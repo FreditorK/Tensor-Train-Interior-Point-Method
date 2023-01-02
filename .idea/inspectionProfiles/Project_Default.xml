@@ -1,0 +1,66 @@
+<component name="InspectionProjectProfileManager">
+  <profile version="1.0">
+    <option name="myName" value="Project Default" />
+    <inspection_tool class="NonAsciiCharacters" enabled="false" level="WARNING" enabled_by_default="false" />
+    <inspection_tool class="PyArgumentListInspection" enabled="false" level="WARNING" enabled_by_default="false" />
+    <inspection_tool class="PyPackageRequirementsInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <option name="ignoredPackages">
+        <value>
+          <list size="13">
+            <item index="0" class="java.lang.String" itemvalue="protobuf" />
+            <item index="1" class="java.lang.String" itemvalue="evoml-api-models" />
+            <item index="2" class="java.lang.String" itemvalue="metaml" />
+            <item index="3" class="java.lang.String" itemvalue="turing-task-manager" />
+            <item index="4" class="java.lang.String" itemvalue="scikit-learn" />
+            <item index="5" class="java.lang.String" itemvalue="dtreeviz" />
+            <item index="6" class="java.lang.String" itemvalue="evoml-explain" />
+            <item index="7" class="java.lang.String" itemvalue="ray" />
+            <item index="8" class="java.lang.String" itemvalue="mrmr_selection" />
+            <item index="9" class="java.lang.String" itemvalue="pandas" />
+            <item index="10" class="java.lang.String" itemvalue="evoml-utils" />
+            <item index="11" class="java.lang.String" itemvalue="evoml-pipeline-interface" />
+            <item index="12" class="java.lang.String" itemvalue="enigmaopt" />
+          </list>
+        </value>
+      </option>
+    </inspection_tool>
+    <inspection_tool class="PyPep8Inspection" enabled="true" level="WEAK WARNING" enabled_by_default="true">
+      <option name="ignoredErrors">
+        <list>
+          <option value="E225" />
+          <option value="E127" />
+          <option value="W605" />
+        </list>
+      </option>
+    </inspection_tool>
+    <inspection_tool class="PyPep8NamingInspection" enabled="true" level="WEAK WARNING" enabled_by_default="true">
+      <option name="ignoredErrors">
+        <list>
+          <option value="N806" />
+          <option value="N801" />
+          <option value="N802" />
+          <option value="N803" />
+        </list>
+      </option>
+    </inspection_tool>
+    <inspection_tool class="PyTypeCheckerInspection" enabled="false" level="WARNING" enabled_by_default="false" />
+    <inspection_tool class="PyUnresolvedReferencesInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <option name="ignoredIdentifiers">
+        <list>
+          <option value="int.backward" />
+          <option value="pdes.PDE.x_dim" />
+          <option value="pdes.PDE.*" />
+          <option value="dict.output_dim" />
+          <option value="dict.domain_function" />
+          <option value="dict.input_dim" />
+          <option value="dict.hidden_dim" />
+          <option value="int.detach" />
+          <option value="bool.astype" />
+          <option value="st_mate._model_generation.training._model_generation" />
+          <option value="metaml._metaml" />
+          <option value="bool.any" />
+        </list>
+      </option>
+    </inspection_tool>
+  </profile>
+</component>
