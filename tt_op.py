@@ -1,14 +1,16 @@
-from typing import List
-
 import numpy as np
-import scipy as sc
+from typing import List
 from itertools import product
 
 PHI_MATRIX = np.array([[1, 1],
                        [1, -1]], dtype=float).reshape(1, 2, 2, 1)
 
+MINUS_ONE = lambda n, rank: [-np.ones((1, 2, rank))/2] \
+                            + [np.concatenate((np.eye(rank, rank), np.eye(rank, rank)), axis=0).reshape(rank, 2, rank)] * (n-2) \
+                            + [np.ones((rank, 2, 1))/2]
 
-def tt_svd(fourier_tensor: np.array):
+
+def tt_svd(fourier_tensor: np.array) -> List[np.array]:
     shape = fourier_tensor.shape
     ranks = [1] + [2] * (len(shape) - 1)
     cores = []
@@ -26,7 +28,7 @@ def tt_svd(fourier_tensor: np.array):
     return cores
 
 
-def tt_to_tensor(tt_train):
+def tt_to_tensor(tt_train: List[np.array]) -> np.array:
     dim = len(tt_train)
     fourier_tensor = np.zeros([2] * dim)
     multi_idxs = product([0, 1], repeat=dim)
@@ -38,13 +40,13 @@ def tt_to_tensor(tt_train):
     return fourier_tensor
 
 
-def _block_diag_tensor(tensor_1, tensor_2):
+def _block_diag_tensor(tensor_1: np.array, tensor_2: np.array) -> np.array:
     column_1 = np.concatenate((tensor_1, np.zeros_like(tensor_1)), axis=0)
     column_2 = np.concatenate((np.zeros_like(tensor_2), tensor_2), axis=0)
     return np.concatenate((column_1, column_2), axis=-1)
 
 
-def tt_add(tt_train_1, tt_train_2):
+def tt_add(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.array]:
     new_cores = [np.concatenate((tt_train_1[0], tt_train_2[0]), axis=-1)]
     for core_1, core_2 in zip(tt_train_1[1:-1], tt_train_2[1:-1]):
         H_i = _block_diag_tensor(core_1, core_2)
@@ -53,14 +55,14 @@ def tt_add(tt_train_1, tt_train_2):
     return new_cores
 
 
-def _tt_train_kron(core_1, core_2):
+def _tt_train_kron(core_1: np.array, core_2: np.array) -> np.array:
     layers = []
     for i in range(core_1.shape[1]):
         layers.append(np.kron(core_1[:, None, i, :], core_2[:, None, i, :]))
     return np.concatenate(layers, axis=1)
 
 
-def tt_hadamard(tt_train_1, tt_train_2):
+def tt_hadamard(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.array]:
     new_cores = []
     for core_1, core_2 in zip(tt_train_1, tt_train_2):
         new_cores.append(_tt_train_kron(core_1, core_2))
@@ -71,7 +73,7 @@ def bool_to_tt_train(bool_values: List[bool]):
     return [np.array([1, 2 * float(b_value) - 1]).reshape(1, -1, 1) for b_value in bool_values]
 
 
-def tt_inner_prod(tt_train_1, tt_train_2):
+def tt_inner_prod(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> float:
     result = np.kron(tt_train_1[0][:, 0, :], tt_train_2[0][:, 0, :]) + np.kron(tt_train_1[0][:, 1, :],
                                                                                tt_train_2[0][:, 1, :])
     for core_1, core_2 in zip(tt_train_1[1:], tt_train_2[1:]):
@@ -79,7 +81,7 @@ def tt_inner_prod(tt_train_1, tt_train_2):
     return result
 
 
-def tt_bool_op(tt_train):
+def tt_bool_op(tt_train: List[np.array]) -> List[np.array]:
     new_cores = []
     for core in tt_train:
         new_core = np.kron(core[:, None, 0, :], PHI_MATRIX[:, 0, :, :]) + np.kron(core[:, None, 1, :], PHI_MATRIX[:, 1, :, :])

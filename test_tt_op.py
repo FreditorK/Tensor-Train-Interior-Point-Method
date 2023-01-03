@@ -1,4 +1,4 @@
-import numpy as np
+import pytest
 from tt_op import *
 
 T_1 = np.array([[[0, 1 / 2],
@@ -25,10 +25,11 @@ test_values = [[True, True, True],
                [False, False, False]]
 
 
-def test_tt_svd():
-    tts = tt_svd(T_1)
+@pytest.mark.parametrize("tensor", [T_1, T_2])
+def test_tt_svd(tensor):
+    tts = tt_svd(tensor)
     retensor = tt_to_tensor(tts)
-    assert np.sum(np.abs(T_1 - retensor)) < 1e-5
+    assert np.sum(np.abs(tensor - retensor)) < 1e-5
 
 
 def test_tt_add():
@@ -47,26 +48,22 @@ def test_tt_multiply():
     assert np.sum(np.abs(retensor - (T_1 * T_2))) < 1e-5
 
 
-def test_tt_inner_product():
-    tt_1 = tt_svd(T_1)
-    tt_2 = tt_svd(T_2)
+@pytest.mark.parametrize("tensor_tuple", [(T_1, t_1), (T_2, t_2)])
+def test_tt_inner_product(tensor_tuple):
+    tensor, t = tensor_tuple
+    tt = tt_svd(tensor)
     for test_value in test_values:
         bool_tt_train = bool_to_tt_train(test_value)
-        true_eval_1 = t_1(*test_value)
-        true_eval_2 = t_2(*test_value)
-        tt_eval_1 = tt_inner_prod(tt_1, bool_tt_train).item()
-        tt_eval_2 = tt_inner_prod(tt_2, bool_tt_train).item()
-        assert np.abs(2 * float(true_eval_1) - 1 - tt_eval_1) < 1e-5
-        assert np.abs(2 * float(true_eval_2) - 1 - tt_eval_2) < 1e-5
+        true_eval = t(*test_value)
+        tt_eval = tt_inner_prod(tt, bool_tt_train).item()
+        assert np.abs(2 * float(true_eval) - 1 - tt_eval) < 1e-5
 
 
-def test_tt_bool_op():
-    tt_1 = tt_svd(T_1)
-    Ttt_1 = tt_bool_op(tt_1)
-    print(Ttt_1)
-    print([t.shape for t in Ttt_1])
-    print(tt_to_tensor(Ttt_1))
-    squared_Ttt_1 = tt_hadamard(Ttt_1, Ttt_1)
-    print(tt_to_tensor(squared_Ttt_1))
-
-test_tt_bool_op()
+@pytest.mark.parametrize("tensor", [T_1, T_2])
+def test_tt_bool_op(tensor):
+    tt = tt_svd(tensor)
+    Ttt = tt_bool_op(tt)
+    squared_Ttt_1 = tt_hadamard(Ttt, Ttt)
+    minus_1_squared_Ttt_1 = tt_add(squared_Ttt_1, MINUS_ONE(len(Ttt), 4))
+    result = tt_inner_prod(minus_1_squared_Ttt_1, minus_1_squared_Ttt_1)
+    assert abs(result) < 1e-5
