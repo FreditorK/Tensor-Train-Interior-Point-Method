@@ -67,3 +67,19 @@ def test_tt_bool_op(tensor):
     minus_1_squared_Ttt_1 = tt_add(squared_Ttt_1, MINUS_ONE(len(Ttt), 4))
     result = tt_inner_prod(minus_1_squared_Ttt_1, minus_1_squared_Ttt_1)
     assert abs(result) < 1e-5
+
+
+@pytest.mark.parametrize("tensor", [T_1, T_2])
+def test_tt_orthogonolize(tensor):
+    tt = tt_svd(tensor)
+    tt_ortho = tt_rl_orthogonalize(tt)
+    assert np.sum(np.abs(tt_to_tensor(tt_ortho) - tensor)) < 1e-5
+
+
+@pytest.mark.parametrize("tensor", [T_1, T_2])
+def test_tt_round(tensor):
+    tt = tt_svd(tensor)
+    tt_added = tt_add(tt, tt)
+    tt_rounded = tt_round(tt_added)
+    retensor = tt_to_tensor(tt_rounded)
+    assert np.sum(np.abs(retensor - (tensor+tensor))) < 1e-5

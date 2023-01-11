@@ -12,22 +12,27 @@ MINUS_ONE = lambda n, rank: [-np.ones((1, 2, rank)) / 2] \
 
 
 def tt_rl_orthogonalize(tt_train: List[np.array]):
-    for idx in reversed(range(len(tt_train) - 1)):
-        shape = tt_train[idx].shape
-        Q_T, R = np.linalg.qr(tt_train[idx + 1].reshape(2, -1))
-        tt_train[idx] = (tt_train[idx].reshape(-1, 2) @ R.T).reshape(*shape)
+    for idx in reversed(range(1, len(tt_train))):
+        shape_p1 = tt_train[idx].shape
+        Q_T, R = np.linalg.qr(tt_train[idx].reshape(shape_p1[0], -1).T)
+        tt_train[idx] = Q_T.T.reshape(-1, 2, shape_p1[-1])
+        tt_train[idx-1] = (tt_train[idx-1].reshape(-1, R.shape[-1]) @ R.T).reshape(-1, 2, tt_train[idx].shape[0])
     return tt_train
 
 
 def tt_round(tt_train: List[np.array]):
     tt_train = tt_rl_orthogonalize(tt_train)
+    print([t.shape for t in tt_train])
     for idx in range(len(tt_train) - 1):
-        shape = tt_train[idx].shape
-        Q_T, R = np.linalg.qr(tt_train[idx].reshape(-1, 2))
-        U, S, V_T = np.linalg.svd(R)
-        tt_train[idx] = (tt_train[idx].reshape(-1, 2) @ U).reshape(*shape)
-        shape_2 = tt_train[idx + 1].shape
-        tt_train[idx + 1] = (S @ V_T @ tt_train[idx + 1].reshape(2, -1)).reshape(shape_2)
+        U, S, V_T = np.linalg.svd(tt_train[idx].reshape(-1, tt_train[idx].shape[-1]))
+        num_non_sing_eig = len(S)
+        U = U[:, :num_non_sing_eig]
+        V_T = V_T[:num_non_sing_eig, :]
+        print(idx+1)
+        print(S.shape, V_T.shape, tt_train[idx + 1].reshape(tt_train[idx + 1].shape[0], -1).shape)
+        print((np.diag(S) @ V_T @ tt_train[idx + 1].reshape(tt_train[idx + 1].shape[0], -1)).shape)
+        tt_train[idx] = U.reshape(-1, 2, 2)
+        tt_train[idx + 1] = (np.diag(S) @ V_T @ tt_train[idx + 1].reshape(tt_train[idx + 1].shape[0], -1)).reshape(2, 2, -1)
     return tt_train
 
 
