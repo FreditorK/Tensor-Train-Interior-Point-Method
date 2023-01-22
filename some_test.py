@@ -61,6 +61,7 @@ def tt_experimental_op(tt_train_1: List[np.array], tt_train_2: List[np.array]) -
     """
     new_cores = []
     for idx, (core_1, core_2) in enumerate(zip(tt_train_1, tt_train_2)):
+        core_2 = np.kron(np.array([[0], [1]]), core_2[:, None, 0, :]) + np.kron(np.array([[1], [0]]), core_2[:, None, 1, :])
         new_core = np.kron(core_1[:, None, 0, :], I_MATRIX[:, 0, :, :] @ core_2[:, None, 0, :]) + np.kron(core_1[:, None, 1, :], I_MATRIX[:, 1, :, :] @ core_2[:, None, 1, :])
         new_cores.append(new_core)
     return new_cores
@@ -68,11 +69,29 @@ def tt_experimental_op(tt_train_1: List[np.array], tt_train_2: List[np.array]) -
 #print(tt_to_tensor(tt_1))
 tt_1_copy = deepcopy(tt_1)
 #tt_1_copy[2][:, [0, 1], :] = tt_1_copy[2][:, [1, 0], :]
-tt_1_copy[2] = np.kron(np.array([[0], [1]]), tt_1_copy[2][:, None, 0, :]) + np.kron(np.array([[1], [0]]), tt_1_copy[2][:, None, 1, :])
-#print(tt_1[2])
-#print(tt_1_copy[2])
-print(tt_to_tensor(tt_1), tt_to_tensor(tt_1_copy))
+tt_1_copy = [np.kron(np.array([[0], [1]]), core[:, None, 0, :]) + np.kron(np.array([[1], [0]]), core[:, None, 1, :]) for core in tt_1_copy]
+
+print(tt_1[1])
+print(tt_1_copy[1])
+new_tt_1 = [np.concatenate((t.reshape(t.shape[0], t.shape[1], 1, t.shape[2]), t_copy.reshape(t_copy.shape[0], t_copy.shape[1], 1, t_copy.shape[2])), axis=2) for t, t_copy in zip(tt_1, tt_1_copy)]
+print([t.shape for t in tt_1])
+
+def tt_ex_2_op(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.array]:
+    """
+    Produces the truth table result tensor
+    """
+    new_cores = []
+    for idx, (core_1, core_2) in enumerate(zip(tt_train_1, tt_train_2)):
+        new_core = np.kron(core_1[:, None, 0, :], core_2[:, 0, :, :]) + np.kron(core_1[:, None, 1, :],
+                                                                                  core_2[:, 1, :, :])
+        new_cores.append(new_core)
+    return new_cores
+
+#print(tt_to_tensor(tt_1), tt_to_tensor(tt_1_copy))
 #tt_1 = tt_experimental_op(tt_1, tt_1_copy)#[tt_1[0], tt_1[1], np.array([[[1, 0], [0, 1]], [[0, 1], [1, 0]]]), tt_1[2]]
 #inner_pro = tt_inner_prod(tt_1, tt_1_copy)
 #print(inner_pro)
 #print(tt_to_tensor(tt_1))
+new_tt = tt_ex_2_op(tt_1, new_tt_1)
+print([t.shape for t in new_tt])
+print(tt_to_tensor(new_tt))
