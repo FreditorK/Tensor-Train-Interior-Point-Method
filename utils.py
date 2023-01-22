@@ -10,21 +10,15 @@ import math
 class Expression:
     count = 0
 
-    def __init__(self, name: str, values, op):
+    def __init__(self, name: str, op):
         if name is None:
             self.name = f"e_{str(Expression.count)}"
             Expression.count += 1
         else:
             self.name = name
 
-        self.values = values
+        self.tt_train = []
         self.op = op
-
-    def forward(self, var_dict):
-        return self.op(*[v if isinstance(v, Number) or isinstance(v, jnp.DeviceArray) else v.forward(var_dict) for v in
-                         self.values])
-
-    def to_tt_train (self):
 
     def __repr__(self):
         return str(self)
@@ -32,80 +26,33 @@ class Expression:
     def __str__(self):
         return self.name
 
-    def __add__(self, other):  # +
-        if isinstance(other, Number):
-            other = float(other) + 0.0
-        return Expression(f"({str(self)}+{str(other)})", [self, other], lambda x, y: x + y)
-
-    def __sub__(self, other):  # -
-        if isinstance(other, Number):
-            other = float(other) + 0.0
-        return Expression(f"({str(self)}-{str(other)})", [self, other], lambda x, y: x - y)
-
-    def __mul__(self, other):  # *
-        if isinstance(other, Number):
-            other = float(other) + 0.0
-        return Expression(f"{str(self)}*{str(other)}", [self, other], lambda x, y: x * y)
-
-    def __neg__(self):  # -x
-        return Expression(f"-{str(self)}", [self], lambda x: -x)
-
-    # reverse math
-    def __radd__(self, other):  # +
-        if isinstance(other, Number):
-            other = float(other) + 0.0
-        return Expression(f"({str(other)}+{str(self)})", [self, other], lambda x, y: x + y)
-
-    def __rsub__(self, other):  # -
-        if isinstance(other, Number):
-            other = float(other) + 0.0
-        return Expression(f"({str(other)}-{str(self)})", [self, other], lambda x, y: y - x)
-
-    def __rmul__(self, other):  # *
-        if isinstance(other, Number):
-            other = float(other) + 0.0
-        return Expression(f"{str(other)}*{str(self)}", [self, other], lambda x, y: x * y)
-
-    def __matmul__(self, other):
-        return Expression(f"{str(other)}@{str(self)}", [self, other], lambda x, y: x @ y)
-
-    def __rmatmul__(self, other):
-        return Expression(f"{str(other)}@{str(self)}", [self, other], lambda x, y: y @ x)
-
     def __and__(self, other):
-        return Expression(f"({str(self)}∧{str(other)})", [self, other],
-                          lambda x, y: -0.5 + 0.5 * x + 0.5 * y + 0.5 * x * y)
+        pass
 
     def __rand__(self, other):
-        return Expression(f"({str(other)}∧{str(self)})", [self, other],
-                          lambda x, y: -0.5 + 0.5 * y + 0.5 * x + 0.5 * y * x)
+        return other.__and__(self)
 
     def __or__(self, other):
-        return Expression(f"({str(self)}v{str(other)})", [self, other],
-                          lambda x, y: 0.5 + 0.5 * x + 0.5 * y - 0.5 * x * y)
+        pass
 
     def __ror__(self, other):
-        return Expression(f"({str(other)}v{str(self)})", [self, other],
-                          lambda x, y: 0.5 + 0.5 * y + 0.5 * x - 0.5 * y * x)
+        return other.__or__(self)
 
     def __invert__(self):
-        return Expression(f"~{str(self)}", [self], lambda x: -x)
+        self.tt_train[0] *= -1
+        return self
 
     def __lshift__(self, other):  # <-
-        return Expression(f"({str(self)}<-{str(other)})", [self, other],
-                          lambda x, y: 0.5 + 0.5 * x - 0.5 * y + 0.5 * x * y)
+        return self.__ror__(other.__invert__())
 
     def __rlshift__(self, other):
-        return Expression(f"({str(other)}<-{str(self)})", [self, other],
-                          lambda x, y: 0.5 + 0.5 * y - 0.5 * x + 0.5 * y * x)
+        return other.__ror__(self.__invert__())
 
     def __rshift__(self, other):  # ->
-        return Expression(f"({str(self)}->{str(other)})", [self, other],
-                          lambda x, y: 0.5 - 0.5 * y + 0.5 * x + 0.5 * y * x)
+        return other.__ror__(self.__invert__())
 
     def __rrshift__(self, other):  # ->
-        return Expression(f"({str(other)}->{str(self)})", [self, other],
-                          lambda x, y: 0.5 - 0.5 * x + 0.5 * y + 0.5 * x * y)
+        return self.__ror__(other.__invert__())
 
 
 class Atom(Expression):
@@ -114,9 +61,6 @@ class Atom(Expression):
     def __init__(self, index, name=None):
         if name is None:
             name = f"v_{str(Atom.counter)}"
-            Atom.counter += 1
+        Atom.counter += 1
         super().__init__("{" + name + "}", [self], lambda x: x)
-        self.index = index
-
-    def forward(self, var_dict: Dict[str, np.array]):
-        return var_dict[self.name[1:-1]]
+        self.index = Atom.counter
