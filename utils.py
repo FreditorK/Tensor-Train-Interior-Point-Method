@@ -17,7 +17,6 @@ class Expression:
         else:
             self.name = name
 
-        self.tt_train = []
         self.op = op
 
     def __repr__(self):
@@ -36,6 +35,12 @@ class Expression:
         pass
 
     def __ror__(self, other):
+        return other.__or__(self)
+
+    def __xor__(self, other):
+        pass
+
+    def __rxor__(self, other):
         return other.__or__(self)
 
     def __invert__(self):

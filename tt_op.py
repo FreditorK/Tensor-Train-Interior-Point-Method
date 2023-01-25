@@ -16,7 +16,7 @@ def tt_rl_orthogonalize(tt_train: List[np.array]):
         shape_p1 = tt_train[idx].shape
         Q_T, R = np.linalg.qr(tt_train[idx].reshape(shape_p1[0], -1).T)
         tt_train[idx] = Q_T.T.reshape(-1, 2, shape_p1[-1])
-        tt_train[idx-1] = (tt_train[idx-1].reshape(-1, R.shape[-1]) @ R.T).reshape(-1, 2, tt_train[idx].shape[0])
+        tt_train[idx - 1] = (tt_train[idx - 1].reshape(-1, R.shape[-1]) @ R.T).reshape(-1, 2, tt_train[idx].shape[0])
     return tt_train
 
 
@@ -28,11 +28,12 @@ def tt_round(tt_train: List[np.array]):
         num_non_sing_eig = len(S)
         U = U[:, :num_non_sing_eig]
         V_T = V_T[:num_non_sing_eig, :]
-        print(idx+1)
+        print(idx + 1)
         print(S.shape, V_T.shape, tt_train[idx + 1].reshape(tt_train[idx + 1].shape[0], -1).shape)
         print((np.diag(S) @ V_T @ tt_train[idx + 1].reshape(tt_train[idx + 1].shape[0], -1)).shape)
         tt_train[idx] = U.reshape(-1, 2, 2)
-        tt_train[idx + 1] = (np.diag(S) @ V_T @ tt_train[idx + 1].reshape(tt_train[idx + 1].shape[0], -1)).reshape(2, 2, -1)
+        tt_train[idx + 1] = (np.diag(S) @ V_T @ tt_train[idx + 1].reshape(tt_train[idx + 1].shape[0], -1)).reshape(2, 2,
+                                                                                                                   -1)
     return tt_train
 
 
@@ -142,3 +143,34 @@ def tt_bool_op(tt_train: List[np.array]) -> List[np.array]:
                                                                                   PHI_MATRIX[:, 1, :, :])
         new_cores.append(new_core)
     return new_cores
+
+
+def tt_xnor(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.array]:
+    """
+    Produces the truth table result tensor
+    """
+    new_cores = []
+    tt_train_2_permuted = [
+        np.kron(np.array([[0], [1]]), core[:, None, 0, :]) + np.kron(np.array([[1], [0]]), core[:, None, 1, :]) for core
+        in tt_train_2]
+    tt_train_2 = [np.concatenate((np.expand_dims(t, 1), np.expand_dims(t_permuted, 1)), axis=1) for t, t_permuted in
+                  zip(tt_train_2, tt_train_2_permuted)]
+    for idx, (core_1, core_2) in enumerate(zip(tt_train_1, tt_train_2)):
+        new_core = np.kron(core_1[:, None, 0, :], core_2[:, :, 0, :]) + np.kron(core_1[:, None, 1, :],
+                                                                                core_2[:, :, 1, :])
+        new_cores.append(new_core)
+    return new_cores
+
+
+def tt_xor(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.array]:
+    xor_cores = tt_xnor(tt_train_1, tt_train_2)
+    xor_cores[0] *= -1
+    return xor_cores
+
+
+def tt_and(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.array]:
+    xnor_cores = tt_xnor(tt_train_1, tt_train_2)
+    xnor_cores[0] *= 0.5
+    tt_train_1[0] *= 0.5
+    tt_train_2[0] *= 0.5
+    sum_cores = tt_add(tt_add(xnor_cores, tt_train_1), tt_train_2)
