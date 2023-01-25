@@ -45,11 +45,15 @@ def tt_svd(fourier_tensor: np.array) -> List[np.array]:
     ranks = [1] + [2] * (len(shape) - 1)
     cores = []
     for i in range(len(ranks) - 1):
+        print(fourier_tensor.shape)
         A = fourier_tensor.reshape(ranks[i] * shape[i], -1)
+        print("hi", A)
         U, S, V_T = np.linalg.svd(A)
-        num_non_sing_eig = len(S)
-        U = U[:, :num_non_sing_eig]
-        V_T = V_T[:num_non_sing_eig, :]
+        non_sing_eig_idxs = S[S != 0]
+        S = S[non_sing_eig_idxs]
+        U = U[:, :non_sing_eig_idxs]
+        print(U.shape, S.shape, V_T.shape)
+        V_T = V_T[:non_sing_eig_idxs, :]
         G_i = U.reshape(ranks[i], shape[i], ranks[i + 1])
         cores.append(G_i)
         fourier_tensor = np.diag(S) @ V_T
