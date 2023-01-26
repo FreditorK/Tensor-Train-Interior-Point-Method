@@ -1,3 +1,5 @@
+import itertools
+
 import numpy as np
 from typing import List
 from itertools import product
@@ -14,26 +16,28 @@ MINUS_ONE = lambda n, rank: [-np.ones((1, 2, rank)) / 2] \
 def tt_rl_orthogonalize(tt_train: List[np.array]):
     for idx in reversed(range(1, len(tt_train))):
         shape_p1 = tt_train[idx].shape
+        shape = tt_train[idx-1].shape
         Q_T, R = np.linalg.qr(tt_train[idx].reshape(shape_p1[0], -1).T)
-        tt_train[idx] = Q_T.T.reshape(-1, 2, shape_p1[-1])
-        tt_train[idx - 1] = (tt_train[idx - 1].reshape(-1, R.shape[-1]) @ R.T).reshape(-1, 2, tt_train[idx].shape[0])
+        tt_train[idx] = Q_T.T.reshape(-1, shape_p1[1], shape_p1[-1])
+        tt_train[idx - 1] = (tt_train[idx - 1].reshape(-1, R.shape[-1]) @ R.T).reshape(-1, shape[1], tt_train[idx].shape[0])
     return tt_train
 
 
 def tt_round(tt_train: List[np.array]):
     tt_train = tt_rl_orthogonalize(tt_train)
-    print([t.shape for t in tt_train])
+    rank = 1
     for idx in range(len(tt_train) - 1):
-        U, S, V_T = np.linalg.svd(tt_train[idx].reshape(-1, tt_train[idx].shape[-1]))
-        num_non_sing_eig = len(S)
-        U = U[:, :num_non_sing_eig]
-        V_T = V_T[:num_non_sing_eig, :]
-        print(idx + 1)
-        print(S.shape, V_T.shape, tt_train[idx + 1].reshape(tt_train[idx + 1].shape[0], -1).shape)
-        print((np.diag(S) @ V_T @ tt_train[idx + 1].reshape(tt_train[idx + 1].shape[0], -1)).shape)
-        tt_train[idx] = U.reshape(-1, 2, 2)
-        tt_train[idx + 1] = (np.diag(S) @ V_T @ tt_train[idx + 1].reshape(tt_train[idx + 1].shape[0], -1)).reshape(2, 2,
-                                                                                                                   -1)
+        idx_shape = tt_train[idx].shape
+        next_idx_shape = tt_train[idx + 1].shape
+        U, S, V_T = np.linalg.svd(tt_train[idx].reshape(rank*idx_shape[1], -1))
+        non_sing_eig_idxs = np.nonzero(S)[0]
+        S = S[non_sing_eig_idxs]
+        next_rank = len(S)
+        U = U[:, non_sing_eig_idxs]
+        V_T = V_T[non_sing_eig_idxs, :]
+        tt_train[idx] = U.reshape(rank, idx_shape[1], next_rank)
+        tt_train[idx + 1] = (np.diag(S) @ V_T @ tt_train[idx + 1].reshape(V_T.shape[-1], -1)).reshape(next_rank, next_idx_shape[1], -1)
+        rank = next_rank
     return tt_train
 
 
@@ -42,22 +46,21 @@ def tt_svd(fourier_tensor: np.array) -> List[np.array]:
     Converts a tensor into a tensor train
     """
     shape = fourier_tensor.shape
-    ranks = [1] + [2] * (len(shape) - 1)
+    rank = 1
     cores = []
-    for i in range(len(ranks) - 1):
-        print(fourier_tensor.shape)
-        A = fourier_tensor.reshape(ranks[i] * shape[i], -1)
-        print("hi", A)
+    for i in range(len(shape) - 1):
+        A = fourier_tensor.reshape(rank * shape[i], -1)
         U, S, V_T = np.linalg.svd(A)
-        non_sing_eig_idxs = S[S != 0]
+        non_sing_eig_idxs = np.nonzero(S)[0]
         S = S[non_sing_eig_idxs]
-        U = U[:, :non_sing_eig_idxs]
-        print(U.shape, S.shape, V_T.shape)
-        V_T = V_T[:non_sing_eig_idxs, :]
-        G_i = U.reshape(ranks[i], shape[i], ranks[i + 1])
+        next_rank = len(S)
+        U = U[:, non_sing_eig_idxs]
+        V_T = V_T[non_sing_eig_idxs, :]
+        G_i = U.reshape(rank, shape[i], next_rank)
         cores.append(G_i)
         fourier_tensor = np.diag(S) @ V_T
-    G_n = fourier_tensor.reshape(2, 2, 1)
+        rank = next_rank
+    G_n = fourier_tensor.reshape(rank, 2, 1)
     cores.append(G_n)
     return cores
 
@@ -66,9 +69,8 @@ def tt_to_tensor(tt_train: List[np.array]) -> np.array:
     """
     Converts a tensor train back into a tensor
     """
-    dim = len(tt_train)
-    fourier_tensor = np.zeros([2] * dim)
-    multi_idxs = product([0, 1], repeat=dim)
+    fourier_tensor = np.zeros([t.shape[1] for t in tt_train])
+    multi_idxs = product(*[list(range(t.shape[1])) for t in tt_train])
     for idx in multi_idxs:
         dot_prod = tt_train[0][:, idx[0], :]
         for i, core in enumerate(tt_train[1:]):

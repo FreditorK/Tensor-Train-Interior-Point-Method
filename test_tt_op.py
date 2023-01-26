@@ -83,3 +83,4 @@ def test_tt_round(tensor):
     tt_rounded = tt_round(tt_added)
     retensor = tt_to_tensor(tt_rounded)
     assert np.sum(np.abs(retensor - (tensor+tensor))) < 1e-5
+

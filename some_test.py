@@ -40,28 +40,32 @@ T_3 = np.array([
 
 T_4 = np.array([
     [
-        [[-5/8, 3/8],
-         [0, 0]],
-        [[1/8, 1/8],
-         [0, 0]]
+        [
+            [[-5/8, 3/8],
+             [0, 0]],
+            [[1/8, 1/8],
+             [0, 0]]
+        ],
+        [
+            [[1/8, 1/8],
+             [0, 0]],
+            [[-1/8, -1/8],
+             [0, 0]]
+        ]
     ],
     [
-        [[1/8, 1/8],
-         [0, 0]],
-        [[-1/8, -1/8],
-         [0, 0]]
-    ],
-    [
-        [[3/8, 3/8],
-         [0, 0]],
-        [[1/8, 1/8],
-         [0, 0]]
-    ],
-    [
-        [[1/8, 1/8],
-         [0, 0]],
-        [[-1/8, -1/8],
-         [0, 0]]
+        [
+            [[3/8, 3/8],
+             [0, 0]],
+            [[1/8, 1/8],
+             [0, 0]]
+        ],
+        [
+            [[1/8, 1/8],
+             [0, 0]],
+            [[-1/8, -1/8],
+             [0, 0]]
+        ]
     ]
 ])
 
@@ -70,6 +74,12 @@ T_4 = np.array([
 print(T_4.shape)
 print(np.sum(T_4*T_4))
 tt_3 = tt_svd(T_4)
+print([t.shape for t in tt_3])
+#print(np.round(tt_to_tensor(tt_3), decimals=4))
+#rounded = tt_round(tt_3)
+#print([t.shape for t in rounded])
+#print([np.round(t, decimals=4) for t in tt_3])
+#print(np.round(tt_to_tensor(rounded), decimals=4))
 
 #tt_1_copy = deepcopy(tt_1)
 #new_tt = tt_xor(tt_1, tt_2)
