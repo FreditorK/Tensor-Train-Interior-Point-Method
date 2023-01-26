@@ -69,12 +69,45 @@ T_4 = np.array([
     ]
 ])
 
+T_5 = np.array([
+    [
+        [
+            [[1, 1],
+             [0, 0]],
+            [[1, 1],
+             [1, 0]]
+        ],
+        [
+            [[1, 1],
+             [0, 0]],
+            [[1, 1],
+             [0, 0]]
+        ]
+    ],
+    [
+        [
+            [[1, 1],
+             [1, 0]],
+            [[1, 1],
+             [0, 0]]
+        ],
+        [
+            [[1, 1],
+             [0, 0]],
+            [[1, 1],
+             [0, 1]]
+        ]
+    ]
+])
+
+
+
 #tt_1 = tt_svd(T_1)
 #tt_2 = tt_svd(T_2)
-print(T_4.shape)
-print(np.sum(T_4*T_4))
-tt_3 = tt_svd(T_4)
-print([t.shape for t in tt_3])
+#print(T_4.shape)
+#print(np.sum(T_4*T_4))
+#tt_3 = tt_svd(T_5)
+#print([t.shape for t in tt_3])
 #print(np.round(tt_to_tensor(tt_3), decimals=4))
 #rounded = tt_round(tt_3)
 #print([t.shape for t in rounded])
@@ -89,3 +122,4 @@ print([t.shape for t in tt_3])
 #print(T_3.shape)
 #print(tt_svd(T_3))
 #print(tt_to_tensor(tt_3))
+print(tt_to_tensor(ONE(3)))

@@ -64,7 +64,9 @@ def test_tt_bool_op(tensor):
     tt = tt_svd(tensor)
     Ttt = tt_bool_op(tt)
     squared_Ttt_1 = tt_hadamard(Ttt, Ttt)
-    minus_1_squared_Ttt_1 = tt_add(squared_Ttt_1, MINUS_ONE(len(Ttt), 4))
+    minus_one = ONE(len(Ttt))
+    minus_one[0] *= -1
+    minus_1_squared_Ttt_1 = tt_add(squared_Ttt_1, minus_one)
     result = tt_inner_prod(minus_1_squared_Ttt_1, minus_1_squared_Ttt_1)
     assert abs(result) < 1e-5
 
@@ -84,3 +86,9 @@ def test_tt_round(tensor):
     retensor = tt_to_tensor(tt_rounded)
     assert np.sum(np.abs(retensor - (tensor+tensor))) < 1e-5
 
+tt_1 = tt_svd(T_1)
+tt_2 = tt_svd(T_2)
+tt_and_12 = tt_or(tt_1, tt_2)
+retensor = tt_to_tensor(tt_and_12)
+print(np.sum(retensor*retensor))
+print(retensor)

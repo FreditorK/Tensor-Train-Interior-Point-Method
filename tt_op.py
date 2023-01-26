@@ -7,19 +7,19 @@ from itertools import product
 PHI_MATRIX = np.array([[1, 1],
                        [1, -1]], dtype=float).reshape(1, 2, 2, 1)
 
-MINUS_ONE = lambda n, rank: [-np.ones((1, 2, rank)) / 2] \
-                            + [np.concatenate((np.eye(rank, rank), np.eye(rank, rank)), axis=0).reshape(rank, 2,
-                                                                                                        rank)] * (n - 2) \
-                            + [np.ones((rank, 2, 1)) / 2]
+ONE = lambda n: [np.ones((1, 2, 1)) for _ in range(n)]
+
+LEADING_ONE = lambda n: [np.array([1, 0], dtype=float).reshape(1, 2, 1) for _ in range(n)]
 
 
 def tt_rl_orthogonalize(tt_train: List[np.array]):
     for idx in reversed(range(1, len(tt_train))):
         shape_p1 = tt_train[idx].shape
-        shape = tt_train[idx-1].shape
+        shape = tt_train[idx - 1].shape
         Q_T, R = np.linalg.qr(tt_train[idx].reshape(shape_p1[0], -1).T)
         tt_train[idx] = Q_T.T.reshape(-1, shape_p1[1], shape_p1[-1])
-        tt_train[idx - 1] = (tt_train[idx - 1].reshape(-1, R.shape[-1]) @ R.T).reshape(-1, shape[1], tt_train[idx].shape[0])
+        tt_train[idx - 1] = (tt_train[idx - 1].reshape(-1, R.shape[-1]) @ R.T).reshape(-1, shape[1],
+                                                                                       tt_train[idx].shape[0])
     return tt_train
 
 
@@ -29,14 +29,16 @@ def tt_round(tt_train: List[np.array]):
     for idx in range(len(tt_train) - 1):
         idx_shape = tt_train[idx].shape
         next_idx_shape = tt_train[idx + 1].shape
-        U, S, V_T = np.linalg.svd(tt_train[idx].reshape(rank*idx_shape[1], -1))
+        U, S, V_T = np.linalg.svd(tt_train[idx].reshape(rank * idx_shape[1], -1))
         non_sing_eig_idxs = np.nonzero(S)[0]
         S = S[non_sing_eig_idxs]
         next_rank = len(S)
         U = U[:, non_sing_eig_idxs]
         V_T = V_T[non_sing_eig_idxs, :]
         tt_train[idx] = U.reshape(rank, idx_shape[1], next_rank)
-        tt_train[idx + 1] = (np.diag(S) @ V_T @ tt_train[idx + 1].reshape(V_T.shape[-1], -1)).reshape(next_rank, next_idx_shape[1], -1)
+        tt_train[idx + 1] = (np.diag(S) @ V_T @ tt_train[idx + 1].reshape(V_T.shape[-1], -1)).reshape(next_rank,
+                                                                                                      next_idx_shape[1],
+                                                                                                      -1)
         rank = next_rank
     return tt_train
 
@@ -83,8 +85,8 @@ def _block_diag_tensor(tensor_1: np.array, tensor_2: np.array) -> np.array:
     """
     For internal use: Concatenates two tensors to a block diagonal tensor
     """
-    column_1 = np.concatenate((tensor_1, np.zeros_like(tensor_1)), axis=0)
-    column_2 = np.concatenate((np.zeros_like(tensor_2), tensor_2), axis=0)
+    column_1 = np.concatenate((tensor_1, np.zeros((tensor_2.shape[0], tensor_1.shape[1], tensor_1.shape[2]))), axis=0)
+    column_2 = np.concatenate((np.zeros((tensor_1.shape[0], tensor_2.shape[1], tensor_2.shape[2])), tensor_2), axis=0)
     return np.concatenate((column_1, column_2), axis=-1)
 
 
@@ -179,4 +181,20 @@ def tt_and(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.ar
     xnor_cores[0] *= 0.5
     tt_train_1[0] *= 0.5
     tt_train_2[0] *= 0.5
-    sum_cores = tt_add(tt_add(xnor_cores, tt_train_1), tt_train_2)
+    leading_one = LEADING_ONE(len(tt_train_1))
+    leading_one[0] *= -0.5
+    sum_cores = tt_add(leading_one, tt_add(tt_add(xnor_cores, tt_train_1), tt_train_2))
+    rounded_sum = tt_round(sum_cores)
+    return rounded_sum
+
+
+def tt_or(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.array]:
+    xnor_cores = tt_xnor(tt_train_1, tt_train_2)
+    xnor_cores[0] *= -0.5
+    tt_train_1[0] *= 0.5
+    tt_train_2[0] *= 0.5
+    leading_one = LEADING_ONE(len(tt_train_1))
+    leading_one[0] *= 0.5
+    sum_cores = tt_add(leading_one, tt_add(tt_add(xnor_cores, tt_train_1), tt_train_2))
+    rounded_sum = tt_round(sum_cores)
+    return rounded_sum
