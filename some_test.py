@@ -2,15 +2,8 @@ import numpy as np
 from tt_op import *
 from tt_op import _tt_train_kron
 from copy import deepcopy
+from utils import *
 
-
-def fundamental_tt_train(idx, dim):
-    tt_train = [np.zeros((1, 2, 2))] + [np.zeros((2, 2, 2))] * (dim - 2) + [np.zeros((2, 2, 1))]
-    multi_idx = [0] * dim
-    multi_idx[idx] = 1
-    for i in range(dim):
-        tt_train[i][0, multi_idx[i], 0] = 1
-    return tt_train
 
 
 T_1 = np.array([[[2, 1],
@@ -122,4 +115,15 @@ T_5 = np.array([
 #print(T_3.shape)
 #print(tt_svd(T_3))
 #print(tt_to_tensor(tt_3))
-print(tt_to_tensor(ONE(3)))
+#print(tt_to_tensor(ONE(3)))
+
+x = Atom(3, "x")
+y = Atom(3, "y")
+z = Atom(3, "z")
+print(tt_to_tensor(y.to_tt_train()))
+formula = (x & y) ^ z
+print(formula)
+tt_formula = formula.to_tt_train()
+print(tt_formula)
+print(tt_to_tensor(tt_formula))
+#print(tt_to_tensor(tt_formula))

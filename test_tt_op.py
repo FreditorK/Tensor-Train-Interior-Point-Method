@@ -64,7 +64,7 @@ def test_tt_bool_op(tensor):
     tt = tt_svd(tensor)
     Ttt = tt_bool_op(tt)
     squared_Ttt_1 = tt_hadamard(Ttt, Ttt)
-    minus_one = ONE(len(Ttt))
+    minus_one = tt_one(len(Ttt))
     minus_one[0] *= -1
     minus_1_squared_Ttt_1 = tt_add(squared_Ttt_1, minus_one)
     result = tt_inner_prod(minus_1_squared_Ttt_1, minus_1_squared_Ttt_1)

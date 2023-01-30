@@ -7,9 +7,23 @@ from itertools import product
 PHI_MATRIX = np.array([[1, 1],
                        [1, -1]], dtype=float).reshape(1, 2, 2, 1)
 
-ONE = lambda n: [np.ones((1, 2, 1)) for _ in range(n)]
 
-LEADING_ONE = lambda n: [np.array([1, 0], dtype=float).reshape(1, 2, 1) for _ in range(n)]
+def tt_one(dim):
+    """ Returns an all-one tensor of dimension 2**dim """
+    return [np.ones((1, 2, 1)) for _ in range(dim)]
+
+
+def tt_leading_one(dim):
+    """ Returns a tensor of dimension 2**dim with a one entry in its 00000...00-entry"""
+    return tt_atom_train(dim + 1, dim)
+
+
+def tt_atom_train(idx, dim):
+    """ Returns a tensor of dimension 2**dim with a one entry at the respective degree 1 monomial"""
+    return [
+        np.array([0, 1], dtype=float).reshape(1, 2, 1) if idx == i else np.array([1, 0], dtype=float).reshape(1, 2, 1)
+        for i in range(dim)
+    ]
 
 
 def tt_rl_orthogonalize(tt_train: List[np.array]):
@@ -181,7 +195,7 @@ def tt_and(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.ar
     xnor_cores[0] *= 0.5
     tt_train_1[0] *= 0.5
     tt_train_2[0] *= 0.5
-    leading_one = LEADING_ONE(len(tt_train_1))
+    leading_one = tt_leading_one(len(tt_train_1))
     leading_one[0] *= -0.5
     sum_cores = tt_add(leading_one, tt_add(tt_add(xnor_cores, tt_train_1), tt_train_2))
     rounded_sum = tt_round(sum_cores)
@@ -193,8 +207,13 @@ def tt_or(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.arr
     xnor_cores[0] *= -0.5
     tt_train_1[0] *= 0.5
     tt_train_2[0] *= 0.5
-    leading_one = LEADING_ONE(len(tt_train_1))
+    leading_one = tt_leading_one(len(tt_train_1))
     leading_one[0] *= 0.5
     sum_cores = tt_add(leading_one, tt_add(tt_add(xnor_cores, tt_train_1), tt_train_2))
     rounded_sum = tt_round(sum_cores)
     return rounded_sum
+
+
+def tt_neg(tt_train: List[np.array]) -> List[np.array]:
+    tt_train[0] *= -1
+    return tt_train
