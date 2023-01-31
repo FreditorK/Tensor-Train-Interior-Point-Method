@@ -3,6 +3,7 @@ import itertools
 import numpy as np
 from typing import List
 from itertools import product
+from operators import partial_D
 
 PHI_MATRIX = np.array([[1, 1],
                        [1, -1]], dtype=float).reshape(1, 2, 2, 1)
@@ -95,6 +96,13 @@ def tt_to_tensor(tt_train: List[np.array]) -> np.array:
     return fourier_tensor
 
 
+def tt_leading_entry(tt_train: List[np.array]) -> np.array:
+    """
+    Returns the leading entry of a TT-train
+    """
+    return np.linalg.multi_dot([core[:, 0, :] for core in tt_train])
+
+
 def _block_diag_tensor(tensor_1: np.array, tensor_2: np.array) -> np.array:
     """
     For internal use: Concatenates two tensors to a block diagonal tensor
@@ -123,7 +131,7 @@ def _tt_train_kron(core_1: np.array, core_2: np.array) -> np.array:
     """
     layers = []
     for i in range(core_1.shape[1]):
-        layers.append(np.kron(core_1[:, None, i, :], core_2[:, None, i, :]))
+        layers.append(np.kron(np.expand_dims(core_1[:, i], 1), np.expand_dims(core_2[:, i], 1)))
     return np.concatenate(layers, axis=1)
 
 
@@ -217,3 +225,26 @@ def tt_or(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.arr
 def tt_neg(tt_train: List[np.array]) -> List[np.array]:
     tt_train[0] *= -1
     return tt_train
+
+
+class Minimiser:
+    def __init__(self, constraints, dimension):
+        self.dimension = dimension
+        self.constraints = constraints
+        self.gradient_functions = [partial_D(self._boolean_criterion, idx) for idx in range(dimension)]
+
+    def find_feasible_hypothesis(self):
+        pass
+
+    def _core_iteration(self, tt_train, idx):
+        B = np.einsum("abc, cde -> abde", tt_train[idx], tt_train[idx+1])
+
+    def _boolean_criterion(self, *tt_train):
+        squared_Ttt_1 = tt_hadamard(tt_train, tt_train)
+        minus_one = tt_one(self.dimension)
+        minus_one[0] *= -1
+        minus_1_squared_Ttt_1 = tt_add(squared_Ttt_1, minus_one)
+        return tt_inner_prod(minus_1_squared_Ttt_1, minus_1_squared_Ttt_1)
+
+    def init_tt_train(self):
+        return [2 * np.random.rand(1, 2, 1) - 1 for _ in range(self.dimension)]

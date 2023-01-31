@@ -81,3 +81,23 @@ class Atom(Expression):
 
     def to_tt_train(self):
         return deepcopy(self.tt_train)
+
+
+def exists_A_extending(e):
+    e_mean = tt_leading_entry(e) + 1
+    return lambda h: -(tt_leading_entry(h) + e_mean + tt_inner_prod(h, e)) + 1e-6
+
+
+def exists_A_not_extending(e):
+    e_mean = tt_leading_entry(e) - 1
+    return lambda h: tt_leading_entry(h) + e_mean + tt_inner_prod(h, e) + 1e-6
+
+
+def all_A_extending(e):
+    e_mean = tt_leading_entry(e) - 1
+    return lambda h: -(tt_leading_entry(h) + e_mean + tt_inner_prod(h, e))
+
+
+def all_A_not_extending(e):
+    e_mean = tt_leading_entry(e) + 1
+    return lambda h: tt_leading_entry(h) + e_mean + tt_inner_prod(h, e)
