@@ -170,3 +170,4 @@ print(np.round(tt_to_tensor(hypothesis), decimals=5))
 print("Score:", boolean_criterion(hypothesis), tt_inner_prod(hypothesis, hypothesis))
 
 
+

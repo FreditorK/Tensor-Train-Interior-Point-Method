@@ -1,11 +1,9 @@
-import itertools
-
+import jax
 import numpy as np
 import jax.numpy as jnp
 from typing import List
 from itertools import product
 from operators import partial_D
-from copy import deepcopy
 
 PHI = np.array([[1, 1],
                 [1, -1]], dtype=float).reshape(1, 2, 2, 1)
@@ -14,22 +12,22 @@ PHI = np.array([[1, 1],
 def phi(dimensions):
     tensor = PHI
     new_PHI = PHI
-    for _ in range(2**(dimensions)-1):
-        new_PHI = np.expand_dims(new_PHI, (0, 1))
-        tensor = np.expand_dims(tensor, (-1, -2))
-        tensor = np.kron(tensor, new_PHI)
+    for _ in range(2 ** (dimensions) - 1):
+        new_PHI = jnp.expand_dims(new_PHI, (0, 1))
+        tensor = jnp.expand_dims(tensor, (-1, -2))
+        tensor = jnp.kron(tensor, new_PHI)
     return tensor
 
 
 def tt_one(dim):
     """ Returns an all-one tensor of dimension 2**dim """
-    return [np.ones((1, 2, 1)) for _ in range(dim)]
+    return [jnp.ones((1, 2, 1)) for _ in range(dim)]
 
 
 def tt_one_bonded(dim, bond_dim):
     """ Returns an all-one tensor of dimension 2**dim with one bonded dimension"""
-    one = [np.ones((1, 2, 1)) for _ in range(dim - 2)]
-    one.insert(bond_dim, np.ones((1, 2, 2, 1)))
+    one = [jnp.ones((1, 2, 1)) for _ in range(dim - 2)]
+    one.insert(bond_dim, jnp.ones((1, 2, 2, 1)))
     return one
 
 
@@ -41,13 +39,13 @@ def tt_leading_one(dim):
 def tt_atom_train(idx, dim):
     """ Returns a tensor of dimension 2**dim with a one entry at the respective degree 1 monomial"""
     return [
-        np.array([0, 1], dtype=float).reshape(1, 2, 1) if idx == i else np.array([1, 0], dtype=float).reshape(1, 2, 1)
+        jnp.array([0, 1], dtype=float).reshape(1, 2, 1) if idx == i else jnp.array([1, 0], dtype=float).reshape(1, 2, 1)
         for i in range(dim)
     ]
 
 
 def tt_rl_orthogonalize(tt_train: List[np.array]):
-    for idx in reversed(range(1, len(tt_train))):
+    for idx in range(len(tt_train)-1, 0, -1):
         shape_p1 = tt_train[idx].shape
         shape = tt_train[idx - 1].shape
         Q_T, R = np.linalg.qr(tt_train[idx].reshape(shape_p1[0], -1).T)
@@ -55,6 +53,20 @@ def tt_rl_orthogonalize(tt_train: List[np.array]):
         tt_train[idx - 1] = (tt_train[idx - 1].reshape(-1, R.shape[-1]) @ R.T).reshape(-1, shape[1],
                                                                                        tt_train[idx].shape[0])
     return tt_train
+
+
+def part_bond(core):
+    shape = core.shape
+    A = core.reshape(shape[0] * shape[1], -1)
+    U, S, V_T = jnp.linalg.svd(A)
+    non_sing_eig_idxs = jnp.nonzero(S)[0]
+    S = S[non_sing_eig_idxs]
+    next_rank = len(S)
+    U = U[:, non_sing_eig_idxs]
+    V_T = V_T[non_sing_eig_idxs, :]
+    G_i = U.reshape(shape[0], shape[1], next_rank)
+    G_ip1 = (jnp.diag(S) @ V_T).reshape(next_rank, shape[2], shape[-1])
+    return G_i, G_ip1
 
 
 def tt_round(tt_train: List[np.array]):
@@ -150,8 +162,8 @@ def _tt_train_kron(core_1: np.array, core_2: np.array) -> np.array:
     """
     layers = []
     core_shape_length = len(core_1.shape)
-    axes = [i for i in range(1, core_shape_length - 1)]
-    for i in product(*[[0, 1] for _ in range(core_shape_length - 2)]):
+    axes = list(range(1, core_shape_length - 1))
+    for i in product(*([[0, 1]]*(core_shape_length - 2))):
         idx = (slice(None),) + i
         layers.append(jnp.kron(jnp.expand_dims(core_1[idx], axis=axes), jnp.expand_dims(core_2[idx], axis=axes)))
     return jnp.concatenate(layers, axis=1).reshape(
@@ -163,56 +175,53 @@ def tt_hadamard(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[
     """
     Computes the hadamard product/pointwise multiplication of two tensor trains
     """
-    new_cores = []
-    for core_1, core_2 in zip(tt_train_1, tt_train_2):
-        new_cores.append(_tt_train_kron(core_1, core_2))
-    return new_cores
+    return [_tt_train_kron(core_1, core_2) for core_1, core_2 in zip(tt_train_1, tt_train_2)]
 
 
 def bool_to_tt_train(bool_values: List[bool]):
     """
     Converts a list of boolean values into its respective tensor train
     """
-    return [np.array([1, 2 * float(b_value) - 1]).reshape(1, -1, 1) for b_value in bool_values]
+    return [jnp.array([1, 2 * float(b_value) - 1]).reshape(1, -1, 1) for b_value in bool_values]
 
 
 def _tt_core_collapse(core_1: np.array, core_2: np.array):
-    result = 0
-    for i in product(*[[0, 1] for _ in range(len(core_1.shape) - 2)]):
-        idx = (slice(None),) + i
-        result += jnp.kron(core_1[idx], core_2[idx])
-    return result
+    return sum([
+        jnp.kron(core_1[(slice(None),) + i], core_2[(slice(None),) + i])
+        for i in product(*([[0, 1]]*(len(core_1.shape) - 2)))
+    ])
 
 
 def tt_inner_prod(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> float:
     """
     Computes the inner product between two tensor trains
     """
-    result = _tt_core_collapse(tt_train_1[0], tt_train_2[0])
-    for core_1, core_2 in zip(tt_train_1[1:], tt_train_2[1:]):
-        result = result @ _tt_core_collapse(core_1, core_2)
-    return jnp.sum(result)
+    return jnp.sum(jnp.linalg.multi_dot([_tt_core_collapse(core_1, core_2) for core_1, core_2 in zip(tt_train_1, tt_train_2)]))
 
 
 def _tt_phi_core(core_1: np.array):
-    result = 0
-    for i in product(*[[0, 1] for _ in range(len(core_1.shape) - 2)]):
-        idx_1 = (slice(None), ) + i
-        idx_2 = (slice(None),) + sum(zip(i, [slice(None)]*len(i)), ())
-        phi_sub = phi(len(i)-1)
-        result += jnp.kron(jnp.expand_dims(core_1[idx_1], list(range(1, 1+len(i)))), phi_sub[idx_2])
-    return result
+    return sum([
+        jnp.kron(
+            jnp.expand_dims(core_1[(slice(None),) + i], list(range(1, 1 + len(i)))),
+            phi(len(i) - 1)[(slice(None),) + sum(zip(i, [slice(None)] * len(i)), ())]
+        ) for i in product(*([[0, 1]]*(len(core_1.shape) - 2)))])
 
 
 def tt_bool_op(tt_train: List[np.array]) -> List[np.array]:
     """
     Produces the truth table result tensor
     """
-    new_cores = []
-    for core in tt_train:
-        new_core = _tt_phi_core(core)
-        new_cores.append(new_core)
-    return new_cores
+    return [_tt_phi_core(core) for core in tt_train]
+
+
+def boolean_criterion(tt_train):
+    one = tt_one(len(tt_train))
+    one[0] *= -1.0
+    tt_train = tt_bool_op(tt_train)
+    squared_Ttt_1 = tt_hadamard(tt_train, tt_train)
+    minus_1_squared_Ttt_1 = tt_add(squared_Ttt_1, one)
+
+    return tt_inner_prod(minus_1_squared_Ttt_1, minus_1_squared_Ttt_1)
 
 
 def tt_xnor(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.array]:
@@ -267,30 +276,6 @@ def tt_neg(tt_train: List[np.array]) -> List[np.array]:
     return tt_train
 
 
-def part_bond(core):
-    shape = core.shape
-    A = core.reshape(shape[0] * shape[1], -1)
-    U, S, V_T = np.linalg.svd(A)
-    non_sing_eig_idxs = np.nonzero(S)[0]
-    S = S[non_sing_eig_idxs]
-    next_rank = len(S)
-    U = U[:, non_sing_eig_idxs]
-    V_T = V_T[non_sing_eig_idxs, :]
-    G_i = U.reshape(shape[0], shape[1], next_rank)
-    G_ip1 = (np.diag(S) @ V_T).reshape(next_rank, shape[2], shape[-1])
-    return G_i, G_ip1
-
-
-def boolean_criterion(tt_train):
-    one = tt_one(len(tt_train))
-    one[0] *= -1.0
-    tt_train = tt_bool_op(tt_train)
-    squared_Ttt_1 = tt_hadamard(tt_train, tt_train)
-    minus_1_squared_Ttt_1 = tt_add(squared_Ttt_1, one)
-
-    return tt_inner_prod(minus_1_squared_Ttt_1, minus_1_squared_Ttt_1)
-
-
 class Minimiser:
     def __init__(self, constraints, dimension):
         self.dimension = dimension
@@ -328,7 +313,7 @@ class Minimiser:
             squared_Ttt_1 = tt_hadamard(tt_train, tt_train)
             minus_1_squared_Ttt_1 = tt_add(squared_Ttt_1, one)
             return tt_inner_prod(minus_1_squared_Ttt_1,
-                                 minus_1_squared_Ttt_1)  # + (1-tt_inner_prod(tt_train, tt_train))**2
+                                 minus_1_squared_Ttt_1)
 
         return criterion_func
 
