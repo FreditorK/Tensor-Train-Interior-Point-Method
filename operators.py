@@ -2,7 +2,7 @@ import jax
 
 
 def partial_D(f, idx):
-    return jax.jit(jax.vmap(jax.grad(f, argnums=idx), -1))
+    return jax.jit(jax.grad(f, argnums=idx))
 
 
 def D_func(f):

@@ -1,17 +1,36 @@
 import itertools
 
 import numpy as np
+import jax.numpy as jnp
 from typing import List
 from itertools import product
 from operators import partial_D
+from copy import deepcopy
 
-PHI_MATRIX = np.array([[1, 1],
-                       [1, -1]], dtype=float).reshape(1, 2, 2, 1)
+PHI = np.array([[1, 1],
+                [1, -1]], dtype=float).reshape(1, 2, 2, 1)
+
+
+def phi(dimensions):
+    tensor = PHI
+    new_PHI = PHI
+    for _ in range(2**(dimensions)-1):
+        new_PHI = np.expand_dims(new_PHI, (0, 1))
+        tensor = np.expand_dims(tensor, (-1, -2))
+        tensor = np.kron(tensor, new_PHI)
+    return tensor
 
 
 def tt_one(dim):
     """ Returns an all-one tensor of dimension 2**dim """
     return [np.ones((1, 2, 1)) for _ in range(dim)]
+
+
+def tt_one_bonded(dim, bond_dim):
+    """ Returns an all-one tensor of dimension 2**dim with one bonded dimension"""
+    one = [np.ones((1, 2, 1)) for _ in range(dim - 2)]
+    one.insert(bond_dim, np.ones((1, 2, 2, 1)))
+    return one
 
 
 def tt_leading_one(dim):
@@ -107,20 +126,20 @@ def _block_diag_tensor(tensor_1: np.array, tensor_2: np.array) -> np.array:
     """
     For internal use: Concatenates two tensors to a block diagonal tensor
     """
-    column_1 = np.concatenate((tensor_1, np.zeros((tensor_2.shape[0], tensor_1.shape[1], tensor_1.shape[2]))), axis=0)
-    column_2 = np.concatenate((np.zeros((tensor_1.shape[0], tensor_2.shape[1], tensor_2.shape[2])), tensor_2), axis=0)
-    return np.concatenate((column_1, column_2), axis=-1)
+    column_1 = jnp.concatenate((tensor_1, np.zeros((tensor_2.shape[0],) + tensor_1.shape[1:])), axis=0)
+    column_2 = jnp.concatenate((jnp.zeros((tensor_1.shape[0],) + tensor_2.shape[1:]), tensor_2), axis=0)
+    return jnp.concatenate((column_1, column_2), axis=-1)
 
 
 def tt_add(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.array]:
     """
     Adds two tensor trains
     """
-    new_cores = [np.concatenate((tt_train_1[0], tt_train_2[0]), axis=-1)]
+    new_cores = [jnp.concatenate((tt_train_1[0], tt_train_2[0]), axis=-1)]
     for core_1, core_2 in zip(tt_train_1[1:-1], tt_train_2[1:-1]):
         H_i = _block_diag_tensor(core_1, core_2)
         new_cores.append(H_i)
-    new_cores.append(np.concatenate((tt_train_1[-1], tt_train_2[-1]), axis=0))
+    new_cores.append(jnp.concatenate((tt_train_1[-1], tt_train_2[-1]), axis=0))
     return new_cores
 
 
@@ -130,9 +149,14 @@ def _tt_train_kron(core_1: np.array, core_2: np.array) -> np.array:
     expansion
     """
     layers = []
-    for i in range(core_1.shape[1]):
-        layers.append(np.kron(np.expand_dims(core_1[:, i], 1), np.expand_dims(core_2[:, i], 1)))
-    return np.concatenate(layers, axis=1)
+    core_shape_length = len(core_1.shape)
+    axes = [i for i in range(1, core_shape_length - 1)]
+    for i in product(*[[0, 1] for _ in range(core_shape_length - 2)]):
+        idx = (slice(None),) + i
+        layers.append(jnp.kron(jnp.expand_dims(core_1[idx], axis=axes), jnp.expand_dims(core_2[idx], axis=axes)))
+    return jnp.concatenate(layers, axis=1).reshape(
+        (core_1.shape[0] * core_2.shape[0],) + core_1.shape[1:-1] + (core_1.shape[-1] * core_2.shape[-1],)
+    )
 
 
 def tt_hadamard(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.array]:
@@ -152,14 +176,31 @@ def bool_to_tt_train(bool_values: List[bool]):
     return [np.array([1, 2 * float(b_value) - 1]).reshape(1, -1, 1) for b_value in bool_values]
 
 
+def _tt_core_collapse(core_1: np.array, core_2: np.array):
+    result = 0
+    for i in product(*[[0, 1] for _ in range(len(core_1.shape) - 2)]):
+        idx = (slice(None),) + i
+        result += jnp.kron(core_1[idx], core_2[idx])
+    return result
+
+
 def tt_inner_prod(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> float:
     """
     Computes the inner product between two tensor trains
     """
-    result = np.kron(tt_train_1[0][:, 0, :], tt_train_2[0][:, 0, :]) + np.kron(tt_train_1[0][:, 1, :],
-                                                                               tt_train_2[0][:, 1, :])
+    result = _tt_core_collapse(tt_train_1[0], tt_train_2[0])
     for core_1, core_2 in zip(tt_train_1[1:], tt_train_2[1:]):
-        result = result @ (np.kron(core_1[:, 0, :], core_2[:, 0, :]) + np.kron(core_1[:, 1, :], core_2[:, 1, :]))
+        result = result @ _tt_core_collapse(core_1, core_2)
+    return jnp.sum(result)
+
+
+def _tt_phi_core(core_1: np.array):
+    result = 0
+    for i in product(*[[0, 1] for _ in range(len(core_1.shape) - 2)]):
+        idx_1 = (slice(None), ) + i
+        idx_2 = (slice(None),) + sum(zip(i, [slice(None)]*len(i)), ())
+        phi_sub = phi(len(i)-1)
+        result += jnp.kron(jnp.expand_dims(core_1[idx_1], list(range(1, 1+len(i)))), phi_sub[idx_2])
     return result
 
 
@@ -169,8 +210,7 @@ def tt_bool_op(tt_train: List[np.array]) -> List[np.array]:
     """
     new_cores = []
     for core in tt_train:
-        new_core = np.kron(core[:, None, 0, :], PHI_MATRIX[:, 0, :, :]) + np.kron(core[:, None, 1, :],
-                                                                                  PHI_MATRIX[:, 1, :, :])
+        new_core = _tt_phi_core(core)
         new_cores.append(new_core)
     return new_cores
 
@@ -227,24 +267,70 @@ def tt_neg(tt_train: List[np.array]) -> List[np.array]:
     return tt_train
 
 
+def part_bond(core):
+    shape = core.shape
+    A = core.reshape(shape[0] * shape[1], -1)
+    U, S, V_T = np.linalg.svd(A)
+    non_sing_eig_idxs = np.nonzero(S)[0]
+    S = S[non_sing_eig_idxs]
+    next_rank = len(S)
+    U = U[:, non_sing_eig_idxs]
+    V_T = V_T[non_sing_eig_idxs, :]
+    G_i = U.reshape(shape[0], shape[1], next_rank)
+    G_ip1 = (np.diag(S) @ V_T).reshape(next_rank, shape[2], shape[-1])
+    return G_i, G_ip1
+
+
+def boolean_criterion(tt_train):
+    one = tt_one(len(tt_train))
+    one[0] *= -1.0
+    tt_train = tt_bool_op(tt_train)
+    squared_Ttt_1 = tt_hadamard(tt_train, tt_train)
+    minus_1_squared_Ttt_1 = tt_add(squared_Ttt_1, one)
+
+    return tt_inner_prod(minus_1_squared_Ttt_1, minus_1_squared_Ttt_1)
+
+
 class Minimiser:
     def __init__(self, constraints, dimension):
         self.dimension = dimension
         self.constraints = constraints
-        self.gradient_functions = [partial_D(self._boolean_criterion, idx) for idx in range(dimension)]
+        self.gradient_functions = []
+        for idx in range(dimension - 1):
+            self.gradient_functions.append(
+                partial_D(self._boolean_criterion(idx), idx)
+            )
+        self.lr = 1e-2
 
     def find_feasible_hypothesis(self):
-        pass
+        tt_train = self._init_tt_train()
+        for _ in range(500):
+            for idx in range(self.dimension - 1):
+                tt_train = self._core_iteration(tt_train, idx)
+            self.lr *= 0.99
+
+        return tt_train
 
     def _core_iteration(self, tt_train, idx):
-        B = np.einsum("abc, cde -> abde", tt_train[idx], tt_train[idx+1])
+        B = np.einsum("abc, cde -> abde", tt_train[idx], tt_train[idx + 1])
+        bonded_tt_train = tt_train[:idx] + [B] + tt_train[idx + 2:]
+        B -= self.lr * self.gradient_functions[idx](*bonded_tt_train)
+        B_part_1, B_part_2 = part_bond(B)
+        tt_train = tt_train[:idx] + [B_part_1, B_part_2] + tt_train[idx + 2:]
+        return tt_train
 
-    def _boolean_criterion(self, *tt_train):
-        squared_Ttt_1 = tt_hadamard(tt_train, tt_train)
-        minus_one = tt_one(self.dimension)
-        minus_one[0] *= -1
-        minus_1_squared_Ttt_1 = tt_add(squared_Ttt_1, minus_one)
-        return tt_inner_prod(minus_1_squared_Ttt_1, minus_1_squared_Ttt_1)
+    def _boolean_criterion(self, idx):
+        one = tt_one_bonded(self.dimension, idx)
+        one[0] *= -1.0
 
-    def init_tt_train(self):
+        def criterion_func(*tt_train):
+            tt_train = tt_bool_op(tt_train)
+            squared_Ttt_1 = tt_hadamard(tt_train, tt_train)
+            minus_1_squared_Ttt_1 = tt_add(squared_Ttt_1, one)
+            return tt_inner_prod(minus_1_squared_Ttt_1,
+                                 minus_1_squared_Ttt_1)  # + (1-tt_inner_prod(tt_train, tt_train))**2
+
+        return criterion_func
+
+    def _init_tt_train(self):
         return [2 * np.random.rand(1, 2, 1) - 1 for _ in range(self.dimension)]
