@@ -1,10 +1,5 @@
-import numpy as np
-import jax.numpy as jnp
-import jax.scipy.special as sc
-from numbers import Number
-from abc import ABC, abstractmethod
-from typing import Dict, Callable, List
-import math
+from sympy.logic.boolalg import ANFform
+from sympy import symbols
 from tt_op import *
 from copy import deepcopy
 
@@ -83,21 +78,32 @@ class Atom(Expression):
         return deepcopy(self.tt_train)
 
 
+def get_ANF(atoms, hypothesis):
+    variable_names = " ".join([a.name for a in atoms])
+    variables = symbols(variable_names)
+    truth_table_labels = ((np.round(tt_to_tensor(tt_bool_op(hypothesis)))+1)/2).astype(int).flatten()
+    return ANFform(variables, truth_table_labels)
+
+
 def exists_A_extending(e):
+    e = e.to_tt_train()
     e_mean = tt_leading_entry(e) + 1
-    return lambda h: -(tt_leading_entry(h) + e_mean + tt_inner_prod(h, e)) + 1e-6
+    return lambda *h: -(tt_leading_entry(h) + e_mean + tt_inner_prod(h, e)) + 1e-6
 
 
 def exists_A_not_extending(e):
+    e = e.to_tt_train()
     e_mean = tt_leading_entry(e) - 1
-    return lambda h: tt_leading_entry(h) + e_mean + tt_inner_prod(h, e) + 1e-6
+    return lambda *h: tt_leading_entry(h) + e_mean + tt_inner_prod(h, e) + 1e-6
 
 
 def all_A_extending(e):
+    e = e.to_tt_train()
     e_mean = tt_leading_entry(e) - 1
-    return lambda h: -(tt_leading_entry(h) + e_mean + tt_inner_prod(h, e))
+    return lambda *h: -(tt_leading_entry(h) + e_mean + tt_inner_prod(h, e))
 
 
 def all_A_not_extending(e):
+    e = e.to_tt_train()
     e_mean = tt_leading_entry(e) + 1
-    return lambda h: tt_leading_entry(h) + e_mean + tt_inner_prod(h, e)
+    return lambda *h: tt_leading_entry(h) + e_mean + tt_inner_prod(h, e)

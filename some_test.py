@@ -3,6 +3,7 @@ from tt_op import *
 from tt_op import _tt_train_kron
 from copy import deepcopy
 from utils import *
+from optimiser import Minimiser
 
 
 
@@ -163,9 +164,16 @@ print(np.round(tt_to_tensor(tt_2_parted)-tt_to_tensor(actual_hadamard), decimals
 #print(tt_to_tensor(tt_formula))
 #print(tt_leading_entry(tt_formula))
 #print(tt_to_tensor(tt_formula))
-
-opt = Minimiser([], 5)
+x = Atom(3, "x")
+y = Atom(3, "y")
+z = Atom(3, "z")
+opt = Minimiser([
+    exists_A_extending(x << y),
+    all_A_not_extending(y & z)
+], 3)
 hypothesis = opt.find_feasible_hypothesis()
+#print(np.round(tt_to_tensor(tt_bool_op(hypothesis)), decimals=5).reshape(-1, 1))
+print(get_ANF([x, y, z], hypothesis))
 print(np.round(tt_to_tensor(hypothesis), decimals=5))
 print("Score:", boolean_criterion(hypothesis), tt_inner_prod(hypothesis, hypothesis))
 

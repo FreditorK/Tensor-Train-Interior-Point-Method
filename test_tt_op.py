@@ -85,10 +85,3 @@ def test_tt_round(tensor):
     tt_rounded = tt_round(tt_added)
     retensor = tt_to_tensor(tt_rounded)
     assert np.sum(np.abs(retensor - (tensor+tensor))) < 1e-5
-
-tt_1 = tt_svd(T_1)
-tt_2 = tt_svd(T_2)
-tt_and_12 = tt_or(tt_1, tt_2)
-retensor = tt_to_tensor(tt_and_12)
-print(np.sum(retensor*retensor))
-print(retensor)
