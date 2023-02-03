@@ -82,6 +82,6 @@ def test_tt_orthogonolize(tensor):
 def test_tt_round(tensor):
     tt = tt_svd(tensor)
     tt_added = tt_add(tt, tt)
-    tt_rounded = tt_round(tt_added)
+    tt_rounded = tt_rank_reduce(tt_added)
     retensor = tt_to_tensor(tt_rounded)
     assert np.sum(np.abs(retensor - (tensor+tensor))) < 1e-5

@@ -12,9 +12,9 @@ class Minimiser:
             )
         self.lr = 1e-2
 
-    def find_feasible_hypothesis(self):
+    def find_feasible_hypothesis(self, iterations=100):
         tt_train = self._init_tt_train()
-        for _ in range(500):
+        for _ in range(iterations):
             for idx in range(self.dimension - 1):
                 tt_train = self._core_iteration(tt_train, idx)
             self.lr *= 0.99
@@ -30,20 +30,25 @@ class Minimiser:
         return tt_train
 
     def _boolean_criterion(self, idx):
-        one = tt_one_bonded(self.dimension, idx)
-        one[0] *= -1.0
+        minus_one = tt_one_bonded(self.dimension, idx)
+        minus_one[0] *= -1.0
+        penalty = self._barrier(idx)
 
         def criterion_func(*tt_train):
             tt_train = tt_bool_op(tt_train)
             squared_Ttt_1 = tt_hadamard(tt_train, tt_train)
-            minus_1_squared_Ttt_1 = tt_add(squared_Ttt_1, one)
-            return tt_inner_prod(minus_1_squared_Ttt_1,
-                                 minus_1_squared_Ttt_1)
+            minus_1_squared_Ttt_1 = tt_add(squared_Ttt_1, minus_one)
+            return tt_inner_prod(minus_1_squared_Ttt_1, minus_1_squared_Ttt_1) - penalty(tt_train)
 
         return criterion_func
 
-    def _projection(self, gradient: np.array):
-        pass
+    def _barrier(self, idx):
+        constraints = [c(idx) for c in self.constraints]
+
+        def penalty_func(tt_train):
+            return sum([jnp.log(c(tt_train)) for c in constraints])
+
+        return penalty_func
 
     def _init_tt_train(self):
         return [2 * np.random.rand(1, 2, 1) - 1 for _ in range(self.dimension)]

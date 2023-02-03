@@ -81,29 +81,51 @@ class Atom(Expression):
 def get_ANF(atoms, hypothesis):
     variable_names = " ".join([a.name for a in atoms])
     variables = symbols(variable_names)
-    truth_table_labels = ((np.round(tt_to_tensor(tt_bool_op(hypothesis)))+1)/2).astype(int).flatten()
+    truth_table_labels = ((np.round(tt_to_tensor(tt_bool_op(hypothesis))) + 1) / 2).astype(int).flatten()
     return ANFform(variables, truth_table_labels)
 
 
-def exists_A_extending(e):
-    e = e.to_tt_train()
-    e_mean = tt_leading_entry(e) + 1
-    return lambda *h: -(tt_leading_entry(h) + e_mean + tt_inner_prod(h, e)) + 1e-6
+def bond_at(e, idx):
+    e_bond = np.einsum("abc, cde -> abde", e[idx], e[idx + 1])
+    e = e[:idx] + [e_bond] + e[idx + 2:]
+    return e
 
 
-def exists_A_not_extending(e):
-    e = e.to_tt_train()
-    e_mean = tt_leading_entry(e) - 1
-    return lambda *h: tt_leading_entry(h) + e_mean + tt_inner_prod(h, e) + 1e-6
+def exists_A_extending(example):
+    def unbonded_constraint(idx):
+        e = example.to_tt_train()
+        e_mean = tt_leading_entry(e) + 1
+        e = bond_at(e, idx)
+        return lambda h: tt_leading_entry(h) + e_mean + tt_inner_prod(h, e) - 1e-6
+
+    return unbonded_constraint
 
 
-def all_A_extending(e):
-    e = e.to_tt_train()
-    e_mean = tt_leading_entry(e) - 1
-    return lambda *h: -(tt_leading_entry(h) + e_mean + tt_inner_prod(h, e))
+def exists_A_not_extending(example):
+    def unbonded_constraint(idx):
+        e = example.to_tt_train()
+        e_mean = tt_leading_entry(e) - 1
+        e = bond_at(e, idx)
+        return lambda h: -(tt_leading_entry(h) + e_mean + tt_inner_prod(h, e) + 1e-6)
+
+    return unbonded_constraint
 
 
-def all_A_not_extending(e):
-    e = e.to_tt_train()
-    e_mean = tt_leading_entry(e) + 1
-    return lambda *h: tt_leading_entry(h) + e_mean + tt_inner_prod(h, e)
+def all_A_extending(example):
+    def unbonded_constraint(idx):
+        e = example.to_tt_train()
+        e_mean = tt_leading_entry(e) - 1
+        e = bond_at(e, idx)
+        return lambda h: tt_leading_entry(h) + e_mean + tt_inner_prod(h, e)
+
+    return unbonded_constraint
+
+
+def all_A_not_extending(example):
+    def unbonded_constraint(idx):
+        e = example.to_tt_train()
+        e_mean = tt_leading_entry(e) + 1
+        e = bond_at(e, idx)
+        return lambda h: -(tt_leading_entry(h) + e_mean + tt_inner_prod(h, e))
+
+    return unbonded_constraint

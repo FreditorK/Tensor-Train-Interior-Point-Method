@@ -9,10 +9,11 @@ PHI = np.array([[1, 1],
                 [1, -1]], dtype=float).reshape(1, 2, 2, 1)
 
 
-def phi(dimensions):
+def phi(num_bonds):
+    """ Bonds "num_bonds" PHI cores together """
     tensor = PHI
     new_PHI = PHI
-    for _ in range(2 ** (dimensions) - 1):
+    for _ in range(2 ** (num_bonds) - 1):
         new_PHI = jnp.expand_dims(new_PHI, (0, 1))
         tensor = jnp.expand_dims(tensor, (-1, -2))
         tensor = jnp.kron(tensor, new_PHI)
@@ -45,7 +46,7 @@ def tt_atom_train(idx, dim):
 
 
 def tt_rl_orthogonalize(tt_train: List[np.array]):
-    for idx in range(len(tt_train)-1, 0, -1):
+    for idx in range(len(tt_train) - 1, 0, -1):
         shape_p1 = tt_train[idx].shape
         shape = tt_train[idx - 1].shape
         Q_T, R = np.linalg.qr(tt_train[idx].reshape(shape_p1[0], -1).T)
@@ -56,10 +57,11 @@ def tt_rl_orthogonalize(tt_train: List[np.array]):
 
 
 def part_bond(core):
+    """ Breaks up a bond between two cores """
     shape = core.shape
     A = core.reshape(shape[0] * shape[1], -1)
     U, S, V_T = jnp.linalg.svd(A)
-    non_sing_eig_idxs = jnp.nonzero(S)[0]
+    non_sing_eig_idxs = jnp.nonzero(S)
     S = S[non_sing_eig_idxs]
     next_rank = len(S)
     U = U[:, non_sing_eig_idxs]
@@ -69,7 +71,8 @@ def part_bond(core):
     return G_i, G_ip1
 
 
-def tt_round(tt_train: List[np.array]):
+def tt_rank_reduce(tt_train: List[np.array]):
+    """ Might reduce TT-rank """
     tt_train = tt_rl_orthogonalize(tt_train)
     rank = 1
     for idx in range(len(tt_train) - 1):
@@ -90,9 +93,7 @@ def tt_round(tt_train: List[np.array]):
 
 
 def tt_svd(fourier_tensor: np.array) -> List[np.array]:
-    """
-    Converts a tensor into a tensor train
-    """
+    """ Converts a tensor into a tensor train """
     shape = fourier_tensor.shape
     rank = 1
     cores = []
@@ -131,9 +132,10 @@ def tt_leading_entry(tt_train: List[np.array]) -> np.array:
     """
     Returns the leading entry of a TT-train
     """
-    return np.linalg.multi_dot([core[:, 0, :] for core in tt_train])
+    return jnp.sum(jnp.linalg.multi_dot([core[tuple([slice(None)] + [0]*(len(core.shape)-2))] for core in tt_train]))
 
 
+@jax.jit
 def _block_diag_tensor(tensor_1: np.array, tensor_2: np.array) -> np.array:
     """
     For internal use: Concatenates two tensors to a block diagonal tensor
@@ -147,14 +149,12 @@ def tt_add(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.ar
     """
     Adds two tensor trains
     """
-    new_cores = [jnp.concatenate((tt_train_1[0], tt_train_2[0]), axis=-1)]
-    for core_1, core_2 in zip(tt_train_1[1:-1], tt_train_2[1:-1]):
-        H_i = _block_diag_tensor(core_1, core_2)
-        new_cores.append(H_i)
-    new_cores.append(jnp.concatenate((tt_train_1[-1], tt_train_2[-1]), axis=0))
-    return new_cores
+    return [jnp.concatenate((tt_train_1[0], tt_train_2[0]), axis=-1)] + \
+        [_block_diag_tensor(core_1, core_2) for core_1, core_2 in zip(tt_train_1[1:-1], tt_train_2[1:-1])] + \
+        [jnp.concatenate((tt_train_1[-1], tt_train_2[-1]), axis=0)]
 
 
+@jax.jit
 def _tt_train_kron(core_1: np.array, core_2: np.array) -> np.array:
     """
     For internal use: Computes the kronecker product between two TT-cores with appropriate dimensional
@@ -163,7 +163,7 @@ def _tt_train_kron(core_1: np.array, core_2: np.array) -> np.array:
     layers = []
     core_shape_length = len(core_1.shape)
     axes = list(range(1, core_shape_length - 1))
-    for i in product(*([[0, 1]]*(core_shape_length - 2))):
+    for i in product(*([[0, 1]] * (core_shape_length - 2))):
         idx = (slice(None),) + i
         layers.append(jnp.kron(jnp.expand_dims(core_1[idx], axis=axes), jnp.expand_dims(core_2[idx], axis=axes)))
     return jnp.concatenate(layers, axis=1).reshape(
@@ -185,10 +185,11 @@ def bool_to_tt_train(bool_values: List[bool]):
     return [jnp.array([1, 2 * float(b_value) - 1]).reshape(1, -1, 1) for b_value in bool_values]
 
 
+@jax.jit
 def _tt_core_collapse(core_1: np.array, core_2: np.array):
     return sum([
         jnp.kron(core_1[(slice(None),) + i], core_2[(slice(None),) + i])
-        for i in product(*([[0, 1]]*(len(core_1.shape) - 2)))
+        for i in product(*([[0, 1]] * (len(core_1.shape) - 2)))
     ])
 
 
@@ -196,15 +197,17 @@ def tt_inner_prod(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> flo
     """
     Computes the inner product between two tensor trains
     """
-    return jnp.sum(jnp.linalg.multi_dot([_tt_core_collapse(core_1, core_2) for core_1, core_2 in zip(tt_train_1, tt_train_2)]))
+    return jnp.sum(
+        jnp.linalg.multi_dot([_tt_core_collapse(core_1, core_2) for core_1, core_2 in zip(tt_train_1, tt_train_2)]))
 
 
+@jax.jit
 def _tt_phi_core(core_1: np.array):
     return sum([
         jnp.kron(
             jnp.expand_dims(core_1[(slice(None),) + i], list(range(1, 1 + len(i)))),
             phi(len(i) - 1)[(slice(None),) + sum(zip(i, [slice(None)] * len(i)), ())]
-        ) for i in product(*([[0, 1]]*(len(core_1.shape) - 2)))])
+        ) for i in product(*([[0, 1]] * (len(core_1.shape) - 2)))])
 
 
 def tt_bool_op(tt_train: List[np.array]) -> List[np.array]:
@@ -255,7 +258,7 @@ def tt_and(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.ar
     leading_one = tt_leading_one(len(tt_train_1))
     leading_one[0] *= -0.5
     sum_cores = tt_add(leading_one, tt_add(tt_add(xnor_cores, tt_train_1), tt_train_2))
-    rounded_sum = tt_round(sum_cores)
+    rounded_sum = tt_rank_reduce(sum_cores)
     return rounded_sum
 
 
@@ -267,7 +270,7 @@ def tt_or(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.arr
     leading_one = tt_leading_one(len(tt_train_1))
     leading_one[0] *= 0.5
     sum_cores = tt_add(leading_one, tt_add(tt_add(xnor_cores, tt_train_1), tt_train_2))
-    rounded_sum = tt_round(sum_cores)
+    rounded_sum = tt_rank_reduce(sum_cores)
     return rounded_sum
 
 

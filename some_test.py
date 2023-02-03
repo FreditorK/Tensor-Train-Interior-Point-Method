@@ -1,7 +1,4 @@
-import numpy as np
-from tt_op import *
-from tt_op import _tt_train_kron
-from copy import deepcopy
+from time import time
 from utils import *
 from optimiser import Minimiser
 
@@ -109,13 +106,8 @@ def _boolean_criterion(tt_train):
 tt_1 = tt_svd(T_4)
 tt_2 = tt_svd(T_4)
 tt_2new = [tt_2[0], np.einsum("abc, cde -> abde", tt_2[1], tt_2[2]), tt_2[3], tt_2[4]]
-tt_copy = deepcopy(tt_2new)
-tt_crit = tt_bool_op(tt_2new)
-parted_bond_1, parted_bond_2 = part_bond(tt_crit[1])
-tt_crit = [tt_crit[0], parted_bond_1, parted_bond_2, tt_crit[2], tt_crit[3]]
-print("hi", tt_inner_prod(tt_bool_op(tt_2), tt_bool_op(tt_2)))
-print(tt_to_tensor(tt_crit))
-print(tt_to_tensor(tt_bool_op(tt_2)))
+print(tt_leading_entry(tt_1))
+print(tt_leading_entry(tt_2new))
 """
 """
 tt_copy[0] *= -1
@@ -164,6 +156,8 @@ print(np.round(tt_to_tensor(tt_2_parted)-tt_to_tensor(actual_hadamard), decimals
 #print(tt_to_tensor(tt_formula))
 #print(tt_leading_entry(tt_formula))
 #print(tt_to_tensor(tt_formula))
+
+
 x = Atom(3, "x")
 y = Atom(3, "y")
 z = Atom(3, "z")
@@ -171,11 +165,14 @@ opt = Minimiser([
     exists_A_extending(x << y),
     all_A_not_extending(y & z)
 ], 3)
-hypothesis = opt.find_feasible_hypothesis()
-#print(np.round(tt_to_tensor(tt_bool_op(hypothesis)), decimals=5).reshape(-1, 1))
+t_1 = time()
+hypothesis = opt.find_feasible_hypothesis(100)
+t_2 = time()
 print(get_ANF([x, y, z], hypothesis))
 print(np.round(tt_to_tensor(hypothesis), decimals=5))
 print("Score:", boolean_criterion(hypothesis), tt_inner_prod(hypothesis, hypothesis))
+print(f"Total time taken: {t_2-t_1}s.")
+
 
 
 
