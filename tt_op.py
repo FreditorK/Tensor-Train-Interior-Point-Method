@@ -15,8 +15,7 @@ def phi(num_bonds):
     new_PHI = PHI
     for _ in range(2 ** (num_bonds) - 1):
         new_PHI = jnp.expand_dims(new_PHI, (0, 1))
-        tensor = jnp.expand_dims(tensor, (-1, -2))
-        tensor = jnp.kron(tensor, new_PHI)
+        tensor = jnp.kron(jnp.expand_dims(tensor, (-1, -2)), new_PHI)
     return tensor
 
 
@@ -56,12 +55,13 @@ def tt_rl_orthogonalize(tt_train: List[np.array]):
     return tt_train
 
 
+@jax.jit
 def part_bond(core):
     """ Breaks up a bond between two cores """
     shape = core.shape
     A = core.reshape(shape[0] * shape[1], -1)
     U, S, V_T = jnp.linalg.svd(A)
-    non_sing_eig_idxs = jnp.nonzero(S)
+    non_sing_eig_idxs = jnp.nonzero(S, size=len(S), fill_value=0)
     S = S[non_sing_eig_idxs]
     next_rank = len(S)
     U = U[:, non_sing_eig_idxs]
@@ -132,10 +132,10 @@ def tt_leading_entry(tt_train: List[np.array]) -> np.array:
     """
     Returns the leading entry of a TT-train
     """
-    return jnp.sum(jnp.linalg.multi_dot([core[tuple([slice(None)] + [0]*(len(core.shape)-2))] for core in tt_train]))
+    return jnp.sum(
+        jnp.linalg.multi_dot([core[tuple([slice(None)] + [0] * (len(core.shape) - 2))] for core in tt_train]))
 
 
-@jax.jit
 def _block_diag_tensor(tensor_1: np.array, tensor_2: np.array) -> np.array:
     """
     For internal use: Concatenates two tensors to a block diagonal tensor
@@ -154,7 +154,6 @@ def tt_add(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.ar
         [jnp.concatenate((tt_train_1[-1], tt_train_2[-1]), axis=0)]
 
 
-@jax.jit
 def _tt_train_kron(core_1: np.array, core_2: np.array) -> np.array:
     """
     For internal use: Computes the kronecker product between two TT-cores with appropriate dimensional
@@ -185,7 +184,6 @@ def bool_to_tt_train(bool_values: List[bool]):
     return [jnp.array([1, 2 * float(b_value) - 1]).reshape(1, -1, 1) for b_value in bool_values]
 
 
-@jax.jit
 def _tt_core_collapse(core_1: np.array, core_2: np.array):
     return sum([
         jnp.kron(core_1[(slice(None),) + i], core_2[(slice(None),) + i])
@@ -201,7 +199,22 @@ def tt_inner_prod(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> flo
         jnp.linalg.multi_dot([_tt_core_collapse(core_1, core_2) for core_1, core_2 in zip(tt_train_1, tt_train_2)]))
 
 
-@jax.jit
+def _tt_influence_core_collapse(core, idx):
+    return sum([
+        jnp.kron(core[(slice(None),) + i], core[(slice(None),) + i])
+        for i in product(*[list(range(1, int(idx + k == 0) - 1, -1)) for k in range(len(core.shape) - 2)])
+    ])
+
+
+def tt_influence(tt_train: List[np.array], idx):
+    """
+    Returns the influence of an idx-index atom on a boolean function
+    """
+
+    return jnp.sum(
+        jnp.linalg.multi_dot([_tt_influence_core_collapse(core, idx - i) for i, core in enumerate(tt_train)]))
+
+
 def _tt_phi_core(core_1: np.array):
     return sum([
         jnp.kron(

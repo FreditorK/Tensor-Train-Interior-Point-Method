@@ -1,4 +1,5 @@
 from tt_op import *
+from operators import D_func
 
 
 class Minimiser:
@@ -10,6 +11,7 @@ class Minimiser:
             self.gradient_functions.append(
                 partial_D(self._boolean_criterion(idx), idx)
             )
+        self.complete_gradient = D_func(boolean_criterion)
         self.lr = 1e-2
 
     def find_feasible_hypothesis(self, iterations=100):
@@ -18,6 +20,9 @@ class Minimiser:
             for idx in range(self.dimension - 1):
                 tt_train = self._core_iteration(tt_train, idx)
             self.lr *= 0.99
+        for _ in range(50):
+            complete_grad = self.complete_gradient(tt_train)
+            tt_train = [t - self.lr*complete_grad[idx] for idx, t in enumerate(tt_train)]
 
         return tt_train
 

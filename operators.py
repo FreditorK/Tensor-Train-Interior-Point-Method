@@ -6,7 +6,7 @@ def partial_D(f, idx):
 
 
 def D_func(f):
-    return jax.jit(jax.vmap(jax.grad(f), -1))
+    return jax.jit(jax.grad(f))
 
 
 def J_func(f, argnums=0):

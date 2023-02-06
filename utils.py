@@ -91,41 +91,57 @@ def bond_at(e, idx):
     return e
 
 
+def influence_geq(atom, eps):
+    def influence_constraint(_):
+        idx = atom.index
+        return lambda h: tt_influence(h, idx) - eps
+
+    return influence_constraint
+
+
+def influence_leq(atom, eps):
+    def influence_constraint(_):
+        idx = atom.index
+        return lambda h: eps - tt_influence(h, idx)
+
+    return influence_constraint
+
+
 def exists_A_extending(example):
-    def unbonded_constraint(idx):
+    def bonded_constraint(idx):
         e = example.to_tt_train()
         e_mean = tt_leading_entry(e) + 1
         e = bond_at(e, idx)
         return lambda h: tt_leading_entry(h) + e_mean + tt_inner_prod(h, e) - 1e-6
 
-    return unbonded_constraint
+    return bonded_constraint
 
 
 def exists_A_not_extending(example):
-    def unbonded_constraint(idx):
+    def bonded_constraint(idx):
         e = example.to_tt_train()
         e_mean = tt_leading_entry(e) - 1
         e = bond_at(e, idx)
         return lambda h: -(tt_leading_entry(h) + e_mean + tt_inner_prod(h, e) + 1e-6)
 
-    return unbonded_constraint
+    return bonded_constraint
 
 
 def all_A_extending(example):
-    def unbonded_constraint(idx):
+    def bonded_constraint(idx):
         e = example.to_tt_train()
         e_mean = tt_leading_entry(e) - 1
         e = bond_at(e, idx)
         return lambda h: tt_leading_entry(h) + e_mean + tt_inner_prod(h, e)
 
-    return unbonded_constraint
+    return bonded_constraint
 
 
 def all_A_not_extending(example):
-    def unbonded_constraint(idx):
+    def bonded_constraint(idx):
         e = example.to_tt_train()
         e_mean = tt_leading_entry(e) + 1
         e = bond_at(e, idx)
         return lambda h: -(tt_leading_entry(h) + e_mean + tt_inner_prod(h, e))
 
-    return unbonded_constraint
+    return bonded_constraint
