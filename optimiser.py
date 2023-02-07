@@ -1,3 +1,5 @@
+import numpy as np
+
 from tt_op import *
 from operators import D_func
 
@@ -13,26 +15,32 @@ class Minimiser:
             )
         constraint_functions = [c(-1) for c in self.constraints]
         self.penalty_function = lambda tt_train: sum([c(tt_train) for c in constraint_functions])
-        self.lr = 1e-2
 
     def find_feasible_hypothesis(self):
         tt_train, params = self._init_tt_train()
         criterion = boolean_criterion(self.dimension)
+        indices = np.arange(self.dimension - 1)
         criterion_score = 1.0
-        while params["lambda"] > 0 or criterion_score > 1e-4:
-            for idx in range(self.dimension - 1):
+        for _ in np.arange(int(params["lambda"]/0.02)):
+            for idx in indices:
                 tt_train = self._core_iteration(tt_train, params, idx)
-            params["lambda"] -= 0.025
             criterion_score = criterion(tt_train)
-            params["mu"] += self.lr*criterion_score
-            self.lr *= 0.99
+            params["mu"] += params["lr"]*criterion_score
+            params["lambda"] -= 0.02
+            params["lr"] *= 0.99
+        while criterion_score > 1e-4:
+            for idx in indices:
+                tt_train = self._core_iteration(tt_train, params, idx)
+            criterion_score = criterion(tt_train)
+            params["mu"] += params["lr"]*criterion_score
+            params["lr"] *= 0.99
 
         return tt_train
 
     def _core_iteration(self, tt_train, params, idx):
-        B = np.einsum("abc, cde -> abde", tt_train[idx], tt_train[idx + 1])
+        B = jnp.einsum("abc, cde -> abde", tt_train[idx], tt_train[idx + 1])
         bonded_tt_train = tt_train[:idx] + [B] + tt_train[idx + 2:]
-        B -= self.lr * self.gradient_functions[idx](*bonded_tt_train, params=params)
+        B -= params["lr"] * self.gradient_functions[idx](*bonded_tt_train, params=params)
         B_part_1, B_part_2 = part_bond(B)
         tt_train = tt_train[:idx] + [B_part_1, B_part_2] + tt_train[idx + 2:]
         return tt_train
@@ -53,16 +61,17 @@ class Minimiser:
     def _barrier(self, idx):
         constraints = [c(idx) for c in self.constraints]
 
-        def penalty_func(tt_train, shift):
+        def penalty(tt_train, shift):
             return sum([jnp.log(c(tt_train)+shift) for c in constraints])
 
-        return penalty_func
+        return penalty
 
     def _init_tt_train(self):
         tt_train = [2 * np.random.rand(1, 2, 1) - 1 for _ in range(self.dimension)]
         constraints = [c(-1) for c in self.constraints]
         params = {
             "lambda": 1 - min([c(tt_train) for c in constraints]),
-            "mu": 1.0
+            "mu": 1.0,
+            "lr": 1e-2
         }
         return tt_train, params
