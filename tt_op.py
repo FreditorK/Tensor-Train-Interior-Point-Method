@@ -230,14 +230,18 @@ def tt_bool_op(tt_train: List[np.array]) -> List[np.array]:
     return [_tt_phi_core(core) for core in tt_train]
 
 
-def boolean_criterion(tt_train):
-    one = tt_one(len(tt_train))
+def boolean_criterion(dimension):
+    one = tt_one(dimension)
     one[0] *= -1.0
-    tt_train = tt_bool_op(tt_train)
-    squared_Ttt_1 = tt_hadamard(tt_train, tt_train)
-    minus_1_squared_Ttt_1 = tt_add(squared_Ttt_1, one)
 
-    return tt_inner_prod(minus_1_squared_Ttt_1, minus_1_squared_Ttt_1)
+    @jax.jit
+    def criterion(tt_train):
+        tt_train = tt_bool_op(tt_train)
+        squared_Ttt_1 = tt_hadamard(tt_train, tt_train)
+        minus_1_squared_Ttt_1 = tt_add(squared_Ttt_1, one)
+        return tt_inner_prod(minus_1_squared_Ttt_1, minus_1_squared_Ttt_1)
+
+    return criterion
 
 
 def tt_xnor(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.array]:

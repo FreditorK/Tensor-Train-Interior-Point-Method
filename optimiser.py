@@ -16,48 +16,53 @@ class Minimiser:
         self.lr = 1e-2
 
     def find_feasible_hypothesis(self):
-        tt_train, aux, params = self._init_tt_train()
-        while aux > 0:
+        tt_train, params = self._init_tt_train()
+        criterion = boolean_criterion(self.dimension)
+        criterion_score = 1.0
+        while params["lambda"] > 0 or criterion_score > 1e-4:
             for idx in range(self.dimension - 1):
-                tt_train, aux = self._core_iteration(tt_train, aux, params, idx)
-            aux -= params["mu"] / (aux + self.penalty_function(tt_train))
+                tt_train = self._core_iteration(tt_train, params, idx)
+            params["lambda"] -= 0.025
+            criterion_score = criterion(tt_train)
+            params["mu"] += self.lr*criterion_score
             self.lr *= 0.99
-            params["mu"] *= 0.99
 
-        return tt_train, aux
+        return tt_train
 
-    def _core_iteration(self, tt_train, aux, params, idx):
+    def _core_iteration(self, tt_train, params, idx):
         B = np.einsum("abc, cde -> abde", tt_train[idx], tt_train[idx + 1])
         bonded_tt_train = tt_train[:idx] + [B] + tt_train[idx + 2:]
-        B -= self.lr * self.gradient_functions[idx](*bonded_tt_train, aux=aux, params=params)
+        B -= self.lr * self.gradient_functions[idx](*bonded_tt_train, params=params)
         B_part_1, B_part_2 = part_bond(B)
         tt_train = tt_train[:idx] + [B_part_1, B_part_2] + tt_train[idx + 2:]
-        return tt_train, aux
+        return tt_train
 
     def _boolean_criterion(self, idx):
         minus_one = tt_one_bonded(self.dimension, idx)
         minus_one[0] *= -1.0
         penalty = self._barrier(idx)
 
-        def criterion_func(*tt_train, aux, params):
+        def criterion_func(*tt_train, params):
             tt_train = tt_bool_op(tt_train)
             squared_Ttt_1 = tt_hadamard(tt_train, tt_train)
             minus_1_squared_Ttt_1 = tt_add(squared_Ttt_1, minus_one)
-            return aux + (1/(2*params["mu"]))*tt_inner_prod(minus_1_squared_Ttt_1, minus_1_squared_Ttt_1) - params["mu"]*penalty(tt_train, aux)
+            return params['mu']*tt_inner_prod(minus_1_squared_Ttt_1, minus_1_squared_Ttt_1) - params['lambda']*penalty(tt_train, params['lambda'])
 
         return criterion_func
 
     def _barrier(self, idx):
         constraints = [c(idx) for c in self.constraints]
 
-        def penalty_func(tt_train, aux):
-            return sum([jnp.log(c(tt_train)+aux) for c in constraints])
+        def penalty_func(tt_train, shift):
+            return sum([jnp.log(c(tt_train)+shift) for c in constraints])
 
         return penalty_func
 
     def _init_tt_train(self):
         tt_train = [2 * np.random.rand(1, 2, 1) - 1 for _ in range(self.dimension)]
         constraints = [c(-1) for c in self.constraints]
-        aux = 1 - min([c(tt_train) for c in constraints])
-        params = {"mu": 1.0}
-        return tt_train, aux, params
+        params = {
+            "lambda": 1 - min([c(tt_train) for c in constraints]),
+            "mu": 1.0
+        }
+        return tt_train, params
