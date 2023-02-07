@@ -108,40 +108,44 @@ def influence_leq(atom, eps):
 
 
 def exists_A_extending(example):
-    def bonded_constraint(idx):
+    def bonded_constraint(idx=-1):
         e = example.to_tt_train()
         e_mean = tt_leading_entry(e) + 1
-        e = bond_at(e, idx)
+        if idx != -1:
+            e = bond_at(e, idx)
         return lambda h: tt_leading_entry(h) + e_mean + tt_inner_prod(h, e) - 1e-6
 
     return bonded_constraint
 
 
 def exists_A_not_extending(example):
-    def bonded_constraint(idx):
+    def bonded_constraint(idx=-1):
         e = example.to_tt_train()
         e_mean = tt_leading_entry(e) - 1
-        e = bond_at(e, idx)
+        if idx != -1:
+            e = bond_at(e, idx)
         return lambda h: -(tt_leading_entry(h) + e_mean + tt_inner_prod(h, e) + 1e-6)
 
     return bonded_constraint
 
 
 def all_A_extending(example):
-    def bonded_constraint(idx):
+    def bonded_constraint(idx=-1):
         e = example.to_tt_train()
         e_mean = tt_leading_entry(e) - 1
-        e = bond_at(e, idx)
+        if idx != -1:
+            e = bond_at(e, idx)
         return lambda h: tt_leading_entry(h) + e_mean + tt_inner_prod(h, e)
 
     return bonded_constraint
 
 
 def all_A_not_extending(example):
-    def bonded_constraint(idx):
+    def bonded_constraint(idx=-1):
         e = example.to_tt_train()
         e_mean = tt_leading_entry(e) + 1
-        e = bond_at(e, idx)
+        if idx != -1:
+            e = bond_at(e, idx)
         return lambda h: -(tt_leading_entry(h) + e_mean + tt_inner_prod(h, e))
 
     return bonded_constraint

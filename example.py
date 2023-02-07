@@ -10,7 +10,7 @@ opt = Minimiser([
     all_A_not_extending(y ^ z)
 ], 3)
 t_1 = time()
-hypothesis = opt.find_feasible_hypothesis(100)
+hypothesis = opt.find_feasible_hypothesis()
 t_2 = time()
 print(get_ANF([x, y, z], hypothesis))
 print(np.round(tt_to_tensor(hypothesis), decimals=5))
