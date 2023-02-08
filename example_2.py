@@ -2,22 +2,24 @@ from time import time
 from utils import *
 from optimiser import Minimiser
 
-
-head_coin_1 = Atom(4, "head_coin_1")
-tail_coin_1 = Atom(4, "tail_coin_1")
-head_coin_2 = Atom(4, "head_coin_2")
-tail_coin_2 = Atom(4, "tail_coin_2")
-opt = Minimiser([
+vocab_size = 4
+head_coin_1 = Atom(vocab_size, "head_coin_1")
+tail_coin_1 = Atom(vocab_size, "tail_coin_1")
+head_coin_2 = Atom(vocab_size, "head_coin_2")
+tail_coin_2 = Atom(vocab_size, "tail_coin_2")
+constraints = [
     all_A_extending(
         (head_coin_1 & ~tail_coin_1) |
         (~head_coin_1 & tail_coin_1) &
         (head_coin_2 & ~tail_coin_2) |
         (~head_coin_2 & tail_coin_2)
     )
-], 4)
+]
+opt = Minimiser(constraints, vocab_size)
 t_1 = time()
 hypothesis = opt.find_feasible_hypothesis()
 t_2 = time()
+print("Constraint Score: ", constraints[0](-1)(hypothesis))
 #print(tt_influence(hypothesis, 0), tt_influence(hypothesis, 1), tt_influence(hypothesis, 2), tt_influence(hypothesis, 3))
 print(get_ANF([head_coin_1, tail_coin_1, head_coin_2, tail_coin_2], hypothesis))
 print([np.sum(np.abs(t[:, 0, :] - t[:, 1, :])) for t in hypothesis])
