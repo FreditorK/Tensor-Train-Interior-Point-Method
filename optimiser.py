@@ -1,20 +1,22 @@
 from tt_op import *
 from operators import D_func
+from utils import Constraint
+
 
 #np.random.seed(7)
 
 
 class Minimiser:
-    def __init__(self, constraints, dimension):
+    def __init__(self, constraints: Constraint, dimension):
         self.dimension = dimension
-        self.constraints = constraints
+        self.constraints = constraints.get_constraints()
         self.gradient_functions = []
         for idx in range(dimension - 1):
             self.gradient_functions.append(
                 partial_D(self._boolean_criterion(idx), idx)
             )
         constraint_functions = [c(-1) for c in self.constraints]
-        self.penalty_function = lambda tt_train: min([c(tt_train) for c in constraint_functions]+ [1 - tt_inner_prod(tt_train, tt_train)])
+        self.penalty_function = lambda tt_train: min([c(tt_train) for c in constraint_functions]+ [1+1e-5 - tt_inner_prod(tt_train, tt_train)])
         self.complete_gradient = D_func(boolean_criterion(dimension))
 
     def find_feasible_hypothesis(self):
@@ -27,10 +29,10 @@ class Minimiser:
             for idx in indices:
                 tt_train = self._core_iteration(tt_train, params, idx)
             max_violation = self.penalty_function(tt_train)
-            print(params["lambda"], [c(tt_train) for c in constraint_functions]+ [1 - tt_inner_prod(tt_train, tt_train)])
+            print(params["lambda"], [c(tt_train) for c in constraint_functions]+ [1- tt_inner_prod(tt_train, tt_train)])
             params["lambda"] = max(
-                params["lambda"] - params["lr"]*(2 - params["mu"]*params["lambda"]/(max_violation + params["lambda"]) - params["mu"]*jnp.log(max_violation + params["lambda"])),
-                np.abs(max_violation)+1e-3
+                params["lambda"] - params["lr"]*(2 - params["mu"]*params["lambda"]/(max_violation + params["lambda"]) - params["mu"]*jnp.log(max_violation + params["lambda"] + 1e-5)),
+                -min(max_violation, 0)
             )
             if prev_max_violation > max_violation and max_violation < 0:
                 params["lr"] *= 0.99
@@ -40,15 +42,16 @@ class Minimiser:
         params["lr"] *= 0.1
         prev_criterion_score = np.inf
         criterion_score = 1.0
-        while criterion_score > 1e-5:
+        while criterion_score > 1e-4:
             gradient = self.complete_gradient(tt_train)
             tt_train = [t - params["lr"] * gradient[i] for i, t in enumerate(tt_train)]
             criterion_score = criterion(tt_train)
+            print(criterion_score)
             if criterion_score >= prev_criterion_score:
                 params["lr"] *= 0.99
             prev_criterion_score = criterion_score
 
-        return tt_rank_reduce(tt_train)
+        return tt_train
 
     def _core_iteration(self, tt_train, params, idx):
         B = jnp.einsum("abc, cde -> abde", tt_train[idx], tt_train[idx + 1])
@@ -69,7 +72,7 @@ class Minimiser:
             minus_1_squared_Ttt_1 = tt_add(squared_Ttt_1, minus_one)
             return (1 - params["mu"]) * tt_inner_prod(minus_1_squared_Ttt_1, minus_1_squared_Ttt_1) \
                 - params['mu'] * params['lambda']*penalty(tt_train, params['lambda']) \
-                - (params["mu"] - 0.5) * params['lambda'] * jnp.log(1 - tt_inner_prod(tt_train, tt_train) + params["lambda"])
+                - (params["mu"] - 0.5) * params['lambda'] * jnp.log(1+1e-5 - tt_inner_prod(tt_train, tt_train) + params["lambda"])
 
         return criterion_func
 
