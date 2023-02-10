@@ -1,7 +1,7 @@
 from tt_op import *
 from operators import D_func
 
-np.random.seed(7)
+#np.random.seed(7)
 
 
 class Minimiser:
@@ -14,7 +14,7 @@ class Minimiser:
                 partial_D(self._boolean_criterion(idx), idx)
             )
         constraint_functions = [c(-1) for c in self.constraints]
-        self.penalty_function = lambda tt_train: sum([c(tt_train) for c in constraint_functions])
+        self.penalty_function = lambda tt_train: min([c(tt_train) for c in constraint_functions]+ [1 - tt_inner_prod(tt_train, tt_train)])
         self.complete_gradient = D_func(boolean_criterion(dimension))
 
     def find_feasible_hypothesis(self):
@@ -24,7 +24,9 @@ class Minimiser:
         while params["lambda"] > 0:
             for idx in indices:
                 tt_train = self._core_iteration(tt_train, params, idx)
-            params["lambda"] -= params["lr"]  # *(1 - params["mu"]/(max_violation + params["lambda"]))
+            max_violation = self.penalty_function(tt_train)
+            params["lambda"] -= params["lr"]*(2 - params["mu"]*params["lambda"]/(max_violation + params["lambda"]) -jnp.log(max_violation + params["lambda"]))
+            print(params["lambda"])
         print("Feasible point found.")
         params["lambda"] = 0
         params["mu"] = 0.5
@@ -59,8 +61,8 @@ class Minimiser:
             squared_Ttt_1 = tt_hadamard(Ttt_train, Ttt_train)
             minus_1_squared_Ttt_1 = tt_add(squared_Ttt_1, minus_one)
             return (1 - params["mu"]) * tt_inner_prod(minus_1_squared_Ttt_1, minus_1_squared_Ttt_1) \
-                - params['mu'] * penalty(tt_train, params['lambda']) \
-                - (params["mu"] - 0.5) * jnp.log(1 - tt_inner_prod(tt_train, tt_train) + params["lambda"])
+                - params['mu'] * params['lambda']*penalty(tt_train, params['lambda']) \
+                - (params["mu"] - 0.5) * params['lambda'] * jnp.log(1 - tt_inner_prod(tt_train, tt_train) + params["lambda"])
 
         return criterion_func
 
@@ -74,9 +76,8 @@ class Minimiser:
 
     def _init_tt_train(self):
         tt_train = [2 * np.random.rand(1, 2, 1) - 1 for _ in range(self.dimension)]
-        constraints = [c(-1) for c in self.constraints]
         params = {
-            "lambda": 1 - min([c(tt_train) for c in constraints] + [(1 - tt_inner_prod(tt_train, tt_train))]),
+            "lambda": 1 - self.penalty_function(tt_train),
             "mu": 1.0,
             "lr": 1e-1
         }
