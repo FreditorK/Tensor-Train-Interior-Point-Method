@@ -1,4 +1,4 @@
-from sympy.logic.boolalg import ANFform
+from sympy.logic.boolalg import ANFform, to_cnf, to_dnf, to_anf
 from sympy import symbols
 from tt_op import *
 from copy import deepcopy
@@ -82,7 +82,18 @@ def get_ANF(atoms, hypothesis):
     variable_names = " ".join([a.name for a in atoms])
     variables = symbols(variable_names)
     truth_table_labels = ((np.round(tt_to_tensor(tt_bool_op(hypothesis))) + 1) / 2).astype(int).flatten()
-    return ANFform(variables, truth_table_labels)
+    anf = ANFform(variables, truth_table_labels)
+    return anf
+
+
+def get_CNF(atoms, hypothesis):
+    anf = get_ANF(atoms, hypothesis)
+    return to_cnf(anf, simplify=True)
+
+
+def get_DNF(atoms, hypothesis):
+    anf = get_ANF(atoms, hypothesis)
+    return to_dnf(anf, simplify=True)
 
 
 def bond_at(e, idx):

@@ -157,8 +157,12 @@ print(np.round(tt_to_tensor(tt_2_parted)-tt_to_tensor(actual_hadamard), decimals
 #print(tt_leading_entry(tt_formula))
 #print(tt_to_tensor(tt_formula))
 
-tt_2 = tt_svd(T_2)
-print(tt_influence(tt_2, 2))
+x = Atom(3, "x")
+y = Atom(3, "y")
+z = Atom(3, "z")
+tt = [np.round(t, decimals=5) for t in tt_rank_reduce(((y | ~x) & (y | ~z)).to_tt_train())]
+print(tt_to_tensor(tt))
+print(tt)
 
 
 

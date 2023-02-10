@@ -55,13 +55,12 @@ def tt_rl_orthogonalize(tt_train: List[np.array]):
     return tt_train
 
 
-@jax.jit
 def part_bond(core):
     """ Breaks up a bond between two cores """
     shape = core.shape
     A = core.reshape(shape[0] * shape[1], -1)
     U, S, V_T = jnp.linalg.svd(A)
-    non_sing_eig_idxs = jnp.nonzero(S, size=len(S), fill_value=0)
+    non_sing_eig_idxs = jnp.asarray(np.abs(S) > 1e-5).nonzero()
     S = S[non_sing_eig_idxs]
     next_rank = len(S)
     U = U[:, non_sing_eig_idxs]
@@ -79,7 +78,7 @@ def tt_rank_reduce(tt_train: List[np.array]):
         idx_shape = tt_train[idx].shape
         next_idx_shape = tt_train[idx + 1].shape
         U, S, V_T = np.linalg.svd(tt_train[idx].reshape(rank * idx_shape[1], -1))
-        non_sing_eig_idxs = np.nonzero(S)[0]
+        non_sing_eig_idxs = np.asarray(np.abs(S) > 1e-5).nonzero()
         S = S[non_sing_eig_idxs]
         next_rank = len(S)
         U = U[:, non_sing_eig_idxs]
@@ -100,7 +99,7 @@ def tt_svd(fourier_tensor: np.array) -> List[np.array]:
     for i in range(len(shape) - 1):
         A = fourier_tensor.reshape(rank * shape[i], -1)
         U, S, V_T = np.linalg.svd(A)
-        non_sing_eig_idxs = np.nonzero(S)[0]
+        non_sing_eig_idxs = np.asarray(np.abs(S) > 1e-5).nonzero()
         S = S[non_sing_eig_idxs]
         next_rank = len(S)
         U = U[:, non_sing_eig_idxs]
