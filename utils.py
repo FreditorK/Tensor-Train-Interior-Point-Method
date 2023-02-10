@@ -131,9 +131,9 @@ class Constraint:
         self.exists_constraints.append(example)
 
     def exists_A_not_extending(self, examples: List[Expression]):
-        example = ~examples[0]
+        example = examples[0]
         for e in examples[1:]:
-            example = example | ~e
+            example = example | e
         self.exists_not_constraints.append(example)
 
     def all_A_extending(self, examples: List[Expression]):
@@ -143,9 +143,10 @@ class Constraint:
         self.forall_constraints.append(example)
 
     def all_A_not_extending(self, examples: List[Expression]):
-        example = ~examples[0]
+        example = examples[0]
         for e in examples[1:]:
-            example = example | ~e
+            example = example & e
+        example = ~example
         self.forall_constraints.append(example)
 
     def _return_exists_constraints(self):

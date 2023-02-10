@@ -32,7 +32,7 @@ class Minimiser:
             print(params["lambda"], [c(tt_train) for c in constraint_functions]+ [1- tt_inner_prod(tt_train, tt_train)])
             params["lambda"] = max(
                 params["lambda"] - params["lr"]*(2 - params["mu"]*params["lambda"]/(max_violation + params["lambda"]) - params["mu"]*jnp.log(max_violation + params["lambda"] + 1e-5)),
-                -min(max_violation, 0)
+                np.abs(min(max_violation, 0))
             )
             if prev_max_violation > max_violation and max_violation < 0:
                 params["lr"] *= 0.99
