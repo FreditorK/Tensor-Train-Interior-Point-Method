@@ -60,7 +60,7 @@ def part_bond(core):
     shape = core.shape
     A = core.reshape(shape[0] * shape[1], -1)
     U, S, V_T = jnp.linalg.svd(A)
-    non_sing_eig_idxs = jnp.asarray(np.abs(S) > 1e-5).nonzero()
+    non_sing_eig_idxs = jnp.asarray(np.abs(S) > 0).nonzero()
     S = S[non_sing_eig_idxs]
     next_rank = len(S)
     U = U[:, non_sing_eig_idxs]

@@ -2,21 +2,21 @@ from tt_op import *
 from operators import D_func
 from utils import Constraint
 
-
-#np.random.seed(7)
+np.random.seed(7)
 
 
 class Minimiser:
     def __init__(self, constraints: Constraint, dimension):
         self.dimension = dimension
-        self.constraints = constraints.get_constraints()
+        self.equality_constraints = constraints._return_forall_constraints()
+        self.inequality_constraints = constraints._return_exist_not_constraints() + constraints._return_exists_constraints()
         self.gradient_functions = []
         for idx in range(dimension - 1):
             self.gradient_functions.append(
                 partial_D(self._boolean_criterion(idx), idx)
             )
-        constraint_functions = [c(-1) for c in self.constraints]
-        self.penalty_function = lambda tt_train: min([c(tt_train) for c in constraint_functions]+ [1+1e-5 - tt_inner_prod(tt_train, tt_train)])
+        constraint_functions = [c(-1) for c in self.equality_constraints + self.inequality_constraints]
+        self.penalty_function = lambda tt_train: min([c(tt_train) for c in constraint_functions])
         self.complete_gradient = D_func(boolean_criterion(dimension))
 
     def find_feasible_hypothesis(self):
@@ -24,33 +24,37 @@ class Minimiser:
         criterion = boolean_criterion(self.dimension)
         indices = np.arange(self.dimension - 1)
         prev_max_violation = -np.inf
-        constraint_functions = [c(-1) for c in self.constraints]
+        constraint_functions = [c(-1) for c in self.equality_constraints + self.inequality_constraints]
         while params["lambda"] > 0:
             for idx in indices:
                 tt_train = self._core_iteration(tt_train, params, idx)
+                tt_train[idx] = tt_train[idx] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
+            # Projection onto sphere
+            # norm_index = np.random.randint(0, self.dimension)
+            # tt_train[norm_index] = tt_train[norm_index] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
             max_violation = self.penalty_function(tt_train)
-            print(params["lambda"], [c(tt_train) for c in constraint_functions]+ [1- tt_inner_prod(tt_train, tt_train)])
+            print(params["lambda"], [c(tt_train) for c in constraint_functions], tt_inner_prod(tt_train, tt_train))
             params["lambda"] = max(
-                params["lambda"] - params["lr"]*(2 - params["mu"]*params["lambda"]/(max_violation + params["lambda"]) - params["mu"]*jnp.log(max_violation + params["lambda"] + 1e-5)),
-                np.abs(min(max_violation, 0))
+                params["lambda"] - 0.05, np.abs(min(max_violation, 0))
+                # params["lr"]*(3 - 1/(max_violation + params["lambda"]+1e-5)
             )
-            if prev_max_violation > max_violation and max_violation < 0:
-                params["lr"] *= 0.99
+            # if prev_max_violation > max_violation and max_violation < 0:
+            #   params["lr"] *= 0.99
+        print(max_violation)
         print("Feasible point found.")
         params["lambda"] = 0
-        params["mu"] = 0.5
         params["lr"] *= 0.1
         prev_criterion_score = np.inf
         criterion_score = 1.0
-        while criterion_score > 1e-4:
-            gradient = self.complete_gradient(tt_train)
-            tt_train = [t - params["lr"] * gradient[i] for i, t in enumerate(tt_train)]
+        while params["mu"] > 0.0:
+            params["mu"] -= 0.005
+            for idx in indices:
+                tt_train = self._core_iteration(tt_train, params, idx)
             criterion_score = criterion(tt_train)
             print(criterion_score)
             if criterion_score >= prev_criterion_score:
                 params["lr"] *= 0.99
             prev_criterion_score = criterion_score
-
         return tt_train
 
     def _core_iteration(self, tt_train, params, idx):
@@ -67,28 +71,30 @@ class Minimiser:
         penalty = self._barrier(idx)
 
         def criterion_func(*tt_train, params):
-            Ttt_train = tt_bool_op(tt_train)  # TODO: Ttt_train is tt_train on git
+            Ttt_train = tt_bool_op(tt_train)
             squared_Ttt_1 = tt_hadamard(Ttt_train, Ttt_train)
             minus_1_squared_Ttt_1 = tt_add(squared_Ttt_1, minus_one)
-            return (1 - params["mu"]) * tt_inner_prod(minus_1_squared_Ttt_1, minus_1_squared_Ttt_1) \
-                - params['mu'] * params['lambda']*penalty(tt_train, params['lambda']) \
-                - (params["mu"] - 0.5) * params['lambda'] * jnp.log(1+1e-5 - tt_inner_prod(tt_train, tt_train) + params["lambda"])
+            return penalty(tt_train, params) + (1 - params["mu"]) * tt_inner_prod(minus_1_squared_Ttt_1, minus_1_squared_Ttt_1) \
 
         return criterion_func
 
     def _barrier(self, idx):
-        constraints = [c(idx) for c in self.constraints]
+        equality_constraints = [c(idx) for c in self.equality_constraints]
+        inequality_constraints = [c(idx) for c in self.inequality_constraints]
 
-        def penalty(tt_train, shift):
-            return sum([jnp.log(c(tt_train) + shift) for c in constraints])
+        def penalty(tt_train, params):
+            return sum([jnp.square(c(tt_train)) for c in equality_constraints]) \
+                - params["lambda"] * sum([jnp.log(c(tt_train) + params["lambda"]) for c in inequality_constraints])
 
         return penalty
 
     def _init_tt_train(self):
         tt_train = [2 * np.random.rand(1, 2, 1) - 1 for _ in range(self.dimension)]
+        tt_train[0] = tt_train[0] / np.sqrt(tt_inner_prod(tt_train, tt_train))
+        tt_train = tt_rank_reduce(tt_train)
         params = {
             "lambda": 1 - self.penalty_function(tt_train),
             "mu": 1.0,
-            "lr": 1e-1
+            "lr": 1e-2
         }
         return tt_train, params

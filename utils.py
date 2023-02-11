@@ -127,13 +127,14 @@ class Constraint:
     def exists_A_extending(self, examples: List[Expression]):
         example = examples[0]
         for e in examples[1:]:
-            example = example & e
+            example = example | e
         self.exists_constraints.append(example)
 
     def exists_A_not_extending(self, examples: List[Expression]):
         example = examples[0]
         for e in examples[1:]:
             example = example | e
+        example = ~example
         self.exists_not_constraints.append(example)
 
     def all_A_extending(self, examples: List[Expression]):
@@ -163,7 +164,7 @@ class Constraint:
             e = example
             if idx != -1:
                 e = bond_at(example, idx)
-            return lambda h: tt_leading_entry(h) + e_mean + tt_inner_prod(h, e) - 1e-5
+            return lambda h: tt_leading_entry(h) + e_mean + tt_inner_prod(h, e)
 
         return [bonded_constraint]
 
@@ -181,7 +182,7 @@ class Constraint:
             e = example
             if idx != -1:
                 e = bond_at(example, idx)
-            return lambda h: -(tt_leading_entry(h) + e_mean + tt_inner_prod(h, e) + 1e-5)
+            return lambda h: -(tt_leading_entry(h) + e_mean + tt_inner_prod(h, e))
 
         return [bonded_constraint]
 
@@ -193,16 +194,16 @@ class Constraint:
             example = example & e
 
         example = example.to_tt_train()
-        e_mean = tt_leading_entry(example) - 1
+        e_mean = -(tt_leading_entry(example) + 1)
         assert np.abs(e_mean + 2) > 1e-5, "An example is contradictory!"
 
         def bonded_constraint(idx=-1):
             e = example
             if idx != -1:
                 e = bond_at(example, idx)
-            return lambda h: tt_leading_entry(h) + e_mean + tt_inner_prod(h, e) + 1e-6
+            return lambda h: tt_leading_entry(h) + tt_inner_prod(h, e) + e_mean
+
+        print(tt_leading_entry(example))
+        print(bonded_constraint(idx=-1)(example))
 
         return [bonded_constraint]
-
-    def get_constraints(self):
-        return self._return_forall_constraints() + self._return_exists_constraints() + self._return_exist_not_constraints()
