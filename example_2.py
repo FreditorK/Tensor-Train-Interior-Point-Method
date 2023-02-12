@@ -13,10 +13,10 @@ constraints.all_A_extending([
         (head_coin_2 & ~tail_coin_2) | (~head_coin_2 & tail_coin_2)
 ])
 
-#constraints.all_A_not_extending([
-#    (head_coin_1 & tail_coin_1) | (~head_coin_1 & ~tail_coin_1),
-#    (head_coin_2 & tail_coin_2) | (~head_coin_2 & ~tail_coin_2)
-#])
+constraints.all_A_not_extending([
+    (head_coin_1 & tail_coin_1) | (~head_coin_1 & ~tail_coin_1),
+    (head_coin_2 & tail_coin_2) | (~head_coin_2 & ~tail_coin_2)
+])
 
 opt = Minimiser(constraints, vocab_size)
 t_1 = time()

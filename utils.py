@@ -121,6 +121,7 @@ def influence_leq(atom, eps):
 class Constraint:
     def __init__(self):
         self.forall_constraints = []
+        self.forall_not_constraints = []
         self.exists_constraints = []
         self.exists_not_constraints = []
 
@@ -146,9 +147,8 @@ class Constraint:
     def all_A_not_extending(self, examples: List[Expression]):
         example = examples[0]
         for e in examples[1:]:
-            example = example & e
-        example = ~example
-        self.forall_constraints.append(example)
+            example = example | e
+        self.forall_not_constraints.append(example)
 
     def _return_exists_constraints(self):
         if len(self.exists_constraints) == 0:
@@ -195,7 +195,7 @@ class Constraint:
 
         example = example.to_tt_train()
         e_mean = -(tt_leading_entry(example) + 1)
-        assert np.abs(e_mean + 2) > 1e-5, "An example is contradictory!"
+        assert np.abs(e_mean) > 1e-5, "An example is contradictory!"
 
         def bonded_constraint(idx=-1):
             e = example
@@ -203,7 +203,24 @@ class Constraint:
                 e = bond_at(example, idx)
             return lambda h: tt_leading_entry(h) + tt_inner_prod(h, e) + e_mean
 
-        print(tt_leading_entry(example))
-        print(bonded_constraint(idx=-1)(example))
+        return [bonded_constraint]
+
+    def _return_forall_not_constraints(self):
+        if len(self.forall_not_constraints) == 0:
+            return []
+        example = self.forall_not_constraints[0]
+        for e in self.forall_not_constraints[1:]:
+            example = example | e
+
+        p = example
+        example = example.to_tt_train()
+        e_mean = tt_leading_entry(example) + 1
+        assert np.abs(e_mean + 2) > 1e-5, "An example is contradictory!"
+
+        def bonded_constraint(idx=-1):
+            e = example
+            if idx != -1:
+                e = bond_at(example, idx)
+            return lambda h: tt_leading_entry(h) + tt_inner_prod(h, e) + e_mean
 
         return [bonded_constraint]
