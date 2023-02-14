@@ -212,7 +212,6 @@ class Constraint:
         for e in self.forall_not_constraints[1:]:
             example = example | e
 
-        p = example
         example = example.to_tt_train()
         e_mean = tt_leading_entry(example) + 1
         assert np.abs(e_mean + 2) > 1e-5, "An example is contradictory!"
