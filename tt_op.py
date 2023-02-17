@@ -190,6 +190,12 @@ def _tt_core_collapse(core_1: np.array, core_2: np.array):
     ])
 
 
+def bond_at(e, idx):
+    e_bond = jnp.einsum("abc, cde -> abde", e[idx], e[idx + 1])
+    e = e[:idx] + [e_bond] + e[idx + 2:]
+    return e
+
+
 def tt_inner_prod(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> float:
     """
     Computes the inner product between two tensor trains

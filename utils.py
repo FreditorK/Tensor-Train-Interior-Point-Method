@@ -96,12 +96,6 @@ def get_DNF(atoms, hypothesis):
     return to_dnf(anf, simplify=True)
 
 
-def bond_at(e, idx):
-    e_bond = np.einsum("abc, cde -> abde", e[idx], e[idx + 1])
-    e = e[:idx] + [e_bond] + e[idx + 2:]
-    return e
-
-
 def influence_geq(atom, eps):
     def influence_constraint(_):
         idx = atom.index
@@ -118,108 +112,128 @@ def influence_leq(atom, eps):
     return influence_constraint
 
 
-class Constraint:
+class Meta_Boolean_Function:
+    count = 0
+
+    def __init__(self, name: str, args, op):
+        if name is None:
+            self.name = f"e_{str(Meta_Boolean_Function.count)}"
+            Meta_Boolean_Function.count += 1
+        else:
+            self.name = name
+
+        self.op = op
+        self.args = args
+
+    def to_tt_constraint(self, idx, negation=False):
+        example = next(func for func in self.args if not isinstance(func, Hypothesis))
+        example = example.to_tt_constraint(idx)
+        if negation:
+            return lambda h: 1 - self.op(h, example)
+        return lambda h: self.op(h, example) + 1
+
+    def __repr__(self):
+        return str(self)
+
+    def __str__(self):
+        return self.name
+
+    def __and__(self, other):
+        self.op = lambda h, e: -0.5 + 0.5 * tt_leading_entry(h) + 0.5 * tt_leading_entry(e) + tt_inner_prod(h, e)
+        self.args = [self, other]
+        return self
+
+    def __rand__(self, other):
+        other.__and__(self)
+        return other
+
+    def __or__(self, other):
+        self.op = lambda h, e: 0.5 + 0.5 * tt_leading_entry(h) + 0.5 * tt_leading_entry(e) - tt_inner_prod(h, e)
+        self.args = [self, other]
+        return self
+
+    def __ror__(self, other):
+        other.__or__(self)
+        return other
+
+    def __xor__(self, other):
+        self.op = lambda h, e: -tt_inner_prod(h, e)
+        self.args = [self, other]
+        return self
+
+    def __rxor__(self, other):
+        other.__or__(self)
+        return other
+
+    def __lshift__(self, other):  # <-
+        self.op = lambda h, e: 0.5 + 0.5 * tt_leading_entry(h) - 0.5 * tt_leading_entry(e) + tt_inner_prod(h, e)
+        self.args = [self, other]
+        return self
+
+    def __rlshift__(self, other):
+        other.__lshift(self)
+        return other
+
+    def __rshift__(self, other):  # ->
+        self.op = lambda h, e: 0.5 - 0.5 * tt_leading_entry(h) + 0.5 * tt_leading_entry(e) + tt_inner_prod(h, e)
+        self.args = [self, other]
+        return self
+
+    def __rrshift__(self, other):  # ->
+        self.__ror__(other.__invert__())
+        return other
+
+
+class Hypothesis(Meta_Boolean_Function):
+    def __init__(self, name=None):
+        if name is None:
+            self.name = "hypothesis"
+        self.name = name
+        super().__init__(name, [self], lambda x: x)
+
+
+class Boolean_Function(Meta_Boolean_Function):
+    count = 0
+
+    def __init__(self, expr: Expression, name: str = None):
+        if name is None:
+            self.name = f"e_{str(Boolean_Function.count)}"
+            Boolean_Function.count += 1
+        else:
+            self.name = name
+        super().__init__(name, [expr], lambda x: x)
+
+    def to_tt_constraint(self, idx, negation=False):
+        example = next(expr for expr in self.args if isinstance(expr, Expression))
+        e = example.to_tt_train()
+        if idx != -1:
+            e = bond_at(e, idx)
+        return e
+
+
+class ConstraintSpace:
     def __init__(self):
         self.forall_constraints = []
-        self.forall_not_constraints = []
+        self.not_forall_constraints = []
         self.exists_constraints = []
-        self.exists_not_constraints = []
+        self.not_exists_constraints = []
 
-    def exists_A_extending(self, examples: List[Expression]):
-        example = examples[0]
-        for e in examples[1:]:
-            example = example | e
+    def exists_S(self, example: Meta_Boolean_Function):
         self.exists_constraints.append(example)
 
-    def exists_A_not_extending(self, examples: List[Expression]):
-        example = examples[0]
-        for e in examples[1:]:
-            example = example | e
-        example = ~example
-        self.exists_not_constraints.append(example)
+    def not_exists_S(self, example: Meta_Boolean_Function):
+        self.not_exists_constraints.append(example)
 
-    def all_A_extending(self, examples: List[Expression]):
-        example = examples[0]
-        for e in examples[1:]:
-            example = example & e
+    def forall_S(self, example: Meta_Boolean_Function):
         self.forall_constraints.append(example)
 
-    def all_A_not_extending(self, examples: List[Expression]):
-        example = examples[0]
-        for e in examples[1:]:
-            example = example | e
-        self.forall_not_constraints.append(example)
+    def not_forall_S(self, example: Meta_Boolean_Function):
+        self.not_forall_constraints.append(example)
 
-    def _return_exists_constraints(self):
-        if len(self.exists_constraints) == 0:
-            return []
-        example = self.exists_constraints[0]
-        for e in self.exists_constraints[1:]:
-            example = example & e
-        example = example.to_tt_train()
-        e_mean = tt_leading_entry(example) + 1
-        assert np.abs(e_mean) > 1e-5, "An example is contradictory!"
+    def _return_inequality_constraints(self):
+        return [lambda idx: func.to_tt_constraint(idx, negation=False) for func in self.exists_constraints] + \
+            [lambda idx: func.to_tt_constraint(idx, negation=True) for func in self.not_exists_constraints]
 
-        def bonded_constraint(idx=-1):
-            e = example
-            if idx != -1:
-                e = bond_at(example, idx)
-            return lambda h: tt_leading_entry(h) + e_mean + tt_inner_prod(h, e)
-
-        return [bonded_constraint]
-
-    def _return_exist_not_constraints(self):
-        if len(self.exists_not_constraints) == 0:
-            return []
-        example = self.exists_not_constraints[0]
-        for e in self.exists_not_constraints[1:]:
-            example = example & e
-        example = example.to_tt_train()
-        e_mean = tt_leading_entry(example) - 1
-        assert np.abs(e_mean + 2) > 1e-5, "An example is contradictory!"
-
-        def bonded_constraint(idx=-1):
-            e = example
-            if idx != -1:
-                e = bond_at(example, idx)
-            return lambda h: -(tt_leading_entry(h) + e_mean + tt_inner_prod(h, e))
-
-        return [bonded_constraint]
-
-    def _return_forall_constraints(self):
-        if len(self.forall_constraints) == 0:
-            return []
-        example = self.forall_constraints[0]
-        for e in self.forall_constraints[1:]:
-            example = example & e
-
-        example = example.to_tt_train()
-        e_mean = -(tt_leading_entry(example) + 1)
-        assert np.abs(e_mean) > 1e-5, "An example is contradictory!"
-
-        def bonded_constraint(idx=-1):
-            e = example
-            if idx != -1:
-                e = bond_at(example, idx)
-            return lambda h: tt_leading_entry(h) + tt_inner_prod(h, e) + e_mean
-
-        return [bonded_constraint]
-
-    def _return_forall_not_constraints(self):
-        if len(self.forall_not_constraints) == 0:
-            return []
-        example = self.forall_not_constraints[0]
-        for e in self.forall_not_constraints[1:]:
-            example = example | e
-
-        example = example.to_tt_train()
-        e_mean = tt_leading_entry(example) + 1
-        assert np.abs(e_mean + 2) > 1e-5, "An example is contradictory!"
-
-        def bonded_constraint(idx=-1):
-            e = example
-            if idx != -1:
-                e = bond_at(example, idx)
-            return lambda h: tt_leading_entry(h) + tt_inner_prod(h, e) + e_mean
-
-        return [bonded_constraint]
+    def _return_equality_constraints(self):
+        return [lambda idx: func.to_tt_constraint(idx, negation=True) for func in self.forall_constraints] + \
+            [lambda idx: func.to_tt_constraint(idx, negation=False) for func in self.not_forall_constraints]
