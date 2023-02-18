@@ -9,7 +9,6 @@ z = Atom(3, "z")
 h = Hypothesis()
 e_1 = Boolean_Function(y & z)
 e_2 = Boolean_Function(x << (y & z))
-
 const_space = ConstraintSpace()
 const_space.forall_S(h >> e_1)
 const_space.exists_S(h >> e_2)

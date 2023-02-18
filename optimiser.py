@@ -54,18 +54,30 @@ class Minimiser:
         params["lr"] *= 0.1
         prev_criterion_score = np.inf
         criterion_score = 1.0
+        """
         print(tt_to_tensor(tt_bool_op(tt_train)))
-        tt_save = deepcopy(tt_train)
+        tt_save = [np.array([[[1.], [0.]]]), np.array([[[-0.70710677,  0.70710677], [0.70710677,  0.70710677]]]),
+                   np.array([[[0.70710677], [0.]], [[0.], [0.70710677]]])]
+        one = tt_leading_one(3)
+        one[0] *= -1
+        tt_save = tt_add(tt_save, one)
+        """
+
         while criterion_score > 1e-4:
             gradient = self.complete_gradient(tt_train)
-            tt_train = [t - params["lr"] * gradient[i] for i, t in enumerate(tt_train)]
+            inner = tt_inner_prod(tt_train, gradient)
+            tt_train[0] -= params["lr"] * (gradient[0] - inner * tt_train[0])
+            tt_train[0] = tt_train[0] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
+            for idx in range(self.dimension):
+                tt_train[idx] -= params["lr"] * (gradient[idx] - tt_train[idx])
+                tt_train[idx] = tt_train[idx] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
             criterion_score = criterion(tt_train)
             print(f"Current violation: {criterion_score} \r", end="")
             if criterion_score >= prev_criterion_score:
                 params["lr"] *= 0.9
             prev_criterion_score = criterion_score
         print("\n", flush=True)
-        print("Inner", (1-tt_inner_prod(tt_save, tt_train))/2, flush=True)
+        #print("Inner", (1-tt_inner_prod(tt_save, tt_train))/2, flush=True)
         return tt_rank_reduce(tt_train)
 
     def _core_iteration(self, tt_train, params, idx):
