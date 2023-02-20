@@ -204,6 +204,11 @@ def tt_inner_prod(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> flo
         jnp.linalg.multi_dot([_tt_core_collapse(core_1, core_2) for core_1, core_2 in zip(tt_train_1, tt_train_2)]))
 
 
+def tt_grad_inner_prod(tt_train_1: List[np.array], tt_train_2: List[np.array], gradient_core: np.array, idx):
+    return jnp.sum(
+        jnp.linalg.multi_dot([_tt_core_collapse(core_1, gradient_core) if i == idx else _tt_core_collapse(core_1, core_2) for i, (core_1, core_2) in enumerate(zip(tt_train_1, tt_train_2))]))
+
+
 def _tt_influence_core_collapse(core, idx):
     return sum([
         jnp.kron(core[(slice(None),) + i], core[(slice(None),) + i])
