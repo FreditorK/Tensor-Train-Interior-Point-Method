@@ -139,7 +139,7 @@ class Meta_Boolean_Function:
         return self.name
 
     def __and__(self, other):
-        self.op = lambda h, e: -0.5 + 0.5 * tt_leading_entry(h) + 0.5 * tt_leading_entry(e) + tt_inner_prod(h, e)
+        self.op = lambda h, e: -0.5 + 0.5 * tt_leading_entry(h) + 0.5 * tt_leading_entry(e) + 0.5*tt_inner_prod(h, e)
         self.args = [self, other]
         return self
 
@@ -148,7 +148,7 @@ class Meta_Boolean_Function:
         return other
 
     def __or__(self, other):
-        self.op = lambda h, e: 0.5 + 0.5 * tt_leading_entry(h) + 0.5 * tt_leading_entry(e) - tt_inner_prod(h, e)
+        self.op = lambda h, e: 0.5 + 0.5 * tt_leading_entry(h) + 0.5 * tt_leading_entry(e) - 0.5*tt_inner_prod(h, e)
         self.args = [self, other]
         return self
 
@@ -166,7 +166,7 @@ class Meta_Boolean_Function:
         return other
 
     def __lshift__(self, other):  # <-
-        self.op = lambda h, e: 0.5 + 0.5 * tt_leading_entry(h) - 0.5 * tt_leading_entry(e) + tt_inner_prod(h, e)
+        self.op = lambda h, e: 0.5 + 0.5 * tt_leading_entry(h) - 0.5 * tt_leading_entry(e) + 0.5*tt_inner_prod(h, e)
         self.args = [self, other]
         return self
 
@@ -175,7 +175,7 @@ class Meta_Boolean_Function:
         return other
 
     def __rshift__(self, other):  # ->
-        self.op = lambda h, e: 0.5 - 0.5 * tt_leading_entry(h) + 0.5 * tt_leading_entry(e) + tt_inner_prod(h, e)
+        self.op = lambda h, e: 0.5 - 0.5 * tt_leading_entry(h) + 0.5 * tt_leading_entry(e) + 0.5*tt_inner_prod(h, e)
         self.args = [self, other]
         return self
 

@@ -49,31 +49,49 @@ class Minimiser:
             max_violation = self.penalty_function_iq(tt_train)
             print(f"Current violation: {max_violation} \r", end="")
             params["lambda"] = max(params["lambda"] - 0.05, max_violation)
-            if prev_max_violation > max_violation:
+            if prev_max_violation < max_violation:
                 params["lr"] *= 0.99
+            prev_max_violation = max_violation
         params["lambda"] = 0
         params["beta"] = 1.0
         print("Barrier feasible!", flush=True)
-        while params["mu"] > 1e-3:
+        max_violation = np.inf
+        while max_violation > 1e-3:
             for idx in indices:
                 tt_train = self._core_iteration(tt_train, params, idx)
             max_violation = self.penalty_function_eq(tt_train)
             print(f"Current violation: {max_violation} \r", end="")
             params["mu"] = max(params["mu"]-0.025, max_violation)
-            if prev_max_violation > max_violation:
+            if prev_max_violation < max_violation:
                 params["lr"] *= 0.99
+            prev_max_violation = max_violation
         print("Feasible point found.", flush=True)
         params["mu"] = 0
         params["lr"] *= 0.1
-        criterion_score = 1.0
-
+        criterion_score = np.inf
+        prev_criterion_score = np.inf
         while criterion_score > 1e-4:
             for idx in range(self.dimension-1):
                 gradient = self.complete_gradient(tt_train)[idx]
-                tt_train[idx] -= params["lr_crit"] * gradient
+                tt_train[idx] -= params["lr_crit"] * (gradient - tt_grad_inner_prod(tt_train, tt_train, gradient, idx)*tt_train[idx])
+                tt_train[idx] = tt_train[idx] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
                 tt_train = self._core_iteration(tt_train, params, idx)
             max_violation = self.penalty_function_eq(tt_train)
             criterion_score = criterion(tt_train)
+            if max_violation > prev_max_violation:
+                if criterion_score < prev_criterion_score:
+                    params["lr"] *= 1.005
+                    params["lr_crit"] *= 0.995
+                else:
+                    params["lr"] *= 0.995
+            else:
+                if max_violation < prev_max_violation:
+                    params["lr"] *= 0.995
+                    params["lr_crit"] *= 1.005
+                else:
+                    params["lr_crit"] *= 0.995
+            prev_criterion_score = criterion_score
+            prev_max_violation = max_violation
             print(f"Current violation: {criterion_score}, Constraint Violation: {max_violation} \r", end="")
         print("\n", flush=True)
         return tt_rank_reduce(tt_train)

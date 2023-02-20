@@ -7,18 +7,19 @@ head_coin_1 = Atom(vocab_size, "head_coin_1")
 tail_coin_1 = Atom(vocab_size, "tail_coin_1")
 head_coin_2 = Atom(vocab_size, "head_coin_2")
 tail_coin_2 = Atom(vocab_size, "tail_coin_2")
-constraints = ConstraintSpace()
-constraints.all_A_extending([
-        (head_coin_1 & ~tail_coin_1) | (~head_coin_1 & tail_coin_1),
-        (head_coin_2 & ~tail_coin_2) | (~head_coin_2 & tail_coin_2)
-])
-
-constraints.all_A_not_extending([
-    (head_coin_1 & tail_coin_1) | (~head_coin_1 & ~tail_coin_1),
+h = Hypothesis()
+e_1 = Boolean_Function(
+    ((head_coin_1 & ~tail_coin_1) | (~head_coin_1 & tail_coin_1)) &
+    ((head_coin_2 & ~tail_coin_2) | (~head_coin_2 & tail_coin_2))
+)
+e_2 = Boolean_Function(
+    (head_coin_1 & tail_coin_1) | (~head_coin_1 & ~tail_coin_1) &
     (head_coin_2 & tail_coin_2) | (~head_coin_2 & ~tail_coin_2)
-])
-
-opt = Minimiser(constraints, vocab_size)
+)
+const_space = ConstraintSpace()
+const_space.forall_S(h >> e_1)
+#const_space.not_forall_S(h & e_2)
+opt = Minimiser(const_space, vocab_size)
 t_1 = time()
 hypothesis = opt.find_feasible_hypothesis()
 t_2 = time()
