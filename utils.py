@@ -115,23 +115,20 @@ def influence_leq(atom, eps):
 class Meta_Boolean_Function:
     count = 0
 
-    def __init__(self, name: str, args, bias, inner_prod_sgn):
+    def __init__(self, name: str, args, sgns):
         if name is None:
             self.name = f"e_{str(Meta_Boolean_Function.count)}"
             Meta_Boolean_Function.count += 1
         else:
             self.name = name
 
-        self.bias = bias
-        self.inner_prod_sgn = inner_prod_sgn
+        self.sgns = sgns
         self.args = args
 
-    def to_tt_constraint(self, negation=False):
+    def to_tt_constraint(self):
         example = next(func for func in self.args if not isinstance(func, Hypothesis))
-        e, _, _ = example.to_tt_constraint()
-        if negation:
-            return e, self.bias(e) + 2, self.inner_prod_sgn
-        return e, self.bias(e) - 2, self.inner_prod_sgn
+        e, _ = example.to_tt_constraint()
+        return e, self.sgns
 
     def __repr__(self):
         return str(self)
@@ -140,29 +137,26 @@ class Meta_Boolean_Function:
         return self.name
 
     def __and__(self, other):
-        return Meta_Boolean_Function(f"({self.name} ∧ {other.name})", [self, other], lambda e: -1 + tt_leading_entry(e),
-                                     1)
+        return Meta_Boolean_Function(f"({self.name} ∧ {other.name})", [self, other], (-1, 1, 1, 1))
 
     def __rand__(self, other):
         return other.__and__(self)
 
     def __or__(self, other):
-        return Meta_Boolean_Function(f"({self.name} v {other.name})", [self, other], lambda e: 1 + tt_leading_entry(e),
-                                     -1)
+        return Meta_Boolean_Function(f"({self.name} v {other.name})", [self, other], (1, 1, 1, -1))
 
     def __ror__(self, other):
         other.__or__(self)
         return other
 
     def __xor__(self, other):
-        return Meta_Boolean_Function(f"({self.name} ⊻ {other.name})", [self, other], lambda e: 0, -1)
+        return Meta_Boolean_Function(f"({self.name} ⊻ {other.name})", [self, other], (0, 0, 0, -1))
 
     def __rxor__(self, other):
         return other.__or__(self)
 
     def __lshift__(self, other):  # <-
-        return Meta_Boolean_Function(f"({self.name} <- {other.name})", [self, other], lambda e: 1 - tt_leading_entry(e),
-                                     1)
+        return Meta_Boolean_Function(f"({self.name} <- {other.name})", [self, other], (1, 1, -1, 1))
 
     def __rlshift__(self, other):
         return other.__lshift(self)
@@ -173,7 +167,7 @@ class Hypothesis(Meta_Boolean_Function):
         if name is None:
             self.name = "hypothesis"
         self.name = name
-        super().__init__(name, [self], lambda x: 0, 0)
+        super().__init__(name, [self], (0, 1, 0, 0))
 
 
 class Boolean_Function(Meta_Boolean_Function):
@@ -185,12 +179,12 @@ class Boolean_Function(Meta_Boolean_Function):
             Boolean_Function.count += 1
         else:
             self.name = name
-        super().__init__(name, [expr], lambda x: 0, 0)
+        super().__init__(name, [expr], (0, 0, 1, 0))
 
     def to_tt_constraint(self, negation=False):
         example = next(expr for expr in self.args if isinstance(expr, Expression))
         e = example.to_tt_train()
-        return e, 0, 0
+        return e, (0, 0, 1, 0)
 
 
 class ConstraintSpace:
@@ -202,54 +196,64 @@ class ConstraintSpace:
         self.not_exists_constraints = []
 
     def exists_S(self, example: Meta_Boolean_Function):
-        e, bias, sgn = example.to_tt_constraint(negation=False)
+        e, sgns = example.to_tt_constraint(negation=False)
 
         def penalty(idx):
             e_bonded = e
             if idx != -1:
                 e_bonded = bond_at(e, idx)
-            return lambda h: -bias + tt_leading_entry(h) + sgn * tt_inner_prod(h, e_bonded)
+            return lambda h: sgns[0]+2 + sgns[1]*tt_leading_entry(h) + sgns[2]*tt_leading_entry(e_bonded) + sgns[3]*tt_inner_prod(h, e_bonded)
 
         self.exists_constraints.append(penalty)
 
     def not_exists_S(self, example: Meta_Boolean_Function):
-        e, bias, sgn = example.to_tt_constraint(negation=True)
+        e, sgns = example.to_tt_constraint(negation=True)
 
         def penalty(idx):
             e_bonded = e
             if idx != -1:
                 e_bonded = bond_at(e, idx)
-            return lambda h: -bias + tt_leading_entry(h) + sgn * tt_inner_prod(h, e_bonded)
+            return lambda h: sgns[0]-2 + sgns[1]*tt_leading_entry(h) + sgns[2]*tt_leading_entry(e_bonded) + sgns[3]*tt_inner_prod(h, e_bonded)
 
         self.not_exists_constraints.append(penalty)
 
     def forall_S(self, example: Meta_Boolean_Function):
-        e, bias, sgn = example.to_tt_constraint(negation=False)
-        plane_eq = lambda h: tt_inner_prod(h, e) + tt_leading_entry(h) -tt_leading_entry(e) - 1
+        e, sgns = example.to_tt_constraint()
+        print(sgns)
+        plane_eq = lambda h: sgns[0]-2 + sgns[1]*tt_leading_entry(h) + sgns[2]*tt_leading_entry(e) + sgns[3]*tt_inner_prod(h, e)
         self.eq_constraints.append(plane_eq)
         minus_one = tt_leading_one(len(e))
-        minus_one[0] *= -1
+        minus_one[0] *= sgns[2]
         one = tt_leading_one(len(e))
+        one[0] *= sgns[1]
+        ex_t = tt_add(e, one)
+        norm = (1/tt_inner_prod(ex_t, ex_t))
 
         def projection(tt_train):
-            ex_t = tt_add(e, one)
             tt_train_t = tt_add(tt_train, minus_one)
-            ex_t[0] *= -(1/tt_inner_prod(ex_t, ex_t))*(tt_inner_prod(ex_t, tt_train_t))
+            ex_t[0] *= -norm*(tt_inner_prod(ex_t, tt_train_t))
             proj = tt_add(tt_train, ex_t)
             return proj
 
         self.forall_constraints.append(projection)
 
     def not_forall_S(self, example: Meta_Boolean_Function):
-        e, bias, sgn = example.to_tt_constraint(negation=False)
-        self.eq_constraints.append(lambda h: bias + tt_leading_entry(h) + sgn * tt_inner_prod(h, e))
+        e, sgns = example.to_tt_constraint()
+        plane_eq = lambda h: sgns[0] + 2 + sgns[1] * tt_leading_entry(h) + sgns[2] * tt_leading_entry(e) + sgns[
+            3] * tt_inner_prod(h, e)
+        self.eq_constraints.append(plane_eq)
+        minus_one = tt_leading_one(len(e))
+        minus_one[0] *= sgns[2]
         one = tt_leading_one(len(e))
-        ex = tt_add(e, one)
+        one[0] *= sgns[1]
+        ex_t = tt_add(e, one)
+        norm = (1 / tt_inner_prod(ex_t, ex_t))
 
         def projection(tt_train):
-            ex[0] *= -(sgn * tt_inner_prod(ex, tt_train) + bias)
-            proj = tt_add(tt_train, ex)
-            return tt_rl_orthogonalize(proj)
+            tt_train_t = tt_add(tt_train, minus_one)
+            ex_t[0] *= -norm * (tt_inner_prod(ex_t, tt_train_t))
+            proj = tt_add(tt_train, ex_t)
+            return proj
 
         self.not_forall_constraints.append(projection)
 
