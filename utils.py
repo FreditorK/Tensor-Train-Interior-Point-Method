@@ -130,8 +130,8 @@ class Meta_Boolean_Function:
         example = next(func for func in self.args if not isinstance(func, Hypothesis))
         e, _, _ = example.to_tt_constraint()
         if negation:
-            return e, 2 - self.bias(e), self.inner_prod_sgn  # lambda h: 1 - self.op(h, e)
-        return e, -(2 + self.bias(e)), self.inner_prod_sgn  # lambda h: self.op(h, e) + 1
+            return e, self.bias(e) + 2, self.inner_prod_sgn
+        return e, self.bias(e) - 2, self.inner_prod_sgn
 
     def __repr__(self):
         return str(self)
@@ -224,27 +224,29 @@ class ConstraintSpace:
         self.not_exists_constraints.append(penalty)
 
     def forall_S(self, example: Meta_Boolean_Function):
-        e, bias, sgn = example.to_tt_constraint(negation=True)
-        self.eq_constraints.append(lambda h: -bias + tt_leading_entry(h) + sgn*tt_inner_prod(h, e))
+        e, bias, sgn = example.to_tt_constraint(negation=False)
+        plane_eq = lambda h: tt_inner_prod(h, e) + tt_leading_entry(h) # -tt_leading_entry(e) + tt_leading_entry(h) + tt_inner_prod(h, e) - 1
+        self.eq_constraints.append(plane_eq)
+        minus_one = tt_leading_one(len(e))
+        minus_one[0] *= -1
         one = tt_leading_one(len(e))
-        ex = tt_add(e, one)
 
         def projection(tt_train):
-            ex[0] *= -sgn * (tt_inner_prod(ex, tt_train) - bias)
-            proj = tt_add(tt_train, ex)
-            return tt_rl_orthogonalize(proj)
+            ex_t = tt_add(e, one)
+            ex_t[0] *= -(1/tt_inner_prod(ex_t, ex_t))*(tt_inner_prod(ex_t, tt_train))
+            proj = tt_add(tt_train, ex_t)
+            return proj
 
         self.forall_constraints.append(projection)
 
     def not_forall_S(self, example: Meta_Boolean_Function):
-        e, bias, sgn = example.to_tt_constraint(negation=True)
-        self.eq_constraints.append(lambda h: -bias + tt_leading_entry(h) + sgn * tt_inner_prod(h, e))
+        e, bias, sgn = example.to_tt_constraint(negation=False)
+        self.eq_constraints.append(lambda h: bias + tt_leading_entry(h) + sgn * tt_inner_prod(h, e))
         one = tt_leading_one(len(e))
-        one[0] *= -1
         ex = tt_add(e, one)
 
         def projection(tt_train):
-            ex[0] *= -sgn * (tt_inner_prod(ex, tt_train) - bias)
+            ex[0] *= -(sgn * tt_inner_prod(ex, tt_train) + bias)
             proj = tt_add(tt_train, ex)
             return tt_rl_orthogonalize(proj)
 

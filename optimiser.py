@@ -28,7 +28,7 @@ class Minimiser:
         one[0] *= -1.0
 
         @jax.jit
-        def criterion(tt_train):
+        def criterion(tt_train, params):
             tt_train = tt_bool_op(tt_train)
             squared_Ttt_1 = tt_hadamard(tt_train, tt_train)
             minus_1_squared_Ttt_1 = tt_add(squared_Ttt_1, one)
@@ -38,12 +38,13 @@ class Minimiser:
 
     def find_feasible_hypothesis(self):
         tt_train, params = self._init_tt_train()
+        """
         criterion = boolean_criterion(self.dimension)
         indices = np.arange(self.dimension - 1)
         prev_max_violation = -np.inf
         while params["lambda"] > 0:
             for idx in indices:
-                tt_train = self._core_iteration(tt_train, params, idx)
+                tt_train = self._bonded_iteration(tt_train, params, idx)
             max_violation = self.penalty_function_iq(tt_train)
             print(f"Current violation: {max_violation} \r", end="")
             params["lambda"] = max(params["lambda"] - 0.05, max_violation)
@@ -51,30 +52,37 @@ class Minimiser:
                 params["lr"] *= 0.99
             prev_max_violation = max_violation
         params["lambda"] = 0
+        params["lr"] *= 0.1
         print("Barrier feasible!", flush=True)
         prev_criterion_score = np.inf
         criterion_score = np.inf
         while criterion_score > 1e-4:
             for idx in range(self.dimension-1):
-                gradient = self.complete_gradient(tt_train)[idx]
-                tt_train[idx] -= params["lr_crit"] * (gradient - tt_grad_inner_prod(tt_train, tt_train, gradient, idx)*tt_train[idx])
-                tt_train[idx] = tt_train[idx] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
+                tt_train = self._iteration(tt_train,  params, idx)
             tt_train = self.const_space.project(tt_train)
             criterion_score = criterion(tt_train)
             if criterion_score > prev_criterion_score:
-                params["lr_crit"] *= 0.99
+                params["lr"] *= 0.995
             prev_criterion_score = criterion_score
             print(f"Current violation: {criterion_score} \r", end="")
         print("\n", flush=True)
-        return tt_rank_reduce(tt_train)
+        """
+        return tt_train
 
-    def _core_iteration(self, tt_train, params, idx):
+    def _bonded_iteration(self, tt_train, params, idx):
         B = jnp.einsum("abc, cde -> abde", tt_train[idx], tt_train[idx + 1])
         bonded_tt_train = tt_train[:idx] + [B] + tt_train[idx + 2:]
         grad = self.gradient_functions[idx](*bonded_tt_train, params=params)
         B -= params["lr"] *(grad - tt_grad_inner_prod(bonded_tt_train, bonded_tt_train, grad, idx)*B)
         B_part_1, B_part_2 = part_bond(B)
         tt_train = tt_train[:idx] + [B_part_1, B_part_2] + tt_train[idx + 2:]
+        tt_train[idx] = tt_train[idx] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
+        return tt_train
+
+    def _iteration(self, tt_train, params, idx):
+        gradient = self.complete_gradient(tt_train, params)[idx]
+        tt_train[idx] -= params["lr"] * (
+            gradient - tt_grad_inner_prod(tt_train, tt_train, gradient, idx) * tt_train[idx])
         tt_train[idx] = tt_train[idx] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
         return tt_train
 
@@ -89,11 +97,12 @@ class Minimiser:
     def _init_tt_train(self):
         tt_train = [2 * np.random.rand(1, 2, 1) - 1 for _ in range(self.dimension)]
         tt_train[0] = tt_train[0] / np.sqrt(tt_inner_prod(tt_train, tt_train))
-        tt_train = tt_rank_reduce(tt_train)
+        tt_train = tt_rl_orthogonalize(tt_train)
+        print("Before", [c(tt_train) for c in self.const_space.eq_constraints])
         tt_train = self.const_space.project(tt_train)
+        print("After", [c(tt_train) for c in self.const_space.eq_constraints])
         params = {
             "lambda": 1 - self.penalty_function_iq(tt_train),
-            "lr": 1e-2,
-            "lr_crit": 5e-4
+            "lr": 1e-2
         }
         return tt_train, params
