@@ -225,7 +225,7 @@ class ConstraintSpace:
 
     def forall_S(self, example: Meta_Boolean_Function):
         e, bias, sgn = example.to_tt_constraint(negation=False)
-        plane_eq = lambda h: tt_inner_prod(h, e) + tt_leading_entry(h) # -tt_leading_entry(e) + tt_leading_entry(h) + tt_inner_prod(h, e) - 1
+        plane_eq = lambda h: tt_inner_prod(h, e) + tt_leading_entry(h) -tt_leading_entry(e) - 1
         self.eq_constraints.append(plane_eq)
         minus_one = tt_leading_one(len(e))
         minus_one[0] *= -1
@@ -233,7 +233,8 @@ class ConstraintSpace:
 
         def projection(tt_train):
             ex_t = tt_add(e, one)
-            ex_t[0] *= -(1/tt_inner_prod(ex_t, ex_t))*(tt_inner_prod(ex_t, tt_train))
+            tt_train_t = tt_add(tt_train, minus_one)
+            ex_t[0] *= -(1/tt_inner_prod(ex_t, ex_t))*(tt_inner_prod(ex_t, tt_train_t))
             proj = tt_add(tt_train, ex_t)
             return proj
 
