@@ -220,12 +220,13 @@ class ConstraintSpace:
     def forall_S(self, example: Meta_Boolean_Function):
         e, sgns = example.to_tt_constraint()
         print(sgns)
-        plane_eq = lambda h: sgns[0]-2 + sgns[1]*tt_leading_entry(h) + sgns[2]*tt_leading_entry(e) + sgns[3]*tt_inner_prod(h, e)
+        plane_eq = lambda h: -1 + tt_leading_entry(h) + tt_leading_entry(e) - tt_inner_prod(h, e)
+        #plane_eq = lambda h: -1 + tt_leading_entry(h) - tt_leading_entry(e) + tt_inner_prod(h, e)
         self.eq_constraints.append(plane_eq)
         minus_one = tt_leading_one(len(e))
-        minus_one[0] *= sgns[2]
+        minus_one[0] *= -1
         one = tt_leading_one(len(e))
-        one[0] *= sgns[1]
+        one[0] *= -sgns[2]
         ex_t = tt_add(e, one)
         norm = (1/tt_inner_prod(ex_t, ex_t))
 
