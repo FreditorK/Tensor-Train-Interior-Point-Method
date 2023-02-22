@@ -4,16 +4,17 @@ import numpy as np
 
 from tt_op import *
 from operators import D_func
-from utils import ConstraintSpace
+from utils import ConstraintSpace, Atom
+
 
 #np.random.seed(7)
 
 
 class Minimiser:
-    def __init__(self, constraints: ConstraintSpace, dimension):
+    def __init__(self, const_space: ConstraintSpace, dimension):
         self.dimension = dimension
-        self.const_space = constraints
-        self.inequality_constraints = [lambda _: lambda h: 1 - tt_leading_entry(h)] + constraints._return_inequality_constraints()
+        self.const_space = const_space
+        self.inequality_constraints = [lambda _: lambda h: 1 - tt_leading_entry(h)] + const_space.iq_constraints
         self.gradient_functions = []
         for idx in range(dimension - 1):
             self.gradient_functions.append(
@@ -38,7 +39,6 @@ class Minimiser:
 
     def find_feasible_hypothesis(self):
         tt_train, params = self._init_tt_train()
-        """
         criterion = boolean_criterion(self.dimension)
         indices = np.arange(self.dimension - 1)
         prev_max_violation = -np.inf
@@ -66,7 +66,6 @@ class Minimiser:
             prev_criterion_score = criterion_score
             print(f"Current violation: {criterion_score} \r", end="")
         print("\n", flush=True)
-        """
         return tt_train
 
     def _bonded_iteration(self, tt_train, params, idx):
@@ -97,6 +96,7 @@ class Minimiser:
     def _init_tt_train(self):
         tt_train = [2 * np.random.rand(1, 2, 1) - 1 for _ in range(self.dimension)]
         tt_train[0] = tt_train[0] / np.sqrt(tt_inner_prod(tt_train, tt_train))
+        """
         print("Before", [c(tt_train) for c in self.const_space.eq_constraints])
         tt_train = self.const_space.project(tt_train)
         print("After", [c(tt_train) for c in self.const_space.eq_constraints])
@@ -104,6 +104,7 @@ class Minimiser:
         print("Before", [c(tt_train) for c in self.const_space.eq_constraints])
         tt_train = self.const_space.project(tt_train)
         print("After", [c(tt_train) for c in self.const_space.eq_constraints])
+        """
         params = {
             "lambda": 1 - self.penalty_function_iq(tt_train),
             "lr": 1e-2

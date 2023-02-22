@@ -82,7 +82,7 @@ def get_ANF(atoms, hypothesis):
     variable_names = " ".join([a.name for a in atoms])
     variables = symbols(variable_names)
     truth_table_labels = ((np.round(tt_to_tensor(tt_bool_op(hypothesis))) + 1) / 2).astype(int).flatten()
-    anf = ANFform(variables, truth_table_labels)
+    anf = ANFform(variables, list(reversed(truth_table_labels)))
     return anf
 
 
@@ -177,6 +177,15 @@ class Meta_Boolean_Function:
     def __rlshift__(self, other):
         return other.__lshift(self)
 
+    def __invert__(self):
+        pass
+
+    def __rshift__(self, other):
+        pass
+
+    def __rrshift__(self, other):
+        pass
+
 
 class Hypothesis(Meta_Boolean_Function):
     def __init__(self, name=None):
@@ -201,18 +210,17 @@ class Boolean_Function(Meta_Boolean_Function):
 
 class ConstraintSpace:
     def __init__(self):
-        self.forall_constraints = []
+        self.projections = []
         self.eq_constraints = []
-        self.exists_constraints = []
-        self.not_exists_constraints = []
+        self.iq_constraints = []
 
     def exists_S(self, example: Meta_Boolean_Function):
         e, func = example.to_tt_constraint()
 
         def penalty(idx):
-            return lambda h: func(h, idx) - 1
+            return lambda h: func(h, idx) + 1
 
-        self.exists_constraints.append(penalty)
+        self.iq_constraints.append(penalty)
 
     def forall_S(self, example: Meta_Boolean_Function):
         e, func = example.to_tt_constraint()
@@ -227,14 +235,11 @@ class ConstraintSpace:
             e[0] *= -norm*(tt_inner_prod(e, tt_train_t))
             proj = tt_add(tt_train, e)
             e[0] = ex_0
-            return proj
+            return tt_rl_orthogonalize(proj)
 
-        self.forall_constraints.append(projection)
-
-    def _return_inequality_constraints(self):
-        return self.exists_constraints + self.not_exists_constraints
+        self.projections.append(projection)
 
     def project(self, tt_train):
-        for proj in self.forall_constraints:
+        for proj in self.projections:
             tt_train = proj(tt_train)
         return tt_train
