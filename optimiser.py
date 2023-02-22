@@ -97,7 +97,10 @@ class Minimiser:
     def _init_tt_train(self):
         tt_train = [2 * np.random.rand(1, 2, 1) - 1 for _ in range(self.dimension)]
         tt_train[0] = tt_train[0] / np.sqrt(tt_inner_prod(tt_train, tt_train))
-        tt_train = tt_rl_orthogonalize(tt_train)
+        print("Before", [c(tt_train) for c in self.const_space.eq_constraints])
+        tt_train = self.const_space.project(tt_train)
+        print("After", [c(tt_train) for c in self.const_space.eq_constraints])
+        tt_train[0]*=1.5
         print("Before", [c(tt_train) for c in self.const_space.eq_constraints])
         tt_train = self.const_space.project(tt_train)
         print("After", [c(tt_train) for c in self.const_space.eq_constraints])

@@ -191,8 +191,9 @@ def _tt_core_collapse(core_1: np.array, core_2: np.array):
 
 
 def bond_at(e, idx):
-    e_bond = jnp.einsum("abc, cde -> abde", e[idx], e[idx + 1])
-    e = e[:idx] + [e_bond] + e[idx + 2:]
+    if idx != -1:
+        e_bond = jnp.einsum("abc, cde -> abde", e[idx], e[idx + 1])
+        e = e[:idx] + [e_bond] + e[idx + 2:]
     return e
 
 
