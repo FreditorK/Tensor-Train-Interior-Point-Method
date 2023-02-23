@@ -27,13 +27,14 @@ class Minimiser:
     def criterion(self, dimension):
         one = tt_one(dimension)
         one[0] *= -1.0
+        barrier = self._barrier(-1)
 
         @jax.jit
         def criterion(tt_train, params):
             tt_train = tt_bool_op(tt_train)
             squared_Ttt_1 = tt_hadamard(tt_train, tt_train)
             minus_1_squared_Ttt_1 = tt_add(squared_Ttt_1, one)
-            return tt_inner_prod(minus_1_squared_Ttt_1, minus_1_squared_Ttt_1)
+            return tt_inner_prod(minus_1_squared_Ttt_1, minus_1_squared_Ttt_1) #+ 0.001*barrier(*tt_train, params=params)
 
         return criterion
 
@@ -54,13 +55,18 @@ class Minimiser:
         params["lambda"] = 0
         params["lr"] *= 0.1
         print("Barrier feasible!", flush=True)
+        inequality_constraints = [c(-1) for c in self.inequality_constraints]
+        print(sum([jnp.log(c(tt_train) + params["lambda"]) for c in inequality_constraints]))
         prev_criterion_score = np.inf
         criterion_score = np.inf
         while criterion_score > 1e-4:
-            for idx in range(self.dimension-1):
+            #print("\n", sum([jnp.log(c(tt_train) + params["lambda"]) for c in inequality_constraints]))
+            for idx in range(self.dimension):
                 tt_train = self._iteration(tt_train,  params, idx)
+            #print("\n", sum([jnp.log(c(tt_train) + params["lambda"]) for c in inequality_constraints]))
             tt_train = self.const_space.project(tt_train)
             criterion_score = criterion(tt_train)
+            #print("\n", sum([jnp.log(c(tt_train) + params["lambda"]) for c in inequality_constraints]))
             if criterion_score > prev_criterion_score:
                 params["lr"] *= 0.995
             prev_criterion_score = criterion_score

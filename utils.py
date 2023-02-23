@@ -239,6 +239,11 @@ class ConstraintSpace:
 
         self.projections.append(projection)
 
+    def reflect(self, tt_train):
+        for refl in self.reflections:
+            tt_train = refl(tt_train)
+        return tt_train
+
     def project(self, tt_train):
         for proj in self.projections:
             tt_train = proj(tt_train)
