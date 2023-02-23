@@ -48,7 +48,7 @@ def tt_rl_orthogonalize(tt_train: List[np.array]):
     for idx in range(len(tt_train) - 1, 0, -1):
         shape_p1 = tt_train[idx].shape
         shape = tt_train[idx - 1].shape
-        Q_T, R = np.linalg.qr(tt_train[idx].reshape(shape_p1[0], -1).T)
+        Q_T, R = jnp.linalg.qr(tt_train[idx].reshape(shape_p1[0], -1).T)
         tt_train[idx] = Q_T.T.reshape(-1, shape_p1[1], shape_p1[-1])
         tt_train[idx - 1] = (tt_train[idx - 1].reshape(-1, R.shape[-1]) @ R.T).reshape(-1, shape[1],
                                                                                        tt_train[idx].shape[0])
@@ -226,12 +226,12 @@ def tt_influence(tt_train: List[np.array], idx):
         jnp.linalg.multi_dot([_tt_influence_core_collapse(core, idx - i) for i, core in enumerate(tt_train)]))
 
 
-def _tt_phi_core(core_1: np.array):
+def _tt_phi_core(core: np.array):
     return sum([
         jnp.kron(
-            jnp.expand_dims(core_1[(slice(None),) + i], list(range(1, 1 + len(i)))),
+            jnp.expand_dims(core[(slice(None),) + i], list(range(1, 1 + len(i)))),
             phi(len(i) - 1)[(slice(None),) + sum(zip(i, [slice(None)] * len(i)), ())]
-        ) for i in product(*([[0, 1]] * (len(core_1.shape) - 2)))])
+        ) for i in product(*([[0, 1]] * (len(core.shape) - 2)))])
 
 
 def tt_bool_op(tt_train: List[np.array]) -> List[np.array]:
