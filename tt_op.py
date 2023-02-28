@@ -8,11 +8,24 @@ from operators import partial_D
 PHI = np.array([[1, 1],
                 [1, -1]], dtype=float).reshape(1, 2, 2, 1)
 
+PHI_INV = np.array([[1 / 2, 1 / 2],
+                    [1 / 2, -1 / 2]], dtype=float).reshape(1, 2, 2, 1)
+
 
 def phi(num_bonds):
     """ Bonds "num_bonds" PHI cores together """
     tensor = PHI
     new_PHI = PHI
+    for _ in range(2 ** (num_bonds) - 1):
+        new_PHI = jnp.expand_dims(new_PHI, (0, 1))
+        tensor = jnp.kron(jnp.expand_dims(tensor, (-1, -2)), new_PHI)
+    return tensor
+
+
+def phi_inv(num_bonds):
+    """ Bonds "num_bonds" PHI cores together """
+    tensor = PHI_INV
+    new_PHI = PHI_INV
     for _ in range(2 ** (num_bonds) - 1):
         new_PHI = jnp.expand_dims(new_PHI, (0, 1))
         tensor = jnp.kron(jnp.expand_dims(tensor, (-1, -2)), new_PHI)
@@ -207,7 +220,9 @@ def tt_inner_prod(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> flo
 
 def tt_grad_inner_prod(tt_train_1: List[np.array], tt_train_2: List[np.array], gradient_core: np.array, idx):
     return jnp.sum(
-        jnp.linalg.multi_dot([_tt_core_collapse(core_1, gradient_core) if i == idx else _tt_core_collapse(core_1, core_2) for i, (core_1, core_2) in enumerate(zip(tt_train_1, tt_train_2))]))
+        jnp.linalg.multi_dot(
+            [_tt_core_collapse(core_1, gradient_core) if i == idx else _tt_core_collapse(core_1, core_2) for
+             i, (core_1, core_2) in enumerate(zip(tt_train_1, tt_train_2))]))
 
 
 def _tt_influence_core_collapse(core, idx):
@@ -239,6 +254,21 @@ def tt_bool_op(tt_train: List[np.array]) -> List[np.array]:
     Produces the truth table result tensor
     """
     return [_tt_phi_core(core) for core in tt_train]
+
+
+def _tt_phi_core_inv(core: np.array):
+    return sum([
+        jnp.kron(
+            jnp.expand_dims(core[(slice(None),) + i], list(range(1, 1 + len(i)))),
+            phi_inv(len(i) - 1)[(slice(None),) + sum(zip(i, [slice(None)] * len(i)), ())]
+        ) for i in product(*([[0, 1]] * (len(core.shape) - 2)))])
+
+
+def tt_bool_op_inv(tt_train: List[np.array]) -> List[np.array]:
+    """
+    Produces the truth table result tensor
+    """
+    return [_tt_phi_core_inv(core) for core in tt_train]
 
 
 def boolean_criterion(dimension):

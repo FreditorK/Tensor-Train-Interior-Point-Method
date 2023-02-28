@@ -1,6 +1,6 @@
 from time import time
 from utils import *
-from optimiser import Minimiser
+from optimiser import Minimiser, AnswerSetSolver
 
 vocab_size = 3
 x = Atom(3, "x")
@@ -21,8 +21,11 @@ t_1 = time()
 hypothesis = opt.find_feasible_hypothesis()
 t_2 = time()
 print(get_CNF([x, y, z], hypothesis), flush=True)
-print(np.round(tt_to_tensor(hypothesis), decimals=5))
+print(np.round(tt_to_tensor(hypothesis), decimals=4))
 print("Equality constraint Score: ", [jnp.sum(jnp.abs(c(hypothesis))) for c in const_space.eq_constraints])
 print("Inequality constraint Score: ", [jnp.sum(c(hypothesis)) for c in const_space.iq_constraints])
 print("Score:", boolean_criterion(len(hypothesis))(hypothesis), tt_inner_prod(hypothesis, hypothesis))
 print(f"Total time taken: {t_2-t_1}s.")
+asp_solver = AnswerSetSolver(hypothesis, atoms=[x, y, z])
+X = asp_solver.get_min_answer_set()
+print(X)

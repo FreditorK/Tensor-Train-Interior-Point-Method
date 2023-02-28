@@ -144,7 +144,7 @@ class Meta_Boolean_Function:
         bot[0] *= -1
         return Meta_Boolean_Function(
             f"({self.name} v {other.name})",
-            tt_add(e, bot),
+            tt_rl_orthogonalize(tt_add(e, bot)),
             lambda h: tt_add(h, bot),
             lambda h, idx: 0.5 + 0.5 * tt_leading_entry(h) + 0.5 * tt_leading_entry(e) - 0.5 * tt_inner_prod(h,
                                                                                                              bond_at(e,
@@ -180,7 +180,7 @@ class Meta_Boolean_Function:
         bot[0] *= -1
         return Meta_Boolean_Function(
             f"({self.name} <- {other.name})",
-            tt_add(e, top),
+            tt_rl_orthogonalize(tt_add(e, top)),
             lambda h: tt_add(h, bot),
             lambda h, idx: 0.5 + 0.5 * tt_leading_entry(h) - 0.5 * tt_leading_entry(e) + 0.5 * tt_inner_prod(h,
                                                                                                              bond_at(e,
@@ -200,7 +200,7 @@ class Meta_Boolean_Function:
         bot[0] *= -1
         return Meta_Boolean_Function(
             f"({self.name} <- {other.name})",
-            tt_add(e, bot),
+            tt_rl_orthogonalize(tt_add(e, bot)),
             lambda h: tt_add(h, top),
             lambda h, idx: 0.5 - 0.5 * tt_leading_entry(h) + 0.5 * tt_leading_entry(e) + 0.5 * tt_inner_prod(h,
                                                                                                              bond_at(e,
