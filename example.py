@@ -27,5 +27,5 @@ print("Inequality constraint Score: ", [jnp.sum(c(hypothesis)) for c in const_sp
 print("Score:", boolean_criterion(len(hypothesis))(hypothesis), tt_inner_prod(hypothesis, hypothesis))
 print(f"Total time taken: {t_2-t_1}s.")
 asp_solver = AnswerSetSolver(hypothesis, atoms=[x, y, z])
-X = asp_solver.get_min_answer_set()
+X = asp_solver.get_answer_set()
 print(X)
