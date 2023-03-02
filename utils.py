@@ -82,7 +82,7 @@ def get_ANF(atoms, hypothesis):
     variable_names = " ".join([a.name for a in atoms])
     variables = symbols(variable_names)
     truth_table_labels = ((np.round(tt_to_tensor(tt_bool_op(hypothesis))) + 1) / 2).astype(int).flatten()
-    anf = ANFform(variables, truth_table_labels)
+    anf = ANFform(variables, list(reversed(truth_table_labels)))
     return anf
 
 
@@ -94,12 +94,6 @@ def get_CNF(atoms, hypothesis):
 def get_DNF(atoms, hypothesis):
     anf = get_ANF(atoms, hypothesis)
     return to_dnf(anf, simplify=True)
-
-
-def bond_at(e, idx):
-    e_bond = np.einsum("abc, cde -> abde", e[idx], e[idx + 1])
-    e = e[:idx] + [e_bond] + e[idx + 2:]
-    return e
 
 
 def influence_geq(atom, eps):
@@ -118,45 +112,183 @@ def influence_leq(atom, eps):
     return influence_constraint
 
 
-def exists_A_extending(example):
-    def bonded_constraint(idx=-1):
-        e = example.to_tt_train()
-        e_mean = tt_leading_entry(e) + 1
-        if idx != -1:
-            e = bond_at(e, idx)
-        return lambda h: tt_leading_entry(h) + e_mean + tt_inner_prod(h, e) - 1e-6
+class Meta_Boolean_Function:
+    count = 0
 
-    return bonded_constraint
+    def __init__(self, name: str, mod_tt_example, mod_h, func, tt_example):
+        if name is None:
+            self.name = f"e_{str(Meta_Boolean_Function.count)}"
+            Meta_Boolean_Function.count += 1
+        else:
+            self.name = name
+
+        self.mod_tt_example = mod_tt_example
+        self.mod_h = mod_h
+        self.func = func
+        self.tt_example = tt_example
+
+    def to_tt_constraint(self):
+        return self.mod_tt_example, self.mod_h, self.func, self.tt_example
+
+    def __repr__(self):
+        return str(self)
+
+    def __str__(self):
+        return self.name
+
+    def __or__(self, other):
+        e = self.mod_tt_example
+        if isinstance(other, Boolean_Function):
+            e = other.mod_tt_example
+        bot = tt_leading_one(len(e))
+        bot[0] *= -1
+        return Meta_Boolean_Function(
+            f"({self.name} v {other.name})",
+            tt_rl_orthogonalize(tt_add(e, bot)),
+            lambda h: tt_add(h, bot),
+            lambda h, idx: 0.5 + 0.5 * tt_leading_entry(h) + 0.5 * tt_leading_entry(e) - 0.5 * tt_inner_prod(h,
+                                                                                                             bond_at(e,
+                                                                                                                     idx)),
+            e
+        )
+
+    def __ror__(self, other):
+        other.__or__(self)
+        return other
+
+    def __xor__(self, other):
+        e = self.mod_tt_example
+        if isinstance(other, Boolean_Function):
+            e = other.mod_tt_example
+        return Meta_Boolean_Function(
+            f"({self.name} ⊻ {other.name})",
+            e,
+            lambda h: h,
+            lambda h, idx: -tt_inner_prod(h, bond_at(e, idx)),
+            e
+        )
+
+    def __rxor__(self, other):
+        return other.__or__(self)
+
+    def __lshift__(self, other):  # <-
+        e = self.mod_tt_example
+        if isinstance(other, Boolean_Function):
+            e = other.mod_tt_example
+        top = tt_leading_one(len(e))
+        bot = tt_leading_one(len(e))
+        bot[0] *= -1
+        return Meta_Boolean_Function(
+            f"({self.name} <- {other.name})",
+            tt_rl_orthogonalize(tt_add(e, top)),
+            lambda h: tt_add(h, bot),
+            lambda h, idx: 0.5 + 0.5 * tt_leading_entry(h) - 0.5 * tt_leading_entry(e) + 0.5 * tt_inner_prod(h,
+                                                                                                             bond_at(e,
+                                                                                                                     idx)),
+            e
+        )
+
+    def __rlshift__(self, other):
+        return other.__lshift(self)
+
+    def __rshift__(self, other):
+        e = self.mod_tt_example
+        if isinstance(other, Boolean_Function):
+            e = other.mod_tt_example
+        top = tt_leading_one(len(e))
+        bot = tt_leading_one(len(e))
+        bot[0] *= -1
+        return Meta_Boolean_Function(
+            f"({self.name} <- {other.name})",
+            tt_rl_orthogonalize(tt_add(e, bot)),
+            lambda h: tt_add(h, top),
+            lambda h, idx: 0.5 - 0.5 * tt_leading_entry(h) + 0.5 * tt_leading_entry(e) + 0.5 * tt_inner_prod(h,
+                                                                                                             bond_at(e,
+                                                                                                                     idx)),
+            e
+        )
+
+    def __rrshift__(self, other):
+        return other.__rshift(self)
 
 
-def exists_A_not_extending(example):
-    def bonded_constraint(idx=-1):
-        e = example.to_tt_train()
-        e_mean = tt_leading_entry(e) - 1
-        if idx != -1:
-            e = bond_at(e, idx)
-        return lambda h: -(tt_leading_entry(h) + e_mean + tt_inner_prod(h, e) + 1e-6)
-
-    return bonded_constraint
+class Hypothesis(Meta_Boolean_Function):
+    def __init__(self, name=None):
+        self.name = name
+        if name is None:
+            self.name = "hypothesis"
+        super().__init__(name, None, None, None, None)
 
 
-def all_A_extending(example):
-    def bonded_constraint(idx=-1):
-        e = example.to_tt_train()
-        e_mean = tt_leading_entry(e) - 1
-        if idx != -1:
-            e = bond_at(e, idx)
-        return lambda h: tt_leading_entry(h) + e_mean + tt_inner_prod(h, e)
+class Boolean_Function(Meta_Boolean_Function):
+    count = 0
 
-    return bonded_constraint
+    def __init__(self, expr: Expression, name: str = None):
+        if name is None:
+            self.name = f"e_{str(Boolean_Function.count)}"
+            Boolean_Function.count += 1
+        else:
+            self.name = name
+        tt_e = expr.to_tt_train()
+        super().__init__(name, tt_e, None, lambda x: tt_inner_prod(tt_e, x), tt_e)
 
 
-def all_A_not_extending(example):
-    def bonded_constraint(idx=-1):
-        e = example.to_tt_train()
-        e_mean = tt_leading_entry(e) + 1
-        if idx != -1:
-            e = bond_at(e, idx)
-        return lambda h: -(tt_leading_entry(h) + e_mean + tt_inner_prod(h, e))
+class ConstraintSpace:
+    def __init__(self):
+        self.projections = []
+        self.eq_constraints = []
+        self.reflections = []
+        self.iq_constraints = []
 
-    return bonded_constraint
+    def exists_S(self, example: Meta_Boolean_Function):
+        mod_tt_example, mod_h, func, tt_example = example.to_tt_constraint()
+        iq_func = lambda h: func(h, -1) + 1
+        not_identical_func = lambda h: 1 - tt_inner_prod(h, tt_example)
+        self.iq_constraints.extend([iq_func, not_identical_func])
+        norm = (1 / tt_inner_prod(mod_tt_example, mod_tt_example))
+
+        def reflection_1(tt_train):
+            if iq_func(tt_train) < 1e-5:
+                ex_0 = deepcopy(mod_tt_example[0])
+                tt_train_t = mod_h(tt_train)
+                mod_tt_example[0] *= -2 * norm * (tt_inner_prod(mod_tt_example, tt_train_t)+1e-5)
+                proj = tt_add(tt_train, mod_tt_example)
+                mod_tt_example[0] = ex_0
+                return tt_rl_orthogonalize(proj)
+            return tt_train
+
+        def reflection_2(tt_train):
+            if not_identical_func(tt_train) < 1e-5:
+                ex_0 = deepcopy(tt_example[0])
+                tt_example[0] *= -2 * (tt_inner_prod(tt_example, tt_train)-1+1e-5)
+                proj = tt_add(tt_train, tt_example)
+                tt_example[0] = ex_0
+                return tt_rl_orthogonalize(proj)
+            return tt_train
+
+        self.reflections.extend([reflection_1, reflection_2])
+
+    def forall_S(self, example: Meta_Boolean_Function):
+        mod_tt_example, mod_h, func, tt_example = example.to_tt_constraint()
+        self.eq_constraints.append(lambda h: func(h, -1) - 1)
+        norm = (1 / tt_inner_prod(mod_tt_example, mod_tt_example))
+
+        def projection(tt_train):
+            ex_0 = deepcopy(mod_tt_example[0])
+            tt_train_t = mod_h(tt_train)
+            mod_tt_example[0] *= -norm * (tt_inner_prod(mod_tt_example, tt_train_t))
+            proj = tt_add(tt_train, mod_tt_example)
+            mod_tt_example[0] = ex_0
+            return tt_rl_orthogonalize(proj)
+
+        self.projections.append(projection)
+
+    def reflect(self, tt_train):
+        for refl in self.reflections:
+            tt_train = refl(tt_train)
+        return tt_train
+
+    def project(self, tt_train):
+        for proj in self.projections:
+            tt_train = proj(tt_train)
+        return tt_train
