@@ -68,7 +68,7 @@ class Atom(Expression):
 
     def __init__(self, vocab_size, name=None):
         if name is None:
-            name = f"v_{str(Atom.counter)}"
+            name = f"a_{str(Atom.counter)}"
         super().__init__(name, [self], lambda x: x)
         self.index = Atom.counter
         self.tt_train = tt_atom_train(self.index, vocab_size)
@@ -76,6 +76,32 @@ class Atom(Expression):
 
     def to_tt_train(self):
         return deepcopy(self.tt_train)
+
+
+class Predicate:
+    counter = 0
+
+    def __init__(self, num_predicates, name=None):
+        if name is None:
+            name = f"p_{str(Predicate.counter)}"
+        self.name = name
+        self.index = Predicate.counter
+        self.tt_pred_core = np.zeros((1, num_predicates, 1), dtype=float)
+        self.tt_pred_core[:, self.index] = 1.0
+        Predicate.counter += 1
+
+    def __call__(self, atom: Atom):
+        return _PredicateInstance(self.name, atom, self.tt_pred_core)
+
+
+class _PredicateInstance(Expression):
+    def __init__(self, name, atom: Atom, pred_core: np.array):
+        self.atom = atom
+        self.pred_core = pred_core
+        super().__init__(name, [self], lambda x: x)
+
+    def to_tt_train(self):
+        return [self.pred_core] + self.atom.to_tt_train()
 
 
 def get_ANF(atoms, hypothesis):
