@@ -3,7 +3,6 @@ import numpy as np
 import jax.numpy as jnp
 from typing import List
 from itertools import product
-from operators import partial_D
 
 PHI = np.array([[1, 1],
                 [1, -1]], dtype=float).reshape(1, 2, 2, 1)
