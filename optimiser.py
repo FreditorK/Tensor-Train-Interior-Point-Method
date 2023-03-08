@@ -98,7 +98,7 @@ class Minimiser:
             params["mu"] = max(params["mu"] - 0.01, 0.01)
             print(f"Current violation: {criterion_score} \r", end="")
         print("\n", flush=True)
-        return tt_train
+        return self._round(tt_train, params)
 
     def _iteration(self, tt_train, params):
         gradient = self.complete_gradient(*tt_train, params=params)
@@ -107,12 +107,22 @@ class Minimiser:
         tt_train[0] = tt_train[0] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
         return tt_train
 
+    def _round(self, tt_train, params, iterations=10):
+        tt_table = tt_bool_op(tt_train)
+        for _ in range(iterations):
+            tt_table_p3 = tt_hadamard(tt_hadamard(tt_table, tt_table), tt_table)
+            tt_table_p3[0] *= -params["beta"]
+            tt_table[0] *= (1+params["beta"])
+            tt_table = tt_rl_orthogonalize(tt_add(tt_table, tt_table_p3))
+        return tt_rl_orthogonalize(tt_bool_op_inv(tt_table))
+
     def _init_tt_train(self):
         # Initializes at everything is equivalent formula
-        tt_train = [np.array([0.0, 1.0]).reshape(1, 2, 1) for _ in range(self.dimension)]
+        tt_train = [np.array([0.5, 1.0]).reshape(1, 2, 1) for _ in range(self.dimension)]
         tt_train[0] = tt_train[0] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
         params = {
             "lr": 3e-3,
-            "mu": 1.0
+            "mu": 1.0,
+            "beta": 0.5
         }
         return tt_train, params
