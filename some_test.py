@@ -45,11 +45,11 @@ for _ in range(20):
 
 #print(tt_to_tensor(tt_bool_op(e_tt)))
 """
-e= 4*np.random.rand(4) - 2
-beta = -0.1
+e= np.array([0.2, 0.01, -0.5, 0.6])#4*np.random.rand(4) - 2
+beta = -0.5
 print(e)
 a = 1
-for _ in range(100):
-    e = e + beta*(1-e**2)*(0.0 - e) - (1/a)*np.array([0.0, 0.0, 0.5, 1.0]).sum()
+for _ in range(10):
+    e = e - beta*(1-e**2)*e #- (1/a)*np.array([0.0, 0.0, 0.5, 1.0]).sum()
     a += 1
     print(e)

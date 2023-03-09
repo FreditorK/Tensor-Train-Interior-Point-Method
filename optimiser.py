@@ -69,16 +69,9 @@ class Minimiser:
         self.weight_tensor = [np.array([1.0, 0.5]).reshape(1, 2, 1) for _ in range(self.dimension)]
 
     def criterion(self, dimension):
-        one = tt_one(dimension)
-        one[0] *= -1.0
-
         @jax.jit
         def criterion(*tt_train, params):
-            tt_train = tt_bool_op(tt_train)
-            squared_Ttt_1 = tt_hadamard(tt_train, tt_train)
-            minus_1_squared_Ttt_1 = tt_add(squared_Ttt_1, one)
-            return params["mu"]*tt_inner_prod(self.weight_tensor, tt_train) + 1/(2*params["mu"])*tt_inner_prod(minus_1_squared_Ttt_1, minus_1_squared_Ttt_1)
-
+            return tt_inner_prod(self.weight_tensor, tt_train)
         return criterion
 
     def find_feasible_hypothesis(self):
@@ -88,14 +81,14 @@ class Minimiser:
         criterion_score = np.inf
         while criterion_score > 1e-4:
             # optimise over first core, we rl_othogonalise in the projections anyway
-            tt_train = self._iteration(tt_train, params)
             tt_train = self.const_space.project(tt_train)
             tt_train = self.const_space.reflect(tt_train)
+            tt_train = self._iteration(tt_train, params)
+            tt_train = self._round(tt_train, params, iterations=1)
             criterion_score = criterion(tt_train)
             if criterion_score > prev_criterion_score:
                 params["lr"] *= 0.99
             prev_criterion_score = criterion_score
-            params["mu"] = max(params["mu"] - 0.01, 0.01)
             print(f"Current violation: {criterion_score} \r", end="")
         print("\n", flush=True)
         return self._round(tt_train, params)
@@ -103,7 +96,7 @@ class Minimiser:
     def _iteration(self, tt_train, params):
         gradient = self.complete_gradient(*tt_train, params=params)
         tt_train[0] -= params["lr"] * (
-            gradient - tt_grad_inner_prod(tt_train, tt_train, gradient, 0) * tt_train[0])
+            gradient- tt_grad_inner_prod(tt_train, tt_train, gradient, 0) * tt_train[0])
         tt_train[0] = tt_train[0] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
         return tt_train
 
@@ -122,7 +115,6 @@ class Minimiser:
         tt_train[0] = tt_train[0] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
         params = {
             "lr": 3e-3,
-            "mu": 1.0,
             "beta": 0.5
         }
         return tt_train, params
