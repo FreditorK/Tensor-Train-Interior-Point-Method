@@ -288,47 +288,32 @@ def tt_xnor(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.a
     """
     Produces the truth table result tensor
     """
-    new_cores = []
-    tt_train_2_permuted = [
-        np.kron(np.array([[0], [1]]), core[:, None, 0, :]) + np.kron(np.array([[1], [0]]), core[:, None, 1, :]) for core
-        in tt_train_2]
-    tt_train_2 = [np.concatenate((np.expand_dims(t, 1), np.expand_dims(t_permuted, 1)), axis=1) for t, t_permuted in
-                  zip(tt_train_2, tt_train_2_permuted)]
-    for idx, (core_1, core_2) in enumerate(zip(tt_train_1, tt_train_2)):
-        new_core = np.kron(core_1[:, None, 0, :], core_2[:, :, 0, :]) + np.kron(core_1[:, None, 1, :],
-                                                                                core_2[:, :, 1, :])
-        new_cores.append(new_core)
-    return new_cores
+    tt_train_1 = tt_bool_op(tt_train_1)
+    tt_train_2 = tt_bool_op(tt_train_2)
+    tt_train_xnor = tt_hadamard(tt_train_1, tt_train_2)
+    tt_train_xnor = tt_bool_op_inv(tt_train_xnor)
+    return tt_rl_orthogonalize(tt_train_xnor)
 
 
 def tt_xor(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.array]:
-    xor_cores = tt_xnor(tt_train_1, tt_train_2)
-    xor_cores[0] *= -1
-    return xor_cores
+    return tt_xnor(tt_neg(tt_train_1), tt_train_2)
 
 
 def tt_and(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.array]:
-    xnor_cores = tt_xnor(tt_train_1, tt_train_2)
-    xnor_cores[0] *= 0.5
+    tt_train_1 = tt_bool_op(tt_train_1)
+    tt_train_2 = tt_bool_op(tt_train_2)
     tt_train_1[0] *= 0.5
+    tt_mul = tt_hadamard(tt_train_1, tt_train_2)
     tt_train_2[0] *= 0.5
-    leading_one = tt_leading_one(len(tt_train_1))
-    leading_one[0] *= -0.5
-    sum_cores = tt_add(leading_one, tt_add(tt_add(xnor_cores, tt_train_1), tt_train_2))
-    rounded_sum = tt_rank_reduce(sum_cores)
-    return rounded_sum
+    half = tt_one(len(tt_train_1))
+    half[0] *= -0.5
+    tt_train_and = tt_add(tt_add(half, tt_mul), tt_add(tt_train_1, tt_train_2))
+    tt_train_or = tt_bool_op_inv(tt_train_and)
+    return tt_rl_orthogonalize(tt_train_or)
 
 
 def tt_or(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.array]:
-    xnor_cores = tt_xnor(tt_train_1, tt_train_2)
-    xnor_cores[0] *= -0.5
-    tt_train_1[0] *= 0.5
-    tt_train_2[0] *= 0.5
-    leading_one = tt_leading_one(len(tt_train_1))
-    leading_one[0] *= 0.5
-    sum_cores = tt_add(leading_one, tt_add(tt_add(xnor_cores, tt_train_1), tt_train_2))
-    rounded_sum = tt_rank_reduce(sum_cores)
-    return rounded_sum
+    return tt_neg(tt_and(tt_neg(tt_train_1), tt_neg(tt_train_2)))
 
 
 def tt_neg(tt_train: List[np.array]) -> List[np.array]:
