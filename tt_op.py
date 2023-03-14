@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 import jax
 import numpy as np
 import jax.numpy as jnp
@@ -299,6 +301,33 @@ def boolean_criterion(dimension):
         return tt_inner_prod(minus_1_squared_Ttt_1, minus_1_squared_Ttt_1)
 
     return criterion
+
+
+def tt_extract_seq(tt_train, assignments):
+    tt_ttable = tt_rl_orthogonalize(tt_bool_op(tt_train))
+    N = len(tt_train)
+    answer = [np.array([0.1, 0.9]).reshape(1, 2, 1) for _ in range(N)]
+    indices = list(range(N))
+    for i in assignments.keys():
+        a = assignments[i]
+        answer[i] = ((a-1)/(-2) * np.array([0.0, 1.0]) + (1+a)/2 * np.array([1.0, 0.0])).reshape(1, 2, 1)
+        indices.remove(i)
+    termination_crit = 0.9 ** len(indices)
+    score = tt_inner_prod(tt_ttable, answer)
+    while score < termination_crit:
+        improvements = -np.ones(N)
+        buffer = deepcopy(answer)
+        for j in indices:
+            buffer[j] = np.array([0.9, 0.1]).reshape(1, 2, 1)
+            improvements[j] = tt_inner_prod(tt_ttable, buffer) - score
+            buffer[j] = answer[j]
+        max_improvements = np.argmax(improvements)
+        answer[max_improvements] = np.array([1.0, 0.0]).reshape(1, 2, 1)
+        indices.remove(max_improvements)
+        score = tt_inner_prod(tt_ttable, answer)
+    return [(np.array([1, -1]) @ np.round(a)).item() for a in answer]
+
+
 
 
 def tt_xnor(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.array]:
