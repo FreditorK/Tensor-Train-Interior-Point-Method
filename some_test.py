@@ -4,16 +4,20 @@ from operators import D_func
 from utils import *
 from tt_op import tt_extract_seq
 
-vocab_size = 3
+vocab_size = 4
 x = Atom(vocab_size, "x")
 y = Atom(vocab_size, "y")
 z = Atom(vocab_size, "z")
-e_3 = (
-    x & (y | z) #~x & (y | z)
-)
-e_tt = e_3.to_tt_train()
+w = Atom(vocab_size, "w")
+e_tt_1 = (x & (y | z)).to_tt_train()
+e_tt_2 = ((x & (y | z)) >> w).to_tt_train()
+e_tt_3 = (x & (y | z) & w).to_tt_train()
+e_tt_4 = (x ^ w).to_tt_train()
+print(get_minimal_answer_set(e_tt_1, [x, y, z, w]))
+print(get_minimal_answer_set(e_tt_2, [x, y, z, w], x=1, y=1))
+print(get_minimal_answer_set(e_tt_3, [x, y, z, w]))
+print(get_minimal_answer_set(e_tt_4, [x, y, z, w]))
 
-print(tt_extract_seq(e_tt, dict([(0, 1), (2, -1)])))
 """
 tt_ttable = tt_bool_op(e_tt)
 #mask = tt_add(tt_add(x.tt_train, y.tt_train), z.tt_train)

@@ -304,8 +304,8 @@ def boolean_criterion(dimension):
 
 
 def tt_extract_seq(tt_train, assignments):
-    tt_ttable = tt_rl_orthogonalize(tt_bool_op(tt_train))
     N = len(tt_train)
+    tt_ttable = tt_rl_orthogonalize(tt_bool_op(tt_train))
     answer = [np.array([0.1, 0.9]).reshape(1, 2, 1) for _ in range(N)]
     indices = list(range(N))
     for i in assignments.keys():
@@ -314,7 +314,7 @@ def tt_extract_seq(tt_train, assignments):
         indices.remove(i)
     termination_crit = 0.9 ** len(indices)
     score = tt_inner_prod(tt_ttable, answer)
-    while score < termination_crit:
+    while score < termination_crit:  # TODO: If we let it run it will converge to the memory mean
         improvements = -np.ones(N)
         buffer = deepcopy(answer)
         for j in indices:
