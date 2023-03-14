@@ -87,7 +87,7 @@ class Minimiser:
             criterion_score = criterion(*tt_train)
             if criterion_score > prev_criterion_score:
                 params["lr"] *= 0.99
-            print(f"Current score: {criterion_score} \r", end="")
+            print(f"Current score: {criterion_score-prev_criterion_score} \r", end="")
             prev_criterion_score = criterion_score
         print("\n", flush=True)
         criterion_score = np.inf

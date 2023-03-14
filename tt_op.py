@@ -240,6 +240,23 @@ def tt_influence(tt_train: List[np.array], idx):
         jnp.linalg.multi_dot([_tt_influence_core_collapse(core, idx - i) for i, core in enumerate(tt_train)]))
 
 
+def _tt_shared_influence_core_collapse(core, idx_1, idx_2):
+    return sum([
+        jnp.kron(core[(slice(None),) + i], core[(slice(None),) + i])
+        for i in product(*[list(range(1, max(int(idx_1 + k == 0), int(idx_2 + k == 0)) - 1, -1)) for k in range(len(core.shape) - 2)])
+    ])
+
+
+def tt_shared_influence(tt_train: List[np.array], idx_1, idx_2):
+    """
+    Returns the influence of an idx-index atom on a boolean function
+    """
+
+    return jnp.sum(
+        jnp.linalg.multi_dot(
+            [_tt_shared_influence_core_collapse(core, idx_1 - i, idx_2 - i) for i, core in enumerate(tt_train)]))
+
+
 def _tt_phi_core(core: np.array):
     return sum([
         jnp.kron(
@@ -274,10 +291,10 @@ def boolean_criterion(dimension):
     one = tt_one(dimension)
     one[0] *= -1.0
 
-    @jax.jit
     def criterion(tt_train):
         tt_train = tt_bool_op(tt_train)
         squared_Ttt_1 = tt_hadamard(tt_train, tt_train)
+        squared_Ttt_1 = tt_rl_orthogonalize(squared_Ttt_1)
         minus_1_squared_Ttt_1 = tt_add(squared_Ttt_1, one)
         return tt_inner_prod(minus_1_squared_Ttt_1, minus_1_squared_Ttt_1)
 
