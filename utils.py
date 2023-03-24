@@ -112,15 +112,6 @@ def influence_leq(atom, eps):
     return influence_constraint
 
 
-def get_minimal_answer_set(tt_train, atoms, **assignments):
-    set_values = []
-    for a in atoms:
-        if a.name in assignments.keys():
-            set_values.append((a.index, assignments[a.name]))
-    extracted_seq = tt_extract_seq(tt_train, dict(set_values))
-    return {atoms[i].name for i, v in enumerate(extracted_seq) if v > 0}
-
-
 
 class Meta_Boolean_Function:
     count = 0

@@ -3,6 +3,7 @@ import numpy as np
 from operators import D_func
 from utils import *
 from tt_op import tt_extract_seq
+from optimiser import AnswerSetSolver
 
 vocab_size = 4
 x = Atom(vocab_size, "x")
@@ -13,11 +14,12 @@ e_tt_1 = (x & (y | z)).to_tt_train()
 e_tt_2 = ((x & (y | z)) >> w).to_tt_train()
 e_tt_3 = (x & (y | z) & w).to_tt_train()
 e_tt_4 = (x ^ w).to_tt_train()
-print(get_minimal_answer_set(e_tt_1, [x, y, z, w]))
-print(get_minimal_answer_set(e_tt_2, [x, y, z, w], x=1, y=1))
-print(get_minimal_answer_set(e_tt_3, [x, y, z, w]))
-print(get_minimal_answer_set(e_tt_4, [x, y, z, w]))
-
+asp_solver = AnswerSetSolver([x, y, z, w])
+print(asp_solver.get_minimal_answer_set(e_tt_1))
+print(asp_solver.get_minimal_answer_set(e_tt_2, x=1, y=1))
+print(asp_solver.get_minimal_answer_set(e_tt_3))
+print(asp_solver.get_minimal_answer_set(e_tt_4))
+print(jnp.sum(tt_to_tensor([np.array([1.0, 0.0]).reshape(1, 2, 1)]+[np.array([0.1, 0.9]).reshape(1, 2, 1) for _ in range(5)])))
 """
 tt_ttable = tt_bool_op(e_tt)
 #mask = tt_add(tt_add(x.tt_train, y.tt_train), z.tt_train)

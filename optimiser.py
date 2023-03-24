@@ -10,55 +10,16 @@ from utils import ConstraintSpace, Atom
 # np.random.seed(7)
 
 class AnswerSetSolver:
-    def __init__(self, tt_train: List[np.array], atoms):
-        self.tt_train = tt_train
+    def __init__(self, atoms):
         self.atoms = atoms
-        self.dimension = len(tt_train)
-        self.params = {
-            "lr": 1e-1
-        }
-        not_ands = ~atoms[0]
-        for a in atoms[1:0]:
-            not_ands = not_ands & ~a
-        self.tt_minimal = not_ands.to_tt_train()
 
-    def _random_sphere_point(self, dimension):
-        sphere_x = np.array([np.random.randn() for _ in range(dimension)])
-        sphere_x = sphere_x / np.linalg.norm(sphere_x)
-        return sphere_x
-
-    def get_answer_set(self, **kwargs):
-        set_values = {}
-        free_indices = {}
-        k = 0
-        for i, atom in enumerate(self.atoms):
-            if atom.name in kwargs.keys():
-                set_values[i] = kwargs[atom.name]
-            else:
-                free_indices[i] = k
-                k += 1
-        random_point = self._random_sphere_point(len(free_indices))
-        X = [
-            np.array([1.0, random_point[free_indices[i]].item()]).reshape(1, 2, 1) if i in free_indices.keys()
-            else np.array([1.0, set_values[i]]).reshape(1, 2, 1)
-            for i in range(self.dimension)
-        ]
-        criterion = lambda x: (1 - tt_inner_prod(self.tt_train, x))**2 - tt_inner_prod(self.tt_minimal, x) - 1
-        criterion_gradient = D_func(criterion)
-        while criterion(X) > 5e-3:
-            for _ in range(10):
-                for idx in free_indices.keys():
-                    X[idx][:, 1] = X[idx][:, 1] - self.params["lr"] * criterion_gradient(X)[idx][:, 1]
-            vs = np.array([X[i][:, 1].item() for i in free_indices.keys()])
-            vs = vs / np.linalg.norm(vs)
-            random_point = self._random_sphere_point(len(free_indices))
-            vs = [np.sign(random_point[i] * v) for i, v in enumerate(vs)]
-            X = [
-                np.array([1.0, vs[free_indices[i]].item()]).reshape(1, 2, 1) if i in free_indices.keys()
-                else np.array([1.0, set_values[i]]).reshape(1, 2, 1)
-                for i in range(self.dimension)
-            ]
-        return {self.atoms[i] for i, x in enumerate(X) if int(x[:, 1].item()) == 1}
+    def get_minimal_answer_set(self, tt_train, **assignments):
+        set_values = []
+        for a in self.atoms:
+            if a.name in assignments.keys():
+                set_values.append((a.index, assignments[a.name]))
+        extracted_seq = tt_extract_seq(tt_train, dict(set_values))
+        return {self.atoms[i].name for i, v in enumerate(extracted_seq) if v > 0}
 
 
 class Minimiser:
@@ -81,7 +42,6 @@ class Minimiser:
                 params["lr"] *= 0.99
             print(f"Current score: {criterion_score-prev_criterion_score} \r", end="")
             prev_criterion_score = criterion_score
-        print("\n", flush=True)
         criterion_score = np.inf
         while criterion_score > 1e-4:
             # optimise over first core, we rl_othogonalise in the projections anyway

@@ -245,7 +245,8 @@ def tt_influence(tt_train: List[np.array], idx):
 def _tt_shared_influence_core_collapse(core, idx_1, idx_2):
     return sum([
         jnp.kron(core[(slice(None),) + i], core[(slice(None),) + i])
-        for i in product(*[list(range(1, max(int(idx_1 + k == 0), int(idx_2 + k == 0)) - 1, -1)) for k in range(len(core.shape) - 2)])
+        for i in product(*[list(range(1, max(int(idx_1 + k == 0), int(idx_2 + k == 0)) - 1, -1)) for k in
+                           range(len(core.shape) - 2)])
     ])
 
 
@@ -306,13 +307,14 @@ def boolean_criterion(dimension):
 def tt_extract_seq(tt_train, assignments):
     N = len(tt_train)
     tt_ttable = tt_rl_orthogonalize(tt_bool_op(tt_train))
-    answer = [np.array([0.1, 0.9]).reshape(1, 2, 1) for _ in range(N)]
+    answer = [np.array([0.1, 0.9]).reshape(1, 2, 1) for _ in range(N)]  # Sum over tensor sums to 1
     indices = list(range(N))
     for i in assignments.keys():
         a = assignments[i]
-        answer[i] = ((a-1)/(-2) * np.array([0.0, 1.0]) + (1+a)/2 * np.array([1.0, 0.0])).reshape(1, 2, 1)
+        answer[i] = ((a - 1) / (-2) * np.array([0.0, 1.0]) + (1 + a) / 2 * np.array([1.0, 0.0])).reshape(1, 2, 1)
         indices.remove(i)
-    termination_crit = 0.9 ** len(indices)
+    termination_crit = 0.9 ** len(indices)  # if the 0.9s overlap on a truth value
+    termination_crit -= 1 - termination_crit  # subtract all the other weights, i.e. 1 - true_entry (entries sum to 1)
     score = tt_inner_prod(tt_ttable, answer)
     while score < termination_crit:  # TODO: If we let it run it will converge to the memory mean
         improvements = -np.ones(N)
@@ -323,11 +325,11 @@ def tt_extract_seq(tt_train, assignments):
             buffer[j] = answer[j]
         max_improvements = np.argmax(improvements)
         answer[max_improvements] = np.array([1.0, 0.0]).reshape(1, 2, 1)
+        print(indices, max_improvements, improvements)
         indices.remove(max_improvements)
         score = tt_inner_prod(tt_ttable, answer)
+        print(score, termination_crit)
     return [(np.array([1, -1]) @ np.round(a)).item() for a in answer]
-
-
 
 
 def tt_xnor(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.array]:

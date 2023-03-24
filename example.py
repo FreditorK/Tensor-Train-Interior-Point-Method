@@ -26,6 +26,6 @@ print("Equality constraint Score: ", [jnp.sum(jnp.abs(c(hypothesis))) for c in c
 print("Inequality constraint Score: ", [jnp.sum(c(hypothesis)) for c in const_space.iq_constraints])
 print("Score:", boolean_criterion(len(hypothesis))(hypothesis), tt_inner_prod(hypothesis, hypothesis))
 print(f"Total time taken: {t_2-t_1}s.")
-asp_solver = AnswerSetSolver(hypothesis, atoms=[x, y, z])
-X = asp_solver.get_answer_set()
+asp_solver = AnswerSetSolver([x, y, z])
+X = asp_solver.get_minimal_answer_set(hypothesis)
 print(X)
