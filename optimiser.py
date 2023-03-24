@@ -65,26 +65,18 @@ class Minimiser:
     def __init__(self, const_space: ConstraintSpace, dimension):
         self.dimension = dimension
         self.const_space = const_space
-        self.complete_gradient = partial_D(self.criterion(), 0)
+        self.soft_loss = lambda *tt_train: sum([loss(tt_train) for loss in self.const_space.iq_constraints])
+        self.iq_gradient = partial_D(self.soft_loss, 0)
         self.weight_tensor = [np.array([1.0, 0.5]).reshape(1, 2, 1) for _ in range(self.dimension)]
-
-    def criterion(self):
-        @jax.jit
-        def criterion(*tt_train):
-            return (1 + tt_inner_prod(self.weight_tensor, tt_train))/2
-        return criterion
 
     def find_feasible_hypothesis(self):
         tt_train, params = self._init_tt_train()
-        criterion = self.criterion()
         bool_criterion = boolean_criterion(self.dimension)
         prev_criterion_score = np.inf
-        criterion_score = 2
+        criterion_score = 100
         while np.abs(criterion_score -prev_criterion_score) > 1e-4:
-            tt_train = self._iteration(tt_train, params)
+            tt_train, criterion_score = self._iteration(tt_train, params)
             tt_train = self.const_space.project(tt_train)
-            tt_train = self.const_space.reflect(tt_train)
-            criterion_score = criterion(*tt_train)
             if criterion_score > prev_criterion_score:
                 params["lr"] *= 0.99
             print(f"Current score: {criterion_score-prev_criterion_score} \r", end="")
@@ -93,21 +85,20 @@ class Minimiser:
         criterion_score = np.inf
         while criterion_score > 1e-4:
             # optimise over first core, we rl_othogonalise in the projections anyway
-            tt_train = self._iteration(tt_train, params)
+            tt_train, _ = self._iteration(tt_train, params)
             tt_train = self._round(tt_train, params)
             tt_train = self.const_space.project(tt_train)
-            tt_train = self.const_space.reflect(tt_train)
             criterion_score = bool_criterion(tt_train)
             print(f"Current violation: {criterion_score} \r", end="")
         print("\n", flush=True)
         return self._round(tt_train, params)
 
     def _iteration(self, tt_train, params):
-        gradient = self.complete_gradient(*tt_train)
+        gradient = self.iq_gradient(*tt_train)
         tt_train[0] -= params["lr"] * (
             gradient- tt_grad_inner_prod(tt_train, tt_train, gradient, 0) * tt_train[0])
         tt_train[0] = tt_train[0] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
-        return tt_train
+        return tt_train, jnp.sum(jnp.square(gradient))
 
     def _round(self, tt_train, params):
         tt_table = tt_bool_op(tt_train)

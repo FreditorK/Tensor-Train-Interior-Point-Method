@@ -247,36 +247,13 @@ class ConstraintSpace:
     def __init__(self):
         self.projections = []
         self.eq_constraints = []
-        self.reflections = []
+        self.inequalities = []
         self.iq_constraints = []
 
     def exists_S(self, example: Meta_Boolean_Function):
         mod_tt_example, mod_h, func, tt_example = example.to_tt_constraint()
-        iq_func = lambda h: func(h, -1) + 1
-        not_identical_func = lambda h: 1 - tt_inner_prod(h, tt_example)
-        self.iq_constraints.extend([iq_func, not_identical_func])
-        norm = (1 / tt_inner_prod(mod_tt_example, mod_tt_example))
-
-        def reflection_1(tt_train):
-            if iq_func(tt_train) < 1e-5:
-                ex_0 = deepcopy(mod_tt_example[0])
-                tt_train_t = mod_h(tt_train)
-                mod_tt_example[0] *= -2 * norm * (tt_inner_prod(mod_tt_example, tt_train_t)+1e-5)
-                proj = tt_add(tt_train, mod_tt_example)
-                mod_tt_example[0] = ex_0
-                return tt_rl_orthogonalize(proj)
-            return tt_train
-
-        def reflection_2(tt_train):
-            if not_identical_func(tt_train) < 1e-5:
-                ex_0 = deepcopy(tt_example[0])
-                tt_example[0] *= -2 * (tt_inner_prod(tt_example, tt_train)-1+1e-5)
-                proj = tt_add(tt_train, tt_example)
-                tt_example[0] = ex_0
-                return tt_rl_orthogonalize(proj)
-            return tt_train
-
-        self.reflections.extend([reflection_1, reflection_2])
+        iq_func = lambda h: (jnp.minimum(0, func(h, -1) + 1))**2 + (jnp.minimum(0, 1 - tt_inner_prod(h, tt_example)))**2
+        self.iq_constraints.append(iq_func)
 
     def forall_S(self, example: Meta_Boolean_Function):
         mod_tt_example, mod_h, func, tt_example = example.to_tt_constraint()
@@ -292,11 +269,6 @@ class ConstraintSpace:
             return tt_rl_orthogonalize(proj)
 
         self.projections.append(projection)
-
-    def reflect(self, tt_train):
-        for refl in self.reflections:
-            tt_train = refl(tt_train)
-        return tt_train
 
     def project(self, tt_train):
         for proj in self.projections:
