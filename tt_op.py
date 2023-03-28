@@ -325,10 +325,8 @@ def tt_extract_seq(tt_train, assignments):
             buffer[j] = answer[j]
         max_improvements = np.argmax(improvements)
         answer[max_improvements] = np.array([1.0, 0.0]).reshape(1, 2, 1)
-        print(indices, max_improvements, improvements)
         indices.remove(max_improvements)
         score = tt_inner_prod(tt_ttable, answer)
-        print(score, termination_crit)
     return [(np.array([1, -1]) @ np.round(a)).item() for a in answer]
 
 

@@ -112,7 +112,6 @@ def influence_leq(atom, eps):
     return influence_constraint
 
 
-
 class Meta_Boolean_Function:
     count = 0
 
@@ -243,7 +242,8 @@ class ConstraintSpace:
 
     def exists_S(self, example: Meta_Boolean_Function):
         mod_tt_example, mod_h, func, tt_example = example.to_tt_constraint()
-        iq_func = lambda h: (jnp.minimum(0, func(h, -1) + 1))**2 + (jnp.minimum(0, 1 - tt_inner_prod(h, tt_example)))**2
+        iq_func = lambda h: (jnp.minimum(0, func(h, -1) + 1)) ** 2 + (
+            jnp.minimum(0, 1 - tt_inner_prod(h, tt_example))) ** 2
         self.iq_constraints.append(iq_func)
 
     def forall_S(self, example: Meta_Boolean_Function):
