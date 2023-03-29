@@ -290,6 +290,39 @@ def tt_bool_op_inv(tt_train: List[np.array]) -> List[np.array]:
     return [_tt_phi_core_inv(core) for core in tt_train]
 
 
+def _tt_measure_core(core: np.array, p, q):
+    p_mat = np.array([[1, 1], [p, -q]], dtype=float).reshape(1, 2, 2, 1)
+    print([p_mat[(slice(None),) + sum(zip(i, [slice(None)] * len(i)), ())] for i in product(*([[0, 1]] * (len(core.shape) - 2)))])
+    return sum([
+        jnp.kron(
+            jnp.expand_dims(core[(slice(None),) + i], list(range(1, 1 + len(i)))),
+            p_mat[(slice(None),) + sum(zip(i, [slice(None)] * len(i)), ())]
+        ) for i in product(*([[0, 1]] * (len(core.shape) - 2)))])
+
+
+def tt_measure(tt_train: List[np.array], likelihoods_true: np.array, likelihoods_false: np.array):
+    """
+    Returns a formula weighted by a measure defined via the likelihoods
+    """
+    return [_tt_measure_core(core, p, q) for core, p, q in zip(tt_train, likelihoods_true, likelihoods_false)]
+
+
+def _tt_measure_core_inv(core: np.array, p, q):
+    p_mat = (1/(p+q))*np.array([[q, 1], [p, -1]], dtype=float).reshape(1, 2, 2, 1)
+    return sum([
+        jnp.kron(
+            jnp.expand_dims(core[(slice(None),) + i], list(range(1, 1 + len(i)))),
+            p_mat[(slice(None),) + sum(zip(i, [slice(None)] * len(i)), ())]
+        ) for i in product(*([[0, 1]] * (len(core.shape) - 2)))])
+
+
+def tt_measure_inv(tt_train: List[np.array], likelihoods_true: np.array, likelihoods_false: np.array):
+    """
+    Returns a formula weighted by a measure defined via the likelihoods
+    """
+    return [_tt_measure_core_inv(core, p, q) for core, p, q in zip(tt_train, likelihoods_true, likelihoods_false)]
+
+
 def boolean_criterion(dimension):
     one = tt_one(dimension)
     one[0] *= -1.0

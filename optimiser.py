@@ -31,11 +31,11 @@ class Minimiser:
         self.weight_tensor = [np.array([1.0, 0.5]).reshape(1, 2, 1) for _ in range(self.dimension)]
 
     def find_feasible_hypothesis(self):
-        tt_train, params = self._init_tt_train()
+        tt_train, tt_measure, params = self._init_tt_train()
         bool_criterion = boolean_criterion(self.dimension)
         prev_criterion_score = np.inf
         criterion_score = 100
-        while np.abs(criterion_score -prev_criterion_score) > 1e-4:
+        while np.abs(criterion_score) > 1e-4:
             tt_train, criterion_score = self._iteration(tt_train, params)
             tt_train = self.const_space.project(tt_train)
             if criterion_score > prev_criterion_score:
@@ -45,6 +45,7 @@ class Minimiser:
         criterion_score = np.inf
         while criterion_score > 1e-4:
             # optimise over first core, we rl_othogonalise in the projections anyway
+            # TODO: Extract measure here if data given, i.e. constraints are contradictory
             tt_train, _ = self._iteration(tt_train, params)
             tt_train = self._round(tt_train, params)
             tt_train = self.const_space.project(tt_train)
@@ -76,8 +77,9 @@ class Minimiser:
         # Initializes at everything is equivalent formula
         tt_train = [np.array([0.5, 1.0]).reshape(1, 2, 1) for _ in range(self.dimension)]
         tt_train[0] = tt_train[0] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
+        tt_measure = tt_one(self.dimension)
         params = {
             "lr": 5e-3,
             "beta": -0.5
         }
-        return tt_train, params
+        return tt_train, tt_measure, params
