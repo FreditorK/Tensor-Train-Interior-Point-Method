@@ -28,7 +28,6 @@ class Minimiser:
         self.const_space = const_space
         self.soft_loss = lambda *tt_train: sum([loss(tt_train) for loss in self.const_space.iq_constraints])
         self.iq_gradient = partial_D(self.soft_loss, 0)
-        self.weight_tensor = [np.array([1.0, 0.5]).reshape(1, 2, 1) for _ in range(self.dimension)]
 
     def find_feasible_hypothesis(self):
         tt_train, tt_measure, params = self._init_tt_train()

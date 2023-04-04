@@ -290,9 +290,8 @@ def tt_bool_op_inv(tt_train: List[np.array]) -> List[np.array]:
     return [_tt_phi_core_inv(core) for core in tt_train]
 
 
-def _tt_measure_core(core: np.array, p, q):
-    p_mat = np.array([[1, 1], [p, -q]], dtype=float).reshape(1, 2, 2, 1)
-    print([p_mat[(slice(None),) + sum(zip(i, [slice(None)] * len(i)), ())] for i in product(*([[0, 1]] * (len(core.shape) - 2)))])
+def _tt_measure_core(core: np.array, p):
+    p_mat = np.array([[1, 1], [p, -p]], dtype=float).reshape(1, 2, 2, 1)
     return sum([
         jnp.kron(
             jnp.expand_dims(core[(slice(None),) + i], list(range(1, 1 + len(i)))),
@@ -300,15 +299,15 @@ def _tt_measure_core(core: np.array, p, q):
         ) for i in product(*([[0, 1]] * (len(core.shape) - 2)))])
 
 
-def tt_measure(tt_train: List[np.array], likelihoods_true: np.array, likelihoods_false: np.array):
+def tt_measure(tt_train: List[np.array], likelihoods_true: np.array):
     """
     Returns a formula weighted by a measure defined via the likelihoods
     """
-    return [_tt_measure_core(core, p, q) for core, p, q in zip(tt_train, likelihoods_true, likelihoods_false)]
+    return [_tt_measure_core(core, p) for core, p in zip(tt_train, likelihoods_true)]
 
 
-def _tt_measure_core_inv(core: np.array, p, q):
-    p_mat = (1/(p+q))*np.array([[q, 1], [p, -1]], dtype=float).reshape(1, 2, 2, 1)
+def _tt_measure_core_inv(core: np.array, p):
+    p_mat = (1/(2*p))*np.array([[p, 1], [p, -1]], dtype=float).reshape(1, 2, 2, 1)
     return sum([
         jnp.kron(
             jnp.expand_dims(core[(slice(None),) + i], list(range(1, 1 + len(i)))),
@@ -316,11 +315,11 @@ def _tt_measure_core_inv(core: np.array, p, q):
         ) for i in product(*([[0, 1]] * (len(core.shape) - 2)))])
 
 
-def tt_measure_inv(tt_train: List[np.array], likelihoods_true: np.array, likelihoods_false: np.array):
+def tt_measure_inv(tt_train: List[np.array], likelihoods_true: np.array):
     """
     Returns a formula weighted by a measure defined via the likelihoods
     """
-    return [_tt_measure_core_inv(core, p, q) for core, p, q in zip(tt_train, likelihoods_true, likelihoods_false)]
+    return [_tt_measure_core_inv(core, p) for core, p in zip(tt_train, likelihoods_true)]
 
 
 def boolean_criterion(dimension):
@@ -349,7 +348,7 @@ def tt_extract_seq(tt_train, assignments):
     termination_crit = 0.9 ** len(indices)  # if the 0.9s overlap on a truth value
     termination_crit -= 1 - termination_crit  # subtract all the other weights, i.e. 1 - true_entry (entries sum to 1)
     score = tt_inner_prod(tt_ttable, answer)
-    while score < termination_crit:  # TODO: If we let it run it will converge to the memory mean
+    while score < termination_crit:  # TODO: 1. If we let it run it will converge to the memory mean, 2. we can also after finding the minimal answer set flip that entry and proceed to run to get the next answer set
         improvements = -np.ones(N)
         buffer = deepcopy(answer)
         for j in indices:
