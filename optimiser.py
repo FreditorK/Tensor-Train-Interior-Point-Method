@@ -26,8 +26,6 @@ class Minimiser:
     def __init__(self, const_space: ConstraintSpace, dimension):
         self.dimension = dimension
         self.const_space = const_space
-        self.soft_loss = lambda *tt_train: sum([loss(tt_train) for loss in self.const_space.iq_constraints])
-        self.iq_gradient = partial_D(self.soft_loss, 0)
 
     def find_feasible_hypothesis(self):
         tt_train, tt_measure, params = self._init_tt_train()
@@ -36,10 +34,11 @@ class Minimiser:
         criterion_score = 100
         while np.abs(criterion_score) > 1e-4:
             tt_train, criterion_score = self._iteration(tt_train, params)
+            #self.const_space.update_noise_lvl(tt_train)
             tt_train = self.const_space.project(tt_train)
-            if criterion_score > prev_criterion_score:
+            if criterion_score > prev_criterion_score: # TODO: There should be a check for the wolfe condition here
                 params["lr"] *= 0.99
-            print(f"Current score: {criterion_score-prev_criterion_score} \r", end="")
+            print(f"Current score: {criterion_score} \r", end="")
             prev_criterion_score = criterion_score
         criterion_score = np.inf
         while criterion_score > 1e-4:
@@ -47,14 +46,18 @@ class Minimiser:
             # TODO: Extract measure here if data given, i.e. constraints are contradictory
             tt_train, _ = self._iteration(tt_train, params)
             tt_train = self._round(tt_train, params)
+            #self.const_space.update_noise_lvl(tt_train)
             tt_train = self.const_space.project(tt_train)
+            test = tt_leading_one(3)
+            test[0] *= -1
+            print(tt_to_tensor(self.const_space.project(test)))
             criterion_score = bool_criterion(tt_train)
             print(f"Current violation: {criterion_score} \r", end="")
         print("\n", flush=True)
         return self._round(tt_train, params)
 
     def _iteration(self, tt_train, params):
-        gradient = self.iq_gradient(*tt_train)
+        gradient = self.const_space.gradient(tt_train)
         tt_train[0] -= params["lr"] * (
             gradient- tt_grad_inner_prod(tt_train, tt_train, gradient, 0) * tt_train[0])
         tt_train[0] = tt_train[0] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))

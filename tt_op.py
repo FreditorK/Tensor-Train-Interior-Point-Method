@@ -290,8 +290,7 @@ def tt_bool_op_inv(tt_train: List[np.array]) -> List[np.array]:
     return [_tt_phi_core_inv(core) for core in tt_train]
 
 
-def _tt_measure_core(core: np.array, p):
-    p_mat = np.array([[1, 1], [p, -p]], dtype=float).reshape(1, 2, 2, 1)
+def _tt_measure_core(core: np.array, p_mat):
     return sum([
         jnp.kron(
             jnp.expand_dims(core[(slice(None),) + i], list(range(1, 1 + len(i)))),
@@ -299,15 +298,17 @@ def _tt_measure_core(core: np.array, p):
         ) for i in product(*([[0, 1]] * (len(core.shape) - 2)))])
 
 
-def tt_measure(tt_train: List[np.array], likelihoods_true: np.array):
+def tt_measure(tt_train: List[np.array], likelihoods: np.array):
     """
     Returns a formula weighted by a measure defined via the likelihoods
     """
-    return [_tt_measure_core(core, p) for core, p in zip(tt_train, likelihoods_true)]
+    return [_tt_measure_core(
+        core,
+        jnp.array([[1, 1], [p, -p]], dtype=float).reshape(1, 2, 2, 1)
+    ) for core, p in zip(tt_train, likelihoods)]
 
 
-def _tt_measure_core_inv(core: np.array, p):
-    p_mat = (1/(2*p))*np.array([[p, 1], [p, -1]], dtype=float).reshape(1, 2, 2, 1)
+def _tt_measure_core_inv(core: np.array, p_mat):
     return sum([
         jnp.kron(
             jnp.expand_dims(core[(slice(None),) + i], list(range(1, 1 + len(i)))),
@@ -315,11 +316,22 @@ def _tt_measure_core_inv(core: np.array, p):
         ) for i in product(*([[0, 1]] * (len(core.shape) - 2)))])
 
 
-def tt_measure_inv(tt_train: List[np.array], likelihoods_true: np.array):
+def tt_measure_inv(tt_train: List[np.array], likelihoods: np.array):
     """
     Returns a formula weighted by a measure defined via the likelihoods
     """
-    return [_tt_measure_core_inv(core, p) for core, p in zip(tt_train, likelihoods_true)]
+    return [_tt_measure_core_inv(
+        core,
+        (1 / 2) *jnp.array([[1, 1/p if p > 0 else 0], [1, -1/p if p > 0 else 0]], dtype=float).reshape(1, 2, 2, 1)
+    ) for core, p in zip(tt_train, likelihoods)]
+
+
+def tt_noise_op(tt_train: List[np.array], likelihoods: np.array):
+    return tt_bool_op_inv(tt_measure(tt_train, likelihoods))
+
+
+def tt_noise_op_inv(tt_train: List[np.array], likelihoods: np.array):
+    return tt_measure_inv(tt_bool_op(tt_train), likelihoods)
 
 
 def boolean_criterion(dimension):

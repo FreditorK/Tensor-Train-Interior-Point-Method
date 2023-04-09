@@ -2,6 +2,7 @@ from sympy.logic.boolalg import ANFform, to_cnf, to_dnf, to_anf
 from sympy import symbols
 from tt_op import *
 from copy import deepcopy
+from operators import partial_D
 
 
 class Expression:
@@ -238,12 +239,20 @@ class ConstraintSpace:
         self.projections = []
         self.eq_constraints = []
         self.inequalities = []
-        self.iq_constraints = []
+        self.iq_constraints = [lambda h: jnp.minimum(0, tt_leading_entry(h) + 1 - 1e-4)**2]
+        self.iq_gradient = None
+
+    def gradient(self, tt_train):
+        if self.iq_gradient is None:
+            self.iq_gradient = partial_D(lambda *h: self.soft_loss(h), 0)
+        return self.iq_gradient(*tt_train)
+
+    def update_noise_lvl(self, tt_train):
+        pass
 
     def exists_S(self, example: Meta_Boolean_Function):
-        mod_tt_example, mod_h, func, tt_example = example.to_tt_constraint()
-        iq_func = lambda h: (jnp.minimum(0, func(h, -1) + 1)) ** 2 + (
-            jnp.minimum(0, 1 - tt_inner_prod(h, tt_example))) ** 2
+        mod_tt_example, mod_h, func, tt_example = example.to_tt_constraint()  # TODO: We can pull the sum into the inner product, i.e. add all examples up before?
+        iq_func = lambda h: jnp.minimum(0, func(h, -1) + 1 -1e-5)** 2
         self.iq_constraints.append(iq_func)
 
     def forall_S(self, example: Meta_Boolean_Function):
@@ -265,3 +274,45 @@ class ConstraintSpace:
         for proj in self.projections:
             tt_train = proj(tt_train)
         return tt_train
+
+    def soft_loss(self, tt_train):
+        return sum([loss(tt_train) for loss in self.iq_constraints])
+
+
+class NoisyConstraintSpace(ConstraintSpace):
+    def __init__(self):
+        super().__init__()
+        self.lr = 1e-1
+        self.noise_op_measure = None
+        self.noise_gradient = None
+        self.iq_gradient = None
+
+    def gradient(self, tt_train):
+        if self.iq_gradient is None:
+            self.noise_op_measure = np.ones(len(tt_train))
+            self.iq_gradient = partial_D(lambda p, *h: self.soft_loss(tt_noise_op(h, p)), 1)
+        #print("Loss: ", self.soft_loss(tt_train))
+        gradient = self.iq_gradient(self.noise_op_measure, *tt_train)
+        print("Grad: ", jnp.sum(gradient**2))
+        return gradient
+
+    def update_noise_lvl(self, tt_train):
+        #print("leading Entry:", tt_leading_entry(tt_train))
+        if self.noise_gradient is None:
+            def noise_gradient(p, h):
+                h = tt_noise_op(h, p)
+                return self.soft_loss(h) + sum(loss(h)**2 for loss in self.eq_constraints)
+
+            self.noise_gradient = partial_D(noise_gradient, 0)  # TODO: We can probably add everything up for the proj loss
+        gradient = self.noise_gradient(self.noise_op_measure, tt_train)
+        is_zero = self.noise_op_measure*(1-self.noise_op_measure)*(np.abs(gradient) < 1e-4)
+        self.noise_op_measure = np.clip(self.noise_op_measure + self.lr*(is_zero - gradient), a_max=1, a_min=0)
+        #print(self.noise_op_measure)
+
+    def project(self, tt_train):
+        noisy_tt_train = tt_noise_op(tt_train, self.noise_op_measure)
+        for proj in self.projections:
+            noisy_tt_train = proj(noisy_tt_train)
+        proj_tt_train = tt_rl_orthogonalize(tt_noise_op_inv(noisy_tt_train, self.noise_op_measure))
+        proj_tt_train = [core if self.noise_op_measure[i] > 0 else tt_train[i] for i, core in enumerate(proj_tt_train)]
+        return proj_tt_train
