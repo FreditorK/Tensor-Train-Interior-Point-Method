@@ -409,3 +409,8 @@ def tt_or(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.arr
 def tt_neg(tt_train: List[np.array]) -> List[np.array]:
     tt_train[0] *= -1
     return tt_train
+
+
+def tt_mul_scal(alpha, tt_train):
+    tt_train[0] *= alpha
+    return tt_train

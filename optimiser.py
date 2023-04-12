@@ -34,25 +34,28 @@ class Minimiser:
         criterion_score = 100
         while np.abs(criterion_score) > 1e-4:
             tt_train, criterion_score = self._iteration(tt_train, params)
-            #self.const_space.update_noise_lvl(tt_train)
             tt_train = self.const_space.project(tt_train)
             if criterion_score > prev_criterion_score: # TODO: There should be a check for the wolfe condition here
                 params["lr"] *= 0.99
+                #self.const_space.update_noise_lvl(tt_train)
             print(f"Current score: {criterion_score} \r", end="")
             prev_criterion_score = criterion_score
+        #print("success")
+        #print(tt_to_tensor(tt_train))
         criterion_score = np.inf
         while criterion_score > 1e-4:
             # optimise over first core, we rl_othogonalise in the projections anyway
             # TODO: Extract measure here if data given, i.e. constraints are contradictory
             tt_train, _ = self._iteration(tt_train, params)
             tt_train = self._round(tt_train, params)
-            #self.const_space.update_noise_lvl(tt_train)
+            self.const_space.update_noise_lvl(tt_train)
             tt_train = self.const_space.project(tt_train)
-            test = tt_leading_one(3)
-            test[0] *= -1
-            print(tt_to_tensor(self.const_space.project(test)))
             criterion_score = bool_criterion(tt_train)
+            if criterion_score > prev_criterion_score: # TODO: There should be a check for the wolfe condition here
+                params["lr"] *= 0.99
+                self.const_space.update_noise_lvl(tt_train)
             print(f"Current violation: {criterion_score} \r", end="")
+            prev_criterion_score = criterion_score
         print("\n", flush=True)
         return self._round(tt_train, params)
 
