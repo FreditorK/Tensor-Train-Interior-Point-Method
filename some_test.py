@@ -31,3 +31,13 @@ weighted_tensor = tt_noise_op(weighted_tensor, ps_2)
 #unweighted_tensor = tt_measure_inv(tt_bool_op(weighted_tensor), ps, qs)
 print(tt_inner_prod(weighted_tensor, [np.array([1, 1]).reshape(1, 2, 1), np.array([1, -1]).reshape(1, 2, 1), np.array([1, -1]).reshape(1, 2, 1), np.array([1, -1]).reshape(1, 2, 1)]))
 print(tt_inner_prod(e_tt_1, [np.array([1, 1]).reshape(1, 2, 1), np.array([1, -0.25]).reshape(1, 2, 1), np.array([1, -1]).reshape(1, 2, 1), np.array([1, -1]).reshape(1, 2, 1)]))
+
+tens = 2*np.random.rand(2, 2, 2)-1
+tens[np.random.randint(0, 2), np.random.randint(0, 2), np.random.randint(0, 2)] = 1.0
+tens *= 1/np.sqrt(np.sum(tens*tens))
+true = tt_svd(tens)
+print(tt_inner_prod(true, true))
+print(tt_to_tensor(true))
+print(tt_to_tensor(tt_bool_op(true)))
+clipped_true = [np.clip(c, a_max=1, a_min=-1) for c in tt_bool_op(true)]
+print(tt_to_tensor(clipped_true))

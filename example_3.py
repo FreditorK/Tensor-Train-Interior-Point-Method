@@ -14,7 +14,7 @@ e_1_contradiction = Boolean_Function(~x & y)
 const_space.forall_S(h >> e_1_contradiction)
 top = tt_leading_one(3)
 top_p = tt_leading_one(3)
-k = 0.72
+k = 1.0
 top_p[0] *= k
 bot = tt_leading_one(3)
 bot_p = tt_leading_one(3)
@@ -22,12 +22,11 @@ bot[0] *= -1.0
 bot_p[0] *= -k
 a = (x & y).to_tt_train()
 ps = np.array([0.0, 1.0, 1.0])
-a = tt_noise_op(a, ps)
 #e_1 = tt_noise_op(e_1, ps)
 #e_1_contradiction = tt_noise_op(e_1_contradiction, ps)
 #print(const_space.eq_constraints[1](const_space.projections[0](a)))
-print(tt_inner_prod(tt_add(e_1.tt_example, top_p), tt_add(a, bot_p)))
-print(tt_inner_prod(tt_add(e_1_contradiction.tt_example, bot_p), tt_add(a, top_p)))
+print(tt_inner_prod(tt_add(e_1.tt_example, top_p), tt_noise_op(tt_add(a, bot_p), ps)))
+print(tt_inner_prod(tt_add(e_1_contradiction.tt_example, bot_p), tt_noise_op(tt_add(a, top_p), ps)))
 #print(const_space.eq_constraints[0](const_space.projections[1](a)))
 """
 opt = Minimiser(const_space, vocab_size)

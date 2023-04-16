@@ -233,7 +233,8 @@ class ConstraintSpace:
 
     def gradient(self, tt_train):
         if self.iq_gradient is None:
-            self.iq_gradient = partial_D(lambda *h: sum([loss(h) for loss in self.iq_constraints]), 0)
+            n = len(self.iq_constraints)
+            self.iq_gradient = partial_D(lambda *h: (1/n)*sum([loss(h) for loss in self.iq_constraints]), 0)
         return self.iq_gradient(*tt_train)
 
     def update_noise_lvl(self, tt_train):
@@ -305,7 +306,7 @@ class NoisyConstraintSpace(ConstraintSpace):
             self.update_noise_lvl(tt_train, iterations-1)
 
 
-    def project(self, tt_train):
+    def project(self, tt_train): # TODO: check that projection was contractive!!
         noisy_tt_train = tt_noise_op(tt_train, self.noise_op_measure)
         for proj in self.projections:
             noisy_tt_train = proj(noisy_tt_train, self.expected_truth)

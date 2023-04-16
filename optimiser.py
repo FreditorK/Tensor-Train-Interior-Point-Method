@@ -32,7 +32,7 @@ class Minimiser:
         bool_criterion = boolean_criterion(self.dimension)
         prev_criterion_score = np.inf
         criterion_score = 100
-        while np.abs(criterion_score) > 1e-4:
+        while np.abs(criterion_score) > 0.32:
             tt_train, criterion_score = self._iteration(tt_train, params)
             tt_train = self.const_space.project(tt_train)
             if criterion_score > prev_criterion_score: # TODO: There should be a check for the wolfe condition here
@@ -40,8 +40,6 @@ class Minimiser:
                 #self.const_space.update_noise_lvl(tt_train)
             print(f"Current score: {criterion_score} \r", end="")
             prev_criterion_score = criterion_score
-        #print("success")
-        #print(tt_to_tensor(tt_train))
         criterion_score = np.inf
         while criterion_score > 1e-4:
             # optimise over first core, we rl_othogonalise in the projections anyway
@@ -53,17 +51,20 @@ class Minimiser:
             criterion_score = bool_criterion(tt_train)
             if criterion_score > prev_criterion_score: # TODO: There should be a check for the wolfe condition here
                 params["lr"] *= 0.99
-                self.const_space.update_noise_lvl(tt_train)
+                #self.const_space.update_noise_lvl(tt_train)
             print(f"Current violation: {criterion_score} \r", end="")
             prev_criterion_score = criterion_score
         print("\n", flush=True)
+        print([t.shape for t in tt_train])
         return self._round(tt_train, params)
 
     def _iteration(self, tt_train, params):
         gradient = self.const_space.gradient(tt_train)
-        tt_train[0] -= params["lr"] * (
-            gradient- tt_grad_inner_prod(tt_train, tt_train, gradient, 0) * tt_train[0])
-        tt_train[0] = tt_train[0] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
+        tt_train[0] -= params["lr"] * gradient
+        sqred_radius = tt_inner_prod(tt_train, tt_train)
+        if sqred_radius > 1:
+            tt_train[0] += params["lr"] * tt_grad_inner_prod(tt_train, tt_train, gradient, 0) * tt_train[0]
+            tt_train[0] = tt_train[0] / jnp.sqrt(sqred_radius)
         return tt_train, jnp.sum(jnp.square(gradient))
 
     def _round(self, tt_train, params):
@@ -76,7 +77,7 @@ class Minimiser:
         tt_train[0] *= (1 - tt_inner_prod(tt_update, tt_train))
         tt_train = tt_add(tt_update, tt_train)
         tt_train[0] = tt_train[0] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
-        return tt_rl_orthogonalize(tt_train)
+        return tt_rank_reduce(tt_train)
 
     def _init_tt_train(self):
         # Initializes at everything is equivalent formula

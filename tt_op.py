@@ -3,6 +3,7 @@ from copy import deepcopy
 import jax
 import numpy as np
 import jax.numpy as jnp
+import jax.scipy as jsc
 from typing import List
 from itertools import product
 
@@ -69,8 +70,9 @@ def tt_rl_orthogonalize(tt_train: List[np.array]):
     return tt_train
 
 
-def part_bond(core):
+def tt_part_bond(tt_train, idx):
     """ Breaks up a bond between two cores """
+    core = tt_train[idx]
     shape = core.shape
     A = core.reshape(shape[0] * shape[1], -1)
     U, S, V_T = jnp.linalg.svd(A)
@@ -81,10 +83,20 @@ def part_bond(core):
     V_T = V_T[non_sing_eig_idxs, :]
     G_i = U.reshape(shape[0], shape[1], next_rank)
     G_ip1 = (jnp.diag(S) @ V_T).reshape(next_rank, shape[2], shape[-1])
-    return G_i, G_ip1
+    return tt_train[:idx] + [G_i, G_ip1] + tt_train[idx + 1:]
 
 
-def tt_rank_reduce(tt_train: List[np.array]):
+def tt_rank_loss(tt_train):
+    sum_of_sqrd_eigs = 0
+    n = len(tt_train)-1
+    for idx in range(n):
+        t_bond = jnp.einsum("abc, cde -> abde", tt_train[idx], tt_train[idx + 1])
+        t_bond = t_bond.reshape(t_bond.shape[0] * t_bond.shape[1], -1)
+        sum_of_sqrd_eigs += jnp.linalg.norm(t_bond @ t_bond.T, ord="nuc")
+    return sum_of_sqrd_eigs/n
+
+
+def tt_rank_reduce(tt_train: List[np.array], tt_bound=1e-4):
     """ Might reduce TT-rank """
     tt_train = tt_rl_orthogonalize(tt_train)
     rank = 1
@@ -92,7 +104,7 @@ def tt_rank_reduce(tt_train: List[np.array]):
         idx_shape = tt_train[idx].shape
         next_idx_shape = tt_train[idx + 1].shape
         U, S, V_T = np.linalg.svd(tt_train[idx].reshape(rank * idx_shape[1], -1))
-        non_sing_eig_idxs = np.asarray(np.abs(S) > 1e-5).nonzero()
+        non_sing_eig_idxs = np.asarray(np.abs(S) > tt_bound).nonzero()
         S = S[non_sing_eig_idxs]
         next_rank = len(S)
         U = U[:, non_sing_eig_idxs]
@@ -204,7 +216,7 @@ def _tt_core_collapse(core_1: np.array, core_2: np.array):
     ])
 
 
-def bond_at(e, idx):
+def tt_bond_at(e, idx):
     if idx != -1:
         e_bond = jnp.einsum("abc, cde -> abde", e[idx], e[idx + 1])
         e = e[:idx] + [e_bond] + e[idx + 2:]
@@ -322,7 +334,7 @@ def tt_measure_inv(tt_train: List[np.array], likelihoods: np.array):
     """
     return [_tt_measure_core_inv(
         core,
-        (1 / 2) *jnp.array([[1, 1/p if p > 0 else 0], [1, -1/p if p > 0 else 0]], dtype=float).reshape(1, 2, 2, 1)
+        (1 / 2) * jnp.array([[1, 1 / p if p > 0 else 0], [1, -1 / p if p > 0 else 0]], dtype=float).reshape(1, 2, 2, 1)
     ) for core, p in zip(tt_train, likelihoods)]
 
 
