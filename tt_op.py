@@ -4,6 +4,7 @@ import jax
 import numpy as np
 import jax.numpy as jnp
 import jax.scipy as jsc
+from jax.nn import softmax
 from typing import List
 from itertools import product
 
@@ -88,12 +89,13 @@ def tt_part_bond(tt_train, idx):
 
 def tt_rank_loss(tt_train):
     sum_of_sqrd_eigs = 0
-    n = len(tt_train)-1
-    for idx in range(n):
+    bond_ranks = jnp.array([max(tt_train[idx].shape[-1], tt_train[idx+1].shape[0]) for idx in range(len(tt_train)-1)])
+    bond_ranks = bond_ranks/jnp.max(bond_ranks)
+    for idx, r in enumerate(bond_ranks):
         t_bond = jnp.einsum("abc, cde -> abde", tt_train[idx], tt_train[idx + 1])
         t_bond = t_bond.reshape(t_bond.shape[0] * t_bond.shape[1], -1)
-        sum_of_sqrd_eigs += jnp.linalg.norm(t_bond @ t_bond.T, ord="nuc")
-    return sum_of_sqrd_eigs/n
+        sum_of_sqrd_eigs += r*jnp.linalg.norm(t_bond, ord="nuc")
+    return sum_of_sqrd_eigs
 
 
 def tt_rank_reduce(tt_train: List[np.array], tt_bound=1e-4):

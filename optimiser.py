@@ -29,43 +29,52 @@ class Minimiser:
 
     def find_feasible_hypothesis(self):
         tt_train, tt_measure, params = self._init_tt_train()
-        bool_criterion = boolean_criterion(self.dimension)
-        prev_criterion_score = np.inf
+        tt_train = self._resolve_constraints(tt_train, params)
+        tt_train = self._extract_solution(tt_train, params)
+        return tt_train
+
+    def _resolve_constraints(self, tt_train, params):
         criterion_score = 100
-        while np.abs(criterion_score) > 0.32:
-            tt_train, criterion_score = self._iteration(tt_train, params)
+        prev_criterion_score = np.inf
+        while np.abs(criterion_score) > 1e-4:
             tt_train = self.const_space.project(tt_train)
-            if criterion_score > prev_criterion_score: # TODO: There should be a check for the wolfe condition here
+            tt_train, criterion_score = self._iteration(tt_train, params)
+            if criterion_score > prev_criterion_score:  # TODO: There should be a check for the wolfe condition here
                 params["lr"] *= 0.99
-                #self.const_space.update_noise_lvl(tt_train)
+                # self.const_space.update_noise_lvl(tt_train)
             print(f"Current score: {criterion_score} \r", end="")
             prev_criterion_score = criterion_score
-        criterion_score = np.inf
+        return tt_train
+
+    def _extract_solution(self, tt_train, params):
+        bool_criterion = boolean_criterion(self.dimension)
+        criterion_score = 100
+        prev_criterion_score = np.inf
         while criterion_score > 1e-4:
-            # optimise over first core, we rl_othogonalise in the projections anyway
-            # TODO: Extract measure here if data given, i.e. constraints are contradictory
             tt_train, _ = self._iteration(tt_train, params)
             tt_train = self._round(tt_train, params)
             self.const_space.update_noise_lvl(tt_train)
             tt_train = self.const_space.project(tt_train)
             criterion_score = bool_criterion(tt_train)
-            if criterion_score > prev_criterion_score: # TODO: There should be a check for the wolfe condition here
+            if criterion_score > prev_criterion_score:  # TODO: There should be a check for the wolfe condition here
                 params["lr"] *= 0.99
-                #self.const_space.update_noise_lvl(tt_train)
+                # self.const_space.update_noise_lvl(tt_train)
             print(f"Current violation: {criterion_score} \r", end="")
             prev_criterion_score = criterion_score
         print("\n", flush=True)
-        print([t.shape for t in tt_train])
         return self._round(tt_train, params)
 
     def _iteration(self, tt_train, params):
-        gradient = self.const_space.gradient(tt_train)
-        tt_train[0] -= params["lr"] * gradient
-        sqred_radius = tt_inner_prod(tt_train, tt_train)
-        if sqred_radius > 1:
-            tt_train[0] += params["lr"] * tt_grad_inner_prod(tt_train, tt_train, gradient, 0) * tt_train[0]
-            tt_train[0] = tt_train[0] / jnp.sqrt(sqred_radius)
-        return tt_train, jnp.sum(jnp.square(gradient))
+        grad_sum = 0.0
+        for idx in range(self.dimension):
+            gradient = self.const_space.gradient(tt_train)[idx]
+            tt_train[idx] -= params["lr"] * gradient
+            sqred_radius = tt_inner_prod(tt_train, tt_train)
+            if sqred_radius > 1:
+                tt_train[idx] += params["lr"] * tt_grad_inner_prod(tt_train, tt_train, gradient, idx) * tt_train[idx]
+                tt_train[idx] = tt_train[idx] / jnp.sqrt(sqred_radius)
+            grad_sum = jnp.sum(jnp.square(gradient))
+        return tt_train, grad_sum/self.dimension
 
     def _round(self, tt_train, params):
         tt_table = tt_bool_op(tt_train)

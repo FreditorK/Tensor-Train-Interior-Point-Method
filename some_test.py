@@ -41,3 +41,19 @@ print(tt_to_tensor(true))
 print(tt_to_tensor(tt_bool_op(true)))
 clipped_true = [np.clip(c, a_max=1, a_min=-1) for c in tt_bool_op(true)]
 print(tt_to_tensor(clipped_true))
+
+jax.random.PRNGKey(112)
+tensor_1 = np.random.rand(2, 2, 2, 2, 2, 2, 2)
+tt_1 = tt_svd(tensor_1)
+gra_func = D_func(lambda t: tt_rank_loss(t))
+tt_2 = [np.ones((1, 2, 1)) for _ in range(7)]
+print(tt_rank_loss(tt_1), [c.shape for c in tt_1])
+print(tt_rank_loss(tt_2), [c.shape for c in tt_2])
+lr = 0.1
+for _ in range(50):
+    gradient = gra_func(tt_1)
+    for i, g in enumerate(gradient):
+        tt_1[i] -= lr * g[i]
+    lr *= 0.999
+tt_1 = tt_rank_reduce(tt_1, tt_bound=1e-4)
+print(tt_rank_loss(tt_1), [c.shape for c in tt_1])

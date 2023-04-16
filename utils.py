@@ -2,7 +2,7 @@ from sympy.logic.boolalg import ANFform, to_cnf, to_dnf, to_anf
 from sympy import symbols
 from tt_op import *
 from copy import deepcopy
-from operators import partial_D
+from operators import partial_D, D_func
 
 
 class Expression:
@@ -234,8 +234,8 @@ class ConstraintSpace:
     def gradient(self, tt_train):
         if self.iq_gradient is None:
             n = len(self.iq_constraints)
-            self.iq_gradient = partial_D(lambda *h: (1/n)*sum([loss(h) for loss in self.iq_constraints]), 0)
-        return self.iq_gradient(*tt_train)
+            self.iq_gradient = D_func(lambda h: tt_rank_loss(tt_train) + (1/n)*sum([loss(h) for loss in self.iq_constraints]))
+        return self.iq_gradient(tt_train)
 
     def update_noise_lvl(self, tt_train):
         ...
