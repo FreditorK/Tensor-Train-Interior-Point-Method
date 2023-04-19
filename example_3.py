@@ -1,6 +1,6 @@
 from time import time
 from utils import *
-from optimiser import Minimiser, AnswerSetSolver
+from optimiser import ILPSolver, AnswerSetSolver
 
 vocab_size = 3
 x = Atom(vocab_size, "x")
@@ -21,12 +21,16 @@ bot_p = tt_leading_one(3)
 bot[0] *= -1.0
 bot_p[0] *= -k
 a = (x & y).to_tt_train()
-ps = np.array([0.0, 1.0, 1.0])
+ps1 = np.array([0.1, 1.0, 1.0])
+ps2 = np.array([0.1, 1.0, 1.0])
 #e_1 = tt_noise_op(e_1, ps)
 #e_1_contradiction = tt_noise_op(e_1_contradiction, ps)
 #print(const_space.eq_constraints[1](const_space.projections[0](a)))
-print(tt_inner_prod(tt_add(e_1.tt_example, top_p), tt_noise_op(tt_add(a, bot_p), ps)))
-print(tt_inner_prod(tt_add(e_1_contradiction.tt_example, bot_p), tt_noise_op(tt_add(a, top_p), ps)))
+ne1 = tt_noise_op(e_1.tt_example, ps1)
+ne2 = tt_noise_op(e_1_contradiction.tt_example, ps2)
+print(-(1/2) + (1/2)*tt_leading_entry(ne1) + (1/2)*tt_leading_entry(ne2) + (1/2)*tt_inner_prod(ne1, ne2))
+#print(tt_inner_prod(tt_add(e_1.tt_example, top_p), tt_noise_op(tt_add(a, bot_p), ps)))
+#print(tt_inner_prod(tt_add(e_1_contradiction.tt_example, bot_p), tt_noise_op(tt_add(a, top_p), ps)))
 #print(const_space.eq_constraints[0](const_space.projections[1](a)))
 """
 opt = Minimiser(const_space, vocab_size)

@@ -1,6 +1,6 @@
 from time import time
 from utils import *
-from optimiser import Minimiser, AnswerSetSolver
+from optimiser import ILPSolver, AnswerSetSolver
 
 vocab_size = 5
 x = Atom(vocab_size, "x")
@@ -22,7 +22,7 @@ e_4 = Boolean_Function(x & ~z & ~y)
 const_space.exists_S(h << e_4)
 e_5 = Boolean_Function(u & w)
 const_space.exists_S(h << e_5)
-opt = Minimiser(const_space, vocab_size)
+opt = ILPSolver(const_space, vocab_size)
 t_1 = time()
 hypothesis = opt.find_feasible_hypothesis()
 print("Shapes: ", [t.shape for t in hypothesis])

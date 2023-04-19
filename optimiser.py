@@ -22,7 +22,7 @@ class AnswerSetSolver:
         return {self.atoms[i].name for i, v in enumerate(extracted_seq) if v > 0}
 
 
-class Minimiser:
+class ILPSolver:
     def __init__(self, const_space: ConstraintSpace, dimension):
         self.dimension = dimension
         self.const_space = const_space
@@ -68,12 +68,9 @@ class Minimiser:
         grad_sum = 0.0
         for idx in range(self.dimension):
             gradient = self.const_space.gradient(tt_train)[idx]
-            tt_train[idx] -= params["lr"] * gradient
-            sqred_radius = tt_inner_prod(tt_train, tt_train)
-            if sqred_radius > 1:
-                tt_train[idx] += params["lr"] * tt_grad_inner_prod(tt_train, tt_train, gradient, idx) * tt_train[idx]
-                tt_train[idx] = tt_train[idx] / jnp.sqrt(sqred_radius)
-            grad_sum = jnp.sum(jnp.square(gradient))
+            tt_train[idx] -= params["lr"] * (gradient - tt_grad_inner_prod(tt_train, tt_train, gradient, idx) * tt_train[idx])
+            tt_train[idx] = tt_train[idx] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
+            grad_sum += jnp.sum(jnp.square(gradient))
         return tt_train, grad_sum/self.dimension
 
     def _round(self, tt_train, params):

@@ -1,6 +1,6 @@
 from time import time
 from utils import *
-from optimiser import Minimiser, AnswerSetSolver
+from optimiser import ILPSolver, AnswerSetSolver
 
 vocab_size = 4
 head_coin_1 = Atom(vocab_size, "head_coin_1")
@@ -24,7 +24,7 @@ const_space = ConstraintSpace()
 const_space.exists_S(h >> e_1)
 const_space.exists_S(h >> e_2)
 const_space.forall_S(h >> e_3)
-opt = Minimiser(const_space, vocab_size)
+opt = ILPSolver(const_space, vocab_size)
 t_1 = time()
 hypothesis = opt.find_feasible_hypothesis()
 t_2 = time()

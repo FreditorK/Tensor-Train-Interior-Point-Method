@@ -251,8 +251,7 @@ class ConstraintSpace:
 
         def projection(tt_train, q=1):
             ex_0 = mod_tt_example(tt_example, q)
-            norm = (1 / tt_inner_prod(ex_0, ex_0))
-            ex_0[0] *= -norm * (2 * func(tt_train) - 2 * q)
+            ex_0[0] *= -(1 / tt_inner_prod(ex_0, ex_0)) * (2 * func(tt_train) - 2 * q)
             proj = tt_add(tt_train, ex_0)
             return tt_rl_orthogonalize(proj)
 

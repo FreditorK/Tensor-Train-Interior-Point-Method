@@ -1,6 +1,6 @@
 from time import time
 
-from optimiser import AnswerSetSolver, Minimiser
+from optimiser import AnswerSetSolver, ILPSolver
 from utils import *
 
 """
@@ -85,7 +85,7 @@ const_space.exists_S(h >> e_1)
 const_space.forall_S(h >> neg_e_1)
 const_space.forall_S(h >> neg_e_2)
 const_space.forall_S(h >> neg_e_3)
-opt = Minimiser(const_space, vocab_size)
+opt = ILPSolver(const_space, vocab_size)
 t_1 = time()
 hypothesis = opt.find_feasible_hypothesis()
 t_2 = time()

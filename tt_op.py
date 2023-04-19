@@ -71,6 +71,12 @@ def tt_rl_orthogonalize(tt_train: List[np.array]):
     return tt_train
 
 
+def tt_bond_at(tt_train, idx):
+    if idx != -1:
+        tt_train = tt_train[:idx] + [jnp.einsum("abc, cde -> abde", tt_train[idx], tt_train[idx + 1])] + tt_train[idx + 2:]
+    return tt_train
+
+
 def tt_part_bond(tt_train, idx):
     """ Breaks up a bond between two cores """
     core = tt_train[idx]
@@ -88,14 +94,14 @@ def tt_part_bond(tt_train, idx):
 
 
 def tt_rank_loss(tt_train):
-    sum_of_sqrd_eigs = 0
-    bond_ranks = jnp.array([max(tt_train[idx].shape[-1], tt_train[idx+1].shape[0]) for idx in range(len(tt_train)-1)])
-    bond_ranks = bond_ranks/jnp.max(bond_ranks)
-    for idx, r in enumerate(bond_ranks):
-        t_bond = jnp.einsum("abc, cde -> abde", tt_train[idx], tt_train[idx + 1])
-        t_bond = t_bond.reshape(t_bond.shape[0] * t_bond.shape[1], -1)
-        sum_of_sqrd_eigs += r*jnp.linalg.norm(t_bond, ord="nuc")
-    return sum_of_sqrd_eigs
+    """Loss criterion on the TT-rank"""
+    bond_ranks = jnp.array(
+        [max(tt_train[idx].shape[-1], tt_train[idx + 1].shape[0]) for idx in range(len(tt_train) - 1)])
+    bond_ranks = bond_ranks / jnp.max(bond_ranks)
+    return sum([
+        r * jnp.linalg.norm(jnp.einsum("abc, cde -> abde", tt_train[idx], tt_train[idx + 1]).reshape(
+            tt_train[idx].shape[0] * tt_train[idx].shape[1], -1), ord="nuc") for idx, r in enumerate(bond_ranks)
+    ])
 
 
 def tt_rank_reduce(tt_train: List[np.array], tt_bound=1e-4):
@@ -186,12 +192,14 @@ def _tt_train_kron(core_1: np.array, core_2: np.array) -> np.array:
     For internal use: Computes the kronecker product between two TT-cores with appropriate dimensional
     expansion
     """
-    layers = []
     core_shape_length = len(core_1.shape)
     axes = list(range(1, core_shape_length - 1))
-    for i in product(*([[0, 1]] * (core_shape_length - 2))):
-        idx = (slice(None),) + i
-        layers.append(jnp.kron(jnp.expand_dims(core_1[idx], axis=axes), jnp.expand_dims(core_2[idx], axis=axes)))
+    layers = [
+        jnp.kron(
+            jnp.expand_dims(core_1[(slice(None),) + i], axis=axes),
+            jnp.expand_dims(core_2[(slice(None),) + i], axis=axes)
+        ) for i in product(*([[0, 1]] * (core_shape_length - 2)))
+    ]
     return jnp.concatenate(layers, axis=1).reshape(
         (core_1.shape[0] * core_2.shape[0],) + core_1.shape[1:-1] + (core_1.shape[-1] * core_2.shape[-1],)
     )
@@ -208,7 +216,7 @@ def bool_to_tt_train(bool_values: List[bool]):
     """
     Converts a list of boolean values into its respective tensor train
     """
-    return [jnp.array([1, 2 * float(b_value) - 1]).reshape(1, -1, 1) for b_value in bool_values]
+    return [jnp.array([1, 2 * float(b_value) - 1]).reshape(1, 2, 1) for b_value in bool_values]
 
 
 def _tt_core_collapse(core_1: np.array, core_2: np.array):
@@ -216,13 +224,6 @@ def _tt_core_collapse(core_1: np.array, core_2: np.array):
         jnp.kron(core_1[(slice(None),) + i], core_2[(slice(None),) + i])
         for i in product(*([[0, 1]] * (len(core_1.shape) - 2)))
     ])
-
-
-def tt_bond_at(e, idx):
-    if idx != -1:
-        e_bond = jnp.einsum("abc, cde -> abde", e[idx], e[idx + 1])
-        e = e[:idx] + [e_bond] + e[idx + 2:]
-    return e
 
 
 def tt_inner_prod(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> float:
@@ -251,7 +252,6 @@ def tt_influence(tt_train: List[np.array], idx):
     """
     Returns the influence of an idx-index atom on a boolean function
     """
-
     return jnp.sum(
         jnp.linalg.multi_dot([_tt_influence_core_collapse(core, idx - i) for i, core in enumerate(tt_train)]))
 
@@ -266,9 +266,8 @@ def _tt_shared_influence_core_collapse(core, idx_1, idx_2):
 
 def tt_shared_influence(tt_train: List[np.array], idx_1, idx_2):
     """
-    Returns the influence of an idx-index atom on a boolean function
+    Returns the shared influence between an idx_1- and idx_2-index atom on a boolean function
     """
-
     return jnp.sum(
         jnp.linalg.multi_dot(
             [_tt_shared_influence_core_collapse(core, idx_1 - i, idx_2 - i) for i, core in enumerate(tt_train)]))
@@ -396,7 +395,7 @@ def tt_xnor(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.a
     tt_train_2 = tt_bool_op(tt_train_2)
     tt_train_xnor = tt_hadamard(tt_train_1, tt_train_2)
     tt_train_xnor = tt_bool_op_inv(tt_train_xnor)
-    return tt_rl_orthogonalize(tt_train_xnor)
+    return tt_rank_reduce(tt_train_xnor, tt_bound=1e-5)
 
 
 def tt_xor(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.array]:
@@ -412,8 +411,8 @@ def tt_and(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.ar
     half = tt_one(len(tt_train_1))
     half[0] *= -0.5
     tt_train_and = tt_add(tt_add(half, tt_mul), tt_add(tt_train_1, tt_train_2))
-    tt_train_or = tt_bool_op_inv(tt_train_and)
-    return tt_rl_orthogonalize(tt_train_or)
+    tt_train_and = tt_bool_op_inv(tt_train_and)
+    return tt_rank_reduce(tt_train_and, tt_bound=1e-5)
 
 
 def tt_or(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.array]:

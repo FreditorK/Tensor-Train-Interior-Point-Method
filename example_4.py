@@ -1,6 +1,6 @@
 from time import time
 from utils import *
-from optimiser import Minimiser, AnswerSetSolver
+from optimiser import ILPSolver, AnswerSetSolver
 
 vocab_size = 2
 x = Atom(vocab_size, "x")
@@ -11,7 +11,7 @@ e_1 = Boolean_Function(x & y)
 const_space.forall_S(h << e_1)
 e_1_contradiction = Boolean_Function(~x & y)
 const_space.forall_S(h >> e_1_contradiction)
-opt = Minimiser(const_space, vocab_size)
+opt = ILPSolver(const_space, vocab_size)
 t_1 = time()
 hypothesis = opt.find_feasible_hypothesis()
 t_2 = time()
