@@ -26,63 +26,48 @@ class ILPSolver:
     def __init__(self, const_space: ConstraintSpace, dimension):
         self.dimension = dimension
         self.const_space = const_space
+        self.eq_crit = lambda h: sum([np.sum(jnp.abs(c(h))) for c in self.const_space.eq_constraints])
+        self.iq_crit = lambda h: sum([jnp.sum(c(h)) for c in self.const_space.iq_constraints])
+        self.bool_criterion = boolean_criterion(self.dimension)
 
     def find_feasible_hypothesis(self):
         tt_train, tt_measure, params = self._init_tt_train()
-        tt_train = self._resolve_constraints(tt_train, params)
-        tt_train = self._extract_solution(tt_train, params)
+        crit = np.inf
+        while crit > 1e-4:
+            tt_train = self._resolve_constraints(tt_train, params)
+            tt_train = self._extract_solution(tt_train, params)
+            crit = self.eq_crit(tt_train) + self.iq_crit(tt_train)
+            print(f"Constraint Criterion: {crit}")
         return tt_train
 
     def _resolve_constraints(self, tt_train, params):
-        criterion_score = 100
-        prev_criterion_score = np.inf
-        while np.abs(criterion_score) > 1e-4:
+        for _ in range(10):
+            tt_train = self._rank_reduction(tt_train, params)
             tt_train = self.const_space.project(tt_train)
-            tt_train, criterion_score = self._iteration(tt_train, params)
-            if criterion_score > prev_criterion_score:  # TODO: There should be a check for the wolfe condition here
-                params["lr"] *= 0.99
-                # self.const_space.update_noise_lvl(tt_train)
-            print(f"Current score: {criterion_score} \r", end="")
-            prev_criterion_score = criterion_score
         return tt_train
 
     def _extract_solution(self, tt_train, params):
-        bool_criterion = boolean_criterion(self.dimension)
         criterion_score = 100
         prev_criterion_score = np.inf
+        params["lambda"] = 0
         while criterion_score > 1e-4:
-            tt_train, _ = self._iteration(tt_train, params)
-            tt_train = self._round(tt_train, params)
-            self.const_space.update_noise_lvl(tt_train)
-            tt_train = self.const_space.project(tt_train)
-            criterion_score = bool_criterion(tt_train)
+            tt_train = self.const_space.round(tt_train, params)
+            criterion_score = self.bool_criterion(tt_train)
             if criterion_score > prev_criterion_score:  # TODO: There should be a check for the wolfe condition here
                 params["lr"] *= 0.99
-                # self.const_space.update_noise_lvl(tt_train)
             print(f"Current violation: {criterion_score} \r", end="")
             prev_criterion_score = criterion_score
         print("\n", flush=True)
-        return self._round(tt_train, params)
+        return self.const_space.round(tt_train, params)
 
-    def _iteration(self, tt_train, params):
-        grad_sum = 0.0
+    def _rank_reduction(self, tt_train, params):
         for idx in range(self.dimension):
-            gradient = self.const_space.gradient(tt_train)[idx]
-            tt_train[idx] -= params["lr"] * (gradient - tt_grad_inner_prod(tt_train, tt_train, gradient, idx) * tt_train[idx])
-            tt_train[idx] = tt_train[idx] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
-            grad_sum += jnp.sum(jnp.square(gradient))
-        return tt_train, grad_sum/self.dimension
-
-    def _round(self, tt_train, params):
-        tt_table = tt_bool_op(tt_train)
-        tt_table_p3 = tt_hadamard(tt_hadamard(tt_table, tt_table), tt_table)
-        tt_table_p3[0] *= params["beta"]
-        tt_table[0] *= -params["beta"]
-        tt_table = tt_rl_orthogonalize(tt_add(tt_table, tt_table_p3))
-        tt_update = tt_bool_op_inv(tt_table)
-        tt_train[0] *= (1 - tt_inner_prod(tt_update, tt_train))
-        tt_train = tt_add(tt_update, tt_train)
-        tt_train[0] = tt_train[0] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
+            rank_gradient = self.const_space.rank_gradient(tt_train)[idx]
+            tt_train[idx] -= params["lr"] * rank_gradient
+            if tt_inner_prod(tt_train, tt_train) > 1:
+                tt_train[idx] += params["lr"] * tt_grad_inner_prod(tt_train, tt_train, rank_gradient, idx) * \
+                                 tt_train[idx]
+                tt_train[idx] = tt_train[idx] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
         return tt_rank_reduce(tt_train)
 
     def _init_tt_train(self):
@@ -91,7 +76,9 @@ class ILPSolver:
         tt_train[0] = tt_train[0] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
         tt_measure = tt_one(self.dimension)
         params = {
-            "lr": 5e-3,
-            "beta": -0.5
+            "lr": 0.05,
+            "beta": -0.5,
+            "lambda": 0.5,
+            "const_weight": 1.0
         }
         return tt_train, tt_measure, params

@@ -24,14 +24,12 @@ ps = np.array([1.0, 1.0, 1.0, 1.0])
 #print(tt_to_tensor(e_tt_1))
 #print(tt_to_tensor(e_tt_1_meas))
 weighted_tensor = tt_noise_op(e_tt_1, ps)
-ps_2 = np.array([1.0, 1.0, 1.0, 1.0])
-weighted_tensor = tt_noise_op(weighted_tensor, ps_2)
 #weighted_tensor[0] *= 1/jnp.sqrt(tt_inner_prod(weighted_tensor, weighted_tensor))
 #print(tt_to_tensor(weighted_tensor))
 #unweighted_tensor = tt_measure_inv(tt_bool_op(weighted_tensor), ps, qs)
 print(tt_inner_prod(weighted_tensor, [np.array([1, 1]).reshape(1, 2, 1), np.array([1, -1]).reshape(1, 2, 1), np.array([1, -1]).reshape(1, 2, 1), np.array([1, -1]).reshape(1, 2, 1)]))
 print(tt_inner_prod(e_tt_1, [np.array([1, 1]).reshape(1, 2, 1), np.array([1, -0.25]).reshape(1, 2, 1), np.array([1, -1]).reshape(1, 2, 1), np.array([1, -1]).reshape(1, 2, 1)]))
-
+print(jnp.sqrt(tt_inner_prod(weighted_tensor, weighted_tensor)))
 """
 tens = 2*np.random.rand(2, 2, 2)-1
 tens[np.random.randint(0, 2), np.random.randint(0, 2), np.random.randint(0, 2)] = 1.0

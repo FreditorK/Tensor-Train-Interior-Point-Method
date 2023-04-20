@@ -144,9 +144,8 @@ class Meta_Boolean_Function:
         bot[0] *= -1
         return Meta_Boolean_Function(
             f"({self.name} v {other.name})",
-            lambda e, q=1: tt_rl_orthogonalize(tt_add(e, bot)),
-            lambda h, q=1: q * (0.5 + 0.5 * tt_leading_entry(h) + 0.5 * tt_leading_entry(e)) - 0.5 * tt_inner_prod(h,
-                                                                                                                   e),
+            lambda e: tt_rl_orthogonalize(tt_add(e, bot)),
+            lambda h: 0.5 + 0.5 * tt_leading_entry(h) + 0.5 * tt_leading_entry(e) - 0.5 * tt_inner_prod(h, e),
             e
         )
 
@@ -160,8 +159,8 @@ class Meta_Boolean_Function:
             e = other.mod_tt_example
         return Meta_Boolean_Function(
             f"({self.name} ⊻ {other.name})",
-            lambda e, q=1: e,
-            lambda h, q=1: -tt_inner_prod(h, e),
+            lambda e: e,
+            lambda h: -tt_inner_prod(h, e),
             e
         )
 
@@ -175,9 +174,8 @@ class Meta_Boolean_Function:
         top = tt_leading_one(len(e))
         return Meta_Boolean_Function(
             f"({self.name} <- {other.name})",
-            lambda e, q=1: tt_rl_orthogonalize(tt_add(e, tt_mul_scal(q, top))),
-            lambda h, q=1: q * (0.5 + 0.5 * tt_leading_entry(h) - 0.5 * tt_leading_entry(e)) + 0.5 * tt_inner_prod(h,
-                                                                                                                   e),
+            lambda e: tt_rl_orthogonalize(tt_add(e, top)),
+            lambda h: 0.5 + 0.5 * tt_leading_entry(h) - 0.5 * tt_leading_entry(e) + 0.5 * tt_inner_prod(h, e),
             e
         )
 
@@ -192,9 +190,8 @@ class Meta_Boolean_Function:
         bot[0] *= -1
         return Meta_Boolean_Function(
             f"({self.name} <- {other.name})",
-            lambda e, q=1: tt_rl_orthogonalize(tt_add(e, bot)),
-            lambda h, q=1: q * (0.5 - 0.5 * tt_leading_entry(h) + 0.5 * tt_leading_entry(e)) + 0.5 * tt_inner_prod(h,
-                                                                                                                   e),
+            lambda e: tt_rl_orthogonalize(tt_add(e, bot)),
+            lambda h: 0.5 - 0.5 * tt_leading_entry(h) + 0.5 * tt_leading_entry(e) + 0.5 * tt_inner_prod(h, e),
             e
         )
 
@@ -227,33 +224,52 @@ class ConstraintSpace:
     def __init__(self):
         self.projections = []
         self.eq_constraints = []
-        self.inequalities = []
-        self.iq_constraints = [lambda h, q=1: jnp.minimum(0, q * tt_leading_entry(h) + q - 1e-4) ** 2]
-        self.iq_gradient = None
+        self.iq_constraints = []
+        self.rank_gradient = D_func(lambda h: tt_rank_loss(h))
 
-    def gradient(self, tt_train):
-        if self.iq_gradient is None:
-            n = len(self.iq_constraints)
-            self.iq_gradient = D_func(lambda h: tt_rank_loss(tt_train) + (1/n)*sum([loss(h) for loss in self.iq_constraints]))
-        return self.iq_gradient(tt_train)
-
-    def update_noise_lvl(self, tt_train):
-        ...
+    def round(self, tt_train, params):
+        tt_table = tt_bool_op(tt_train)
+        tt_table_p3 = tt_hadamard(tt_hadamard(tt_table, tt_table), tt_table)
+        tt_table_p3[0] *= params["beta"]
+        tt_table[0] *= -params["beta"]
+        tt_table = tt_rl_orthogonalize(tt_add(tt_table, tt_table_p3))
+        tt_update = tt_bool_op_inv(tt_table)
+        in_sphere_crit = tt_inner_prod(tt_update, tt_train)
+        if np.abs(in_sphere_crit) >= 1e-5:
+            tt_train[0] *= (1 - tt_inner_prod(tt_update, tt_train))
+        tt_train = tt_add(tt_update, tt_train)
+        if np.abs(in_sphere_crit) >= 1e-5:
+            tt_train[0] = tt_train[0] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
+        return tt_rank_reduce(tt_train)
 
     def exists_S(self, example: Meta_Boolean_Function):
-        _, func, tt_example = example.to_tt_constraint()  # TODO: We can pull the sum into the inner product, i.e. add all examples up before?
-        iq_func = lambda h, q=1: jnp.minimum(0, func(h, q) + q - 1e-5) ** 2
+        mod_tt_example, func, tt_example = example.to_tt_constraint()  # TODO: We can pull the sum into the inner product, i.e. add all examples up before?
+        iq_func = lambda h, q=1: jnp.minimum(0, func(h) + q - 1e-5) ** 2
         self.iq_constraints.append(iq_func)
+        s_lower = -1 + 2**(-len(tt_example))
+
+        def projection(tt_train, q=1):
+            func_result = func(tt_train)
+            if s_lower >= func_result:
+                ex_0 = mod_tt_example(tt_example)
+                ex_0[0] *= -(1 / tt_inner_prod(ex_0, ex_0)) * (2 * func(tt_train) - 2 * q * s_lower)
+                tt_train = tt_add(tt_train, ex_0)
+            return tt_rl_orthogonalize(tt_train)
+
+        self.projections.append(projection)
 
     def forall_S(self, example: Meta_Boolean_Function):
         mod_tt_example, func, tt_example = example.to_tt_constraint()
-        self.eq_constraints.append(lambda h, q=1: func(h) - q)
+        self.eq_constraints.append(lambda h, q=1: (func(h) - q) ** 2)
+        s_lower = -1 + 2**(-len(tt_example))
 
         def projection(tt_train, q=1):
-            ex_0 = mod_tt_example(tt_example, q)
-            ex_0[0] *= -(1 / tt_inner_prod(ex_0, ex_0)) * (2 * func(tt_train) - 2 * q)
-            proj = tt_add(tt_train, ex_0)
-            return tt_rl_orthogonalize(proj)
+            func_result = func(tt_train)
+            if np.abs(func_result - q) >= s_lower:
+                ex_0 = mod_tt_example(tt_example)
+                ex_0[0] *= -(1 / tt_inner_prod(ex_0, ex_0)) * ((2 * func_result) - 2 * q)
+                tt_train = tt_rl_orthogonalize(tt_add(tt_train, ex_0))
+            return tt_train
 
         self.projections.append(projection)
 
@@ -271,41 +287,22 @@ class NoisyConstraintSpace(ConstraintSpace):
         self.noise_gradient = None
         self.iq_gradient = None
         self.expected_truth = 1.0
-        self.expected_truth_gradient = None
+        self.lr = 1e-3
 
     def gradient(self, tt_train):
-        if self.iq_gradient is None:
-            self.noise_op_measure = np.ones(len(tt_train))
+        if self.eq_gradient is None or self.iq_gradient is None:
+            n_eq = len(self.eq_constraints)
+            self.eq_gradient = D_func(lambda h, q: (1 / n_eq) * sum([loss(h, q) for loss in self.eq_constraints]))
+            n_iq = len(self.iq_constraints)
+            self.iq_gradient = D_func(lambda h, q: (1 / n_iq) * sum([loss(h, q) for loss in self.iq_constraints]))
+        rank_grad = self.rank_gradient(tt_train)
+        eq_grad = self.eq_gradient(tt_train, self.expected_truth)
+        iq_grad = self.iq_gradient(tt_train, self.expected_truth)
+        q_grad = eq_grad[-1] + iq_grad[-1] - 1
+        self.expected_truth -= self.lr * q_grad
+        return rank_grad, eq_grad[0], iq_grad[0]
 
-            def gradient(p, q, *h):
-                h = tt_noise_op(h, p)
-                return sum([loss(h, q) for loss in self.iq_constraints])
-
-            self.iq_gradient = partial_D(gradient, 2)
-        gradient = self.iq_gradient(self.noise_op_measure, self.expected_truth, *tt_train)
-        return gradient
-
-    def update_noise_lvl(self, tt_train, iterations=5):
-        if self.noise_gradient is None:
-            def noise_gradient(p, q, h):
-                h = tt_noise_op(h, p)
-                return sum([loss(h, q) for loss in self.iq_constraints]) + sum(
-                    loss(h, q) ** 2 for loss in self.eq_constraints)
-
-            self.noise_gradient = partial_D(noise_gradient, 0)  # TODO: We can probably add everything up for the proj loss
-            self.expected_truth_gradient = partial_D(noise_gradient, 1)
-        gradient = self.noise_gradient(self.noise_op_measure, self.expected_truth, tt_train)
-        is_zero = self.noise_op_measure*(1-self.noise_op_measure)*(np.abs(gradient) < 1e-5)
-        self.noise_op_measure = np.clip(self.noise_op_measure + self.lr * (is_zero - gradient), a_max=1, a_min=0)
-        expected_truth_gradient = self.expected_truth_gradient(self.noise_op_measure, self.expected_truth, tt_train)
-        is_zero_2 = self.expected_truth*(1-self.expected_truth)*(np.abs(expected_truth_gradient) < 1e-5)
-        self.expected_truth = np.clip(self.expected_truth + self.lr *(is_zero_2 - expected_truth_gradient), a_max=1, a_min=0)
-        print(self.expected_truth, self.noise_op_measure)
-        if iterations > 0:
-            self.update_noise_lvl(tt_train, iterations-1)
-
-
-    def project(self, tt_train): # TODO: check that projection was contractive!!
+    def project(self, tt_train):  # TODO: check that projection was contractive!!
         noisy_tt_train = tt_noise_op(tt_train, self.noise_op_measure)
         for proj in self.projections:
             noisy_tt_train = proj(noisy_tt_train, self.expected_truth)
