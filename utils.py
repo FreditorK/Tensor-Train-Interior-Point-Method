@@ -221,11 +221,21 @@ class Boolean_Function(Meta_Boolean_Function):
 
 
 class ConstraintSpace:
-    def __init__(self):
-        self.projections = []
+    def __init__(self, dimension):
+        self.dimension = dimension
+        self.s_lower = 2**(-self.dimension) - 1
+        self.projections = [self._false_projection]
         self.eq_constraints = []
         self.iq_constraints = []
         self.rank_gradient = D_func(lambda h: tt_rank_loss(h))
+
+    def _false_projection(self, tt_train, q=1):
+        func_result = tt_leading_entry(tt_train)
+        if func_result > self.s_lower:
+            one = tt_leading_one(self.dimension)
+            one[0] *= (2 * func_result - 2 * q * self.s_lower)
+            tt_train = tt_add(tt_train, one)
+        return tt_train
 
     def round(self, tt_train, params):
         tt_table = tt_bool_op(tt_train)
@@ -246,13 +256,12 @@ class ConstraintSpace:
         mod_tt_example, func, tt_example = example.to_tt_constraint()  # TODO: We can pull the sum into the inner product, i.e. add all examples up before?
         iq_func = lambda h, q=1: jnp.minimum(0, func(h) + q - 1e-5) ** 2
         self.iq_constraints.append(iq_func)
-        s_lower = -1 + 2**(-len(tt_example))
 
         def projection(tt_train, q=1):
             func_result = func(tt_train)
-            if s_lower >= func_result:
+            if func_result + q < self.s_lower:
                 ex_0 = mod_tt_example(tt_example)
-                ex_0[0] *= -(1 / tt_inner_prod(ex_0, ex_0)) * (2 * func(tt_train) - 2 * q * s_lower)
+                ex_0[0] *= -(1 / tt_inner_prod(ex_0, ex_0)) * (2 * func(tt_train) - 2 * q * self.s_lower)
                 tt_train = tt_add(tt_train, ex_0)
             return tt_rl_orthogonalize(tt_train)
 
@@ -261,11 +270,10 @@ class ConstraintSpace:
     def forall_S(self, example: Meta_Boolean_Function):
         mod_tt_example, func, tt_example = example.to_tt_constraint()
         self.eq_constraints.append(lambda h, q=1: (func(h) - q) ** 2)
-        s_lower = -1 + 2**(-len(tt_example))
 
         def projection(tt_train, q=1):
             func_result = func(tt_train)
-            if np.abs(func_result - q) >= s_lower:
+            if np.abs(func_result - q) >= self.s_lower + 1:
                 ex_0 = mod_tt_example(tt_example)
                 ex_0[0] *= -(1 / tt_inner_prod(ex_0, ex_0)) * ((2 * func_result) - 2 * q)
                 tt_train = tt_rl_orthogonalize(tt_add(tt_train, ex_0))

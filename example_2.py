@@ -16,11 +16,11 @@ e_2 = Boolean_Function(
 )
 e_3 = Boolean_Function(
     ~(
-    (head_coin_1 & tail_coin_1) | (~head_coin_1 & ~tail_coin_1) &
+    (head_coin_1 & tail_coin_1) | (~head_coin_1 & ~tail_coin_1) |
     (head_coin_2 & tail_coin_2) | (~head_coin_2 & ~tail_coin_2)
     )
 )
-const_space = ConstraintSpace()
+const_space = ConstraintSpace(vocab_size)
 const_space.exists_S(h >> e_1)
 const_space.exists_S(h >> e_2)
 const_space.forall_S(h >> e_3)

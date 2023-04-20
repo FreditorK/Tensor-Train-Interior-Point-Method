@@ -42,8 +42,8 @@ class ILPSolver:
 
     def _resolve_constraints(self, tt_train, params):
         for _ in range(10):
-            tt_train = self._rank_reduction(tt_train, params)
             tt_train = self.const_space.project(tt_train)
+            tt_train = self._rank_reduction(tt_train, params)
         return tt_train
 
     def _extract_solution(self, tt_train, params):
@@ -72,7 +72,7 @@ class ILPSolver:
 
     def _init_tt_train(self):
         # Initializes at everything is equivalent formula
-        tt_train = [np.array([0.5, 1.0]).reshape(1, 2, 1) for _ in range(self.dimension)]
+        tt_train = [np.random.randn(1, 2, 1) for _ in range(self.dimension)]
         tt_train[0] = tt_train[0] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
         tt_measure = tt_one(self.dimension)
         params = {
