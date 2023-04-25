@@ -216,7 +216,7 @@ def bool_to_tt_train(bool_values: List[bool]):
     """
     Converts a list of boolean values into its respective tensor train
     """
-    return [jnp.array([1, 2 * float(b_value) - 1]).reshape(1, 2, 1) for b_value in bool_values]
+    return tt_bool_op_inv([jnp.array([1, 2 * float(b_value) - 1]).reshape(1, 2, 1) for b_value in bool_values])
 
 
 def _tt_core_collapse(core_1: np.array, core_2: np.array):
@@ -231,7 +231,8 @@ def tt_inner_prod(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> flo
     Computes the inner product between two tensor trains
     """
     return jnp.sum(
-        jnp.linalg.multi_dot([_tt_core_collapse(core_1, core_2) for core_1, core_2 in zip(tt_train_1, tt_train_2)]))
+        jnp.linalg.multi_dot([_tt_core_collapse(core_1, core_2) for core_1, core_2 in zip(tt_train_1, tt_train_2)])
+    )
 
 
 def tt_grad_inner_prod(tt_train_1: List[np.array], tt_train_2: List[np.array], gradient_core: np.array, idx):

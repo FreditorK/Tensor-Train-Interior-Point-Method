@@ -72,11 +72,11 @@ class Atom(Expression):
             name = f"a_{str(Atom.counter)}"
         super().__init__(name, [self], lambda x: x)
         self.index = Atom.counter
-        self.tt_train = tt_atom_train(self.index, vocab_size)
+        self.vocab_size = vocab_size
         Atom.counter += 1
 
     def to_tt_train(self):
-        return deepcopy(self.tt_train)
+        return tt_atom_train(self.index, self.vocab_size)
 
 
 def get_ANF(atoms, hypothesis):
@@ -220,21 +220,45 @@ class Boolean_Function(Meta_Boolean_Function):
         super().__init__(name, tt_e, lambda x: tt_inner_prod(tt_e, x), tt_e)
 
 
+class Boolean_Data(Expression):
+    def __init__(self, dataset, labels):
+        super().__init__("Dataset", [self], lambda x: x)
+        # TODO: Estimate noise level through number of contradicting examples
+        self.dataset, indices = np.unique(dataset, return_index=True, axis=0)
+        self.labels = labels[indices]
+        self.compressed_data = tt_mul_scal(-1, tt_leading_one(self.dataset.shape[1]))
+        self._compress()
+
+    def _compress(self):
+        # TODO: Might want to consider a divide and conquer here
+        for instance, label in zip(self.dataset, self.labels):
+            instance_func = bool_to_tt_train(instance)
+            if label > 0:
+                self.compressed_data = tt_or(self.compressed_data, instance_func)
+            else:
+                self.compressed_data = tt_and(self.compressed_data, tt_neg(instance_func))
+
+    def to_tt_train(self):
+        return deepcopy(self.compressed_data)
+
+
 class ConstraintSpace:
     def __init__(self, dimension):
         self.dimension = dimension
-        self.s_lower = 2**(-self.dimension) - 1
+        self.s_lower = 2 ** (-self.dimension) - 1  # -0.9999
         self.projections = [self._false_projection]
         self.eq_constraints = []
-        self.iq_constraints = []
+        self.iq_constraints = [lambda h, q=1: jnp.minimum(0, tt_leading_entry(h) - q*self.s_lower) ** 2]
         self.rank_gradient = D_func(lambda h: tt_rank_loss(h))
 
     def _false_projection(self, tt_train, q=1):
         func_result = tt_leading_entry(tt_train)
-        if func_result > self.s_lower:
+        if func_result < q*self.s_lower:
+            print("hi")
             one = tt_leading_one(self.dimension)
-            one[0] *= (2 * func_result - 2 * q * self.s_lower)
+            one[0] *= (2 * func_result - 2 * q * self.s_lower) # not minus as one should already be minus
             tt_train = tt_add(tt_train, one)
+            #tt_train[0] = tt_train[0] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
         return tt_train
 
     def round(self, tt_train, params):
@@ -244,17 +268,14 @@ class ConstraintSpace:
         tt_table[0] *= -params["beta"]
         tt_table = tt_rl_orthogonalize(tt_add(tt_table, tt_table_p3))
         tt_update = tt_bool_op_inv(tt_table)
-        in_sphere_crit = tt_inner_prod(tt_update, tt_train)
-        if np.abs(in_sphere_crit) >= 1e-5:
-            tt_train[0] *= (1 - tt_inner_prod(tt_update, tt_train))
+        tt_train[0] *= (1 - tt_inner_prod(tt_update, tt_train))
         tt_train = tt_add(tt_update, tt_train)
-        if np.abs(in_sphere_crit) >= 1e-5:
-            tt_train[0] = tt_train[0] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
+        tt_train[0] = tt_train[0] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
         return tt_rank_reduce(tt_train)
 
     def exists_S(self, example: Meta_Boolean_Function):
         mod_tt_example, func, tt_example = example.to_tt_constraint()  # TODO: We can pull the sum into the inner product, i.e. add all examples up before?
-        iq_func = lambda h, q=1: jnp.minimum(0, func(h) + q - 1e-5) ** 2
+        iq_func = lambda h, q=1: jnp.minimum(0, func(h) - q*self.s_lower) ** 2
         self.iq_constraints.append(iq_func)
 
         def projection(tt_train, q=1):
@@ -263,6 +284,7 @@ class ConstraintSpace:
                 ex_0 = mod_tt_example(tt_example)
                 ex_0[0] *= -(1 / tt_inner_prod(ex_0, ex_0)) * (2 * func(tt_train) - 2 * q * self.s_lower)
                 tt_train = tt_add(tt_train, ex_0)
+                #tt_train[0] = tt_train[0] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
             return tt_rl_orthogonalize(tt_train)
 
         self.projections.append(projection)
@@ -276,15 +298,23 @@ class ConstraintSpace:
             if np.abs(func_result - q) >= self.s_lower + 1:
                 ex_0 = mod_tt_example(tt_example)
                 ex_0[0] *= -(1 / tt_inner_prod(ex_0, ex_0)) * ((2 * func_result) - 2 * q)
-                tt_train = tt_rl_orthogonalize(tt_add(tt_train, ex_0))
-            return tt_train
+                tt_train = tt_add(tt_train, ex_0)
+                #tt_train[0] = tt_train[0] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
+            return tt_rl_orthogonalize(tt_train)
 
         self.projections.append(projection)
 
     def project(self, tt_train):
+        proj_tt_train = tt_train
         for proj in self.projections:
-            tt_train = proj(tt_train)
-        return tt_train
+            #print(tt_inner_prod(proj_tt_train, proj_tt_train))
+            proj_tt_train = proj(proj_tt_train)
+        #print(tt_inner_prod(proj_tt_train, proj_tt_train), tt_inner_prod(tt_train, proj_tt_train))
+        #print(tt_to_tensor(tt_bool_op(proj_tt_train)))
+        #if tt_inner_prod(proj_tt_train, proj_tt_train) < tt_inner_prod(tt_train, proj_tt_train):
+         #   print("Knowledge is contradictory. Adjusting expected truth value! ")
+        proj_tt_train[0] = proj_tt_train[0] / jnp.sqrt(tt_inner_prod(proj_tt_train, proj_tt_train))
+        return proj_tt_train
 
 
 class NoisyConstraintSpace(ConstraintSpace):
@@ -295,24 +325,15 @@ class NoisyConstraintSpace(ConstraintSpace):
         self.noise_gradient = None
         self.iq_gradient = None
         self.expected_truth = 1.0
-        self.lr = 1e-3
-
-    def gradient(self, tt_train):
-        if self.eq_gradient is None or self.iq_gradient is None:
-            n_eq = len(self.eq_constraints)
-            self.eq_gradient = D_func(lambda h, q: (1 / n_eq) * sum([loss(h, q) for loss in self.eq_constraints]))
-            n_iq = len(self.iq_constraints)
-            self.iq_gradient = D_func(lambda h, q: (1 / n_iq) * sum([loss(h, q) for loss in self.iq_constraints]))
-        rank_grad = self.rank_gradient(tt_train)
-        eq_grad = self.eq_gradient(tt_train, self.expected_truth)
-        iq_grad = self.iq_gradient(tt_train, self.expected_truth)
-        q_grad = eq_grad[-1] + iq_grad[-1] - 1
-        self.expected_truth -= self.lr * q_grad
-        return rank_grad, eq_grad[0], iq_grad[0]
+        self.lr = 1e-2
 
     def project(self, tt_train):  # TODO: check that projection was contractive!!
-        noisy_tt_train = tt_noise_op(tt_train, self.noise_op_measure)
+        proj_tt_train = tt_train
         for proj in self.projections:
-            noisy_tt_train = proj(noisy_tt_train, self.expected_truth)
-        proj_tt_train = tt_rl_orthogonalize(tt_noise_op_inv(noisy_tt_train, self.noise_op_measure))
+            proj_tt_train = proj(proj_tt_train, self.expected_truth)
+        proj_tt_train = tt_rank_reduce(proj_tt_train)
+        # Check whether contractive
+        if tt_inner_prod(proj_tt_train, proj_tt_train) > tt_inner_prod(tt_train, proj_tt_train):
+            print("Knowledge is contradictory. Adjusting expected truth value! ")
+            self.expected_truth = max(0, self.expected_truth - self.lr)
         return proj_tt_train

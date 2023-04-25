@@ -26,7 +26,7 @@ class ILPSolver:
     def __init__(self, const_space: ConstraintSpace, dimension):
         self.dimension = dimension
         self.const_space = const_space
-        self.eq_crit = lambda h: sum([np.sum(jnp.abs(c(h))) for c in self.const_space.eq_constraints])
+        self.eq_crit = lambda h: sum([jnp.sum(jnp.abs(c(h))) for c in self.const_space.eq_constraints])
         self.iq_crit = lambda h: sum([jnp.sum(c(h)) for c in self.const_space.iq_constraints])
         self.bool_criterion = boolean_criterion(self.dimension)
 
@@ -37,13 +37,14 @@ class ILPSolver:
             tt_train = self._resolve_constraints(tt_train, params)
             tt_train = self._extract_solution(tt_train, params)
             crit = self.eq_crit(tt_train) + self.iq_crit(tt_train)
-            print(f"Constraint Criterion: {crit}")
         return tt_train
 
     def _resolve_constraints(self, tt_train, params):
         for _ in range(10):
             tt_train = self.const_space.project(tt_train)
             tt_train = self._rank_reduction(tt_train, params)
+        crit = self.eq_crit(tt_train) + self.iq_crit(tt_train)
+        print(f"Constraint Criterion: {crit}")
         return tt_train
 
     def _extract_solution(self, tt_train, params):
@@ -64,10 +65,9 @@ class ILPSolver:
         for idx in range(self.dimension):
             rank_gradient = self.const_space.rank_gradient(tt_train)[idx]
             tt_train[idx] -= params["lr"] * rank_gradient
-            if tt_inner_prod(tt_train, tt_train) > 1:
-                tt_train[idx] += params["lr"] * tt_grad_inner_prod(tt_train, tt_train, rank_gradient, idx) * \
+            tt_train[idx] += params["lr"] * tt_grad_inner_prod(tt_train, tt_train, rank_gradient, idx) * \
                                  tt_train[idx]
-                tt_train[idx] = tt_train[idx] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
+            tt_train[idx] = tt_train[idx] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
         return tt_rank_reduce(tt_train)
 
     def _init_tt_train(self):
