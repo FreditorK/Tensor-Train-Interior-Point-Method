@@ -116,19 +116,19 @@ def influence_leq(atom, eps):
 class Meta_Boolean_Function:
     count = 0
 
-    def __init__(self, name: str, mod_tt_example, func, tt_example):
+    def __init__(self, name: str, normal_vec, offset, tt_example):
         if name is None:
             self.name = f"e_{str(Meta_Boolean_Function.count)}"
             Meta_Boolean_Function.count += 1
         else:
             self.name = name
 
-        self.mod_tt_example = mod_tt_example
-        self.func = func
+        self.normal_vec = normal_vec
+        self.offset = offset
         self.tt_example = tt_example
 
     def to_tt_constraint(self):
-        return self.mod_tt_example, self.func, self.tt_example
+        return self.normal_vec, self.offset, self.tt_example
 
     def __repr__(self):
         return str(self)
@@ -137,15 +137,15 @@ class Meta_Boolean_Function:
         return self.name
 
     def __or__(self, other):
-        e = self.mod_tt_example
+        e = self.normal_vec
         if isinstance(other, Boolean_Function):
-            e = other.mod_tt_example
+            e = other.normal_vec
         bot = tt_leading_one(len(e))
         bot[0] *= -1
         return Meta_Boolean_Function(
             f"({self.name} v {other.name})",
             lambda e: tt_rl_orthogonalize(tt_add(e, bot)),
-            lambda h: 0.5 + 0.5 * tt_leading_entry(h) + 0.5 * tt_leading_entry(e) - 0.5 * tt_inner_prod(h, e),
+            1 + tt_leading_entry(e),
             e
         )
 
@@ -154,13 +154,13 @@ class Meta_Boolean_Function:
         return other
 
     def __xor__(self, other):
-        e = self.mod_tt_example
+        e = self.normal_vec
         if isinstance(other, Boolean_Function):
-            e = other.mod_tt_example
+            e = other.normal_vec
         return Meta_Boolean_Function(
             f"({self.name} ⊻ {other.name})",
-            lambda e: e,
-            lambda h: -tt_inner_prod(h, e),
+            lambda e: tt_neg(e),
+            0,
             e
         )
 
@@ -168,14 +168,14 @@ class Meta_Boolean_Function:
         return other.__or__(self)
 
     def __lshift__(self, other):  # <-
-        e = self.mod_tt_example
+        e = self.normal_vec
         if isinstance(other, Boolean_Function):
-            e = other.mod_tt_example
+            e = other.normal_vec
         top = tt_leading_one(len(e))
         return Meta_Boolean_Function(
             f"({self.name} <- {other.name})",
             lambda e: tt_rl_orthogonalize(tt_add(e, top)),
-            lambda h: 0.5 + 0.5 * tt_leading_entry(h) - 0.5 * tt_leading_entry(e) + 0.5 * tt_inner_prod(h, e),
+            1 - tt_leading_entry(e),
             e
         )
 
@@ -183,15 +183,15 @@ class Meta_Boolean_Function:
         return other.__lshift(self)
 
     def __rshift__(self, other):
-        e = self.mod_tt_example
+        e = self.normal_vec
         if isinstance(other, Boolean_Function):
-            e = other.mod_tt_example
+            e = other.normal_vec
         bot = tt_leading_one(len(e))
         bot[0] *= -1
         return Meta_Boolean_Function(
             f"({self.name} <- {other.name})",
             lambda e: tt_rl_orthogonalize(tt_add(e, bot)),
-            lambda h: 0.5 - 0.5 * tt_leading_entry(h) + 0.5 * tt_leading_entry(e) + 0.5 * tt_inner_prod(h, e),
+            1 + tt_leading_entry(e),
             e
         )
 
@@ -254,11 +254,8 @@ class ConstraintSpace:
     def _false_projection(self, tt_train, q=1):
         func_result = tt_leading_entry(tt_train)
         if func_result < q*self.s_lower:
-            print("hi")
             one = tt_leading_one(self.dimension)
-            one[0] *= (2 * func_result - 2 * q * self.s_lower) # not minus as one should already be minus
-            tt_train = tt_add(tt_train, one)
-            #tt_train[0] = tt_train[0] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
+            tt_train = one
         return tt_train
 
     def round(self, tt_train, params):
@@ -274,32 +271,40 @@ class ConstraintSpace:
         return tt_rank_reduce(tt_train)
 
     def exists_S(self, example: Meta_Boolean_Function):
-        mod_tt_example, func, tt_example = example.to_tt_constraint()  # TODO: We can pull the sum into the inner product, i.e. add all examples up before?
-        iq_func = lambda h, q=1: jnp.minimum(0, func(h) - q*self.s_lower) ** 2
+        normal_vec, offset, tt_example = example.to_tt_constraint()  # TODO: We can pull the sum into the inner product, i.e. add all examples up before?
+        iq_func = lambda h, q=1: jnp.minimum(0, tt_inner_prod(h, normal_vec(tt_example)) + offset - q*self.s_lower) ** 2
         self.iq_constraints.append(iq_func)
 
         def projection(tt_train, q=1):
-            func_result = func(tt_train)
-            if func_result + q < self.s_lower:
-                ex_0 = mod_tt_example(tt_example)
-                ex_0[0] *= -(1 / tt_inner_prod(ex_0, ex_0)) * (2 * func(tt_train) - 2 * q * self.s_lower)
-                tt_train = tt_add(tt_train, ex_0)
+            n = normal_vec(tt_example)
+            func_result = tt_inner_prod(tt_train, n) + offset
+            if func_result - q*self.s_lower > 0:
+                n[0] *= -(1 / tt_inner_prod(n, n)) * (func_result - q * self.s_lower)
+                #tt_train[0] *= (1 - tt_inner_prod(tt_train, n))
+                tt_train = tt_add(tt_train, n)
                 #tt_train[0] = tt_train[0] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
             return tt_rl_orthogonalize(tt_train)
 
         self.projections.append(projection)
 
     def forall_S(self, example: Meta_Boolean_Function):
-        mod_tt_example, func, tt_example = example.to_tt_constraint()
-        self.eq_constraints.append(lambda h, q=1: (func(h) - q) ** 2)
+        normal_vec, offset, tt_example = example.to_tt_constraint()
+        eq_func = lambda h, q=1: (tt_inner_prod(h, normal_vec(tt_example)) + offset - q) ** 2
+        self.eq_constraints.append(eq_func)
 
         def projection(tt_train, q=1):
-            func_result = func(tt_train)
+            n = normal_vec(tt_example)
+            func_result = tt_inner_prod(tt_train, n) + offset
             if np.abs(func_result - q) >= self.s_lower + 1:
-                ex_0 = mod_tt_example(tt_example)
-                ex_0[0] *= -(1 / tt_inner_prod(ex_0, ex_0)) * ((2 * func_result) - 2 * q)
-                tt_train = tt_add(tt_train, ex_0)
+                print("Radius: ", tt_inner_prod(tt_train, tt_train))
+                n[0] *= -(1 / tt_inner_prod(n, n)) * (func_result - q)
+                tt_train = tt_add(tt_train, n)
                 #tt_train[0] = tt_train[0] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
+
+                #n[0] *= (- 2 * q)/(2 * func_result)
+                #tt_train[0] *= (1 - tt_inner_prod(tt_train, n))
+                #tt_train[0] = tt_train[0] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
+                print(eq_func(tt_train), tt_inner_prod(tt_train, tt_train))
             return tt_rl_orthogonalize(tt_train)
 
         self.projections.append(projection)
@@ -313,7 +318,6 @@ class ConstraintSpace:
         #print(tt_to_tensor(tt_bool_op(proj_tt_train)))
         #if tt_inner_prod(proj_tt_train, proj_tt_train) < tt_inner_prod(tt_train, proj_tt_train):
          #   print("Knowledge is contradictory. Adjusting expected truth value! ")
-        proj_tt_train[0] = proj_tt_train[0] / jnp.sqrt(tt_inner_prod(proj_tt_train, proj_tt_train))
         return proj_tt_train
 
 
