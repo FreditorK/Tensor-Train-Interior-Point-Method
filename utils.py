@@ -266,7 +266,7 @@ class ConstraintSpace:
         tt_table = tt_rl_orthogonalize(tt_add(tt_table, tt_table_p3))
         tt_update = tt_bool_op_inv(tt_table)
         tt_train[0] *= (1 - tt_inner_prod(tt_update, tt_train))
-        tt_train = tt_add(tt_update, tt_train)
+        tt_train = tt_add(tt_update, tt_train) #TODO: project this update onto the hyperlane subspace
         tt_train[0] = tt_train[0] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
         return tt_rank_reduce(tt_train)
 
@@ -276,13 +276,16 @@ class ConstraintSpace:
         self.iq_constraints.append(iq_func)
 
         def projection(tt_train, q=1):
+            tt_train[0] = tt_train[0] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
             n = normal_vec(tt_example)
-            func_result = tt_inner_prod(tt_train, n) + offset
-            if func_result - q*self.s_lower > 0:
-                n[0] *= -(1 / tt_inner_prod(n, n)) * (func_result - q * self.s_lower)
-                #tt_train[0] *= (1 - tt_inner_prod(tt_train, n))
-                tt_train = tt_add(tt_train, n)
-                #tt_train[0] = tt_train[0] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
+            func_result = tt_inner_prod(tt_train, n)
+            if func_result + offset - 2*q*self.s_lower <= 0:
+                n[0] *= -(1 / tt_inner_prod(n, n)) * func_result
+                proj_tt_train = tt_add(tt_train, n)
+                n[0] *= (offset - 2*q*self.s_lower)/func_result
+                proj_tt_train[0] *= jnp.sqrt((1 - tt_inner_prod(n, n)) / tt_inner_prod(proj_tt_train, proj_tt_train))
+                proj_tt_train = tt_add(proj_tt_train, n)
+                tt_train = proj_tt_train
             return tt_rl_orthogonalize(tt_train)
 
         self.projections.append(projection)
@@ -293,20 +296,16 @@ class ConstraintSpace:
         self.eq_constraints.append(eq_func)
 
         def projection(tt_train, q=1):
+            tt_train[0] = tt_train[0] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
             n = normal_vec(tt_example)
-            func_result = tt_inner_prod(tt_train, n) + offset
-            if np.abs(func_result - q) >= self.s_lower + 1:
-                tt_train[0] = tt_train[0] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
-                print("Radius: ", tt_inner_prod(tt_train, tt_train), offset)
-                n[0] *= -(1 / tt_inner_prod(n, n)) * tt_inner_prod(tt_train, normal_vec(tt_example))
+            func_result = tt_inner_prod(tt_train, n)
+            if np.abs(func_result + offset - q) >= self.s_lower + 1:
+                n[0] *= -(1 / tt_inner_prod(n, n)) * func_result
                 proj_tt_train = tt_add(tt_train, n)
-                print("Check:", tt_inner_prod(proj_tt_train, normal_vec(tt_example)))
-                n[0] *= (offset - 2*q)/tt_inner_prod(tt_train, normal_vec(tt_example))
+                n[0] *= (offset - 2*q)/func_result
                 proj_tt_train[0] *= jnp.sqrt((1-tt_inner_prod(n, n))/tt_inner_prod(proj_tt_train, proj_tt_train))
-                print("Inner:", tt_inner_prod(proj_tt_train, normal_vec(tt_example)))
                 proj_tt_train = tt_add(proj_tt_train, n)
-                #tt_train[0] = tt_train[0] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
-                print("Vio", eq_func(proj_tt_train), tt_inner_prod(proj_tt_train, proj_tt_train))
+                tt_train = proj_tt_train
             return tt_rl_orthogonalize(tt_train)
 
         self.projections.append(projection)

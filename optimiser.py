@@ -37,6 +37,7 @@ class ILPSolver:
             tt_train = self._resolve_constraints(tt_train, params)
             tt_train = self._extract_solution(tt_train, params)
             crit = self.eq_crit(tt_train) + self.iq_crit(tt_train)
+            print(f"Constraint Criterion after: {crit}")
         return tt_train
 
     def _resolve_constraints(self, tt_train, params):
@@ -44,8 +45,8 @@ class ILPSolver:
         for _ in range(20):  # TODO: Must be adjusted based on how close to not violating
             tt_train = self.const_space.project(tt_train)
             tt_train = self._rank_reduction(tt_train, params)
-            #crit = self.eq_crit(tt_train) + self.iq_crit(tt_train)
-        #print(f"Constraint Criterion: {crit}")
+        crit = self.eq_crit(tt_train) + self.iq_crit(tt_train)
+        print(f"Constraint Criterion: {crit}")
         return tt_train
 
     def _extract_solution(self, tt_train, params):
