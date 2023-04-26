@@ -289,22 +289,24 @@ class ConstraintSpace:
 
     def forall_S(self, example: Meta_Boolean_Function):
         normal_vec, offset, tt_example = example.to_tt_constraint()
-        eq_func = lambda h, q=1: (tt_inner_prod(h, normal_vec(tt_example)) + offset - q) ** 2
+        eq_func = lambda h, q=1: (tt_inner_prod(h, normal_vec(tt_example)) + offset - 2*q) ** 2
         self.eq_constraints.append(eq_func)
 
         def projection(tt_train, q=1):
             n = normal_vec(tt_example)
             func_result = tt_inner_prod(tt_train, n) + offset
             if np.abs(func_result - q) >= self.s_lower + 1:
-                print("Radius: ", tt_inner_prod(tt_train, tt_train))
-                n[0] *= -(1 / tt_inner_prod(n, n)) * (func_result - q)
-                tt_train = tt_add(tt_train, n)
+                tt_train[0] = tt_train[0] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
+                print("Radius: ", tt_inner_prod(tt_train, tt_train), offset)
+                n[0] *= -(1 / tt_inner_prod(n, n)) * tt_inner_prod(tt_train, normal_vec(tt_example))
+                proj_tt_train = tt_add(tt_train, n)
+                print("Check:", tt_inner_prod(proj_tt_train, normal_vec(tt_example)))
+                n[0] *= (offset - 2*q)/tt_inner_prod(tt_train, normal_vec(tt_example))
+                proj_tt_train[0] *= jnp.sqrt((1-tt_inner_prod(n, n))/tt_inner_prod(proj_tt_train, proj_tt_train))
+                print("Inner:", tt_inner_prod(proj_tt_train, normal_vec(tt_example)))
+                proj_tt_train = tt_add(proj_tt_train, n)
                 #tt_train[0] = tt_train[0] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
-
-                #n[0] *= (- 2 * q)/(2 * func_result)
-                #tt_train[0] *= (1 - tt_inner_prod(tt_train, n))
-                #tt_train[0] = tt_train[0] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
-                print(eq_func(tt_train), tt_inner_prod(tt_train, tt_train))
+                print("Vio", eq_func(proj_tt_train), tt_inner_prod(proj_tt_train, proj_tt_train))
             return tt_rl_orthogonalize(tt_train)
 
         self.projections.append(projection)
