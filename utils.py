@@ -252,8 +252,6 @@ class ConstraintSpace:
         self.eq_constraints = []
         self.iq_constraints = [lambda h, q=1: jnp.minimum(0, tt_leading_entry(h) - q*self.s_lower) ** 2]
         self.rank_gradient = D_func(lambda h: tt_rank_loss(h))
-        self.tt_minus_three = tt_one(dimension)
-        self.tt_minus_three[0] *= 3
 
     def _false_projection(self, tt_train, q=1):
         func_result = tt_leading_entry(tt_train)
@@ -262,15 +260,19 @@ class ConstraintSpace:
             tt_train = one
         return tt_train
 
-    def round(self, tt_train, params):
+    def round(self, tt_train, bias=0):
         tt_table = tt_bool_op(tt_train)
         tt_table_p3 = tt_hadamard(tt_hadamard(tt_table, tt_table), tt_table)
         tt_table_p3[0] *= -0.5
         tt_table[0] *= 0.5
         tt_table = tt_rl_orthogonalize(tt_add(tt_table, tt_table_p3))
+        if np.abs(bias) > 0.05:
+            tt_bias = tt_one(self.dimension)
+            tt_bias[0] *= bias
+            tt_table = tt_add(tt_table, tt_bias)
         tt_update = tt_bool_op_inv(tt_table)
         tt_train[0] *= (1 - tt_inner_prod(tt_update, tt_train))
-        tt_train = tt_add(tt_update, tt_train)  # TODO: project this update onto the hyperlane subspace
+        tt_train = tt_add(tt_train, tt_update)  # TODO: project this update onto the hyperlane subspace
         tt_train[0] = tt_train[0] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
         return tt_rank_reduce(tt_train, tt_bound=0)
 
@@ -315,7 +317,6 @@ class ConstraintSpace:
         self.projections.append(projection)
 
     def project(self, tt_train):
-        random.shuffle(self.projections)
         proj_tt_train = tt_train
         for proj in self.projections:
             #print(tt_inner_prod(proj_tt_train, proj_tt_train))

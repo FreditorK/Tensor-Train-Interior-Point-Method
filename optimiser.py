@@ -32,17 +32,13 @@ class ILPSolver:
 
     def find_feasible_hypothesis(self):
         tt_train, tt_measure, params = self._init_tt_train()
-        tt_train = self._resolve_constraints(tt_train, params)
-        print(tt_to_tensor(tt_train))
-        #print("First: ", tt_to_tensor(tt_bool_op(tt_train)))
-        #tensor = tt_to_tensor(tt_bool_op(tt_train))
-        #tensor = tensor/np.abs(tensor)
-        #print(tensor)
-        #tt_train = tt_bool_op_inv(tt_svd(tensor))
-        tt_train = self._extract_solution(tt_train, params)
-        # print(tt_to_tensor(tt_bool_op(tt_train)))
-        crit = self.eq_crit(tt_train) + self.iq_crit(tt_train)
-        print(f"Constraint Criterion after: {crit}")
+        criterion_score = 100
+        while criterion_score > 1e-4:
+            tt_train, tt_measure, params = self._init_tt_train()
+            tt_train = self._resolve_constraints(tt_train, params)
+            tt_train = self._extract_solution(tt_train)
+            criterion_score = self.eq_crit(tt_train) + self.iq_crit(tt_train)
+            print(f"Constraint Criterion after: {criterion_score}")
         return tt_train
 
     def _resolve_constraints(self, tt_train, params):
@@ -53,15 +49,16 @@ class ILPSolver:
         print(f"Constraint Criterion: {crit}")
         return tt_train
 
-    def _extract_solution(self, tt_train, params):
+    def _extract_solution(self, tt_train):
         criterion_score = 100
-        params["lambda"] = 0
+        bias = np.clip(0.5*np.random.randn()/3, a_min=-0.5, a_max=0.5)
         while criterion_score > 1e-4:
-            tt_train = self.const_space.round(tt_train, params)
+            tt_train = self.const_space.round(tt_train, bias)
             criterion_score = self.bool_criterion(tt_train)
+            bias *= 0.9
             print(f"Current violation: {criterion_score} \r", end="")
         print("\n", flush=True)
-        return self.const_space.round(tt_train, params)
+        return self.const_space.round(tt_train)
 
     def _rank_reduction(self, tt_train, params):
         for idx in range(self.dimension):
@@ -78,8 +75,6 @@ class ILPSolver:
         tt_train[0] = tt_train[0] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
         tt_measure = tt_one(self.dimension)
         params = {
-            "lr": 0.05,
-            "lambda": 0.5,
-            "const_weight": 1.0
+            "lr": 0.05
         }
         return tt_train, tt_measure, params
