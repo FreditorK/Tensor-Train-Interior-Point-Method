@@ -32,16 +32,20 @@ class ILPSolver:
 
     def find_feasible_hypothesis(self):
         tt_train, tt_measure, params = self._init_tt_train()
-        crit = np.inf
-        while crit > 1e-4:
-            tt_train = self._resolve_constraints(tt_train, params)
-            tt_train = self._extract_solution(tt_train, params)
-            crit = self.eq_crit(tt_train) + self.iq_crit(tt_train)
-            print(f"Constraint Criterion after: {crit}")
+        tt_train = self._resolve_constraints(tt_train, params)
+        print(tt_to_tensor(tt_train))
+        #print("First: ", tt_to_tensor(tt_bool_op(tt_train)))
+        #tensor = tt_to_tensor(tt_bool_op(tt_train))
+        #tensor = tensor/np.abs(tensor)
+        #print(tensor)
+        #tt_train = tt_bool_op_inv(tt_svd(tensor))
+        tt_train = self._extract_solution(tt_train, params)
+        # print(tt_to_tensor(tt_bool_op(tt_train)))
+        crit = self.eq_crit(tt_train) + self.iq_crit(tt_train)
+        print(f"Constraint Criterion after: {crit}")
         return tt_train
 
     def _resolve_constraints(self, tt_train, params):
-        crit = np.inf
         for _ in range(20):  # TODO: Must be adjusted based on how close to not violating
             tt_train = self.const_space.project(tt_train)
             tt_train = self._rank_reduction(tt_train, params)
@@ -51,15 +55,11 @@ class ILPSolver:
 
     def _extract_solution(self, tt_train, params):
         criterion_score = 100
-        prev_criterion_score = np.inf
         params["lambda"] = 0
         while criterion_score > 1e-4:
             tt_train = self.const_space.round(tt_train, params)
             criterion_score = self.bool_criterion(tt_train)
-            if criterion_score > prev_criterion_score:  # TODO: There should be a check for the wolfe condition here
-                params["lr"] *= 0.99
             print(f"Current violation: {criterion_score} \r", end="")
-            prev_criterion_score = criterion_score
         print("\n", flush=True)
         return self.const_space.round(tt_train, params)
 
@@ -79,7 +79,6 @@ class ILPSolver:
         tt_measure = tt_one(self.dimension)
         params = {
             "lr": 0.05,
-            "beta": -0.5,
             "lambda": 0.5,
             "const_weight": 1.0
         }
