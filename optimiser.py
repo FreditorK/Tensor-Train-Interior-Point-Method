@@ -1,10 +1,5 @@
-from copy import deepcopy
-
-import numpy as np
-
 from tt_op import *
-from operators import D_func, partial_D
-from utils import ConstraintSpace, Atom
+from utils import ConstraintSpace
 
 
 # np.random.seed(7)
@@ -29,12 +24,14 @@ class ILPSolver:
         self.eq_crit = lambda h: sum([jnp.sum(jnp.abs(c(h))) for c in self.const_space.eq_constraints])
         self.iq_crit = lambda h: sum([jnp.sum(c(h)) for c in self.const_space.iq_constraints])
         self.bool_criterion = boolean_criterion(self.dimension)
+        self.error_bound = self.const_space.s_lower + 1
 
     def find_feasible_hypothesis(self):
-        tt_train, tt_measure, params = self._init_tt_train()
+        tt_train = []
         criterion_score = 100
-        while criterion_score > 1e-4:
-            tt_train, tt_measure, params = self._init_tt_train()
+        error_bound = self.error_bound**2
+        while criterion_score > error_bound:
+            tt_train, params = self._init_tt_train()
             tt_train = self._resolve_constraints(tt_train, params)
             tt_train = self._extract_solution(tt_train)
             criterion_score = self.eq_crit(tt_train) + self.iq_crit(tt_train)
@@ -53,7 +50,7 @@ class ILPSolver:
         criterion_score = 100
         tt_train = tt_add_noise(tt_train)
         tt_train = self.const_space.round(tt_train)
-        while criterion_score > 1e-4:
+        while criterion_score > self.error_bound:
             tt_train = self.const_space.round(tt_train)
             criterion_score = self.bool_criterion(tt_train)
             print(f"Current violation: {criterion_score} \r", end="")
@@ -72,9 +69,8 @@ class ILPSolver:
     def _init_tt_train(self):
         # Initializes at everything is equivalent formula
         tt_train = [np.random.randn(1, 2, 1) for _ in range(self.dimension)]
-        tt_train[0] = tt_train[0] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
-        tt_measure = tt_one(self.dimension)
+        tt_train = tt_mul_scal(1 / jnp.sqrt(tt_inner_prod(tt_train, tt_train)), tt_train)
         params = {
             "lr": 0.05
         }
-        return tt_train, tt_measure, params
+        return tt_train, params

@@ -333,6 +333,9 @@ class NoisyConstraintSpace(ConstraintSpace):
         self.expected_truth = 1.0
         self.lr = 1e-2
 
+    def round(self, tt_train): # TODO: Implement under consideration of adjusted truth value
+        pass
+
     def project(self, tt_train):  # TODO: check that projection was contractive!!
         proj_tt_train = tt_train
         for proj in self.projections:
