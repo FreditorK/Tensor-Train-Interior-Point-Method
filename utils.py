@@ -260,16 +260,12 @@ class ConstraintSpace:
             tt_train = one
         return tt_train
 
-    def round(self, tt_train, bias=0):
+    def round(self, tt_train):
         tt_table = tt_bool_op(tt_train)
         tt_table_p3 = tt_hadamard(tt_hadamard(tt_table, tt_table), tt_table)
         tt_table_p3[0] *= -0.5
         tt_table[0] *= 0.5
         tt_table = tt_rl_orthogonalize(tt_add(tt_table, tt_table_p3))
-        if np.abs(bias) > 0.05:
-            tt_bias = tt_one(self.dimension)
-            tt_bias[0] *= bias
-            tt_table = tt_add(tt_table, tt_bias)
         tt_update = tt_bool_op_inv(tt_table)
         tt_train[0] *= (1 - tt_inner_prod(tt_update, tt_train))
         tt_train = tt_add(tt_train, tt_update)  # TODO: project this update onto the hyperlane subspace

@@ -42,7 +42,7 @@ class ILPSolver:
         return tt_train
 
     def _resolve_constraints(self, tt_train, params):
-        for _ in range(20):  # TODO: Must be adjusted based on how close to not violating
+        for _ in range(10):  # TODO: Must be adjusted based on how close to not violating
             tt_train = self.const_space.project(tt_train)
             tt_train = self._rank_reduction(tt_train, params)
         crit = self.eq_crit(tt_train) + self.iq_crit(tt_train)
@@ -51,11 +51,11 @@ class ILPSolver:
 
     def _extract_solution(self, tt_train):
         criterion_score = 100
-        bias = np.clip(0.5*np.random.randn()/3, a_min=-0.5, a_max=0.5)
+        #tt_train = tt_add_noise(tt_train)
+        tt_train = self.const_space.round(tt_train)
         while criterion_score > 1e-4:
-            tt_train = self.const_space.round(tt_train, bias)
+            tt_train = self.const_space.round(tt_train)
             criterion_score = self.bool_criterion(tt_train)
-            bias *= 0.9
             print(f"Current violation: {criterion_score} \r", end="")
         print("\n", flush=True)
         return self.const_space.round(tt_train)
