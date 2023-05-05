@@ -51,7 +51,7 @@ class ILPSolver:
 
     def _extract_solution(self, tt_train):
         criterion_score = 100
-        #tt_train = tt_add_noise(tt_train)
+        tt_train = tt_add_noise(tt_train)
         tt_train = self.const_space.round(tt_train)
         while criterion_score > 1e-4:
             tt_train = self.const_space.round(tt_train)

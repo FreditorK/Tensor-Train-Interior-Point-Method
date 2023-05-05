@@ -262,14 +262,13 @@ class ConstraintSpace:
 
     def round(self, tt_train):
         tt_table = tt_bool_op(tt_train)
-        tt_table_p3 = tt_hadamard(tt_hadamard(tt_table, tt_table), tt_table)
-        tt_table_p3[0] *= -0.5
-        tt_table[0] *= 0.5
+        tt_table_p3 = tt_mul_scal(-0.5, tt_hadamard(tt_hadamard(tt_table, tt_table), tt_table))
+        tt_table = tt_mul_scal(0.5, tt_table)
         tt_table = tt_rl_orthogonalize(tt_add(tt_table, tt_table_p3))
         tt_update = tt_bool_op_inv(tt_table)
-        tt_train[0] *= (1 - tt_inner_prod(tt_update, tt_train))
+        tt_train = tt_mul_scal(1 - tt_inner_prod(tt_update, tt_train), tt_train)
         tt_train = tt_add(tt_train, tt_update)  # TODO: project this update onto the hyperlane subspace
-        tt_train[0] = tt_train[0] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
+        tt_train = tt_mul_scal(1 / jnp.sqrt(tt_inner_prod(tt_train, tt_train)), tt_train)
         return tt_rank_reduce(tt_train, tt_bound=0)
 
     def exists_S(self, example: Meta_Boolean_Function):
