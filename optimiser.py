@@ -27,29 +27,30 @@ class ILPSolver:
         self.error_bound = self.const_space.s_lower + 1
 
     def find_feasible_hypothesis(self):
-        tt_train = []
-        criterion_score = 100
         error_bound = self.error_bound**2
-        while criterion_score > error_bound:
-            tt_train, params = self._init_tt_train()
+        tt_train, params = self._init_tt_train()
+        for _ in range(100):
             tt_train = self._resolve_constraints(tt_train, params)
             tt_train = self._extract_solution(tt_train)
             criterion_score = self.eq_crit(tt_train) + self.iq_crit(tt_train)
-            print(f"Constraint Criterion after: {criterion_score}")
+            if criterion_score > error_bound:
+                print(f"Constraint Criterion after: {criterion_score}")
+                self.const_space.add_faulty_hypothesis(tt_train)
+            else:
+                return tt_train
         return tt_train
 
     def _resolve_constraints(self, tt_train, params):
         for _ in range(10):  # TODO: Must be adjusted based on how close to not violating
             tt_train = self.const_space.project(tt_train)
-            tt_train = self._rank_reduction(tt_train, params)
+            tt_train = self._objective(tt_train, params)
         crit = self.eq_crit(tt_train) + self.iq_crit(tt_train)
         print(f"Constraint Criterion: {crit}")
         return tt_train
 
     def _extract_solution(self, tt_train):
-        criterion_score = 100
-        tt_train = tt_add_noise(tt_train)
         tt_train = self.const_space.round(tt_train)
+        criterion_score = self.bool_criterion(tt_train)
         while criterion_score > self.error_bound:
             tt_train = self.const_space.round(tt_train)
             criterion_score = self.bool_criterion(tt_train)
@@ -57,7 +58,7 @@ class ILPSolver:
         print("\n", flush=True)
         return self.const_space.round(tt_train)
 
-    def _rank_reduction(self, tt_train, params):
+    def _objective(self, tt_train, params):
         for idx in range(self.dimension):
             rank_gradient = self.const_space.rank_gradient(tt_train)[idx]
             tt_train[idx] -= params["lr"] * rank_gradient

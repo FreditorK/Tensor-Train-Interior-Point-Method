@@ -1,3 +1,4 @@
+import copy
 import random
 
 from sympy.logic.boolalg import ANFform, to_cnf, to_dnf, to_anf
@@ -251,7 +252,12 @@ class ConstraintSpace:
         self.projections = [self._false_projection]
         self.eq_constraints = []
         self.iq_constraints = [lambda h, q=1: jnp.minimum(0, tt_leading_entry(h) - q*self.s_lower) ** 2]
-        self.rank_gradient = D_func(lambda h: tt_rank_loss(h))
+        self.faulty_hypothesis = tt_mul_scal(-1, tt_leading_one(dimension))
+        self.rank_gradient = D_func(lambda h: tt_rank_loss(h) - tt_inner_prod(h, self.faulty_hypothesis))
+
+    def add_faulty_hypothesis(self, tt_train):
+        self.faulty_hypothesis = tt_rank_reduce(tt_or(tt_train, self.faulty_hypothesis))
+        self.rank_gradient = D_func(lambda h: tt_rank_loss(h) - tt_inner_prod(h, self.faulty_hypothesis))
 
     def _false_projection(self, tt_train, q=1):
         func_result = tt_leading_entry(tt_train)
@@ -342,6 +348,7 @@ class NoisyConstraintSpace(ConstraintSpace):
             proj_tt_train = proj(proj_tt_train, self.expected_truth)
         proj_tt_train = tt_rank_reduce(proj_tt_train)
         # Check whether contractive
+        # TODO: We also want to minimise the necessary noise level
         if tt_inner_prod(proj_tt_train, proj_tt_train) > tt_inner_prod(tt_train, proj_tt_train):
             print("Knowledge is contradictory. Adjusting expected truth value! ")
             self.expected_truth = max(0, self.expected_truth - self.lr)
