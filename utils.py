@@ -251,7 +251,7 @@ class ConstraintSpace:
         self.s_lower = 2 ** (-self.dimension) - 1  # -0.9999
         self.projections = [self._false_projection]
         self.eq_constraints = []
-        self.iq_constraints = [lambda h, q=1: jnp.minimum(0, tt_leading_entry(h) - q*self.s_lower) ** 2]
+        self.iq_constraints = [lambda h, q=1: jnp.maximum(0, q*self.s_lower-tt_leading_entry(h))]
         self.faulty_hypothesis = tt_mul_scal(-1, tt_leading_one(dimension))
         self.rank_gradient = D_func(lambda h: tt_rank_loss(h) - tt_inner_prod(h, self.faulty_hypothesis))
 
@@ -279,7 +279,7 @@ class ConstraintSpace:
 
     def exists_S(self, example: Meta_Boolean_Function):
         normal_vec, offset, tt_example = example.to_tt_constraint()  # TODO: We can pull the sum into the inner product, i.e. add all examples up before?
-        iq_func = lambda h, q=1: jnp.minimum(0, tt_inner_prod(h, normal_vec(tt_example)) + offset - q*self.s_lower) ** 2
+        iq_func = lambda h, q=1: jnp.maximum(0, q*self.s_lower - tt_inner_prod(h, normal_vec(tt_example)) - offset)
         self.iq_constraints.append(iq_func)
 
         def projection(tt_train, q=1):
@@ -299,7 +299,7 @@ class ConstraintSpace:
 
     def forall_S(self, example: Meta_Boolean_Function):
         normal_vec, offset, tt_example = example.to_tt_constraint()
-        eq_func = lambda h, q=1: (tt_inner_prod(h, normal_vec(tt_example)) + offset - 2*q) ** 2
+        eq_func = lambda h, q=1: jnp.abs(tt_inner_prod(h, normal_vec(tt_example)) + offset - 2*q)
         self.eq_constraints.append(eq_func)
 
         def projection(tt_train, q=1):
