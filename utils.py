@@ -257,7 +257,7 @@ class ConstraintSpace:
         self.faulty_hypothesis = tt_mul_scal(-1, tt_leading_one(dimension))
         self.eq_crit = lambda h, q=1: sum([jnp.sum(jnp.abs(c(h, q))) for c in self.eq_constraints])
         self.iq_crit = lambda h, q=1: sum([jnp.sum(c(h, q)) for c in self.iq_constraints])
-        self.rank_gradient = D_func(lambda h: tt_rank_loss(h) - 10*tt_inner_prod(h, self.faulty_hypothesis))
+        self.rank_gradient = D_func(lambda h: tt_rank_loss(h))
         self.boolean_criterion = boolean_criterion(dimension)
 
     def add_faulty_hypothesis(self, tt_train):
@@ -329,7 +329,7 @@ class ConstraintSpace:
             for proj in self.projections:
                 proj_tt_train = proj(proj_tt_train)
             criterion_score = self.eq_crit(proj_tt_train) + self.iq_crit(proj_tt_train)
-        return tt_rank_reduce(proj_tt_train), criterion_score
+        return tt_rank_reduce(proj_tt_train)
 
 
 class NoisyConstraintSpace(ConstraintSpace):
@@ -393,4 +393,4 @@ class NoisyConstraintSpace(ConstraintSpace):
                 self.expected_truth = max(0, self.expected_truth - self.lr)
                 proj_tt_train = tt_mul_scal(self.expected_truth / jnp.sqrt(tt_inner_prod(proj_tt_train, proj_tt_train)), proj_tt_train)
                 print(f"Knowledge is contradictory. Adjusting expected truth value to {self.expected_truth}. ")
-        return proj_tt_train, criterion_score
+        return proj_tt_train

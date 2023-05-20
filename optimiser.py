@@ -43,9 +43,12 @@ class ILPSolver:
 
     def _resolve_constraints(self, tt_train, params):
         criterion_score = np.inf
-        while criterion_score > self.error_bound:  # TODO: Switch to objective based criteria
+        tt_train = self.const_space.project(tt_train)
+        while criterion_score > 2*self.error_bound:  # Gradient induced change, i.e. similar to first-order sufficient condition
+            prev_tt_train = tt_train
             tt_train = self._objective(tt_train, params)
-            tt_train, criterion_score = self.const_space.project(tt_train)
+            tt_train = self.const_space.project(tt_train)
+            criterion_score = self.const_space.radius**2-tt_inner_prod(tt_train, prev_tt_train)
             print(f"Constraint Criterion: {criterion_score} \r", end="")
         print("\n", flush=True)
         return tt_train
