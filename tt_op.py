@@ -73,7 +73,8 @@ def tt_rl_orthogonalize(tt_train: List[np.array]):
 
 def tt_bond_at(tt_train, idx):
     if idx != -1:
-        tt_train = tt_train[:idx] + [jnp.einsum("abc, cde -> abde", tt_train[idx], tt_train[idx + 1])] + tt_train[idx + 2:]
+        tt_train = tt_train[:idx] + [jnp.einsum("abc, cde -> abde", tt_train[idx], tt_train[idx + 1])] + tt_train[
+                                                                                                         idx + 2:]
     return tt_train
 
 
@@ -102,6 +103,16 @@ def tt_rank_loss(tt_train):
         r * jnp.linalg.norm(jnp.einsum("abc, cde -> abde", tt_train[idx], tt_train[idx + 1]).reshape(
             tt_train[idx].shape[0] * tt_train[idx].shape[1], -1), ord="nuc") for idx, r in enumerate(bond_ranks)
     ])
+
+
+def tt_denoise_loss(tt_train, likelihoods):
+    denoised_tt_train = tt_noise_op_inv(tt_train, likelihoods)
+    return (tt_inner_prod(denoised_tt_train, denoised_tt_train) - 1) ** 2
+
+
+def tt_noise_loss(tt_train, likelihoods, expected_truth):
+    noised_tt_train = tt_noise_op(tt_train, likelihoods)
+    return (tt_inner_prod(noised_tt_train, noised_tt_train) - expected_truth) ** 2
 
 
 def tt_rank_reduce(tt_train: List[np.array], tt_bound=1e-4):
@@ -334,9 +345,10 @@ def tt_measure_inv(tt_train: List[np.array], likelihoods: np.array):
     """
     Returns a formula weighted by a measure defined via the likelihoods
     """
+    likelihoods = 1 / jnp.maximum(likelihoods, 1e-3)
     return [_tt_measure_core_inv(
         core,
-        (1 / 2) * jnp.array([[1, 1 / p if p > 0 else 0], [1, -1 / p if p > 0 else 0]], dtype=float).reshape(1, 2, 2, 1)
+        (1 / 2) * jnp.array([[1, p], [1, -p]], dtype=float).reshape(1, 2, 2, 1)
     ) for core, p in zip(tt_train, likelihoods)]
 
 
@@ -354,6 +366,21 @@ def boolean_criterion(dimension):
 
     def criterion(tt_train):
         tt_train = tt_bool_op(tt_train)
+        squared_Ttt_1 = tt_hadamard(tt_train, tt_train)
+        squared_Ttt_1 = tt_rl_orthogonalize(squared_Ttt_1)
+        minus_1_squared_Ttt_1 = tt_add(squared_Ttt_1, one)
+        return tt_inner_prod(minus_1_squared_Ttt_1, minus_1_squared_Ttt_1)
+
+    return criterion
+
+
+def noisy_boolean_criterion(dimension):
+    one = tt_one(dimension)
+    one[0] *= -1.0
+
+    def criterion(tt_train, likelihoods):
+        tt_train = tt_bool_op(tt_noise_op_inv(tt_train, likelihoods))
+        tt_train = tt_mul_scal(1/jnp.sqrt(tt_inner_prod(tt_train, tt_train)), tt_train)
         squared_Ttt_1 = tt_hadamard(tt_train, tt_train)
         squared_Ttt_1 = tt_rl_orthogonalize(squared_Ttt_1)
         minus_1_squared_Ttt_1 = tt_add(squared_Ttt_1, one)
@@ -432,7 +459,7 @@ def tt_mul_scal(alpha, tt_train):
 
 def tt_add_noise(tt_train, rank=3, noise_radius=0.1):
     n = len(tt_train)
-    noise_train = [np.random.randn(rank if idx != 0 else 1, 2, rank if idx != n-1 else 1)/3 for idx in range(n)]
+    noise_train = [np.random.randn(rank if idx != 0 else 1, 2, rank if idx != n - 1 else 1) / 3 for idx in range(n)]
     noise_train = tt_mul_scal(noise_radius / jnp.sqrt(tt_inner_prod(noise_train, noise_train)), noise_train)
     # projection onto tangent space of tt_train
     tt_train = tt_mul_scal(1 - tt_inner_prod(noise_train, tt_train), tt_train)

@@ -192,7 +192,7 @@ class Meta_Boolean_Function:
         bot = tt_leading_one(len(e))
         bot[0] *= -1
         return Meta_Boolean_Function(
-            f"({self.name} <- {other.name})",
+            f"({self.name} -> {other.name})",
             lambda e: tt_rl_orthogonalize(tt_add(e, bot)),
             1 + tt_leading_entry(e),
             e
@@ -206,8 +206,8 @@ class Hypothesis(Meta_Boolean_Function):
     def __init__(self, name=None):
         self.name = name
         if name is None:
-            self.name = "hypothesis"
-        super().__init__(name, None, None, None)
+            self.name = "h"
+        super().__init__(self.name, None, None, None)
 
 
 class Boolean_Function(Meta_Boolean_Function):
@@ -248,22 +248,27 @@ class Boolean_Data(Expression):
 class ConstraintSpace:
     def __init__(self, dimension):
         self.dimension = dimension
+        self.expected_truth = 1.0
+        self.radius = 1.0
         self.s_lower = 2 ** (-self.dimension) - 1  # -0.9999
         self.projections = [self._false_projection]
         self.eq_constraints = []
-        self.iq_constraints = [lambda h, q=1: jnp.maximum(0, q*self.s_lower-tt_leading_entry(h))]
+        self.iq_constraints = [lambda h, q=1: jnp.maximum(0, q * self.s_lower - tt_leading_entry(h))]
         self.faulty_hypothesis = tt_mul_scal(-1, tt_leading_one(dimension))
-        self.rank_gradient = D_func(lambda h: tt_rank_loss(h) - tt_inner_prod(h, self.faulty_hypothesis))
+        self.eq_crit = lambda h, q=1: sum([jnp.sum(jnp.abs(c(h, q))) for c in self.eq_constraints])
+        self.iq_crit = lambda h, q=1: sum([jnp.sum(c(h, q)) for c in self.iq_constraints])
+        self.rank_gradient = D_func(lambda h: tt_rank_loss(h) - 10*tt_inner_prod(h, self.faulty_hypothesis))
+        self.boolean_criterion = boolean_criterion(dimension)
 
     def add_faulty_hypothesis(self, tt_train):
         self.faulty_hypothesis = tt_rank_reduce(tt_or(tt_train, self.faulty_hypothesis))
-        self.rank_gradient = D_func(lambda h: tt_rank_loss(h) - tt_inner_prod(h, self.faulty_hypothesis))
+        self.rank_gradient = D_func(lambda h: tt_rank_loss(h) - 10*tt_inner_prod(h, self.faulty_hypothesis))
 
     def _false_projection(self, tt_train, q=1):
         func_result = tt_leading_entry(tt_train)
-        if func_result - q*self.s_lower <= 0:
+        if func_result - q * self.s_lower <= 0:
             one = tt_leading_one(self.dimension)
-            tt_train = one
+            tt_train = tt_mul_scal(np.sqrt(q), one)
         return tt_train
 
     def round(self, tt_train):
@@ -279,18 +284,18 @@ class ConstraintSpace:
 
     def exists_S(self, example: Meta_Boolean_Function):
         normal_vec, offset, tt_example = example.to_tt_constraint()  # TODO: We can pull the sum into the inner product, i.e. add all examples up before?
-        iq_func = lambda h, q=1: jnp.maximum(0, q*self.s_lower - tt_inner_prod(h, normal_vec(tt_example)) - offset)
+        iq_func = lambda h, q=1: jnp.maximum(0, q * self.s_lower - tt_inner_prod(h, normal_vec(tt_example)) - offset)
         self.iq_constraints.append(iq_func)
 
         def projection(tt_train, q=1):
-            tt_train[0] = tt_train[0] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
+            radius = jnp.sqrt(tt_inner_prod(tt_train, tt_train))
             n = normal_vec(tt_example)
             func_result = tt_inner_prod(tt_train, n)
-            if func_result + offset - 2*q*self.s_lower <= 0:
-                n[0] *= -(1 / tt_inner_prod(n, n)) * func_result
+            if func_result + offset - 2 * q * self.s_lower <= 0:
+                n = tt_mul_scal(-(func_result / tt_inner_prod(n, n)), n)
                 proj_tt_train = tt_add(tt_train, n)
-                n[0] *= (offset - 2*q*self.s_lower)/func_result
-                proj_tt_train[0] *= jnp.sqrt((1 - tt_inner_prod(n, n)) / tt_inner_prod(proj_tt_train, proj_tt_train))
+                proj_tt_train[0] *= jnp.sqrt((radius**2 - np.abs(0.5*offset - q * self.s_lower)) / tt_inner_prod(proj_tt_train, proj_tt_train))
+                n = tt_mul_scal((offset - 2 * q * self.s_lower) / func_result, n)
                 proj_tt_train = tt_add(proj_tt_train, n)
                 tt_train = proj_tt_train
             return tt_rl_orthogonalize(tt_train)
@@ -299,18 +304,18 @@ class ConstraintSpace:
 
     def forall_S(self, example: Meta_Boolean_Function):
         normal_vec, offset, tt_example = example.to_tt_constraint()
-        eq_func = lambda h, q=1: jnp.abs(tt_inner_prod(h, normal_vec(tt_example)) + offset - 2*q)
+        eq_func = lambda h, q=1: jnp.abs(tt_inner_prod(h, normal_vec(tt_example)) + offset - 2 * q)
         self.eq_constraints.append(eq_func)
 
         def projection(tt_train, q=1):
-            tt_train[0] = tt_train[0] / jnp.sqrt(tt_inner_prod(tt_train, tt_train))
+            radius = jnp.sqrt(tt_inner_prod(tt_train, tt_train))
             n = normal_vec(tt_example)
             func_result = tt_inner_prod(tt_train, n)
-            if np.abs(func_result + offset - q) >= self.s_lower + 1:
-                n[0] *= -(1 / tt_inner_prod(n, n)) * func_result
+            if np.abs(func_result + offset - 2*q) >= self.s_lower + 1:
+                n = tt_mul_scal(-(func_result / tt_inner_prod(n, n)), n)
                 proj_tt_train = tt_add(tt_train, n)
-                n[0] *= (offset - 2*q)/func_result
-                proj_tt_train[0] *= jnp.sqrt((1-tt_inner_prod(n, n))/tt_inner_prod(proj_tt_train, proj_tt_train))
+                proj_tt_train[0] *= jnp.sqrt((radius**2 - np.abs((0.5*offset - q))) / tt_inner_prod(proj_tt_train, proj_tt_train))
+                n = tt_mul_scal((offset - 2 * q) / func_result, n)
                 proj_tt_train = tt_add(proj_tt_train, n)
                 tt_train = proj_tt_train
             return tt_rl_orthogonalize(tt_train)
@@ -318,38 +323,74 @@ class ConstraintSpace:
         self.projections.append(projection)
 
     def project(self, tt_train):
+        criterion_score = self.eq_crit(tt_train) + self.iq_crit(tt_train)
         proj_tt_train = tt_train
-        for proj in self.projections:
-            #print(tt_inner_prod(proj_tt_train, proj_tt_train))
-            proj_tt_train = proj(proj_tt_train)
-        #print(tt_inner_prod(proj_tt_train, proj_tt_train), tt_inner_prod(tt_train, proj_tt_train))
-        #print(tt_to_tensor(tt_bool_op(proj_tt_train)))
-        #if tt_inner_prod(proj_tt_train, proj_tt_train) < tt_inner_prod(tt_train, proj_tt_train):
-         #   print("Knowledge is contradictory. Adjusting expected truth value! ")
-        return proj_tt_train
+        while criterion_score > self.s_lower + 1:
+            for proj in self.projections:
+                proj_tt_train = proj(proj_tt_train)
+            criterion_score = self.eq_crit(proj_tt_train) + self.iq_crit(proj_tt_train)
+        return tt_rank_reduce(proj_tt_train), criterion_score
 
 
 class NoisyConstraintSpace(ConstraintSpace):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, dimension):
+        super().__init__(dimension)
         self.lr = 1e-1
-        self.noise_op_measure = None
-        self.noise_gradient = None
+        self.noise_op_measure = np.ones(dimension)
         self.iq_gradient = None
-        self.expected_truth = 1.0
         self.lr = 1e-2
+        self.prev_criterion = np.inf
+        self.noise_gradient = partial_D(tt_noise_loss, 1)
+        self.denoise_gradient = partial_D(tt_denoise_loss, 1)
+        self.lr = 1e-2
+        self.noisy_criterion = noisy_boolean_criterion(dimension)
 
-    def round(self, tt_train): # TODO: Implement under consideration of adjusted truth value
-        pass
+    def boolean_criterion(self, tt_train):
+        return self.noisy_criterion(tt_train, self.noise_op_measure)
+
+    def round(self, tt_train):  # TODO: Implement under consideration of adjusted truth value
+        self.update_denoise_op(tt_train)
+        tt_train = tt_noise_op_inv(tt_train, self.noise_op_measure)
+        tt_train = tt_mul_scal(1 / jnp.sqrt(tt_inner_prod(tt_train, tt_train)), tt_train)
+        tt_table = tt_bool_op(tt_train)
+        tt_table_p3 = tt_mul_scal(-0.5, tt_hadamard(tt_hadamard(tt_table, tt_table), tt_table))
+        tt_table = tt_mul_scal(0.5, tt_table)
+        tt_table = tt_rl_orthogonalize(tt_add(tt_table, tt_table_p3))
+        tt_update = tt_bool_op_inv(tt_table)
+        tt_train = tt_mul_scal(1 - tt_inner_prod(tt_update, tt_train), tt_train)
+        tt_train = tt_add(tt_train, tt_update)
+        tt_train = tt_mul_scal(1 / jnp.sqrt(tt_inner_prod(tt_train, tt_train)), tt_train)
+        self.update_noise_op(tt_train)
+        tt_train = tt_noise_op(tt_train, self.noise_op_measure)
+        tt_train = tt_mul_scal(self.expected_truth / jnp.sqrt(tt_inner_prod(tt_train, tt_train)), tt_train)
+        return tt_rank_reduce(tt_train)
+
+    def update_denoise_op(self, tt_train):
+        gradient = self.noise_op_measure
+        while np.linalg.norm(gradient) > 1e-3:
+            gradient = self.denoise_gradient(tt_train, self.noise_op_measure)
+            self.noise_op_measure = np.clip(self.noise_op_measure - self.lr * gradient, a_min=0, a_max=1)
+        #print(f"Estimated noise levels: {self.noise_op_measure} \n")
+
+    def update_noise_op(self, tt_train):
+        gradient = self.noise_op_measure
+        while np.linalg.norm(gradient) > 1e-3:
+            gradient = self.noise_gradient(tt_train, self.noise_op_measure, self.expected_truth)
+            self.noise_op_measure = np.clip(self.noise_op_measure - self.lr * gradient, a_min=0, a_max=1)
+        #print(f"Estimated noise levels: {self.noise_op_measure} \n")
 
     def project(self, tt_train):  # TODO: check that projection was contractive!!
+        criterion_score = self.eq_crit(tt_train, self.expected_truth) + self.iq_crit(tt_train, self.expected_truth)
         proj_tt_train = tt_train
-        for proj in self.projections:
-            proj_tt_train = proj(proj_tt_train, self.expected_truth)
-        proj_tt_train = tt_rank_reduce(proj_tt_train)
-        # Check whether contractive
-        # TODO: We also want to minimise the necessary noise level
-        if tt_inner_prod(proj_tt_train, proj_tt_train) > tt_inner_prod(tt_train, proj_tt_train):
-            print("Knowledge is contradictory. Adjusting expected truth value! ")
-            self.expected_truth = max(0, self.expected_truth - self.lr)
-        return proj_tt_train
+        while criterion_score > 0.000001: #self.s_lower + 1:
+            for proj in self.projections:
+                proj_tt_train = proj(proj_tt_train, self.expected_truth)
+            proj_tt_train = tt_rank_reduce(proj_tt_train, tt_bound=0)
+            prev_criterion = criterion_score
+            criterion_score = self.eq_crit(proj_tt_train, self.expected_truth) + self.iq_crit(proj_tt_train, self.expected_truth)
+            print("Scores: ", prev_criterion, criterion_score)
+            if criterion_score >= prev_criterion:
+                self.expected_truth = max(0, self.expected_truth - self.lr)
+                proj_tt_train = tt_mul_scal(self.expected_truth / jnp.sqrt(tt_inner_prod(proj_tt_train, proj_tt_train)), proj_tt_train)
+                print(f"Knowledge is contradictory. Adjusting expected truth value to {self.expected_truth}. ")
+        return proj_tt_train, criterion_score
