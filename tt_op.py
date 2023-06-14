@@ -7,6 +7,7 @@ import jax.scipy as jsc
 from jax.nn import softmax
 from typing import List
 from itertools import product
+from operators import *
 
 PHI = np.array([[1, 1],
                 [1, -1]], dtype=float).reshape(1, 2, 2, 1)
@@ -96,13 +97,10 @@ def tt_part_bond(tt_train, idx):
 
 def tt_rank_loss(tt_train):
     """Loss criterion on the TT-rank"""
-    bond_ranks = jnp.array(
-        [max(tt_train[idx].shape[-1], tt_train[idx + 1].shape[0]) for idx in range(len(tt_train) - 1)])
-    bond_ranks = bond_ranks / jnp.max(bond_ranks)
-    return sum([
-        r * jnp.linalg.norm(jnp.einsum("abc, cde -> abde", tt_train[idx], tt_train[idx + 1]).reshape(
-            tt_train[idx].shape[0] * tt_train[idx].shape[1], -1), ord="nuc") for idx, r in enumerate(bond_ranks)
-    ])
+    return jnp.max(jnp.array([
+        jnp.linalg.norm(jnp.einsum("abc, cde -> abde", tt_train[idx], tt_train[idx + 1]).reshape(
+            tt_train[idx].shape[0] * tt_train[idx].shape[1], -1), ord=2) for idx in range(len(tt_train) - 1) # largest singular value
+    ]))
 
 
 def tt_denoise_loss(tt_train, likelihoods):
@@ -126,6 +124,28 @@ def tt_rank_reduce(tt_train: List[np.array], tt_bound=1e-4):
         non_sing_eig_idxs = np.asarray(np.abs(S) > tt_bound).nonzero()
         S = S[non_sing_eig_idxs]
         next_rank = len(S)
+        U = U[:, non_sing_eig_idxs]
+        V_T = V_T[non_sing_eig_idxs, :]
+        tt_train[idx] = U.reshape(rank, idx_shape[1], next_rank)
+        tt_train[idx + 1] = (np.diag(S) @ V_T @ tt_train[idx + 1].reshape(V_T.shape[-1], -1)).reshape(next_rank,
+                                                                                                      next_idx_shape[1],
+                                                                                                      -1)
+        rank = next_rank
+    return tt_train
+
+
+def tt_rank_retraction(tt_upper_ranks: List[np.array], tt_train: List[np.array]):
+    """ Might reduce TT-rank """
+    tt_train = tt_rl_orthogonalize(tt_train)
+    rank = 1
+    for idx, upper_rank in enumerate(tt_upper_ranks):
+        idx_shape = tt_train[idx].shape
+        next_idx_shape = tt_train[idx + 1].shape
+        U, S, V_T = np.linalg.svd(tt_train[idx].reshape(rank * idx_shape[1], -1))
+        abs_S = np.abs(S)
+        next_rank = min(upper_rank, len(abs_S > 0))
+        non_sing_eig_idxs = np.argpartition(abs_S, -next_rank)[-next_rank:]
+        S = S[non_sing_eig_idxs]
         U = U[:, non_sing_eig_idxs]
         V_T = V_T[non_sing_eig_idxs, :]
         tt_train[idx] = U.reshape(rank, idx_shape[1], next_rank)
@@ -360,7 +380,7 @@ def tt_noise_op_inv(tt_train: List[np.array], likelihoods: np.array):
     return tt_measure_inv(tt_bool_op(tt_train), likelihoods)
 
 
-def boolean_criterion(dimension):
+def tt_boolean_criterion(dimension):
     one = tt_one(dimension)
     one[0] *= -1.0
 
@@ -374,13 +394,13 @@ def boolean_criterion(dimension):
     return criterion
 
 
-def noisy_boolean_criterion(dimension):
+def tt_noisy_boolean_criterion(dimension):
     one = tt_one(dimension)
     one[0] *= -1.0
 
     def criterion(tt_train, likelihoods):
         tt_train = tt_bool_op(tt_noise_op_inv(tt_train, likelihoods))
-        tt_train = tt_mul_scal(1/jnp.sqrt(tt_inner_prod(tt_train, tt_train)), tt_train)
+        tt_train = tt_mul_scal(1 / jnp.sqrt(tt_inner_prod(tt_train, tt_train)), tt_train)
         squared_Ttt_1 = tt_hadamard(tt_train, tt_train)
         squared_Ttt_1 = tt_rl_orthogonalize(squared_Ttt_1)
         minus_1_squared_Ttt_1 = tt_add(squared_Ttt_1, one)
@@ -452,8 +472,8 @@ def tt_neg(tt_train: List[np.array]) -> List[np.array]:
     return tt_train
 
 
-def tt_mul_scal(alpha, tt_train):
-    tt_train[0] *= alpha
+def tt_mul_scal(alpha, tt_train, idx=0):
+    tt_train[idx] *= alpha
     return tt_train
 
 
@@ -466,3 +486,32 @@ def tt_add_noise(tt_train, rank=3, noise_radius=0.1):
     tt_train = tt_add(tt_train, noise_train)
     tt_train = tt_mul_scal(1 / jnp.sqrt(tt_inner_prod(tt_train, tt_train)), tt_train)
     return tt_rl_orthogonalize(tt_train)
+
+
+def tt_round_iteration(tt_train):
+    tt_train_p3 = tt_mul_scal(-0.5, tt_hadamard(tt_hadamard(tt_train, tt_train), tt_train))
+    tt_train = tt_mul_scal(1.5, deepcopy(tt_train))
+    tt_train = tt_add(tt_train, tt_train_p3)
+    return tt_rank_reduce(tt_train, tt_bound=0)
+
+
+def tt_round(tt_train, iterations=100):
+    for _ in range(iterations):
+        tt_train = tt_round_iteration(tt_train)
+    return tt_round_iteration(tt_train)
+
+
+def tt_abs(tt_train):
+    rounded_tt_train = tt_round(tt_train)
+    absolute_tt_train = tt_rl_orthogonalize(tt_rank_reduce(tt_hadamard(rounded_tt_train, tt_train)))
+    return absolute_tt_train
+
+
+def tt_min(tt_train, lr=5e-1):
+    dimension = len(tt_train)
+    entry_param = np.array([0.5 for _ in range(dimension)])
+    gradient = D_func(lambda e: tt_inner_prod(tt_train, [jnp.array([1-e[i], e[i]]).reshape(1, 2, 1) for i in range(dimension)]))
+    for _ in range(100):
+        grad = gradient(entry_param)
+        entry_param = [np.clip(e - lr*grad[i], a_min=0, a_max=1) for i, e in enumerate(entry_param)]
+    return np.round(entry_param, decimals=0)

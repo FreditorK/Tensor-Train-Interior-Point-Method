@@ -1,6 +1,7 @@
 from tt_op import *
 from utils import ConstraintSpace
 from utils import NoisyConstraintSpace
+from functools import partial
 
 
 # np.random.seed(7)
@@ -31,9 +32,7 @@ class ILPSolver:
             print(f"----------Iteration {i}----------")
             tt_train = self._resolve_constraints(tt_train, params)
             tt_train = self._extract_solution(tt_train)
-            criterion_score = self.const_space.eq_crit(tt_train,
-                                                       self.const_space.expected_truth) + self.const_space.iq_crit(
-                tt_train, self.const_space.expected_truth)
+            criterion_score = self.const_space.eq_crit(tt_train) + self.const_space.iq_crit(tt_train)
             if criterion_score > error_bound:
                 print(f"Constraint Criterion after rounding: {criterion_score}")
                 self.const_space.add_faulty_hypothesis(tt_train)
@@ -48,19 +47,22 @@ class ILPSolver:
             prev_tt_train = tt_train
             tt_train = self._objective(tt_train, params)
             tt_train = self.const_space.project(tt_train)
-            criterion_score = self.const_space.radius**2-tt_inner_prod(tt_train, prev_tt_train)
+            criterion_score = self.const_space.stopping_criterion(tt_train, prev_tt_train)
             print(f"Constraint Criterion: {criterion_score} \r", end="")
         print("\n", flush=True)
         return tt_train
 
     def _extract_solution(self, tt_train):
         criterion_score = self.const_space.boolean_criterion(tt_train)
+        retraction = partial(tt_rank_retraction, [core.shape[-1] for core in tt_train[:-1]])
         while criterion_score > self.error_bound:
             tt_train = self.const_space.round(tt_train)
+            tt_train = retraction(tt_train)
             criterion_score = self.const_space.boolean_criterion(tt_train)
             print(f"Boolean Criterion: {criterion_score} \r", end="")
         print("\n", flush=True)
-        return self.const_space.round(tt_train)
+        tt_train = self.const_space.round(tt_train)
+        return retraction(tt_train)
 
     def _objective(self, tt_train, params):
         for idx in range(self.dimension):
@@ -68,13 +70,13 @@ class ILPSolver:
             tt_train[idx] -= params["lr"] * rank_gradient
             tt_train[idx] += params["lr"] * tt_grad_inner_prod(tt_train, tt_train, rank_gradient, idx) * \
                              tt_train[idx]
-            tt_train[idx] *= self.const_space.radius / np.sqrt(tt_inner_prod(tt_train, tt_train))
+            tt_train = self.const_space.normalise(tt_train, idx)
         return tt_train
 
     def _init_tt_train(self):
         # Initializes at everything is equivalent formula
-        tt_train = [np.random.randn(1, 2, 1) for _ in range(self.dimension)]
-        tt_train = tt_mul_scal(1 / jnp.sqrt(tt_inner_prod(tt_train, tt_train)), tt_train)
+        tt_train = [np.array([1.0, 0.0]).reshape(1, 2, 1) for _ in range(self.dimension)]
+        tt_train = self.const_space.normalise(tt_train)
         params = {
             "lr": 0.08
         }
