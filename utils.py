@@ -291,7 +291,7 @@ class ConstraintSpace:
         self.faulty_hypothesis = tt_mul_scal(-1, tt_leading_one(dimension))
         self.eq_crit = lambda h: sum([jnp.sum(jnp.abs(c(h))) for c in self.eq_constraints])
         self.iq_crit = lambda h: sum([jnp.sum(c(h)) for c in self.iq_constraints])
-        self.rank_gradient = D_func(lambda h: tt_nuc_schatten_norm(h))
+        self.rank_gradient = D_func(lambda h: tt_inf_schatten_norm(h))
         self.boolean_criterion = tt_boolean_criterion(dimension)
 
     def normalise(self, tt_train, idx=0):

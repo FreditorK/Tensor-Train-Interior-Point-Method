@@ -48,9 +48,14 @@ class ILPSolver:
 
     def _resolve_constraints(self, tt_train, params):
         criterion_score = np.inf
-        tt_train = self.const_space.project(tt_train)
-        while criterion_score > self.error_bound*params["lr"]:  # Gradient induced change, i.e. similar to first-order sufficient condition
-            prev_tt_train = tt_train
+        while criterion_score >= 0.1*self.error_bound * params["lr"]:
+            prev_tt_train = deepcopy(tt_train)
+            tt_train = self._objective(tt_train, params)
+            criterion_score = self.const_space.stopping_criterion(tt_train, prev_tt_train)
+            print(f"Objective Value: {criterion_score} \r", end="")
+        criterion_score = np.inf
+        while criterion_score >= self.error_bound*params["lr"]:  # Gradient induced change, i.e. similar to first-order sufficient condition
+            prev_tt_train = deepcopy(tt_train)
             tt_train = self._objective(tt_train, params)
             tt_train = self.const_space.project(tt_train)
             criterion_score = self.const_space.stopping_criterion(tt_train, prev_tt_train)
@@ -71,8 +76,9 @@ class ILPSolver:
         return retraction(tt_train)
 
     def _objective(self, tt_train, params):
+        tt_train = tt_add_noise(tt_train, rank=1, noise_radius=0.05) # TODO: decay noise
         for idx in range(self.dimension):
-            rank_gradient = self.objective_grad(tt_train, idx) + self.const_space.rank_gradient(tt_train)[idx]
+            rank_gradient = self.objective_grad(tt_train, idx) #+ self.const_space.rank_gradient(tt_train)[idx]
             tt_train[idx] -= params["lr"] * rank_gradient
             tt_train[idx] += params["lr"] * tt_grad_inner_prod(tt_train, tt_train, rank_gradient, idx) * \
                              tt_train[idx]
