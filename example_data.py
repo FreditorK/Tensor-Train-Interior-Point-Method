@@ -10,7 +10,7 @@ w = Atom(vocab_size, "w")
 u = Atom(vocab_size, "u")
 h = Hypothesis()
 const_space = ConstraintSpace(vocab_size)
-e_0 = Boolean_Data(
+e_0 = Boolean_Data_Lower(
     np.array([
         [1, 0, 0, 1, 1],
         [1, 0, 1, 0, 1],
@@ -21,10 +21,10 @@ e_0 = Boolean_Data(
         [1, 0, 1, 1, 1],
         [1, 0, 0, 1, 0]
     ]),
-    np.array([1, 0, 0, 0, 1, 1, 0, 1])
+    np.array([1, 0, 0, 0, 1, 1, 0, -1])
 )
-
-print("Data Function: ", get_CNF([x, y, z, w, u], e_0.compressed_data), flush=True)
+variable_list = [x, y, z, w, u]
+print("Data Function: ", get_CNF(variable_list, e_0.compressed_data), f"Noise lvl {[(str(v), e.item()) for v, e in zip(variable_list, e_0.noise)]}", f"Expectation: {e_0.radius}", flush=True)
 const_space.forall_S(h >> e_0)
 opt = ILPSolver(const_space, vocab_size)
 t_1 = time()
@@ -36,6 +36,6 @@ print("Equality constraint Score: ", [jnp.sum(jnp.abs(c(hypothesis))) for c in c
 print("Inequality constraint Score: ", [jnp.sum(c(hypothesis)) for c in const_space.iq_constraints])
 print("Score:", tt_boolean_criterion(len(hypothesis))(hypothesis), tt_inner_prod(hypothesis, hypothesis))
 print(f"Total time taken: {t_2-t_1}s.")
-asp_solver = AnswerSetSolver([x, y, z, w, u])
+asp_solver = AnswerSetSolver(variable_list)
 X = asp_solver.get_minimal_answer_set(hypothesis)
 print(X)

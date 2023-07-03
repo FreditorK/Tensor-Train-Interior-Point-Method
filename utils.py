@@ -100,6 +100,13 @@ def get_DNF(atoms, hypothesis):
     return to_dnf(anf, simplify=True)
 
 
+def generate_atoms(n):
+    atoms = []
+    for i in range(n):
+        atoms.append(Atom(n, f"x_{i}"))
+    return atoms
+
+
 def influence_geq(atom, eps):
     def influence_constraint(_):
         idx = atom.index
@@ -141,7 +148,7 @@ class Meta_Boolean_Function:
 
     def __or__(self, other):
         e = self.normal_vec
-        if isinstance(other, Boolean_Function) or isinstance(other, Boolean_Data):
+        if isinstance(other, Boolean_Function) or isinstance(other, Boolean_Data_Lower):
             e = other.normal_vec
         bot = tt_leading_one(len(e))
         bot[0] *= -1
@@ -158,7 +165,7 @@ class Meta_Boolean_Function:
 
     def __xor__(self, other):
         e = self.normal_vec
-        if isinstance(other, Boolean_Function) or isinstance(other, Boolean_Data):
+        if isinstance(other, Boolean_Function) or isinstance(other, Boolean_Data_Lower):
             e = other.normal_vec
         return Meta_Boolean_Function(
             f"({self.name} ⊻ {other.name})",
@@ -172,7 +179,7 @@ class Meta_Boolean_Function:
 
     def __lshift__(self, other):  # <-
         e = self.normal_vec
-        if isinstance(other, Boolean_Function) or isinstance(other, Boolean_Data):
+        if isinstance(other, Boolean_Function) or isinstance(other, Boolean_Data_Lower):
             e = other.normal_vec
         top = tt_leading_one(len(e))
         return Meta_Boolean_Function(
@@ -187,7 +194,7 @@ class Meta_Boolean_Function:
 
     def __rshift__(self, other):
         e = self.normal_vec
-        if isinstance(other, Boolean_Function) or isinstance(other, Boolean_Data):
+        if isinstance(other, Boolean_Function) or isinstance(other, Boolean_Data_Lower):
             e = other.normal_vec
         bot = tt_leading_one(len(e))
         bot[0] *= -1
@@ -223,15 +230,44 @@ class Boolean_Function(Meta_Boolean_Function):
         super().__init__(name, tt_e, lambda x: tt_inner_prod(tt_e, x), tt_e)
 
 
-class Boolean_Data(Meta_Boolean_Function):
+class Boolean_Data_Lower(Meta_Boolean_Function):
     def __init__(self, dataset, labels):
         # TODO: Estimate noise level through number of contradicting examples
         self.dataset, indices = np.unique(dataset, return_index=True, axis=0)
         self.labels = labels[indices]
         self.compressed_data = tt_mul_scal(-1, tt_leading_one(self.dataset.shape[1]))
         self._compress()
-        super().__init__("Dataset", self.compressed_data, lambda x: tt_inner_prod(self.compressed_data, x), self.compressed_data)
+        self.noise, self.radius = self._estimate_noise()
+        super().__init__("Dataset", self.compressed_data, lambda x: tt_inner_prod(self.compressed_data, x),
+                         self.compressed_data)
 
+    def _compress(self):
+        # TODO: Might want to consider a divide and conquer here
+        true_idxs = [i for i, l in enumerate(self.labels) if l > 0]
+        false_idxs = [i for i, l in enumerate(self.labels) if l < 0]
+        for i in zip(true_idxs):
+            instance_func = bool_to_tt_train(self.dataset[i])
+            self.compressed_data = tt_xor(self.compressed_data, instance_func)
+        for i in zip(false_idxs):
+            instance_func = bool_to_tt_train(self.dataset[i])
+            self.compressed_data = tt_and(self.compressed_data, tt_neg(instance_func))
+
+    def _estimate_noise(self, lr=1e-2):
+        dataset = [[jnp.array([1, x]).reshape(1, 2, 1) for x in xs] for xs in self.dataset]
+        N = len(dataset)
+        gradient = partial_D(
+            lambda h, p, X, Y: (1 / N) * sum([(tt_inner_prod(tt_noise_op(h, p), x) - y) ** 2 for x, y in zip(X, Y)]),
+            idx=1)
+        prev_p = jnp.ones(self.dataset.shape[1]) + 1
+        p = jnp.ones_like(prev_p)
+        while jnp.sum(jnp.abs(prev_p - p)) > 1e-3:
+            prev_p = p
+            p = jnp.clip(p - lr * gradient(self.compressed_data, p, dataset, self.labels), a_min=0, a_max=1)
+        noisy_compressed_data = tt_noise_op(self.compressed_data, p)
+        return p, jnp.sqrt(tt_inner_prod(noisy_compressed_data, noisy_compressed_data))
+
+
+class Boolean_Data_Upper(Boolean_Data_Lower):
     def _compress(self):
         # TODO: Might want to consider a divide and conquer here
         true_idxs = [i for i, l in enumerate(self.labels) if l > 0]
@@ -255,7 +291,7 @@ class ConstraintSpace:
         self.faulty_hypothesis = tt_mul_scal(-1, tt_leading_one(dimension))
         self.eq_crit = lambda h: sum([jnp.sum(jnp.abs(c(h))) for c in self.eq_constraints])
         self.iq_crit = lambda h: sum([jnp.sum(c(h)) for c in self.iq_constraints])
-        self.rank_gradient = D_func(lambda h: tt_rank_loss(h))
+        self.rank_gradient = D_func(lambda h: tt_nuc_schatten_norm(h))
         self.boolean_criterion = tt_boolean_criterion(dimension)
 
     def normalise(self, tt_train, idx=0):
@@ -266,7 +302,7 @@ class ConstraintSpace:
 
     def add_faulty_hypothesis(self, tt_train):
         self.faulty_hypothesis = tt_rank_reduce(tt_or(tt_train, self.faulty_hypothesis))
-        self.rank_gradient = D_func(lambda h: tt_rank_loss(h) - 10*tt_inner_prod(h, self.faulty_hypothesis))
+        self.rank_gradient = D_func(lambda h: tt_inf_schatten_norm(h) - 2 * tt_inner_prod(h, self.faulty_hypothesis))
 
     def _false_projection(self, tt_train):
         func_result = tt_leading_entry(tt_train)
@@ -298,7 +334,8 @@ class ConstraintSpace:
             if func_result + offset - 2 * self.s_lower <= 0:
                 n = tt_mul_scal(-(func_result / tt_inner_prod(n, n)), n)
                 proj_tt_train = tt_add(tt_train, n)
-                proj_tt_train[0] *= jnp.sqrt((radius**2 - np.abs(0.5*offset - self.s_lower)) / tt_inner_prod(proj_tt_train, proj_tt_train))
+                proj_tt_train[0] *= jnp.sqrt(
+                    (radius ** 2 - np.abs(0.5 * offset - self.s_lower)) / tt_inner_prod(proj_tt_train, proj_tt_train))
                 n = tt_mul_scal((offset - 2 * self.s_lower) / func_result, n)
                 proj_tt_train = tt_add(proj_tt_train, n)
                 tt_train = proj_tt_train
@@ -315,10 +352,18 @@ class ConstraintSpace:
             radius = jnp.sqrt(tt_inner_prod(tt_train, tt_train))
             n = normal_vec(tt_example)
             func_result = tt_inner_prod(tt_train, n)
-            if np.abs(func_result + offset - 2) >= self.s_lower + 1:
+            if func_result == 0:
+                proj_tt_train = tt_train
+                proj_tt_train[0] *= jnp.sqrt(
+                    (radius ** 2 - np.abs((0.5 * offset - 1))) / tt_inner_prod(proj_tt_train, proj_tt_train))
+                n = tt_mul_scal((offset - 2), n)
+                proj_tt_train = tt_add(proj_tt_train, n)
+                tt_train = proj_tt_train
+            elif np.abs(func_result + offset - 2) >= self.s_lower + 1:
                 n = tt_mul_scal(-(func_result / tt_inner_prod(n, n)), n)
                 proj_tt_train = tt_add(tt_train, n)
-                proj_tt_train[0] *= jnp.sqrt((radius**2 - np.abs((0.5*offset - 1))) / tt_inner_prod(proj_tt_train, proj_tt_train))
+                proj_tt_train[0] *= jnp.sqrt(
+                    (radius ** 2 - np.abs((0.5 * offset - 1))) / tt_inner_prod(proj_tt_train, proj_tt_train))
                 n = tt_mul_scal((offset - 2) / func_result, n)
                 proj_tt_train = tt_add(proj_tt_train, n)
                 tt_train = proj_tt_train
@@ -329,7 +374,7 @@ class ConstraintSpace:
     def project(self, tt_train):
         criterion_score = self.eq_crit(tt_train) + self.iq_crit(tt_train)
         proj_tt_train = tt_train
-        while criterion_score > self.s_lower + 1:
+        while criterion_score >= self.s_lower + 1:
             for proj in self.projections:
                 proj_tt_train = proj(proj_tt_train)
             criterion_score = self.eq_crit(proj_tt_train) + self.iq_crit(proj_tt_train)
@@ -348,7 +393,7 @@ class NoisyConstraintSpace(ConstraintSpace):
         self.faulty_hypothesis = tt_mul_scal(-1, tt_leading_one(dimension))
         self.eq_crit = lambda h: sum([jnp.sum(jnp.abs(c(h))) for c in self.eq_constraints])
         self.iq_crit = lambda h: sum([jnp.sum(c(h)) for c in self.iq_constraints])
-        self.rank_gradient = D_func(lambda h: tt_rank_loss(h))
+        self.rank_gradient = D_func(lambda h: tt_inf_schatten_norm(h))
 
         self.noise_op_measure = np.ones(dimension)
         self.noise_gradient = partial_D(tt_noise_loss, 1)
@@ -388,7 +433,9 @@ class NoisyConstraintSpace(ConstraintSpace):
             if func_result + offset - 2 * q * self.s_lower <= 0:
                 n = tt_mul_scal(-(func_result / tt_inner_prod(n, n)), n)
                 proj_tt_train = tt_add(tt_train, n)
-                proj_tt_train[0] *= jnp.sqrt((radius**2 - np.abs(0.5*offset - q * self.s_lower)) / tt_inner_prod(proj_tt_train, proj_tt_train))
+                proj_tt_train[0] *= jnp.sqrt(
+                    (radius ** 2 - np.abs(0.5 * offset - q * self.s_lower)) / tt_inner_prod(proj_tt_train,
+                                                                                            proj_tt_train))
                 n = tt_mul_scal((offset - 2 * q * self.s_lower) / func_result, n)
                 proj_tt_train = tt_add(proj_tt_train, n)
                 tt_train = proj_tt_train
@@ -405,10 +452,11 @@ class NoisyConstraintSpace(ConstraintSpace):
             radius = jnp.sqrt(tt_inner_prod(tt_train, tt_train))
             n = normal_vec(tt_example)
             func_result = tt_inner_prod(tt_train, n)
-            if np.abs(func_result + offset - 2*q) >= self.s_lower + 1:
+            if np.abs(func_result + offset - 2 * q) >= self.s_lower + 1:
                 n = tt_mul_scal(-(func_result / tt_inner_prod(n, n)), n)
                 proj_tt_train = tt_add(tt_train, n)
-                proj_tt_train[0] *= jnp.sqrt((radius**2 - np.abs((0.5*offset - q))) / tt_inner_prod(proj_tt_train, proj_tt_train))
+                proj_tt_train[0] *= jnp.sqrt(
+                    (radius ** 2 - np.abs((0.5 * offset - q))) / tt_inner_prod(proj_tt_train, proj_tt_train))
                 n = tt_mul_scal((offset - 2 * q) / func_result, n)
                 proj_tt_train = tt_add(proj_tt_train, n)
                 tt_train = proj_tt_train
@@ -424,4 +472,3 @@ class NoisyConstraintSpace(ConstraintSpace):
                 proj_tt_train = proj(proj_tt_train)
             criterion_score = self.eq_crit(proj_tt_train) + self.iq_crit(proj_tt_train)
         return tt_rank_reduce(proj_tt_train)
-

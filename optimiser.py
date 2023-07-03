@@ -1,3 +1,5 @@
+import numpy as np
+
 from tt_op import *
 from utils import ConstraintSpace
 from utils import NoisyConstraintSpace
@@ -20,8 +22,12 @@ class AnswerSetSolver:
 
 
 class ILPSolver:
-    def __init__(self, const_space: ConstraintSpace, dimension):
+    def __init__(self, const_space: ConstraintSpace, dimension, objective=None):
         self.dimension = dimension
+        self.objective_grad = lambda h, idx: 0
+        if objective is not None:
+            objective_grad = D_func(objective)
+            self.objective_grad = lambda h, idx: objective_grad(h)[idx]
         self.const_space = const_space
         self.error_bound = self.const_space.s_lower + 1
 
@@ -43,12 +49,12 @@ class ILPSolver:
     def _resolve_constraints(self, tt_train, params):
         criterion_score = np.inf
         tt_train = self.const_space.project(tt_train)
-        while criterion_score > 2*self.error_bound:  # Gradient induced change, i.e. similar to first-order sufficient condition
+        while criterion_score > self.error_bound*params["lr"]:  # Gradient induced change, i.e. similar to first-order sufficient condition
             prev_tt_train = tt_train
             tt_train = self._objective(tt_train, params)
             tt_train = self.const_space.project(tt_train)
             criterion_score = self.const_space.stopping_criterion(tt_train, prev_tt_train)
-            print(f"Constraint Criterion: {criterion_score} \r", end="")
+            print(f"Objective Value: {criterion_score} \r", end="")
         print("\n", flush=True)
         return tt_train
 
@@ -66,7 +72,7 @@ class ILPSolver:
 
     def _objective(self, tt_train, params):
         for idx in range(self.dimension):
-            rank_gradient = self.const_space.rank_gradient(tt_train)[idx]
+            rank_gradient = self.objective_grad(tt_train, idx) + self.const_space.rank_gradient(tt_train)[idx]
             tt_train[idx] -= params["lr"] * rank_gradient
             tt_train[idx] += params["lr"] * tt_grad_inner_prod(tt_train, tt_train, rank_gradient, idx) * \
                              tt_train[idx]

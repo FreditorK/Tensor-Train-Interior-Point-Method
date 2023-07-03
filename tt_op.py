@@ -95,11 +95,25 @@ def tt_part_bond(tt_train, idx):
     return tt_train[:idx] + [G_i, G_ip1] + tt_train[idx + 1:]
 
 
-def tt_rank_loss(tt_train):
+def tt_inf_schatten_norm(tt_train):
     """Loss criterion on the TT-rank"""
-    return jnp.max(jnp.array([
+    tt_train = tt_train + [jnp.array([1, 0]).reshape(1, 2, 1)] if len(tt_train) % 2 == 1 else tt_train
+    tt_train = tt_bool_op(tt_train)
+    return jnp.max(jnp.array([  # TODO: prod or max or logsum?
         jnp.linalg.norm(jnp.einsum("abc, cde -> abde", tt_train[idx], tt_train[idx + 1]).reshape(
-            tt_train[idx].shape[0] * tt_train[idx].shape[1], -1), ord=2) for idx in range(len(tt_train) - 1) # largest singular value
+            tt_train[idx].shape[0] * tt_train[idx].shape[-1], -1), ord=2) for idx in range(0, len(tt_train) - 1, 2)
+        # largest singular value
+    ]))
+
+
+def tt_nuc_schatten_norm(tt_train):
+    """Loss criterion on the TT-rank"""
+    tt_train = tt_train + [jnp.array([1, 0]).reshape(1, 2, 1)] if len(tt_train) % 2 == 1 else tt_train
+    tt_train = tt_bool_op(tt_train)
+    return jnp.max(jnp.array([  # TODO: prod or max or logsum?
+        jnp.linalg.norm(jnp.einsum("abc, cde -> abde", tt_train[idx], tt_train[idx + 1]).reshape(
+            tt_train[idx].shape[0] * tt_train[idx].shape[-1], -1), ord='nuc') for idx in range(0, len(tt_train) - 1, 2)
+        # largest singular value
     ]))
 
 
@@ -121,7 +135,8 @@ def tt_rank_reduce(tt_train: List[np.array], tt_bound=1e-4):
         idx_shape = tt_train[idx].shape
         next_idx_shape = tt_train[idx + 1].shape
         U, S, V_T = np.linalg.svd(tt_train[idx].reshape(rank * idx_shape[1], -1))
-        non_sing_eig_idxs = np.asarray(np.abs(S) > tt_bound).nonzero()
+        abs_S = np.abs(S)
+        non_sing_eig_idxs = np.asarray(abs_S >= min(np.max(abs_S), tt_bound)).nonzero()
         S = S[non_sing_eig_idxs]
         next_rank = len(S)
         U = U[:, non_sing_eig_idxs]
@@ -288,21 +303,21 @@ def tt_influence(tt_train: List[np.array], idx):
         jnp.linalg.multi_dot([_tt_influence_core_collapse(core, idx - i) for i, core in enumerate(tt_train)]))
 
 
-def _tt_shared_influence_core_collapse(core, idx_1, idx_2):
+def _tt_shared_influence_core_collapse(core, idxs):
     return sum([
         jnp.kron(core[(slice(None),) + i], core[(slice(None),) + i])
-        for i in product(*[list(range(1, max(int(idx_1 + k == 0), int(idx_2 + k == 0)) - 1, -1)) for k in
+        for i in product(*[list(range(1, int(np.max(idxs + k == 0)) - 1, -1)) for k in
                            range(len(core.shape) - 2)])
     ])
 
 
-def tt_shared_influence(tt_train: List[np.array], idx_1, idx_2):
+def tt_shared_influence(tt_train: List[np.array], idxs: np.array):
     """
     Returns the shared influence between an idx_1- and idx_2-index atom on a boolean function
     """
     return jnp.sum(
         jnp.linalg.multi_dot(
-            [_tt_shared_influence_core_collapse(core, idx_1 - i, idx_2 - i) for i, core in enumerate(tt_train)]))
+            [_tt_shared_influence_core_collapse(core, idxs - i) for i, core in enumerate(tt_train)]))
 
 
 def _tt_phi_core(core: np.array):
@@ -510,8 +525,9 @@ def tt_abs(tt_train):
 def tt_min(tt_train, lr=5e-1):
     dimension = len(tt_train)
     entry_param = np.array([0.5 for _ in range(dimension)])
-    gradient = D_func(lambda e: tt_inner_prod(tt_train, [jnp.array([1-e[i], e[i]]).reshape(1, 2, 1) for i in range(dimension)]))
+    gradient = D_func(
+        lambda e: tt_inner_prod(tt_train, [jnp.array([1 - e[i], e[i]]).reshape(1, 2, 1) for i in range(dimension)]))
     for _ in range(100):
         grad = gradient(entry_param)
-        entry_param = [np.clip(e - lr*grad[i], a_min=0, a_max=1) for i, e in enumerate(entry_param)]
+        entry_param = [np.clip(e - lr * grad[i], a_min=0, a_max=1) for i, e in enumerate(entry_param)]
     return np.round(entry_param, decimals=0)
