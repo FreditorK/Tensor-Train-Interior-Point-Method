@@ -331,6 +331,13 @@ class ConstraintSpace:
             radius = jnp.sqrt(tt_inner_prod(tt_train, tt_train))
             n = normal_vec(tt_example)
             func_result = tt_inner_prod(tt_train, n)
+            if func_result == 0:
+                proj_tt_train = tt_train
+                proj_tt_train[0] *= jnp.sqrt(
+                    (radius ** 2 - np.abs(0.5 * offset - self.s_lower)) / tt_inner_prod(proj_tt_train, proj_tt_train))
+                n = tt_mul_scal((offset - 2 * self.s_lower), n)
+                proj_tt_train = tt_add(proj_tt_train, n)
+                tt_train = proj_tt_train
             if func_result + offset - 2 * self.s_lower <= 0:
                 n = tt_mul_scal(-(func_result / tt_inner_prod(n, n)), n)
                 proj_tt_train = tt_add(tt_train, n)
