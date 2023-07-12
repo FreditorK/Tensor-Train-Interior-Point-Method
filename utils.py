@@ -285,31 +285,20 @@ class ConstraintSpace:
         self.dimension = dimension
         self.radius = 1.0
         self.s_lower = 2 ** (-self.dimension) - 1  # -0.9999
-        self.projections = [self._false_projection]
+        self.projections = []
         self.eq_constraints = []
         self.iq_constraints = [lambda h: jnp.maximum(0, self.s_lower - tt_leading_entry(h))]
         self.faulty_hypothesis = tt_mul_scal(-1, tt_leading_one(dimension))
         self.eq_crit = lambda h: sum([jnp.sum(jnp.abs(c(h))) for c in self.eq_constraints])
         self.iq_crit = lambda h: sum([jnp.sum(c(h)) for c in self.iq_constraints])
-        self.rank_gradient = D_func(lambda h: tt_inf_schatten_norm(h))
+        self.rank_gradient = D_func(lambda h: 0.0)
         self.boolean_criterion = tt_boolean_criterion(dimension)
 
     def normalise(self, tt_train, idx=0):
-        return tt_mul_scal(1 / np.sqrt(tt_inner_prod(tt_train, tt_train)), tt_train, idx)
+        return tt_mul_scal(self.radius / np.sqrt(tt_inner_prod(tt_train, tt_train)), tt_train, idx)
 
     def stopping_criterion(self, tt_train, prev_tt_train):
         return 1 - tt_inner_prod(tt_train, prev_tt_train)
-
-    def add_faulty_hypothesis(self, tt_train):
-        self.faulty_hypothesis = tt_rank_reduce(tt_or(tt_train, self.faulty_hypothesis))
-        self.rank_gradient = D_func(lambda h: tt_inf_schatten_norm(h) - 2 * tt_inner_prod(h, self.faulty_hypothesis))
-
-    def _false_projection(self, tt_train):
-        func_result = tt_leading_entry(tt_train)
-        if func_result - self.s_lower <= 0:
-            one = tt_leading_one(self.dimension)
-            tt_train = one
-        return tt_train
 
     def round(self, tt_train):
         tt_table = tt_bool_op(tt_train)
@@ -331,7 +320,7 @@ class ConstraintSpace:
             radius = jnp.sqrt(tt_inner_prod(tt_train, tt_train))
             n = normal_vec(tt_example)
             func_result = tt_inner_prod(tt_train, n)
-            if func_result == 0:
+            if func_result == 0 and offset - 2 * self.s_lower <= 0:
                 proj_tt_train = tt_train
                 proj_tt_train[0] *= jnp.sqrt(
                     (radius ** 2 - np.abs(0.5 * offset - self.s_lower)) / tt_inner_prod(proj_tt_train, proj_tt_train))
@@ -346,7 +335,7 @@ class ConstraintSpace:
                 n = tt_mul_scal((offset - 2 * self.s_lower) / func_result, n)
                 proj_tt_train = tt_add(proj_tt_train, n)
                 tt_train = proj_tt_train
-            return tt_rl_orthogonalize(tt_train)
+            return tt_rank_reduce(tt_train)
 
         self.projections.append(projection)
 
@@ -359,7 +348,7 @@ class ConstraintSpace:
             radius = jnp.sqrt(tt_inner_prod(tt_train, tt_train))
             n = normal_vec(tt_example)
             func_result = tt_inner_prod(tt_train, n)
-            if func_result == 0:
+            if func_result == 0 and np.abs(offset - 2) >= self.s_lower + 1:
                 proj_tt_train = tt_train
                 proj_tt_train[0] *= jnp.sqrt(
                     (radius ** 2 - np.abs((0.5 * offset - 1))) / tt_inner_prod(proj_tt_train, proj_tt_train))
@@ -374,7 +363,7 @@ class ConstraintSpace:
                 n = tt_mul_scal((offset - 2) / func_result, n)
                 proj_tt_train = tt_add(proj_tt_train, n)
                 tt_train = proj_tt_train
-            return tt_rl_orthogonalize(tt_train)
+            return tt_rank_reduce(tt_train)
 
         self.projections.append(projection)
 
@@ -385,7 +374,7 @@ class ConstraintSpace:
             for proj in self.projections:
                 proj_tt_train = proj(proj_tt_train)
             criterion_score = self.eq_crit(proj_tt_train) + self.iq_crit(proj_tt_train)
-        return tt_rank_reduce(proj_tt_train)
+        return proj_tt_train
 
 
 class NoisyConstraintSpace(ConstraintSpace):

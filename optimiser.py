@@ -24,7 +24,7 @@ class AnswerSetSolver:
 class ILPSolver:
     def __init__(self, const_space: ConstraintSpace, dimension, objective=None):
         self.dimension = dimension
-        self.objective_grad = lambda h, idx: 0
+        self.objective_grad = None
         if objective is not None:
             objective_grad = D_func(objective)
             self.objective_grad = lambda h, idx: objective_grad(h)[idx]
@@ -36,12 +36,16 @@ class ILPSolver:
         tt_train, params = self._init_tt_train()
         for i in range(100):
             print(f"----------Iteration {i}----------")
-            tt_train = self._resolve_constraints(tt_train, params)
+            if self.objective_grad is not None:
+                tt_train = self._resolve_constraints(tt_train, params)
+            else:
+                tt_train = self.const_space.project(tt_train)
             tt_train = self._extract_solution(tt_train)
             criterion_score = self.const_space.eq_crit(tt_train) + self.const_space.iq_crit(tt_train)
             if criterion_score > error_bound:
+                rank = tt_rank(tt_train)
                 print(f"Constraint Criterion after rounding: {criterion_score}")
-                self.const_space.add_faulty_hypothesis(tt_train)
+                tt_train = tt_add_noise(tt_train, rank=rank, noise_radius=self.error_bound)
             else:
                 return tt_train
         return tt_train
@@ -73,10 +77,12 @@ class ILPSolver:
             print(f"Boolean Criterion: {criterion_score} \r", end="")
         print("\n", flush=True)
         tt_train = self.const_space.round(tt_train)
-        return retraction(tt_train)
+        return tt_rank_reduce(tt_train)
 
     def _objective(self, tt_train, params):
-        tt_train = tt_add_noise(tt_train, rank=1, noise_radius=0.05) # TODO: decay noise
+        if params["noise"] > 0.01:
+            tt_train = tt_add_noise(tt_train, rank=1, noise_radius=params["noise"])
+            params["noise"] *= 0.99
         for idx in range(self.dimension):
             rank_gradient = self.objective_grad(tt_train, idx) #+ self.const_space.rank_gradient(tt_train)[idx]
             tt_train[idx] -= params["lr"] * rank_gradient
@@ -90,6 +96,7 @@ class ILPSolver:
         tt_train = [np.array([1.0, 0.0]).reshape(1, 2, 1) for _ in range(self.dimension)]
         tt_train = self.const_space.normalise(tt_train)
         params = {
-            "lr": 0.08
+            "lr": 0.08,
+            "noise": 0.1
         }
         return tt_train, params

@@ -99,9 +99,9 @@ def tt_inf_schatten_norm(tt_train):
     """Loss criterion on the TT-rank"""
     tt_train = tt_train + [jnp.array([1, 0]).reshape(1, 2, 1)] if len(tt_train) % 2 == 1 else tt_train
     tt_train = tt_bool_op(tt_train)
-    return jnp.max(jnp.array([  # TODO: prod or max or logsum?
+    return jnp.product(jnp.array([  # TODO: prod or max or logsum?
         jnp.linalg.norm(jnp.einsum("abc, cde -> abde", tt_train[idx], tt_train[idx + 1]).reshape(
-            tt_train[idx].shape[0] * tt_train[idx].shape[-1], -1), ord=2) for idx in range(0, len(tt_train) - 1, 2)
+            tt_train[idx].shape[0] * tt_train[idx + 1].shape[-1], -1), ord=2) for idx in range(0, len(tt_train) - 1, 2)
         # largest singular value
     ]))
 
@@ -112,7 +112,8 @@ def tt_nuc_schatten_norm(tt_train):
     tt_train = tt_bool_op(tt_train)
     return jnp.max(jnp.array([  # TODO: prod or max or logsum?
         jnp.linalg.norm(jnp.einsum("abc, cde -> abde", tt_train[idx], tt_train[idx + 1]).reshape(
-            tt_train[idx].shape[0] * tt_train[idx].shape[-1], -1), ord='nuc') for idx in range(0, len(tt_train) - 1, 2)
+            tt_train[idx].shape[0] * tt_train[idx + 1].shape[-1], -1), ord='nuc') for idx in
+        range(0, len(tt_train) - 1, 2)
         # largest singular value
     ]))
 
@@ -147,6 +148,10 @@ def tt_rank_reduce(tt_train: List[np.array], tt_bound=1e-4):
                                                                                                       -1)
         rank = next_rank
     return tt_train
+
+
+def tt_rank(tt_train):
+    return np.max([max(t.shape[0], t.shape[1]) for t in tt_train])
 
 
 def tt_rank_retraction(tt_upper_ranks: List[np.array], tt_train: List[np.array]):
@@ -256,6 +261,10 @@ def tt_hadamard(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[
     Computes the hadamard product/pointwise multiplication of two tensor trains
     """
     return [_tt_train_kron(core_1, core_2) for core_1, core_2 in zip(tt_train_1, tt_train_2)]
+
+
+def tt_kronecker_prod(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.array]:
+    return tt_train_1 + tt_train_2
 
 
 def bool_to_tt_train(bool_values: List[bool]):
@@ -522,12 +531,15 @@ def tt_abs(tt_train):
     return absolute_tt_train
 
 
-def tt_min(tt_train, lr=5e-1):
-    dimension = len(tt_train)
-    entry_param = np.array([0.5 for _ in range(dimension)])
-    gradient = D_func(
-        lambda e: tt_inner_prod(tt_train, [jnp.array([1 - e[i], e[i]]).reshape(1, 2, 1) for i in range(dimension)]))
-    for _ in range(100):
-        grad = gradient(entry_param)
-        entry_param = [np.clip(e - lr * grad[i], a_min=0, a_max=1) for i, e in enumerate(entry_param)]
-    return np.round(entry_param, decimals=0)
+def graph_to_tensor(n, edges): # Start numbering nodes at 0
+    tensor = np.zeros([2]*n + [2]*n)
+    for e in edges:
+        index_1 = [int(x) for x in reversed(bin(e[0])[2:])]
+        index_1 += [0]*(n-len(index_1))
+        index_2 = [int(x) for x in reversed(bin(e[1])[2:])]
+        index_2 += [0] * (n - len(index_2))
+        tensor[tuple(index_1 + index_2)] = 1
+        tensor[tuple(index_2 + index_1)] = 1
+    return tensor
+
+
