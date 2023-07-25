@@ -7,7 +7,7 @@ head_coin_1 = Atom(vocab_size, "head_coin_1")
 tail_coin_1 = Atom(vocab_size, "tail_coin_1")
 head_coin_2 = Atom(vocab_size, "head_coin_2")
 tail_coin_2 = Atom(vocab_size, "tail_coin_2")
-h = Hypothesis()
+h = Hypothesis(vocab_size)
 
 
 def coin_symmetry(tt_train):
@@ -21,7 +21,7 @@ const_space.forall_S(h >> e_0)
 #const_space.forall_S(h >> e_1)
 opt = ILPSolver(const_space, vocab_size, objective=coin_symmetry)
 t_1 = time()
-hypothesis = opt.find_feasible_hypothesis()
+hypothesis = opt.find_hypothesis()
 t_2 = time()
 print("Shapes: ", [t.shape for t in hypothesis])
 print("Equality constraint Score: ", [jnp.sum(jnp.abs(c(hypothesis))) for c in const_space.eq_constraints])

@@ -28,7 +28,7 @@ print("Data Function: ", get_CNF(variable_list, e_0.compressed_data), f"Noise lv
 const_space.forall_S(h >> e_0)
 opt = ILPSolver(const_space, vocab_size)
 t_1 = time()
-hypothesis = opt.find_feasible_hypothesis()
+hypothesis = opt.find_hypothesis()
 t_2 = time()
 print("Shapes: ", [t.shape for t in hypothesis])
 print(get_CNF([x, y, z, w, u], hypothesis), flush=True)

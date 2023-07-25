@@ -477,11 +477,10 @@ def tt_xor(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.ar
 def tt_and(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.array]:
     tt_train_1 = tt_bool_op(tt_train_1)
     tt_train_2 = tt_bool_op(tt_train_2)
-    tt_train_1[0] *= 0.5
+    tt_train_1 = tt_mul_scal(0.5, tt_train_1)
     tt_mul = tt_hadamard(tt_train_1, tt_train_2)
-    tt_train_2[0] *= 0.5
-    half = tt_one(len(tt_train_1))
-    half[0] *= -0.5
+    tt_train_2 = tt_mul_scal(0.5, tt_train_2)
+    half = tt_mul_scal(-0.5, tt_one(len(tt_train_1)))
     tt_train_and = tt_add(tt_add(half, tt_mul), tt_add(tt_train_1, tt_train_2))
     tt_train_and = tt_bool_op_inv(tt_train_and)
     return tt_rank_reduce(tt_train_and, tt_bound=1e-5)

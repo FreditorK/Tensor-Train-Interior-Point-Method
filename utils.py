@@ -14,9 +14,9 @@ class Expression:
     def __init__(self, name: str, args, op):
         if name is None:
             self.name = f"e_{str(Expression.count)}"
-            Expression.count += 1
         else:
             self.name = name
+        Expression.count += 1
 
         self.op = op
         self.args = args
@@ -129,9 +129,9 @@ class Meta_Boolean_Function:
     def __init__(self, name: str, normal_vec, offset, tt_example):
         if name is None:
             self.name = f"e_{str(Meta_Boolean_Function.count)}"
-            Meta_Boolean_Function.count += 1
         else:
             self.name = name
+        Meta_Boolean_Function.count += 1
 
         self.normal_vec = normal_vec
         self.offset = offset
@@ -148,7 +148,8 @@ class Meta_Boolean_Function:
 
     def __or__(self, other):
         e = self.normal_vec
-        if isinstance(other, Boolean_Function) or isinstance(other, Boolean_Data_Lower):
+        if isinstance(other, Boolean_Function) or isinstance(other, Boolean_Data_Lower) or isinstance(other,
+                                                                                                      Boolean_Data_Upper):
             e = other.normal_vec
         bot = tt_leading_one(len(e))
         bot[0] *= -1
@@ -165,7 +166,8 @@ class Meta_Boolean_Function:
 
     def __xor__(self, other):
         e = self.normal_vec
-        if isinstance(other, Boolean_Function) or isinstance(other, Boolean_Data_Lower):
+        if isinstance(other, Boolean_Function) or isinstance(other, Boolean_Data_Lower) or isinstance(other,
+                                                                                                      Boolean_Data_Upper):
             e = other.normal_vec
         return Meta_Boolean_Function(
             f"({self.name} ⊻ {other.name})",
@@ -179,7 +181,8 @@ class Meta_Boolean_Function:
 
     def __lshift__(self, other):  # <-
         e = self.normal_vec
-        if isinstance(other, Boolean_Function) or isinstance(other, Boolean_Data_Lower):
+        if isinstance(other, Boolean_Function) or isinstance(other, Boolean_Data_Lower) or isinstance(other,
+                                                                                                      Boolean_Data_Upper):
             e = other.normal_vec
         top = tt_leading_one(len(e))
         return Meta_Boolean_Function(
@@ -194,7 +197,8 @@ class Meta_Boolean_Function:
 
     def __rshift__(self, other):
         e = self.normal_vec
-        if isinstance(other, Boolean_Function) or isinstance(other, Boolean_Data_Lower):
+        if isinstance(other, Boolean_Function) or isinstance(other, Boolean_Data_Lower) or isinstance(other,
+                                                                                                      Boolean_Data_Upper):
             e = other.normal_vec
         bot = tt_leading_one(len(e))
         bot[0] *= -1
@@ -210,11 +214,15 @@ class Meta_Boolean_Function:
 
 
 class Hypothesis(Meta_Boolean_Function):
-    def __init__(self, name=None):
+    count = 0
+
+    def __init__(self, dimension, name=None):
         self.name = name
         if name is None:
             self.name = "h"
-        super().__init__(self.name, None, None, None)
+        Hypothesis.count += 1
+        tt_e = tt_leading_one(dimension)
+        super().__init__(self.name, tt_e, None, None)
 
 
 class Boolean_Function(Meta_Boolean_Function):
@@ -223,9 +231,9 @@ class Boolean_Function(Meta_Boolean_Function):
     def __init__(self, expr: Expression, name: str = None):
         if name is None:
             self.name = f"e_{str(Boolean_Function.count)}"
-            Boolean_Function.count += 1
         else:
             self.name = name
+        Boolean_Function.count += 1
         tt_e = expr.to_tt_train()
         super().__init__(name, tt_e, lambda x: tt_inner_prod(tt_e, x), tt_e)
 

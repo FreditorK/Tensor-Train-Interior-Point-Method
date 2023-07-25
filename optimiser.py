@@ -22,8 +22,9 @@ class AnswerSetSolver:
 
 
 class ILPSolver:
-    def __init__(self, const_space: ConstraintSpace, dimension, objective=None):
+    def __init__(self, const_space: ConstraintSpace, dimension, objective=None, noise=0.1):
         self.dimension = dimension
+        self.noise = noise
         self.objective_grad = None
         if objective is not None:
             objective_grad = D_func(objective)
@@ -31,16 +32,17 @@ class ILPSolver:
         self.const_space = const_space
         self.error_bound = self.const_space.s_lower + 1
 
-    def find_feasible_hypothesis(self):
+    def find_hypothesis(self):
         error_bound = self.error_bound
         tt_train, params = self._init_tt_train()
         for i in range(100):
             print(f"----------Iteration {i}----------")
             if self.objective_grad is not None:
+                tt_train = self._minimise_objective(tt_train, params)
                 tt_train = self._resolve_constraints(tt_train, params)
             else:
                 tt_train = self.const_space.project(tt_train)
-            tt_train = self._extract_solution(tt_train)
+            tt_train = self._round_solution(tt_train)
             criterion_score = self.const_space.eq_crit(tt_train) + self.const_space.iq_crit(tt_train)
             if criterion_score > error_bound:
                 rank = tt_rank(tt_train)
@@ -50,24 +52,28 @@ class ILPSolver:
                 return tt_train
         return tt_train
 
-    def _resolve_constraints(self, tt_train, params):
+    def _minimise_objective(self, tt_train, params):
         criterion_score = np.inf
         while criterion_score >= 0.1*self.error_bound * params["lr"]:
             prev_tt_train = deepcopy(tt_train)
-            tt_train = self._objective(tt_train, params)
+            tt_train = self._gradient_update(tt_train, params)
             criterion_score = self.const_space.stopping_criterion(tt_train, prev_tt_train)
-            print(f"Objective Value: {criterion_score} \r", end="")
-        criterion_score = np.inf
-        while criterion_score >= self.error_bound*params["lr"]:  # Gradient induced change, i.e. similar to first-order sufficient condition
-            prev_tt_train = deepcopy(tt_train)
-            tt_train = self._objective(tt_train, params)
-            tt_train = self.const_space.project(tt_train)
-            criterion_score = self.const_space.stopping_criterion(tt_train, prev_tt_train)
-            print(f"Objective Value: {criterion_score} \r", end="")
+            print(f"Stopping Criterion: {criterion_score} \r", end="")
         print("\n", flush=True)
         return tt_train
 
-    def _extract_solution(self, tt_train):
+    def _resolve_constraints(self, tt_train, params):
+        criterion_score = np.inf
+        while criterion_score >= 0.1*self.error_bound*params["lr"]:  # Gradient induced change, i.e. similar to first-order sufficient condition
+            prev_tt_train = deepcopy(tt_train)
+            tt_train = self._gradient_update(tt_train, params)
+            tt_train = self.const_space.project(tt_train)
+            criterion_score = self.const_space.stopping_criterion(tt_train, prev_tt_train)
+            print(f"Stopping Criterion: {criterion_score} \r", end="")
+        print("\n", flush=True)
+        return tt_train
+
+    def _round_solution(self, tt_train):
         criterion_score = self.const_space.boolean_criterion(tt_train)
         retraction = partial(tt_rank_retraction, [core.shape[-1] for core in tt_train[:-1]])
         while criterion_score > self.error_bound:
@@ -79,7 +85,7 @@ class ILPSolver:
         tt_train = self.const_space.round(tt_train)
         return tt_rank_reduce(tt_train)
 
-    def _objective(self, tt_train, params):
+    def _gradient_update(self, tt_train, params):
         if params["noise"] > 0.01:
             tt_train = tt_add_noise(tt_train, rank=1, noise_radius=params["noise"])
             params["noise"] *= 0.99
@@ -97,6 +103,6 @@ class ILPSolver:
         tt_train = self.const_space.normalise(tt_train)
         params = {
             "lr": 0.08,
-            "noise": 0.1
+            "noise": self.noise
         }
         return tt_train, params
