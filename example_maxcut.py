@@ -24,7 +24,7 @@ def maxcut_objective(tt_train):
     return tt_inner_prod(bool_graph, tt_kronecker_prod(tt_train, tt_train))
 
 
-opt = ILPSolver(const_space, vocab_size, objective=maxcut_objective)
+opt = ILPSolver(const_space, objective=maxcut_objective)
 
 if args.stats:
     number_of_edges_in_cut = []

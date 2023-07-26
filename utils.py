@@ -8,16 +8,57 @@ from copy import deepcopy
 from operators import partial_D, D_func
 
 
+def _tt_and(x, y):
+    print("hi")
+    if x is None:
+        print("hi_1")
+        e = y
+        normal_vector = tt_add(e, tt_leading_one(len(e)))
+        return tt_leading_entry(e) - 1, normal_vector
+    elif y is None:
+        print("hi_1")
+        e = x
+        normal_vector = tt_add(e, tt_leading_one(len(e)))
+        return tt_leading_entry(e) - 1, normal_vector
+    print(x, y)
+    print([c.shape for c in x], [c.shape for c in y])
+    return tt_and(x, y)
+
+
+def _tt_or(x, y):
+    if x is None:
+        e = y
+        normal_vector = tt_add(tt_neg(e), tt_leading_one(len(e)))
+        return 1 + tt_leading_entry(e), normal_vector
+    elif y is None:
+        e = x
+        normal_vector = tt_add(tt_neg(e), tt_leading_one(len(e)))
+        return 1 + tt_leading_entry(e), normal_vector
+    return tt_or(x, y)
+
+
+def _tt_xor(x, y):
+    if x is None:
+        e = y
+        normal_vector = tt_neg(e)
+        return 0, normal_vector
+    elif y is None:
+        e = x
+        normal_vector = tt_neg(e)
+        return 0, normal_vector
+    return tt_xor(x, y)
+
+
+def _tt_neg(x):
+    if x is None:
+        return x  # It only flips the normal vector, i.e. it doesn't matter
+    return tt_neg(x)
+
+
 class Expression:
-    count = 0
 
     def __init__(self, name: str, args, op):
-        if name is None:
-            self.name = f"e_{str(Expression.count)}"
-        else:
-            self.name = name
-        Expression.count += 1
-
+        self.name = name
         self.op = op
         self.args = args
 
@@ -34,25 +75,33 @@ class Expression:
         return self.args[key]
 
     def __and__(self, other):
-        return Expression(f"({self.name} ∧ {other.name})", [self, other], tt_and)
+        if isinstance(self, Atom) and isinstance(other, Atom):
+            return Boolean_Function(f"({self.name} ∧ {other.name})", tt_and(self.to_tt_train(), other.to_tt_train()))
+        return Expression(f"({self.name} ∧ {other.name})", [self, other], _tt_and)
 
     def __rand__(self, other):
         return other.__and__(self)
 
     def __or__(self, other):
-        return Expression(f"({self.name} v {other.name})", [self, other], tt_or)
+        if isinstance(self, Atom) and isinstance(other, Atom):
+            return Boolean_Function(f"({self.name} v {other.name})", tt_or(self.to_tt_train(), other.to_tt_train()))
+        return Expression(f"({self.name} v {other.name})", [self, other], _tt_or)
 
     def __ror__(self, other):
         return other.__or__(self)
 
     def __xor__(self, other):
-        return Expression(f"({self.name} ⊻ {other.name})", [self, other], tt_xor)
+        if isinstance(self, Atom) and isinstance(other, Atom):
+            return Boolean_Function(f"({self.name} ⊻ {other.name})", tt_xor(self.to_tt_train(), other.to_tt_train()))
+        return Expression(f"({self.name} ⊻ {other.name})", [self, other], _tt_xor)
 
     def __rxor__(self, other):
         return other.__or__(self)
 
     def __invert__(self):
-        return Expression(f"¬{self.name}", [self], tt_neg)
+        if isinstance(self, Atom):
+            return Boolean_Function(f"¬{self.name}", tt_neg(self.to_tt_train()))
+        return Expression(f"¬{self.name}", [self], _tt_neg)
 
     def __lshift__(self, other):  # <-
         return self.__ror__(other.__invert__())
@@ -68,18 +117,54 @@ class Expression:
 
 
 class Atom(Expression):
-    counter = 0
+    count = 0
 
-    def __init__(self, vocab_size, name=None):
+    def __init__(self, name=None):
         if name is None:
-            name = f"a_{str(Atom.counter)}"
+            name = f"a_{str(Atom.count)}"
         super().__init__(name, [self], lambda x: x)
-        self.index = Atom.counter
-        self.vocab_size = vocab_size
-        Atom.counter += 1
+        self.index = Atom.count
+        Atom.count += 1
 
     def to_tt_train(self):
-        return tt_atom_train(self.index, self.vocab_size)
+        return tt_atom_train(self.index, Atom.count)
+
+
+class Hypothesis(Expression):
+    count = 0
+
+    def __init__(self, name=None, indices=None):
+        if name is None:
+            name = f"h_{Hypothesis.count}"
+        super().__init__(name, [self], lambda x: x)
+        self.active = True
+        self.indices = indices
+        if indices is None:
+            self.tt_hypothesis = tt_leading_one(Atom.count)
+        else:
+            self.tt_hypothesis = tt_leading_one(len(self.indices))
+        Hypothesis.count += 1
+
+    def to_tt_train(self):
+        if self.active:
+            if self.indices is None:
+                return self.tt_hypothesis
+            tt_train = [np.array([1, 0]).reshape(1, 2, 1) for _ in range(Atom.count)]
+            for idx, i in enumerate(self.indices):
+                tt_train[i] = self.tt_hypothesis[idx]
+            return tt_train
+        return None
+
+
+class Boolean_Function(Expression):
+
+    def __init__(self, name: str, tt_e):
+        self.name = name
+        self.tt_e = tt_e
+        super().__init__(name, [self], lambda x: x)
+
+    def to_tt_train(self):
+        return self.tt_e
 
 
 def get_ANF(atoms, hypothesis):
@@ -103,7 +188,7 @@ def get_DNF(atoms, hypothesis):
 def generate_atoms(n):
     atoms = []
     for i in range(n):
-        atoms.append(Atom(n, f"x_{i}"))
+        atoms.append(Atom(f"x_{i}"))
     return atoms
 
 
@@ -121,171 +206,6 @@ def influence_leq(atom, eps):
         return lambda h: eps - tt_influence(h, idx)
 
     return influence_constraint
-
-
-class Meta_Boolean_Function:
-    count = 0
-
-    def __init__(self, name: str, normal_vec, offset, tt_example):
-        if name is None:
-            self.name = f"e_{str(Meta_Boolean_Function.count)}"
-        else:
-            self.name = name
-        Meta_Boolean_Function.count += 1
-
-        self.normal_vec = normal_vec
-        self.offset = offset
-        self.tt_example = tt_example
-
-    def to_tt_constraint(self):
-        return self.normal_vec, self.offset, self.tt_example
-
-    def __repr__(self):
-        return str(self)
-
-    def __str__(self):
-        return self.name
-
-    def __or__(self, other):
-        e = self.normal_vec
-        if isinstance(other, Boolean_Function) or isinstance(other, Boolean_Data_Lower) or isinstance(other,
-                                                                                                      Boolean_Data_Upper):
-            e = other.normal_vec
-        bot = tt_leading_one(len(e))
-        bot[0] *= -1
-        return Meta_Boolean_Function(
-            f"({self.name} v {other.name})",
-            lambda e: tt_rl_orthogonalize(tt_add(e, bot)),
-            1 + tt_leading_entry(e),
-            e
-        )
-
-    def __ror__(self, other):
-        other.__or__(self)
-        return other
-
-    def __xor__(self, other):
-        e = self.normal_vec
-        if isinstance(other, Boolean_Function) or isinstance(other, Boolean_Data_Lower) or isinstance(other,
-                                                                                                      Boolean_Data_Upper):
-            e = other.normal_vec
-        return Meta_Boolean_Function(
-            f"({self.name} ⊻ {other.name})",
-            lambda e: tt_neg(e),
-            0,
-            e
-        )
-
-    def __rxor__(self, other):
-        return other.__or__(self)
-
-    def __lshift__(self, other):  # <-
-        e = self.normal_vec
-        if isinstance(other, Boolean_Function) or isinstance(other, Boolean_Data_Lower) or isinstance(other,
-                                                                                                      Boolean_Data_Upper):
-            e = other.normal_vec
-        top = tt_leading_one(len(e))
-        return Meta_Boolean_Function(
-            f"({self.name} <- {other.name})",
-            lambda e: tt_rl_orthogonalize(tt_add(e, top)),
-            1 - tt_leading_entry(e),
-            e
-        )
-
-    def __rlshift__(self, other):
-        return other.__lshift(self)
-
-    def __rshift__(self, other):
-        e = self.normal_vec
-        if isinstance(other, Boolean_Function) or isinstance(other, Boolean_Data_Lower) or isinstance(other,
-                                                                                                      Boolean_Data_Upper):
-            e = other.normal_vec
-        bot = tt_leading_one(len(e))
-        bot[0] *= -1
-        return Meta_Boolean_Function(
-            f"({self.name} -> {other.name})",
-            lambda e: tt_rl_orthogonalize(tt_add(e, bot)),
-            1 + tt_leading_entry(e),
-            e
-        )
-
-    def __rrshift__(self, other):
-        return other.__rshift(self)
-
-
-class Hypothesis(Meta_Boolean_Function):
-    count = 0
-
-    def __init__(self, dimension, name=None):
-        self.name = name
-        if name is None:
-            self.name = "h"
-        Hypothesis.count += 1
-        tt_e = tt_leading_one(dimension)
-        super().__init__(self.name, tt_e, None, None)
-
-
-class Boolean_Function(Meta_Boolean_Function):
-    count = 0
-
-    def __init__(self, expr: Expression, name: str = None):
-        if name is None:
-            self.name = f"e_{str(Boolean_Function.count)}"
-        else:
-            self.name = name
-        Boolean_Function.count += 1
-        tt_e = expr.to_tt_train()
-        super().__init__(name, tt_e, lambda x: tt_inner_prod(tt_e, x), tt_e)
-
-
-class Boolean_Data_Lower(Meta_Boolean_Function):
-    def __init__(self, dataset, labels):
-        # TODO: Estimate noise level through number of contradicting examples
-        self.dataset, indices = np.unique(dataset, return_index=True, axis=0)
-        self.labels = labels[indices]
-        self.compressed_data = tt_mul_scal(-1, tt_leading_one(self.dataset.shape[1]))
-        self._compress()
-        self.noise, self.radius = self._estimate_noise()
-        super().__init__("Dataset", self.compressed_data, lambda x: tt_inner_prod(self.compressed_data, x),
-                         self.compressed_data)
-
-    def _compress(self):
-        # TODO: Might want to consider a divide and conquer here
-        true_idxs = [i for i, l in enumerate(self.labels) if l > 0]
-        false_idxs = [i for i, l in enumerate(self.labels) if l < 0]
-        for i in zip(true_idxs):
-            instance_func = bool_to_tt_train(self.dataset[i])
-            self.compressed_data = tt_xor(self.compressed_data, instance_func)
-        for i in zip(false_idxs):
-            instance_func = bool_to_tt_train(self.dataset[i])
-            self.compressed_data = tt_and(self.compressed_data, tt_neg(instance_func))
-
-    def _estimate_noise(self, lr=1e-2):
-        dataset = [[jnp.array([1, x]).reshape(1, 2, 1) for x in xs] for xs in self.dataset]
-        N = len(dataset)
-        gradient = partial_D(
-            lambda h, p, X, Y: (1 / N) * sum([(tt_inner_prod(tt_noise_op(h, p), x) - y) ** 2 for x, y in zip(X, Y)]),
-            idx=1)
-        prev_p = jnp.ones(self.dataset.shape[1]) + 1
-        p = jnp.ones_like(prev_p)
-        while jnp.sum(jnp.abs(prev_p - p)) > 1e-3:
-            prev_p = p
-            p = jnp.clip(p - lr * gradient(self.compressed_data, p, dataset, self.labels), a_min=0, a_max=1)
-        noisy_compressed_data = tt_noise_op(self.compressed_data, p)
-        return p, jnp.sqrt(tt_inner_prod(noisy_compressed_data, noisy_compressed_data))
-
-
-class Boolean_Data_Upper(Boolean_Data_Lower):
-    def _compress(self):
-        # TODO: Might want to consider a divide and conquer here
-        true_idxs = [i for i, l in enumerate(self.labels) if l > 0]
-        false_idxs = [i for i, l in enumerate(self.labels) if l < 0]
-        for i in zip(true_idxs):
-            instance_func = bool_to_tt_train(self.dataset[i])
-            self.compressed_data = tt_or(self.compressed_data, instance_func)
-        for i in zip(false_idxs):
-            instance_func = bool_to_tt_train(self.dataset[i])
-            self.compressed_data = tt_and(self.compressed_data, tt_neg(instance_func))
 
 
 class ConstraintSpace:
@@ -319,7 +239,7 @@ class ConstraintSpace:
         tt_train = tt_mul_scal(1 / jnp.sqrt(tt_inner_prod(tt_train, tt_train)), tt_train)
         return tt_train
 
-    def exists_S(self, example: Meta_Boolean_Function):
+    def exists_S(self, example: Expression):
         normal_vec, offset, tt_example = example.to_tt_constraint()  # TODO: We can pull the sum into the inner product, i.e. add all examples up before?
         iq_func = lambda h: jnp.maximum(0, self.s_lower - tt_inner_prod(h, normal_vec(tt_example)) - offset)
         self.iq_constraints.append(iq_func)
@@ -347,7 +267,7 @@ class ConstraintSpace:
 
         self.projections.append(projection)
 
-    def forall_S(self, example: Meta_Boolean_Function):
+    def forall_S(self, example: Expression):
         normal_vec, offset, tt_example = example.to_tt_constraint()
         eq_func = lambda h: jnp.abs(tt_inner_prod(h, normal_vec(tt_example)) + offset - 2)
         self.eq_constraints.append(eq_func)
@@ -425,7 +345,7 @@ class NoisyConstraintSpace(ConstraintSpace):
         tt_train = tt_mul_scal(1 / jnp.sqrt(tt_inner_prod(tt_train, tt_train)), tt_train)
         return tt_rank_reduce(tt_train, tt_bound=0)
 
-    def exists_S(self, example: Meta_Boolean_Function):
+    def exists_S(self, example: Expression):
         normal_vec, offset, tt_example = example.to_tt_constraint()  # TODO: We can pull the sum into the inner product, i.e. add all examples up before?
         iq_func = lambda h, q=1: jnp.maximum(0, q * self.s_lower - tt_inner_prod(h, normal_vec(tt_example)) - offset)
         self.iq_constraints.append(iq_func)
@@ -447,7 +367,7 @@ class NoisyConstraintSpace(ConstraintSpace):
 
         self.projections.append(projection)
 
-    def forall_S(self, example: Meta_Boolean_Function):
+    def forall_S(self, example: Expression):
         normal_vec, offset, tt_example = example.to_tt_constraint()
         eq_func = lambda h, q=1: jnp.abs(tt_inner_prod(h, normal_vec(tt_example)) + offset - 2 * q)
         self.eq_constraints.append(eq_func)

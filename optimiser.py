@@ -1,7 +1,7 @@
 import numpy as np
 
 from tt_op import *
-from utils import ConstraintSpace
+from utils import ConstraintSpace, Hypothesis
 from utils import NoisyConstraintSpace
 from functools import partial
 
@@ -22,8 +22,7 @@ class AnswerSetSolver:
 
 
 class ILPSolver:
-    def __init__(self, const_space: ConstraintSpace, dimension, objective=None, noise=0.1):
-        self.dimension = dimension
+    def __init__(self, hypotheses: List[Hypothesis], const_space: ConstraintSpace, objective=None, noise=0.1):
         self.noise = noise
         self.objective_grad = None
         if objective is not None:
@@ -89,7 +88,7 @@ class ILPSolver:
         if params["noise"] > 0.01:
             tt_train = tt_add_noise(tt_train, rank=1, noise_radius=params["noise"])
             params["noise"] *= 0.99
-        for idx in range(self.dimension):
+        for idx in range(self.const_space.dimension):
             rank_gradient = self.objective_grad(tt_train, idx) #+ self.const_space.rank_gradient(tt_train)[idx]
             tt_train[idx] -= params["lr"] * rank_gradient
             tt_train[idx] += params["lr"] * tt_grad_inner_prod(tt_train, tt_train, rank_gradient, idx) * \
@@ -99,7 +98,7 @@ class ILPSolver:
 
     def _init_tt_train(self):
         # Initializes at everything is equivalent formula
-        tt_train = [np.array([1.0, 0.0]).reshape(1, 2, 1) for _ in range(self.dimension)]
+        tt_train = [np.array([1.0, 0.0]).reshape(1, 2, 1) for _ in range(self.const_space.dimension)]
         tt_train = self.const_space.normalise(tt_train)
         params = {
             "lr": 0.08,
