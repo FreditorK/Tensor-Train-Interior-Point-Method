@@ -1,13 +1,8 @@
 from copy import deepcopy
-
-import jax
 import numpy as np
 import jax.numpy as jnp
-import jax.scipy as jsc
-from jax.nn import softmax
 from typing import List
 from itertools import product
-from operators import *
 
 PHI = np.array([[1, 1],
                 [1, -1]], dtype=float).reshape(1, 2, 2, 1)
@@ -355,17 +350,6 @@ def _tt_core_fan(core: np.array, basis_core: np.array):
     return sum([
         jnp.kron(jnp.expand_dims(core[(slice(None),) + i], 1), basis_core) for i in product(*[[0, 1]])
     ])
-
-
-def tt_substitute_in(tt_train: List[np.array], tt_basis_train) -> List[np.array]:
-    tt_train_without_basis = deepcopy(tt_train)
-    tt_train_without_basis[-2] = np.einsum("ldr, rk -> ldk", tt_train_without_basis[-2],
-                                           tt_train_without_basis[-1][:, 0, :])
-    tt_train_without_basis.pop()
-    tt_train[-2] = np.einsum("ldr, rk -> ldk", tt_train[-2], tt_train[-1][:, 1, :])
-    tt_train.pop()
-    tt_train = tt_xnor(tt_train, tt_basis_train)
-    return tt_rank_reduce(tt_add(tt_train_without_basis, tt_train))
 
 
 def _tt_phi_core(core: np.array):

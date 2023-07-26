@@ -25,7 +25,8 @@ a = (atoms[0] & ~h_1).to_tt_train()
 h = (atoms[1] | atoms[2]).to_tt_train()
 h[-2] = np.einsum("ldr, rk -> ldk", h[-2], h[-1][:, 0, :])
 h.pop()
-k = tt_substitute_in(a, h)
+h_1.value = h
+k = h_1.substitute_into(a)
 k = [np.power(c, 1) for c in k]
 print(len(k))
 print("Subsituted in:", get_CNF(atoms, k))

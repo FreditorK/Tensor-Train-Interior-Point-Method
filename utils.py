@@ -90,7 +90,20 @@ class Hypothesis(Atom):
         if name is None:
             name = f"h_{Hypothesis.count}"
         super().__init__(name)
+        self.value = tt_leading_one(Atom.count - Hypothesis.count)
         Hypothesis.count += 1
+
+    def substitute_into(self, tt_train: List[np.array]) -> List[np.array]:
+        tt_train_without_basis = deepcopy(tt_train)
+        tt_train_without_basis[self.index-1] = np.einsum("ldr, rk -> ldk",
+                                                             tt_train_without_basis[self.index - 1],
+                                                             tt_train_without_basis[self.index][:, 0, :])
+        tt_train_without_basis.pop()
+        tt_train[self.index-1] = np.einsum("ldr, rk -> ldk", tt_train[self.index - 1],
+                                               tt_train[self.index][:, 1, :])
+        tt_train.pop()
+        tt_train = tt_xnor(tt_train, self.value)
+        return tt_rank_reduce(tt_add(tt_train_without_basis, tt_train))
 
 
 class Boolean_Function(Expression):
