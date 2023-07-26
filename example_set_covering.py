@@ -21,21 +21,15 @@ s_u = reduce(lambda x, y: x | y, atoms[set_U])
 h_1 = Hypothesis()
 #h_2 = Hypothesis()
 #h_3 = Hypothesis()
-a = (atoms[0] ^ h_1).to_tt_train()
+a = (atoms[0] & ~h_1).to_tt_train()
 h = atoms[1].to_tt_train()
 h[-2] = np.einsum("ldr, rk -> ldk", h[-2], h[-1][:, 0, :])
 h.pop()
 k = tt_substitute_in(a, h)
 k = [np.power(c, 1) for c in k]
 print(len(k))
-print("Before Permutation", get_CNF(atoms, k))
-indic = [0]
-for i in indic:
-    a = deepcopy(k[i][:, 0, :])
-    k[i][:, 0, :] = k[i][:, 1, :]
-    k[i][:, 1, :] = a
-print(tt_to_tensor(k))
-print("After Permutation: ", get_CNF(atoms, k))
+print("Subsituted in:", get_CNF(atoms, k))
+print(np.round(tt_to_tensor(k), decimals=2))
 #print(tt_to_tensor(k))
-print("Truth", get_CNF(atoms, (atoms[0] ^ atoms[1]).to_tt_train()[:-1]))
+print("Truth", get_CNF(atoms, (atoms[0] & ~atoms[1]).to_tt_train()[:-1]))
 #const_space = ConstraintSpace(vocab_size)

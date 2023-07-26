@@ -353,7 +353,7 @@ def tt_shared_influence(tt_train: List[np.array], idxs: np.array):
 
 def _tt_core_fan(core: np.array, basis_core: np.array):
     return sum([
-        jnp.kron(core[(slice(None),) + i], basis_core) for i in product(*[[0, 1]])
+        jnp.kron(jnp.expand_dims(core[(slice(None),) + i], 1), basis_core) for i in product(*[[0, 1]])
     ])
 
 
@@ -364,8 +364,8 @@ def tt_substitute_in(tt_train: List[np.array], tt_basis_train) -> List[np.array]
     tt_train_without_basis.pop()
     tt_train[-2] = np.einsum("ldr, rk -> ldk", tt_train[-2], tt_train[-1][:, 1, :])
     tt_train.pop()
-    tt_basis_train = [_tt_core_fan(core, basis_core) for core, basis_core in zip(tt_train, tt_basis_train)]
-    return tt_rank_reduce(tt_add(tt_train_without_basis, tt_basis_train))
+    tt_train = tt_xor(tt_train, tt_neg(tt_basis_train))
+    return tt_rank_reduce(tt_add(tt_train_without_basis, tt_train))
 
 
 def _tt_phi_core(core: np.array):
