@@ -8,53 +8,6 @@ from copy import deepcopy
 from operators import partial_D, D_func
 
 
-def _tt_and(x, y):
-    print("hi")
-    if x is None:
-        print("hi_1")
-        e = y
-        normal_vector = tt_add(e, tt_leading_one(len(e)))
-        return tt_leading_entry(e) - 1, normal_vector
-    elif y is None:
-        print("hi_1")
-        e = x
-        normal_vector = tt_add(e, tt_leading_one(len(e)))
-        return tt_leading_entry(e) - 1, normal_vector
-    print(x, y)
-    print([c.shape for c in x], [c.shape for c in y])
-    return tt_and(x, y)
-
-
-def _tt_or(x, y):
-    if x is None:
-        e = y
-        normal_vector = tt_add(tt_neg(e), tt_leading_one(len(e)))
-        return 1 + tt_leading_entry(e), normal_vector
-    elif y is None:
-        e = x
-        normal_vector = tt_add(tt_neg(e), tt_leading_one(len(e)))
-        return 1 + tt_leading_entry(e), normal_vector
-    return tt_or(x, y)
-
-
-def _tt_xor(x, y):
-    if x is None:
-        e = y
-        normal_vector = tt_neg(e)
-        return 0, normal_vector
-    elif y is None:
-        e = x
-        normal_vector = tt_neg(e)
-        return 0, normal_vector
-    return tt_xor(x, y)
-
-
-def _tt_neg(x):
-    if x is None:
-        return x  # It only flips the normal vector, i.e. it doesn't matter
-    return tt_neg(x)
-
-
 class Expression:
 
     def __init__(self, name: str, args, op):
@@ -77,7 +30,7 @@ class Expression:
     def __and__(self, other):
         if isinstance(self, Atom) and isinstance(other, Atom):
             return Boolean_Function(f"({self.name} ∧ {other.name})", tt_and(self.to_tt_train(), other.to_tt_train()))
-        return Expression(f"({self.name} ∧ {other.name})", [self, other], _tt_and)
+        return Expression(f"({self.name} ∧ {other.name})", [self, other], tt_and)
 
     def __rand__(self, other):
         return other.__and__(self)
@@ -85,7 +38,7 @@ class Expression:
     def __or__(self, other):
         if isinstance(self, Atom) and isinstance(other, Atom):
             return Boolean_Function(f"({self.name} v {other.name})", tt_or(self.to_tt_train(), other.to_tt_train()))
-        return Expression(f"({self.name} v {other.name})", [self, other], _tt_or)
+        return Expression(f"({self.name} v {other.name})", [self, other], tt_or)
 
     def __ror__(self, other):
         return other.__or__(self)
@@ -93,7 +46,7 @@ class Expression:
     def __xor__(self, other):
         if isinstance(self, Atom) and isinstance(other, Atom):
             return Boolean_Function(f"({self.name} ⊻ {other.name})", tt_xor(self.to_tt_train(), other.to_tt_train()))
-        return Expression(f"({self.name} ⊻ {other.name})", [self, other], _tt_xor)
+        return Expression(f"({self.name} ⊻ {other.name})", [self, other], tt_xor)
 
     def __rxor__(self, other):
         return other.__or__(self)
@@ -101,7 +54,7 @@ class Expression:
     def __invert__(self):
         if isinstance(self, Atom):
             return Boolean_Function(f"¬{self.name}", tt_neg(self.to_tt_train()))
-        return Expression(f"¬{self.name}", [self], _tt_neg)
+        return Expression(f"¬{self.name}", [self], tt_neg)
 
     def __lshift__(self, other):  # <-
         return self.__ror__(other.__invert__())
@@ -130,30 +83,14 @@ class Atom(Expression):
         return tt_atom_train(self.index, Atom.count)
 
 
-class Hypothesis(Expression):
+class Hypothesis(Atom):
     count = 0
 
-    def __init__(self, name=None, indices=None):
+    def __init__(self, name=None):
         if name is None:
             name = f"h_{Hypothesis.count}"
-        super().__init__(name, [self], lambda x: x)
-        self.active = True
-        self.indices = indices
-        if indices is None:
-            self.tt_hypothesis = tt_leading_one(Atom.count)
-        else:
-            self.tt_hypothesis = tt_leading_one(len(self.indices))
+        super().__init__(name)
         Hypothesis.count += 1
-
-    def to_tt_train(self):
-        if self.active:
-            if self.indices is None:
-                return self.tt_hypothesis
-            tt_train = [np.array([1, 0]).reshape(1, 2, 1) for _ in range(Atom.count)]
-            for idx, i in enumerate(self.indices):
-                tt_train[i] = self.tt_hypothesis[idx]
-            return tt_train
-        return None
 
 
 class Boolean_Function(Expression):
@@ -192,20 +129,12 @@ def generate_atoms(n):
     return atoms
 
 
-def influence_geq(atom, eps):
-    def influence_constraint(_):
-        idx = atom.index
-        return lambda h: tt_influence(h, idx) - eps
-
-    return influence_constraint
-
-
-def influence_leq(atom, eps):
-    def influence_constraint(_):
-        idx = atom.index
-        return lambda h: eps - tt_influence(h, idx)
-
-    return influence_constraint
+def compute_constraint(hypothesis: Hypothesis, tt_train: List[np.array]):
+    bias = lambda *hs: tt_leading_entry(tt_train) + sum(hs)
+    n = Atom.count - Hypothesis.count
+    indices = [0]*n
+    indices[hypothesis.index] = 1
+    normal_vector = lambda *hs: tt_mul_scal(tt_entry(tt_train, indices), tt_one(n))
 
 
 class ConstraintSpace:

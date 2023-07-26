@@ -15,6 +15,9 @@ PHI = np.array([[1, 1],
 PHI_INV = np.array([[1 / 2, 1 / 2],
                     [1 / 2, -1 / 2]], dtype=float).reshape(1, 2, 2, 1)
 
+FAN = np.array([[1, 0],
+                [0, 1]], dtype=float).reshape(1, 2, 2, 1)
+
 
 def phi(num_bonds):
     """ Bonds "num_bonds" PHI cores together """
@@ -220,6 +223,25 @@ def tt_leading_entry(tt_train: List[np.array]) -> np.array:
         jnp.linalg.multi_dot([core[tuple([slice(None)] + [0] * (len(core.shape) - 2))] for core in tt_train]))
 
 
+def tt_shifted_leading_entry(tt_train: List[np.array], idx: int) -> np.array:
+    """
+    Returns the leading entry of a TT-train with a bias at index idx
+    """
+    return jnp.sum(
+        jnp.linalg.multi_dot(
+            [core[tuple([slice(None)] + [1 if i == idx else 0] * (len(core.shape) - 2))] for i, core in
+             enumerate(tt_train)]))
+
+
+def tt_entry(tt_train: List[np.array], indices: List[int]) -> np.array:
+    """
+    Returns the entry of a TT-train according to the indices
+    """
+    return jnp.sum(
+        jnp.linalg.multi_dot(
+            [core[tuple([slice(None)] + [i] * (len(core.shape) - 2))] for i, core in zip(indices, tt_train)]))
+
+
 def _block_diag_tensor(tensor_1: np.array, tensor_2: np.array) -> np.array:
     """
     For internal use: Concatenates two tensors to a block diagonal tensor
@@ -327,6 +349,23 @@ def tt_shared_influence(tt_train: List[np.array], idxs: np.array):
     return jnp.sum(
         jnp.linalg.multi_dot(
             [_tt_shared_influence_core_collapse(core, idxs - i) for i, core in enumerate(tt_train)]))
+
+
+def _tt_core_fan(core: np.array, basis_core: np.array):
+    return sum([
+        jnp.kron(core[(slice(None),) + i], basis_core) for i in product(*[[0, 1]])
+    ])
+
+
+def tt_substitute_in(tt_train: List[np.array], tt_basis_train) -> List[np.array]:
+    tt_train_without_basis = deepcopy(tt_train)
+    tt_train_without_basis[-2] = np.einsum("ldr, rk -> ldk", tt_train_without_basis[-2],
+                                           tt_train_without_basis[-1][:, 0, :])
+    tt_train_without_basis.pop()
+    tt_train[-2] = np.einsum("ldr, rk -> ldk", tt_train[-2], tt_train[-1][:, 1, :])
+    tt_train.pop()
+    tt_basis_train = [_tt_core_fan(core, basis_core) for core, basis_core in zip(tt_train, tt_basis_train)]
+    return tt_rank_reduce(tt_add(tt_train_without_basis, tt_basis_train))
 
 
 def _tt_phi_core(core: np.array):
@@ -530,15 +569,13 @@ def tt_abs(tt_train):
     return absolute_tt_train
 
 
-def graph_to_tensor(n, edges): # Start numbering nodes at 0
-    tensor = np.zeros([2]*n + [2]*n)
+def graph_to_tensor(n, edges):  # Start numbering nodes at 0
+    tensor = np.zeros([2] * n + [2] * n)
     for e in edges:
         index_1 = [int(x) for x in reversed(bin(e[0])[2:])]
-        index_1 += [0]*(n-len(index_1))
+        index_1 += [0] * (n - len(index_1))
         index_2 = [int(x) for x in reversed(bin(e[1])[2:])]
         index_2 += [0] * (n - len(index_2))
         tensor[tuple(index_1 + index_2)] = 1
         tensor[tuple(index_2 + index_1)] = 1
     return tensor
-
-
