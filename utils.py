@@ -102,7 +102,7 @@ class Hypothesis(Atom):
         tt_train[self.index-1] = np.einsum("ldr, rk -> ldk", tt_train[self.index - 1],
                                                tt_train[self.index][:, 1, :])
         tt_train.pop()
-        tt_train = tt_xnor(tt_train, self.value)
+        tt_train = tt_xnor(tt_train, self.value + [np.array([1, 0]).reshape(1, 2, 1)]*(Atom.count - len(tt_train)))
         return tt_rank_reduce(tt_add(tt_train_without_basis, tt_train))
 
 
