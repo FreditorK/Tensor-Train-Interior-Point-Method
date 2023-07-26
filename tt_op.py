@@ -364,7 +364,7 @@ def tt_substitute_in(tt_train: List[np.array], tt_basis_train) -> List[np.array]
     tt_train_without_basis.pop()
     tt_train[-2] = np.einsum("ldr, rk -> ldk", tt_train[-2], tt_train[-1][:, 1, :])
     tt_train.pop()
-    tt_train = tt_xor(tt_train, tt_neg(tt_basis_train))
+    tt_train = tt_xnor(tt_train, tt_basis_train)
     return tt_rank_reduce(tt_add(tt_train_without_basis, tt_train))
 
 
