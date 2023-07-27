@@ -18,36 +18,18 @@ s_2 = reduce(lambda x, y: x | y, atoms[set_2])
 s_3 = atoms[set_3]
 s_u = reduce(lambda x, y: x | y, atoms[set_U])
 """
+h_0 = Hypothesis()
 h_1 = Hypothesis()
-h_2 = Hypothesis()
 #h_3 = Hypothesis()
-a = (atoms[0] & ~h_1 & h_2).to_tt_train()
-
-b_1 = (atoms[1] | atoms[2]).to_tt_train()
-b_1[-2] = np.einsum("ldr, rk -> ldk", b_1[-2], b_1[-1][:, 0, :])
-b_1.pop()
-b_1[-2] = np.einsum("ldr, rk -> ldk", b_1[-2], b_1[-1][:, 0, :])
-b_1.pop()
-b_2 = (atoms[0]).to_tt_train()
-b_2[-2] = np.einsum("ldr, rk -> ldk", b_2[-2], b_2[-1][:, 0, :])
-b_2.pop()
-b_2[-2] = np.einsum("ldr, rk -> ldk", b_2[-2], b_2[-1][:, 0, :])
-b_2.pop()
-
-h_1.value = b_1
-h_2.value = b_2
-k = h_2.substitute_into(a)
-k = h_1.substitute_into(k)
-k = [np.power(c, 1) for c in k]
-print(len(k))
-print("Subsituted in:", get_CNF(atoms, k))
-print(np.round(tt_to_tensor(k), decimals=2))
-#print(tt_to_tensor(k))
-solution = (atoms[0] & ~(atoms[1] | atoms[2])).to_tt_train()
-solution[-2] = np.einsum("ldr, rk -> ldk", solution[-2], solution[-1][:, 0, :])
-solution.pop()
-solution[-2] = np.einsum("ldr, rk -> ldk", solution[-2], solution[-1][:, 0, :])
-solution.pop()
-print("Truth", get_CNF(atoms, solution))
-print(tt_inner_prod(solution, k))
-#const_space = ConstraintSpace(vocab_size)
+expression_train = TensorTrain.from_expression(atoms[0] & ~h_0 & h_1, hypothesis_space=True)
+print("Pre-Substitution: ", get_CNF(list(atoms) + [h_0, h_1], expression_train.cores))
+h_0_expression = atoms[1] | atoms[2]
+h_1_expression = atoms[0]
+print(f"To substitute in: h_0: {h_0_expression}, h_1: {h_1_expression}")
+h_0.value = TensorTrain.from_expression(h_0_expression).cores
+h_1.value = TensorTrain.from_expression(h_1_expression).cores
+substituted_expression = h_1.substitute_into(expression_train)
+substituted_expression = h_0.substitute_into(substituted_expression)
+print("Post-Subsitution:", get_CNF(atoms, substituted_expression.cores))
+solution = TensorTrain.from_expression(h_1_expression & ~h_0_expression)
+print("Truth", get_CNF(atoms, solution.cores))

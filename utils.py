@@ -15,8 +15,8 @@ class Expression:
         self.op = op
         self.args = args
 
-    def to_tt_train(self):
-        return self.op(*[a.to_tt_train() for a in self.args])
+    def to_tt_train(self, hypothesis_space=False):
+        return self.op(*[a.to_tt_train(hypothesis_space) for a in self.args])
 
     def __repr__(self):
         return str(self)
@@ -29,7 +29,7 @@ class Expression:
 
     def __and__(self, other):
         if isinstance(self, Atom) and isinstance(other, Atom):
-            return Boolean_Function(f"({self.name} ∧ {other.name})", tt_and(self.to_tt_train(), other.to_tt_train()))
+            return Boolean_Function(f"({self.name} ∧ {other.name})", tt_and(self.to_tt_train(True), other.to_tt_train(True)))
         return Expression(f"({self.name} ∧ {other.name})", [self, other], tt_and)
 
     def __rand__(self, other):
@@ -37,7 +37,7 @@ class Expression:
 
     def __or__(self, other):
         if isinstance(self, Atom) and isinstance(other, Atom):
-            return Boolean_Function(f"({self.name} v {other.name})", tt_or(self.to_tt_train(), other.to_tt_train()))
+            return Boolean_Function(f"({self.name} v {other.name})", tt_or(self.to_tt_train(True), other.to_tt_train(True)))
         return Expression(f"({self.name} v {other.name})", [self, other], tt_or)
 
     def __ror__(self, other):
@@ -45,15 +45,15 @@ class Expression:
 
     def __xor__(self, other):
         if isinstance(self, Atom) and isinstance(other, Atom):
-            return Boolean_Function(f"({self.name} ⊻ {other.name})", tt_xor(self.to_tt_train(), other.to_tt_train()))
+            return Boolean_Function(f"({self.name} ⊻ {other.name})", tt_xor(self.to_tt_train(True), other.to_tt_train(True)))
         return Expression(f"({self.name} ⊻ {other.name})", [self, other], tt_xor)
 
     def __rxor__(self, other):
-        return other.__or__(self)
+        return other.__xor__(self)
 
     def __invert__(self):
         if isinstance(self, Atom):
-            return Boolean_Function(f"¬{self.name}", tt_neg(self.to_tt_train()))
+            return Boolean_Function(f"¬{self.name}", tt_neg(self.to_tt_train(True)))
         return Expression(f"¬{self.name}", [self], tt_neg)
 
     def __lshift__(self, other):  # <-
@@ -79,8 +79,49 @@ class Atom(Expression):
         self.index = Atom.count
         Atom.count += 1
 
-    def to_tt_train(self):
-        return tt_atom_train(self.index, Atom.count)
+    def to_tt_train(self, hypothesis_space=False):
+        if hypothesis_space:
+            return tt_atom_train(self.index, Atom.count)
+        return tt_atom_train(self.index, Atom.count - Hypothesis.count)
+
+
+class TensorTrain:
+    def __init__(self, cores: List[np.array], core_labels: List[int]):
+        self.cores = cores
+        self.core_labels = core_labels
+
+    @classmethod
+    def from_expression(cls, expr: Expression, hypothesis_space=False):
+        tt_train = expr.to_tt_train(hypothesis_space)
+        return cls(tt_train, list(range(len(tt_train))))
+
+    def __add__(self, other):
+        if isinstance(other, TensorTrain):
+            return TensorTrain(tt_add(self.cores, other.cores), self.core_labels)
+        new_cores = tt_mul_scal(other, tt_one(len(self.cores)))
+        return TensorTrain(tt_add(self.cores, new_cores), self.core_labels)
+
+    def __radd__(self, other):
+        return other.__add__(self)
+
+    def __sub__(self, other):
+        if isinstance(other, TensorTrain):
+            new_cores = tt_mul_scal(-1, deepcopy(other.cores))
+            return TensorTrain(tt_add(self.cores, new_cores), self.core_labels)
+        new_cores = tt_mul_scal(-other, tt_one(len(self.cores)))
+        return TensorTrain(tt_add(self.cores, new_cores), self.core_labels)
+
+    def __rsub__(self, other):
+        return other.__sub__(self)
+
+    def __mul__(self, other):
+        if isinstance(other, TensorTrain):
+            return TensorTrain(tt_hadamard(self.cores, other.cores), self.core_labels)
+        new_cores = tt_mul_scal(other, deepcopy(self.cores))
+        return TensorTrain(new_cores, self.core_labels)
+
+    def __rmul__(self, other):
+        return other.__mul__(self)
 
 
 class Hypothesis(Atom):
@@ -93,17 +134,23 @@ class Hypothesis(Atom):
         self.value = tt_leading_one(Atom.count - Hypothesis.count)
         Hypothesis.count += 1
 
-    def substitute_into(self, tt_train: List[np.array]) -> List[np.array]:
-        tt_train_without_basis = deepcopy(tt_train)
-        tt_train_without_basis[self.index-1] = np.einsum("ldr, rk -> ldk",
-                                                             tt_train_without_basis[self.index - 1],
-                                                             tt_train_without_basis[self.index][:, 0, :])
+    def substitute_into(self, tt_train: TensorTrain) -> TensorTrain:
+        tt_train_without_basis = deepcopy(tt_train.cores)
+        index = Atom.count-Hypothesis.count + tt_train.core_labels[Atom.count-Hypothesis.count:].index(self.index)
+        tt_train_without_basis[index - 1] = np.einsum("ldr, rk -> ldk",
+                                                           tt_train_without_basis[index - 1],
+                                                           tt_train_without_basis[index][:, 0, :])
         tt_train_without_basis.pop()
-        tt_train[self.index-1] = np.einsum("ldr, rk -> ldk", tt_train[self.index - 1],
-                                               tt_train[self.index][:, 1, :])
-        tt_train.pop()
-        tt_train = tt_xnor(tt_train, self.value + [np.array([1, 0]).reshape(1, 2, 1)]*(Atom.count - len(tt_train)))
-        return tt_rank_reduce(tt_add(tt_train_without_basis, tt_train))
+        tt_train.cores[index - 1] = np.einsum("ldr, rk -> ldk", tt_train.cores[index - 1],
+                                          tt_train.cores[index][:, 1, :])
+        tt_train.cores.pop()
+        tt_train.cores = tt_xnor(tt_train.cores, self.value + [np.array([1, 0]).reshape(1, 2, 1)] * (len(tt_train.cores) - len(self.value)))
+        tt_train.core_labels.pop(index)
+        tt_train.cores = tt_rank_reduce(tt_add(tt_train_without_basis, tt_train.cores))
+        return tt_train
+
+    def to_tt_train(self, hypothesis_space=False):
+        return super().to_tt_train(True)
 
 
 class Boolean_Function(Expression):
@@ -113,8 +160,13 @@ class Boolean_Function(Expression):
         self.tt_e = tt_e
         super().__init__(name, [self], lambda x: x)
 
-    def to_tt_train(self):
-        return self.tt_e
+    def to_tt_train(self, hypothesis_space=False):
+        if hypothesis_space:
+            return self.tt_e
+        last_core = self.tt_e[-1]
+        for i in range(Hypothesis.count):
+            last_core = np.einsum("ldr, rk -> ldk", self.tt_e[-2-i], last_core[:, 0, :])
+        return self.tt_e[:-Hypothesis.count-1] + [last_core]
 
 
 def get_ANF(atoms, hypothesis):
@@ -145,7 +197,7 @@ def generate_atoms(n):
 def compute_constraint(hypothesis: Hypothesis, tt_train: List[np.array]):
     bias = lambda *hs: tt_leading_entry(tt_train) + sum(hs)
     n = Atom.count - Hypothesis.count
-    indices = [0]*n
+    indices = [0] * n
     indices[hypothesis.index] = 1
     normal_vector = lambda *hs: tt_mul_scal(tt_entry(tt_train, indices), tt_one(n))
 
