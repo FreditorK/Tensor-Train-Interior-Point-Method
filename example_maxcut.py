@@ -30,7 +30,7 @@ if args.stats:
     number_of_edges_in_cut = []
     for i in range(100):
         print(f"---Trial {i}---")
-        hypothesis = opt.find_hypothesis()
+        hypothesis = opt.solve()
         set_partition = tt_to_tensor(tt_bool_op(hypothesis)).flatten()
         cut_edges = [e for e in graph_edges if set_partition[e[0]] * set_partition[e[1]] < 0]
         number_of_edges_in_cut.append(len(cut_edges))
@@ -39,7 +39,7 @@ if args.stats:
     print(f"The mean cut edges are: {mean}, Standard deviation: {std}, Average integrality gap: {mean / 7}")
 else:
     t_1 = time()
-    hypothesis = opt.find_hypothesis()
+    hypothesis = opt.solve()
     t_2 = time()
     set_partition = tt_to_tensor(tt_bool_op(hypothesis)).flatten()
     cut_edges = [e for e in graph_edges if set_partition[e[0]] * set_partition[e[1]] < 0]

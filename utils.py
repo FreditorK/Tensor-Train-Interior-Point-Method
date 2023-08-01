@@ -2,6 +2,7 @@ import copy
 import random
 from typing import Dict
 
+import numpy as np
 from sympy.logic.boolalg import ANFform, to_cnf, to_dnf, to_anf
 from sympy import symbols
 from tt_op import *
@@ -102,7 +103,7 @@ class Atom(Expression):
 
     def __init__(self, par_space: ParameterSpace, name=None):
         if name is None:
-            name = f"a_{str(par_space.atom_count)}"
+            name = f"a_{par_space.atom_count}"
         super().__init__(par_space, name, [self], lambda x: x)
         self.index = par_space.atom_count
 
@@ -112,7 +113,8 @@ class Atom(Expression):
 
 class TTExpression:
     def __init__(self, cores: List[np.array], par_space: ParameterSpace, substituted=None):
-        assert par_space.atom_count <= len(cores) <= (par_space.atom_count + par_space.hypothesis_count), "Labels do not match the tensor!"
+        assert par_space.atom_count <= len(cores) <= (
+            par_space.atom_count + par_space.hypothesis_count), "Labels do not match the tensor!"
         self.cores = cores
         self.par_space = par_space
         self.substituted = substituted
@@ -227,10 +229,13 @@ class Hypothesis(Expression):
     def substitute_into(self, tt_train: TTExpression) -> TTExpression:
         assert self.par_space == tt_train.par_space, "Hypothesis is not in the parameter space of the given TT."
         index = self.index - sum([1 for i in tt_train.substituted if i < self.index])
-        tt_core_without_basis = np.einsum("ldr, rk -> ldk", tt_train.cores[index - 1], tt_train.cores[index][:, 0, :]) # [self.index - 1]
+        tt_core_without_basis = np.einsum("ldr, rk -> ldk", tt_train.cores[index - 1],
+                                          tt_train.cores[index][:, 0, :])
         tt_core_with_basis = np.einsum("ldr, rk -> ldk", tt_train.cores[index - 1], tt_train.cores[index][:, 1, :])
-        new_cores = tt_xnor(tt_train.cores[:index-1] + [tt_core_with_basis] + tt_train.cores[index+1:], self.value + [np.array([1, 0]).reshape(1, 2, 1)] * self.par_space.hypothesis_count)
-        new_cores = tt_rank_reduce(tt_add(tt_train.cores[:index-1] + [tt_core_without_basis] + tt_train.cores[index+1:], new_cores))
+        new_cores = tt_xnor(tt_train.cores[:index - 1] + [tt_core_with_basis] + tt_train.cores[index + 1:],
+                            self.value + [np.array([1, 0]).reshape(1, 2, 1)] * self.par_space.hypothesis_count)
+        new_cores = tt_rank_reduce(
+            tt_add(tt_train.cores[:index - 1] + [tt_core_without_basis] + tt_train.cores[index + 1:], new_cores))
         return TTExpression(new_cores, self.par_space, tt_train.substituted + [self.index])
 
     def to_CNF(self):
@@ -248,37 +253,70 @@ class Boolean_Function(Expression):
         return self.tt_e
 
 
-class Constraint:
-    def __init__(self, hypothesis: Hypothesis, tt_expr: TTExpression, hypotheses_to_insert: List[Hypothesis], percent):
+class LogicConstraint(ABC):
+    def __init__(self, tt_expr: TTExpression, hypotheses_to_insert: List[Hypothesis], percent):
         self.tt_expr = tt_expr
-        self.hypothesis = hypothesis
         self.hypotheses_to_insert = hypotheses_to_insert
         self.percent = percent
+        self.s_lower = 2 ** (-tt_expr.par_space.atom_count) - 1
 
-    def get_projection_st(self,  hypothesis: Hypothesis):
+    def _get_hyperplane(self):
         tt_expr = deepcopy(self.tt_expr)
         for h in self.hypotheses_to_insert:
             tt_expr = h.substitute_into(tt_expr)
         bias = tt_leading_entry(tt_expr.cores) - self.percent
-        normal = tt_expr.cores[:hypothesis.par_space.atom_count]
+        last_normal_core = np.einsum("ldr, rk -> ldk", tt_expr.cores[-2], tt_expr.cores[-1][:, 1, :])
+        normal = tt_expr.cores[:-2] + last_normal_core
+        return normal, bias
+
+    @abstractmethod
+    def _projection(self, tt_h, tt_n, bias):
+        ...
+
+    def get_projection(self):
+        normal, bias = self._get_hyperplane()
+        return lambda tt_h: self._projection(tt_h, normal, bias)
+
+
+class ExistentialConstraint(LogicConstraint):
+
+    def _projection(self, tt_h, tt_n, bias):
+        func_result = tt_inner_prod(tt_h, tt_n)
+        condition = func_result + bias - self.s_lower <= 0
+        if condition:
+            alpha = 1 if func_result == 0 else func_result
+            tt_n = tt_mul_scal(-alpha / tt_inner_prod(tt_n, tt_n), tt_n)
+            proj_tt_h = tt_add(tt_h, tt_n)
+            beta = jnp.sqrt((1 - (bias - self.s_lower) ** 2) / tt_inner_prod(proj_tt_h, proj_tt_h))
+            proj_tt_h = tt_mul_scal(beta, proj_tt_h)
+            tt_n = tt_mul_scal((bias - self.s_lower) / alpha, tt_n)
+            proj_tt_h = tt_add(proj_tt_h, tt_n)
+            tt_h = tt_rank_reduce(proj_tt_h)
+        return tt_h, condition
+
+
+class UniversalConstraint(LogicConstraint):
+
+    def _projection(self, tt_h, tt_n, bias):
+        func_result = tt_inner_prod(tt_h, tt_n)
+        condition = func_result + bias - self.s_lower - 1 >= 0
+        if condition:
+            alpha = 1 if func_result == 0 else func_result
+            tt_n = tt_mul_scal(-alpha / tt_inner_prod(tt_n, tt_n), tt_n)
+            proj_tt_h = tt_add(tt_h, tt_n)
+            beta = jnp.sqrt((1 - bias ** 2) / tt_inner_prod(proj_tt_h, proj_tt_h))
+            proj_tt_h = tt_mul_scal(beta, proj_tt_h)
+            tt_n = tt_mul_scal(bias / alpha, tt_n)
+            proj_tt_h = tt_add(proj_tt_h, tt_n)
+            tt_h = tt_rank_reduce(proj_tt_h)
+        return tt_h, condition
 
 
 class ConstraintSpace(ParameterSpace, ABC):
     def __init__(self):
-        """
-        self.radius = 1.0
-        self.s_lower = 2 ** (-self.dimension) - 1  # -0.9999
-        self.projections = []
-        self.eq_constraints = []
-        self.iq_constraints = [lambda h: jnp.maximum(0, self.s_lower - tt_leading_entry(h))]
-        self.faulty_hypothesis = tt_mul_scal(-1, tt_leading_one(self.dimension))
-        self.eq_crit = lambda h: sum([jnp.sum(jnp.abs(c(h))) for c in self.eq_constraints])
-        self.iq_crit = lambda h: sum([jnp.sum(c(h)) for c in self.iq_constraints])
-        self.rank_gradient = D_func(lambda h: 0.0)
-        self.boolean_criterion = tt_boolean_criterion(self.dimension)
-        """
         self.atom_list: List[Atom] = []
         self.hypothesis_list: List[Hypothesis] = []
+        self.objectives: Dict[List] = dict()
         self.iq_constraints: Dict[List] = dict()
         self.eq_constraints: Dict[List] = dict()
 
@@ -308,7 +346,7 @@ class ConstraintSpace(ParameterSpace, ABC):
         return atoms
 
     def Atom(self, name=None):
-        a = Atom(name)
+        a = Atom(self, name)
         self.atoms.append(a)
         return a
 
@@ -319,82 +357,36 @@ class ConstraintSpace(ParameterSpace, ABC):
         self.eq_constraints[h] = []
         return h
 
-    def exists_S(self, expr: Expression):
+    def there_exists(self, expr: Expression):
         return self.at_least(expr, -1)
 
     def at_least(self, expr: Expression, percent):
         tt_train = TTExpression.from_expression(expr)
         relevant_hs = tt_train.hypotheses
         for i, h in enumerate(relevant_hs):
-            self.iq_constraints[h].append((tt_train, relevant_hs[:i] + relevant_hs[i+1:], percent))
+            self.iq_constraints[h].append(
+                ExistentialConstraint(tt_train, relevant_hs[:i] + relevant_hs[i + 1:], percent))
 
-        def projection(tt_train):
-            radius = jnp.sqrt(tt_inner_prod(tt_train, tt_train))
-            n = normal_vec(tt_example)
-            func_result = tt_inner_prod(tt_train, n)
-            if func_result == 0 and offset - 2 * self.s_lower <= 0:
-                proj_tt_train = tt_train
-                proj_tt_train[0] *= jnp.sqrt(
-                    (radius ** 2 - np.abs(0.5 * offset - self.s_lower)) / tt_inner_prod(proj_tt_train, proj_tt_train))
-                n = tt_mul_scal((offset - 2 * self.s_lower), n)
-                proj_tt_train = tt_add(proj_tt_train, n)
-                tt_train = proj_tt_train
-            if func_result + offset - 2 * self.s_lower <= 0:
-                n = tt_mul_scal(-(func_result / tt_inner_prod(n, n)), n)
-                proj_tt_train = tt_add(tt_train, n)
-                proj_tt_train[0] *= jnp.sqrt(
-                    (radius ** 2 - np.abs(0.5 * offset - self.s_lower)) / tt_inner_prod(proj_tt_train, proj_tt_train))
-                n = tt_mul_scal((offset - 2 * self.s_lower) / func_result, n)
-                proj_tt_train = tt_add(proj_tt_train, n)
-                tt_train = proj_tt_train
-            return tt_rank_reduce(tt_train)
+    def for_all(self, expr: Expression, percent=1):
+        tt_train = TTExpression.from_expression(expr)
+        relevant_hs = tt_train.hypotheses
+        for i, h in enumerate(relevant_hs):
+            self.iq_constraints[h].append(
+                ExistentialConstraint(tt_train, relevant_hs[:i] + relevant_hs[i + 1:], percent))
 
-        self.projections.append(projection)
-
-    def forall_S(self, example: Expression):
-        normal_vec, offset, tt_example = example.to_tt_constraint()
-        eq_func = lambda h: jnp.abs(tt_inner_prod(h, normal_vec(tt_example)) + offset - 2)
-        self.eq_constraints.append(eq_func)
-
-        def projection(tt_train):
-            radius = jnp.sqrt(tt_inner_prod(tt_train, tt_train))
-            n = normal_vec(tt_example)
-            func_result = tt_inner_prod(tt_train, n)
-            if func_result == 0 and np.abs(offset - 2) >= self.s_lower + 1:
-                proj_tt_train = tt_train
-                proj_tt_train[0] *= jnp.sqrt(
-                    (radius ** 2 - np.abs((0.5 * offset - 1))) / tt_inner_prod(proj_tt_train, proj_tt_train))
-                n = tt_mul_scal((offset - 2), n)
-                proj_tt_train = tt_add(proj_tt_train, n)
-                tt_train = proj_tt_train
-            elif np.abs(func_result + offset - 2) >= self.s_lower + 1:
-                n = tt_mul_scal(-(func_result / tt_inner_prod(n, n)), n)
-                proj_tt_train = tt_add(tt_train, n)
-                proj_tt_train[0] *= jnp.sqrt(
-                    (radius ** 2 - np.abs((0.5 * offset - 1))) / tt_inner_prod(proj_tt_train, proj_tt_train))
-                n = tt_mul_scal((offset - 2) / func_result, n)
-                proj_tt_train = tt_add(proj_tt_train, n)
-                tt_train = proj_tt_train
-            return tt_rank_reduce(tt_train)
-
-        self.projections.append(projection)
-
-    def project(self, tt_train):
-        criterion_score = self.eq_crit(tt_train) + self.iq_crit(tt_train)
-        proj_tt_train = tt_train
-        while criterion_score >= self.s_lower + 1:
-            for proj in self.projections:
-                proj_tt_train = proj(proj_tt_train)
-            criterion_score = self.eq_crit(proj_tt_train) + self.iq_crit(proj_tt_train)
+    def project(self, hypothesis: Hypothesis):
+        projections = [eq.get_projection() for eq in self.eq_constraints[hypothesis]] + [iq.get_projection() for iq in self.iq_constraints[hypothesis]]
+        proj_tt_train = hypothesis.cores
+        not_converged = True
+        while not_converged:
+            not_converged = False
+            for proj in projections:
+                proj_tt_train, is_violated = proj(proj_tt_train)
+                not_converged = not_converged or is_violated
         return proj_tt_train
 
-    def normalise(self, tt_train, idx=0):
-        return tt_mul_scal(self.radius / np.sqrt(tt_inner_prod(tt_train, tt_train)), tt_train, idx)
-
-    def stopping_criterion(self, tt_train, prev_tt_train):
-        return 1 - tt_inner_prod(tt_train, prev_tt_train)
-
-    def round(self, tt_train):
+    def round(self, hypothesis: Hypothesis):
+        tt_train = hypothesis.value
         tt_table = tt_bool_op(tt_train)
         tt_table_p3 = tt_mul_scal(-0.5, tt_hadamard(tt_hadamard(tt_table, tt_table), tt_table))
         tt_table = tt_mul_scal(0.5, tt_table)
@@ -403,4 +395,12 @@ class ConstraintSpace(ParameterSpace, ABC):
         tt_train = tt_mul_scal(1 - tt_inner_prod(tt_update, tt_train), tt_train)
         tt_train = tt_add(tt_train, tt_update)
         tt_train = tt_mul_scal(1 / jnp.sqrt(tt_inner_prod(tt_train, tt_train)), tt_train)
-        return tt_train
+        hypothesis.value = tt_train
+
+    def normalise(self, tt_train, idx=0):
+        return tt_mul_scal(1 / np.sqrt(tt_inner_prod(tt_train, tt_train)), tt_train, idx)
+
+    def stopping_criterion(self, tt_trains, prev_tt_trains):
+        return np.mean([
+            1 - tt_inner_prod(tt_train, prev_tt_train) for tt_train, prev_tt_train in zip(tt_trains, prev_tt_trains)
+        ])

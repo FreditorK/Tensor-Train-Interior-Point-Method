@@ -1,16 +1,15 @@
 import numpy as np
-
+from operators import D_func
 from tt_op import *
-from utils import ConstraintSpace, Hypothesis
-from utils import NoisyConstraintSpace
+from utils import ConstraintSpace
 from functools import partial
 
 
 # np.random.seed(7)
 
 class AnswerSetSolver:
-    def __init__(self, atoms):
-        self.atoms = atoms
+    def __init__(self, const_space: ConstraintSpace):
+        self.atoms = const_space.atoms
 
     def get_minimal_answer_set(self, tt_train, **assignments):
         set_values = []
@@ -22,86 +21,78 @@ class AnswerSetSolver:
 
 
 class ILPSolver:
-    def __init__(self, hypotheses: List[Hypothesis], const_space: ConstraintSpace, objective=None, noise=0.1):
-        self.noise = noise
+    def __init__(self, const_space: ConstraintSpace, objective=None):
         self.objective_grad = None
         if objective is not None:
-            objective_grad = D_func(objective)
-            self.objective_grad = lambda h, idx: objective_grad(h)[idx]
+            self.objective_grad = D_func(lambda tt_trains: objective(*tt_trains))
         self.const_space = const_space
-        self.error_bound = self.const_space.s_lower + 1
+        self.error_bound = 2 ** (-self.const_space.atom_count)
+        self.boolean_criterion = tt_boolean_criterion(self.const_space.atom_count)
+        self.params = {
+            "lr": 0.08,
+            "noise": 0.5*self.error_bound
+        }
 
-    def find_hypothesis(self):
-        error_bound = self.error_bound
-        tt_train, params = self._init_tt_train()
-        for i in range(100):
+    def solve(self, timeout=100):
+        iter_function = self.const_space.project if self.objective_grad is None else self._riemannian_grad
+        for i in range(timeout):
             print(f"----------Iteration {i}----------")
-            if self.objective_grad is not None:
-                tt_train = self._minimise_objective(tt_train, params)
-                tt_train = self._resolve_constraints(tt_train, params)
-            else:
-                tt_train = self.const_space.project(tt_train)
-            tt_train = self._round_solution(tt_train)
-            criterion_score = self.const_space.eq_crit(tt_train) + self.const_space.iq_crit(tt_train)
-            if criterion_score > error_bound:
-                rank = tt_rank(tt_train)
-                print(f"Constraint Criterion after rounding: {criterion_score}")
-                tt_train = tt_add_noise(tt_train, rank=rank, noise_radius=self.error_bound)
-            else:
-                return tt_train
-        return tt_train
+            iter_function()
+            self._round_solution()
+            criterion_score = self.const_space.stopping_criterion()
+            if criterion_score < self.error_bound:
+                break
+            print(f"Constraint Criterion after rounding: {criterion_score}")
+            self._stir_up()
 
-    def _minimise_objective(self, tt_train, params):
-        criterion_score = np.inf
-        while criterion_score >= 0.1*self.error_bound * params["lr"]:
-            prev_tt_train = deepcopy(tt_train)
-            tt_train = self._gradient_update(tt_train, params)
-            criterion_score = self.const_space.stopping_criterion(tt_train, prev_tt_train)
-            print(f"Stopping Criterion: {criterion_score} \r", end="")
+    def _stir_up(self):
+        for h in self.const_space.hypotheses:
+            rank = tt_rank(h.value)
+            h.value = tt_add_noise(h.value, rank=rank, noise_radius=self.error_bound)
+
+    def _gradient_update(self):
+        tt_trains = [tt_add_noise(h.value, rank=1, noise_radius=self.params["noise"]) for h in self.const_space.hypotheses]
+        for idx in range(self.const_space.atom_count):
+            gradients = self.objective_grad(tt_trains)
+            for i in range(self.const_space.hypothesis_count):
+                gradient = gradients[i][idx]
+                tt_trains[i][idx] -= self.params["lr"] * gradient
+                tt_trains[i][idx] += self.params["lr"] * tt_grad_inner_prod(tt_trains[i], tt_trains[i], gradient, idx) * \
+                             tt_trains[i][idx]
+                tt_trains[i] = self.const_space.normalise(tt_trains[i], idx)
+        for h, tt_train in zip(self.const_space.hypotheses, tt_trains):
+            h.value = tt_train
+
+    def _init_hypotheses(self):
+        criterion = np.inf
+        while criterion >= 0.1*self.error_bound * self.params["lr"]:
+            hypotheses_copies = deepcopy([h.value for h in self.const_space.hypotheses])
+            self._gradient_update()
+            criterion = self.const_space.stopping_criterion(self.const_space.hypotheses, hypotheses_copies)
+            print(f"Stopping Criterion: {criterion} \r", end="")
         print("\n", flush=True)
-        return tt_train
 
-    def _resolve_constraints(self, tt_train, params):
-        criterion_score = np.inf
-        while criterion_score >= 0.1*self.error_bound*params["lr"]:  # Gradient induced change, i.e. similar to first-order sufficient condition
-            prev_tt_train = deepcopy(tt_train)
-            tt_train = self._gradient_update(tt_train, params)
-            tt_train = self.const_space.project(tt_train)
-            criterion_score = self.const_space.stopping_criterion(tt_train, prev_tt_train)
-            print(f"Stopping Criterion: {criterion_score} \r", end="")
+    def _riemannian_grad(self):
+        criterion = np.inf
+        self._init_hypotheses()
+        while criterion >= 0.1*self.error_bound*self.params["lr"]:  # Gradient induced change, i.e. similar to first-order sufficient condition
+            hypotheses_copies = deepcopy([h.value for h in self.const_space.hypotheses])
+            self._gradient_update()
+            self.const_space.project()
+            criterion = self.const_space.stopping_criterion(self.const_space.hypotheses, hypotheses_copies)
+            print(f"Stopping Criterion: {criterion} \r", end="")
         print("\n", flush=True)
-        return tt_train
 
-    def _round_solution(self, tt_train):
-        criterion_score = self.const_space.boolean_criterion(tt_train)
-        retraction = partial(tt_rank_retraction, [core.shape[-1] for core in tt_train[:-1]])
+    def _round_solution(self):
+        criterion_score = np.mean([self.boolean_criterion(h.value) for h in self.const_space.hypotheses])
+        retraction = partial(tt_rank_retraction, )
         while criterion_score > self.error_bound:
-            tt_train = self.const_space.round(tt_train)
-            tt_train = retraction(tt_train)
-            criterion_score = self.const_space.boolean_criterion(tt_train)
+            for h in self.const_space.hypotheses:
+                self.const_space.round(h)
+                h.value = retraction([core.shape[-1] for core in h.value[:-1]], h.value)
+            criterion_score = np.mean([self.boolean_criterion(h.value) for h in self.const_space.hypotheses])
             print(f"Boolean Criterion: {criterion_score} \r", end="")
         print("\n", flush=True)
-        tt_train = self.const_space.round(tt_train)
-        return tt_rank_reduce(tt_train)
-
-    def _gradient_update(self, tt_train, params):
-        if params["noise"] > 0.01:
-            tt_train = tt_add_noise(tt_train, rank=1, noise_radius=params["noise"])
-            params["noise"] *= 0.99
-        for idx in range(self.const_space.dimension):
-            rank_gradient = self.objective_grad(tt_train, idx) #+ self.const_space.rank_gradient(tt_train)[idx]
-            tt_train[idx] -= params["lr"] * rank_gradient
-            tt_train[idx] += params["lr"] * tt_grad_inner_prod(tt_train, tt_train, rank_gradient, idx) * \
-                             tt_train[idx]
-            tt_train = self.const_space.normalise(tt_train, idx)
-        return tt_train
-
-    def _init_tt_train(self):
-        # Initializes at everything is equivalent formula
-        tt_train = [np.array([1.0, 0.0]).reshape(1, 2, 1) for _ in range(self.const_space.dimension)]
-        tt_train = self.const_space.normalise(tt_train)
-        params = {
-            "lr": 0.08,
-            "noise": self.noise
-        }
-        return tt_train, params
+        for h in self.const_space.hypotheses:
+            self.const_space.round(h)
+            h.value = tt_rank_reduce(h.value)

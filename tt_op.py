@@ -1,7 +1,7 @@
 from copy import deepcopy
 import numpy as np
 import jax.numpy as jnp
-from typing import List
+from typing import List, Tuple
 from itertools import product
 
 PHI = np.array([[1, 1],
@@ -152,7 +152,7 @@ def tt_rank(tt_train):
     return np.max([max(t.shape[0], t.shape[1]) for t in tt_train])
 
 
-def tt_rank_retraction(tt_upper_ranks: List[np.array], tt_train: List[np.array]):
+def tt_rank_retraction(tt_upper_ranks: List[int], tt_train: List[np.array]):
     """ Might reduce TT-rank """
     tt_train = tt_rl_orthogonalize(tt_train)
     rank = 1
@@ -458,21 +458,22 @@ def tt_noisy_boolean_criterion(dimension):
 
 def tt_extract_seq(tt_train, assignments):
     N = len(tt_train)
+    eps = 0.5**(1/N) + 1/2**N
     tt_ttable = tt_rl_orthogonalize(tt_bool_op(tt_train))
-    answer = [np.array([0.1, 0.9]).reshape(1, 2, 1) for _ in range(N)]  # Sum over tensor sums to 1
+    answer = [np.array([1-eps, eps]).reshape(1, 2, 1) for _ in range(N)]  # Sum over tensor sums to 1
     indices = list(range(N))
     for i in assignments.keys():
         a = assignments[i]
         answer[i] = ((a - 1) / (-2) * np.array([0.0, 1.0]) + (1 + a) / 2 * np.array([1.0, 0.0])).reshape(1, 2, 1)
         indices.remove(i)
-    termination_crit = 0.9 ** len(indices)  # if the 0.9s overlap on a truth value
+    termination_crit = eps ** len(indices)  # if the 0.9s overlap on a truth value
     termination_crit -= 1 - termination_crit  # subtract all the other weights, i.e. 1 - true_entry (entries sum to 1)
     score = tt_inner_prod(tt_ttable, answer)
     while score < termination_crit:  # TODO: 1. If we let it run it will converge to the memory mean, 2. we can also after finding the minimal answer set flip that entry and proceed to run to get the next answer set
         improvements = -np.ones(N)
         buffer = deepcopy(answer)
         for j in indices:
-            buffer[j] = np.array([0.9, 0.1]).reshape(1, 2, 1)
+            buffer[j] = np.array([eps, 1-eps]).reshape(1, 2, 1)
             improvements[j] = tt_inner_prod(tt_ttable, buffer) - score
             buffer[j] = answer[j]
         max_improvements = np.argmax(improvements)
@@ -551,6 +552,23 @@ def tt_abs(tt_train):
     rounded_tt_train = tt_round(tt_train)
     absolute_tt_train = tt_rl_orthogonalize(tt_rank_reduce(tt_hadamard(rounded_tt_train, tt_train)))
     return absolute_tt_train
+
+
+def tt_substitute(tt_train: List[np.array], substitutions: List[np.array]) -> List[np.array]:
+    """
+
+    :param self:
+    :param tt_train:
+    :param substitutions: List of TTs to substitute into tt_train, substitutions must be in descending order of their
+     indices in tt_train without gap in indices
+    :return:
+    """
+    for i, tt_s in enumerate(substitutions):
+        tt_core_without_basis = np.einsum("ldr, rk -> ldk", tt_train[-(2 + i)], tt_train[-(1+i)][:, 0, :])
+        tt_core_with_basis = np.einsum("ldr, rk -> ldk", tt_train[-(2 + i)], tt_train[-(1 + i)][:, 1, :])
+        new_cores = tt_xnor(tt_train[:-(2 + i)] + [tt_core_with_basis], tt_s + [np.array([1, 0]).reshape(1, 2, 1)] * (i+1))
+        tt_train = tt_rank_reduce(tt_add(tt_train[:-(2 + i)] + [tt_core_without_basis], new_cores))
+    return tt_train
 
 
 def graph_to_tensor(n, edges):  # Start numbering nodes at 0
