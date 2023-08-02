@@ -10,13 +10,12 @@ parser = argparse.ArgumentParser()
 parser.add_argument("-s", "--stats", help="increase output verbosity", action="store_true")
 args = parser.parse_args()
 
-vocab_size = 3  # i.e. graph with 2^3 nodes
-atoms = np.array(generate_atoms(vocab_size))
-const_space = ConstraintSpace(vocab_size)
-
+const_space = ConstraintSpace()
+number_of_nodes = int(np.log2(8))
+atoms = const_space.generate_atoms(number_of_nodes) # i.e. graph with 2^3 nodes
+h = const_space.Hypothesis()
 graph_edges = [(0, 1), (1, 7), (7, 2), (7, 6), (2, 3), (2, 4), (3, 4), (3, 5), (5, 6)]
-
-graph = tt_svd(-2 * graph_to_tensor(3, graph_edges) + 1)
+graph = tt_svd(-2 * tt_graph_to_tensor(number_of_nodes, graph_edges) + 1)
 bool_graph = tt_bool_op_inv(graph)
 
 
@@ -30,8 +29,8 @@ if args.stats:
     number_of_edges_in_cut = []
     for i in range(100):
         print(f"---Trial {i}---")
-        hypothesis = opt.solve()
-        set_partition = tt_to_tensor(tt_bool_op(hypothesis)).flatten()
+        opt.solve()
+        set_partition = tt_to_tensor(tt_bool_op(h.value)).flatten()
         cut_edges = [e for e in graph_edges if set_partition[e[0]] * set_partition[e[1]] < 0]
         number_of_edges_in_cut.append(len(cut_edges))
     mean = np.mean(number_of_edges_in_cut)
@@ -39,9 +38,9 @@ if args.stats:
     print(f"The mean cut edges are: {mean}, Standard deviation: {std}, Average integrality gap: {mean / 7}")
 else:
     t_1 = time()
-    hypothesis = opt.solve()
+    opt.solve()
     t_2 = time()
-    set_partition = tt_to_tensor(tt_bool_op(hypothesis)).flatten()
+    set_partition = tt_to_tensor(tt_bool_op(h.value)).flatten()
     cut_edges = [e for e in graph_edges if set_partition[e[0]] * set_partition[e[1]] < 0]
     print("The cut edges are: ", cut_edges)
     G = nx.Graph()

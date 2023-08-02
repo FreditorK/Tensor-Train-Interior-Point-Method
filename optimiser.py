@@ -30,7 +30,7 @@ class ILPSolver:
         self.boolean_criterion = tt_boolean_criterion(self.const_space.atom_count)
         self.params = {
             "lr": 0.08,
-            "noise": 0.5*self.error_bound
+            "noise": 0.9*self.error_bound
         }
 
     def solve(self, timeout=100):
@@ -59,7 +59,7 @@ class ILPSolver:
                 tt_trains[i][idx] -= self.params["lr"] * gradient
                 tt_trains[i][idx] += self.params["lr"] * tt_grad_inner_prod(tt_trains[i], tt_trains[i], gradient, idx) * \
                              tt_trains[i][idx]
-                tt_trains[i] = self.const_space.normalise(tt_trains[i], idx)
+                tt_trains[i] = tt_normalise(tt_trains[i], idx=idx)
         for h, tt_train in zip(self.const_space.hypotheses, tt_trains):
             h.value = tt_train
 
@@ -89,11 +89,10 @@ class ILPSolver:
 
     def _round_solution(self):
         criterion_score = np.mean([self.boolean_criterion(h.value) for h in self.const_space.hypotheses])
-        retraction = partial(tt_rank_retraction, )
         while criterion_score > self.error_bound:
             for h in self.const_space.hypotheses:
                 self.const_space.round(h)
-                h.value = retraction([core.shape[-1] for core in h.value[:-1]], h.value)
+                h.value = tt_rank_retraction([core.shape[-1] for core in h.value[:-1]], h.value)
             criterion_score = np.mean([self.boolean_criterion(h.value) for h in self.const_space.hypotheses])
             print(f"Boolean Criterion: {criterion_score} \r", end="")
         print("\n", flush=True)

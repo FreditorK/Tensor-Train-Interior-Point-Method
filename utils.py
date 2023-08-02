@@ -283,7 +283,6 @@ class ExistentialConstraint(LogicConstraint):
     def _projection(self, tt_h, tt_n, bias):
         func_result = tt_inner_prod(tt_h, tt_n)
         condition = func_result + bias <= self.s_lower
-        print("E-Pre-eval", abs(func_result + bias), self.s_lower, tt_inner_prod(tt_h, tt_h))
         if condition:
             alpha = 1 if func_result == 0 else func_result
             tt_n = tt_mul_scal(-alpha / tt_inner_prod(tt_n, tt_n), tt_n)
@@ -293,7 +292,6 @@ class ExistentialConstraint(LogicConstraint):
             tt_n = tt_mul_scal((bias - self.s_lower) / alpha, tt_n)
             proj_tt_h = tt_add(proj_tt_h, tt_n)
             tt_h = tt_rank_reduce(proj_tt_h)
-        print("E-Post_eval", tt_inner_prod(tt_h, tt_n) + bias > self.s_lower, tt_inner_prod(tt_h, tt_h))
         return tt_h, condition
 
 
@@ -398,9 +396,6 @@ class ConstraintSpace(ParameterSpace, ABC):
         tt_train = tt_add(tt_train, tt_update)
         tt_train = tt_mul_scal(1 / jnp.sqrt(tt_inner_prod(tt_train, tt_train)), tt_train)
         hypothesis.value = tt_train
-
-    def normalise(self, tt_train, idx=0):
-        return tt_mul_scal(1 / np.sqrt(tt_inner_prod(tt_train, tt_train)), tt_train, idx)
 
     def stopping_criterion(self, tt_trains, prev_tt_trains):
         return np.mean([

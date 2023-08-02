@@ -524,6 +524,10 @@ def tt_mul_scal(alpha, tt_train, idx=0):
     return tt_train
 
 
+def tt_normalise(tt_train, radius=1, idx=0):
+    return tt_mul_scal(radius / np.sqrt(tt_inner_prod(tt_train, tt_train)), tt_train, idx)
+
+
 def tt_add_noise(tt_train, rank=3, noise_radius=0.1):
     n = len(tt_train)
     noise_train = [np.random.randn(rank if idx != 0 else 1, 2, rank if idx != n - 1 else 1) / 3 for idx in range(n)]
@@ -571,7 +575,7 @@ def tt_substitute(tt_train: List[np.array], substitutions: List[np.array]) -> Li
     return tt_train
 
 
-def graph_to_tensor(n, edges):  # Start numbering nodes at 0
+def tt_graph_to_tensor(n, edges):  # Start numbering nodes at 0
     tensor = np.zeros([2] * n + [2] * n)
     for e in edges:
         index_1 = [int(x) for x in reversed(bin(e[0])[2:])]
