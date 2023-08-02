@@ -199,7 +199,6 @@ class TTExpression:
 
     def to_ANF(self):
         vocab = self.par_space.atoms + [h for h in self.par_space.hypotheses if h not in self.substituted]
-        print(len(self.cores), vocab)
         variable_names = " ".join([a.name for a in vocab])
         variables = symbols(variable_names)
         truth_table_labels = ((np.round(tt_to_tensor(tt_bool_op(self.cores))) + 1) / 2).astype(int).flatten()
@@ -259,7 +258,7 @@ class LogicConstraint(ABC):
         self.tt_expr = tt_expr
         self.hypotheses_to_insert = hypotheses_to_insert
         self.percent = percent
-        self.s_lower = 2 ** (-tt_expr.par_space.atom_count) - 1
+        self.s_lower = 2 ** (-tt_expr.par_space.atom_count)
 
     def _get_hyperplane(self):
         tt_expr = deepcopy(self.tt_expr)
@@ -283,16 +282,18 @@ class ExistentialConstraint(LogicConstraint):
 
     def _projection(self, tt_h, tt_n, bias):
         func_result = tt_inner_prod(tt_h, tt_n)
-        condition = func_result + bias - self.s_lower <= 0
+        condition = func_result + bias <= self.s_lower
+        print("E-Pre-eval", abs(func_result + bias), self.s_lower, tt_inner_prod(tt_h, tt_h))
         if condition:
             alpha = 1 if func_result == 0 else func_result
             tt_n = tt_mul_scal(-alpha / tt_inner_prod(tt_n, tt_n), tt_n)
             proj_tt_h = tt_add(tt_h, tt_n)
-            beta = jnp.sqrt((1 - (bias - self.s_lower) ** 2) / tt_inner_prod(proj_tt_h, proj_tt_h))
+            beta = jnp.sqrt((1 - abs(bias - self.s_lower)) / tt_inner_prod(proj_tt_h, proj_tt_h))
             proj_tt_h = tt_mul_scal(beta, proj_tt_h)
             tt_n = tt_mul_scal((bias - self.s_lower) / alpha, tt_n)
             proj_tt_h = tt_add(proj_tt_h, tt_n)
             tt_h = tt_rank_reduce(proj_tt_h)
+        print("E-Post_eval", tt_inner_prod(tt_h, tt_n) + bias > self.s_lower, tt_inner_prod(tt_h, tt_h))
         return tt_h, condition
 
 
@@ -300,12 +301,12 @@ class UniversalConstraint(LogicConstraint):
 
     def _projection(self, tt_h, tt_n, bias):
         func_result = tt_inner_prod(tt_h, tt_n)
-        condition = abs(func_result + bias) >= self.s_lower + 1
+        condition = abs(func_result + bias) >= self.s_lower
         if condition:
             alpha = 1 if func_result == 0 else func_result
             tt_n = tt_mul_scal(-alpha / tt_inner_prod(tt_n, tt_n), tt_n)
             proj_tt_h = tt_add(tt_h, tt_n)
-            beta = jnp.sqrt((1 - bias ** 2) / tt_inner_prod(proj_tt_h, proj_tt_h))
+            beta = jnp.sqrt((1 - abs(bias)) / tt_inner_prod(proj_tt_h, proj_tt_h))
             proj_tt_h = tt_mul_scal(beta, proj_tt_h)
             tt_n = tt_mul_scal(bias / alpha, tt_n)
             proj_tt_h = tt_add(proj_tt_h, tt_n)
@@ -384,7 +385,7 @@ class ConstraintSpace(ParameterSpace, ABC):
             for proj in projections:
                 proj_tt_train, is_violated = proj(proj_tt_train)
                 not_converged = not_converged or is_violated
-        return proj_tt_train
+        hypothesis.value = proj_tt_train
 
     def round(self, hypothesis: Hypothesis):
         tt_train = hypothesis.value
