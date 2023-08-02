@@ -34,13 +34,13 @@ class ILPSolver:
         }
 
     def solve(self, timeout=100):
-        iter_function = self.const_space.project if self.objective_grad is None else self._riemannian_grad
+        iter_function = self._project if self.objective_grad is None else self._riemannian_grad
         for i in range(timeout):
             print(f"----------Iteration {i}----------")
             iter_function()
             self._round_solution()
-            criterion_score = self.const_space.stopping_criterion()
-            if criterion_score < self.error_bound:
+            #criterion_score = self.const_space.stopping_criterion()
+            if True: #criterion_score < self.error_bound:
                 break
             print(f"Constraint Criterion after rounding: {criterion_score}")
             self._stir_up()
@@ -63,12 +63,16 @@ class ILPSolver:
         for h, tt_train in zip(self.const_space.hypotheses, tt_trains):
             h.value = tt_train
 
+    def _project(self):
+        for h in self.const_space.hypotheses:
+            self.const_space.project(h)
+
     def _init_hypotheses(self):
         criterion = np.inf
         while criterion >= 0.1*self.error_bound * self.params["lr"]:
             hypotheses_copies = deepcopy([h.value for h in self.const_space.hypotheses])
             self._gradient_update()
-            criterion = self.const_space.stopping_criterion(self.const_space.hypotheses, hypotheses_copies)
+            criterion = self.const_space.stopping_criterion([h.value for h in self.const_space.hypotheses], hypotheses_copies)
             print(f"Stopping Criterion: {criterion} \r", end="")
         print("\n", flush=True)
 
@@ -78,8 +82,8 @@ class ILPSolver:
         while criterion >= 0.1*self.error_bound*self.params["lr"]:  # Gradient induced change, i.e. similar to first-order sufficient condition
             hypotheses_copies = deepcopy([h.value for h in self.const_space.hypotheses])
             self._gradient_update()
-            self.const_space.project()
-            criterion = self.const_space.stopping_criterion(self.const_space.hypotheses, hypotheses_copies)
+            self._project()
+            criterion = self.const_space.stopping_criterion([h.value for h in self.const_space.hypotheses], hypotheses_copies)
             print(f"Stopping Criterion: {criterion} \r", end="")
         print("\n", flush=True)
 

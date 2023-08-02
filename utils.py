@@ -130,7 +130,7 @@ class TTExpression:
     def hypotheses(self):
         involved_hypotheses = []
         for h in self.par_space.hypotheses:
-            if np.sum(self.cores[h.index][:, 1, :]) < 1e-8:
+            if np.sum(np.abs(self.cores[h.index][:, 1, :])) > 1e-8: # TODO: This condition might need a bit more thought
                 involved_hypotheses.append(h)
         return involved_hypotheses
 
@@ -198,7 +198,8 @@ class TTExpression:
         return TTExpression(new_cores, self.par_space)
 
     def to_ANF(self):
-        vocab = self.par_space.atoms + [h for h in self.par_space.hypotheses if h.index not in self.substituted]
+        vocab = self.par_space.atoms + [h for h in self.par_space.hypotheses if h not in self.substituted]
+        print(len(self.cores), vocab)
         variable_names = " ".join([a.name for a in vocab])
         variables = symbols(variable_names)
         truth_table_labels = ((np.round(tt_to_tensor(tt_bool_op(self.cores))) + 1) / 2).astype(int).flatten()
@@ -239,7 +240,7 @@ class Hypothesis(Expression):
         return TTExpression(new_cores, self.par_space, tt_train.substituted + [self.index])
 
     def to_CNF(self):
-        return TTExpression(self.value, self.par_space).to_CNF()
+        return TTExpression(self.value, self.par_space, substituted=self.par_space.hypotheses).to_CNF()
 
 
 class Boolean_Function(Expression):
@@ -266,7 +267,7 @@ class LogicConstraint(ABC):
             tt_expr = h.substitute_into(tt_expr)
         bias = tt_leading_entry(tt_expr.cores) - self.percent
         last_normal_core = np.einsum("ldr, rk -> ldk", tt_expr.cores[-2], tt_expr.cores[-1][:, 1, :])
-        normal = tt_expr.cores[:-2] + last_normal_core
+        normal = tt_expr.cores[:-2] + [last_normal_core]
         return normal, bias
 
     @abstractmethod
@@ -299,7 +300,7 @@ class UniversalConstraint(LogicConstraint):
 
     def _projection(self, tt_h, tt_n, bias):
         func_result = tt_inner_prod(tt_h, tt_n)
-        condition = func_result + bias - self.s_lower - 1 >= 0
+        condition = abs(func_result + bias) >= self.s_lower + 1
         if condition:
             alpha = 1 if func_result == 0 else func_result
             tt_n = tt_mul_scal(-alpha / tt_inner_prod(tt_n, tt_n), tt_n)
@@ -371,12 +372,12 @@ class ConstraintSpace(ParameterSpace, ABC):
         tt_train = TTExpression.from_expression(expr)
         relevant_hs = tt_train.hypotheses
         for i, h in enumerate(relevant_hs):
-            self.iq_constraints[h].append(
-                ExistentialConstraint(tt_train, relevant_hs[:i] + relevant_hs[i + 1:], percent))
+            self.eq_constraints[h].append(
+                UniversalConstraint(tt_train, relevant_hs[:i] + relevant_hs[i + 1:], percent))
 
     def project(self, hypothesis: Hypothesis):
         projections = [eq.get_projection() for eq in self.eq_constraints[hypothesis]] + [iq.get_projection() for iq in self.iq_constraints[hypothesis]]
-        proj_tt_train = hypothesis.cores
+        proj_tt_train = hypothesis.value
         not_converged = True
         while not_converged:
             not_converged = False
