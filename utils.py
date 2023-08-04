@@ -107,8 +107,16 @@ class Atom(Expression):
         super().__init__(par_space, name, [self], lambda x: x)
         self.index = par_space.atom_count
 
+    def __eq__(self, other):
+        if isinstance(other, Atom):
+            return self.index == other.index
+        return False
+
     def to_tt_train(self):
         return tt_atom_train(self.index, self.par_space.atom_count + self.par_space.hypothesis_count)
+
+    def __hash__(self):
+        return self.index
 
 
 class TTExpression:
@@ -124,15 +132,21 @@ class TTExpression:
     @classmethod
     def from_expression(cls, expr: Expression):
         tt_train = expr.to_tt_train()
-        return cls(tt_train, expr.par_space)
+        not_involved_hypotheses_idxs = []
+        for h in expr.par_space.hypotheses:
+            # TODO: This condition might need a bit more thought
+            if np.sum(
+                np.abs(tt_train[h.index][:, 1, :])
+            ) <= 1 / 2 ** (expr.par_space.atom_count + expr.par_space.hypothesis_count):
+                not_involved_hypotheses_idxs.append(h.index)
+        for i in sorted(not_involved_hypotheses_idxs, reverse=True):
+            tt_train[i - 1] = np.einsum("ldr, rk -> ldk", tt_train[i - 1], tt_train[i][:, 0, :])
+            tt_train.pop(i)
+        return cls(tt_train, expr.par_space, substituted=not_involved_hypotheses_idxs)
 
     @property
     def hypotheses(self):
-        involved_hypotheses = []
-        for h in self.par_space.hypotheses:
-            if np.sum(np.abs(self.cores[h.index][:, 1, :])) > 1e-8: # TODO: This condition might need a bit more thought
-                involved_hypotheses.append(h)
-        return involved_hypotheses
+        return [h for h in self.par_space.hypotheses if h.index not in self.substituted]
 
     def __add__(self, other):
         if isinstance(other, TTExpression):
@@ -227,7 +241,8 @@ class Hypothesis(Expression):
         return tt_atom_train(self.index, self.par_space.atom_count + self.par_space.hypothesis_count)
 
     def substitute_into(self, tt_train: TTExpression) -> TTExpression:
-        assert self.par_space == tt_train.par_space, "Hypothesis is not in the parameter space of the given TT."
+        assert self.par_space.atoms == tt_train.par_space.atoms, "Hypothesis is not in the parameter space of the given TT."
+        assert self.par_space.hypotheses == tt_train.par_space.hypotheses, "Hypothesis is not in the hypothesis space of the given TT."
         index = self.index - sum([1 for i in tt_train.substituted if i < self.index])
         tt_core_without_basis = np.einsum("ldr, rk -> ldk", tt_train.cores[index - 1],
                                           tt_train.cores[index][:, 0, :])
@@ -236,10 +251,18 @@ class Hypothesis(Expression):
                             self.value + [np.array([1, 0]).reshape(1, 2, 1)] * self.par_space.hypothesis_count)
         new_cores = tt_rank_reduce(
             tt_add(tt_train.cores[:index - 1] + [tt_core_without_basis] + tt_train.cores[index + 1:], new_cores))
-        return TTExpression(new_cores, self.par_space, tt_train.substituted + [self.index])
+        return TTExpression(new_cores, self.par_space, substituted=tt_train.substituted + [self.index])
 
     def to_CNF(self):
         return TTExpression(self.value, self.par_space, substituted=self.par_space.hypotheses).to_CNF()
+
+    def __eq__(self, other):
+        if isinstance(other, Hypothesis):
+            return self.index == other.index
+        return False
+
+    def __hash__(self):
+        return self.index
 
 
 class Boolean_Function(Expression):
@@ -257,16 +280,19 @@ class LogicConstraint(ABC):
     def __init__(self, tt_expr: TTExpression, hypotheses_to_insert: List[Hypothesis], percent):
         self.tt_expr = tt_expr
         self.hypotheses_to_insert = hypotheses_to_insert
+        print("To insert", hypotheses_to_insert)
         self.percent = percent
         self.s_lower = 2 ** (-tt_expr.par_space.atom_count)
 
     def _get_hyperplane(self):
         tt_expr = deepcopy(self.tt_expr)
+        print("lenght", len(tt_expr.cores), tt_expr.substituted)
         for h in self.hypotheses_to_insert:
             tt_expr = h.substitute_into(tt_expr)
         bias = tt_leading_entry(tt_expr.cores) - self.percent
         last_normal_core = np.einsum("ldr, rk -> ldk", tt_expr.cores[-2], tt_expr.cores[-1][:, 1, :])
         normal = tt_expr.cores[:-2] + [last_normal_core]
+        print([t.shape for t in normal])
         return normal, bias
 
     @abstractmethod
@@ -333,6 +359,10 @@ class ConstraintSpace(ParameterSpace, ABC):
         return self.hypothesis_list
 
     @property
+    def permuted_hypotheses(self):
+        return list(np.random.permutation(self.hypothesis_list))
+
+    @property
     def hypothesis_count(self):
         return len(self.hypothesis_list)
 
@@ -370,12 +400,15 @@ class ConstraintSpace(ParameterSpace, ABC):
     def for_all(self, expr: Expression, percent=1):
         tt_train = TTExpression.from_expression(expr)
         relevant_hs = tt_train.hypotheses
+        print(expr, relevant_hs)
         for i, h in enumerate(relevant_hs):
             self.eq_constraints[h].append(
                 UniversalConstraint(tt_train, relevant_hs[:i] + relevant_hs[i + 1:], percent))
 
     def project(self, hypothesis: Hypothesis):
-        projections = [eq.get_projection() for eq in self.eq_constraints[hypothesis]] + [iq.get_projection() for iq in self.iq_constraints[hypothesis]]
+        projections = [eq.get_projection() for eq in self.eq_constraints[hypothesis]] + [iq.get_projection() for iq in
+                                                                                         self.iq_constraints[
+                                                                                             hypothesis]]
         proj_tt_train = hypothesis.value
         not_converged = True
         while not_converged:

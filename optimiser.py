@@ -39,7 +39,7 @@ class ILPSolver:
             print(f"----------Iteration {i}----------")
             iter_function()
             self._round_solution()
-            #criterion_score = self.const_space.stopping_criterion()
+            #criterion_score = self.const_space.stopping_criterion() TODO
             if True: #criterion_score < self.error_bound:
                 break
             print(f"Constraint Criterion after rounding: {criterion_score}")
@@ -54,20 +54,21 @@ class ILPSolver:
         tt_trains = [tt_add_noise(h.value, rank=1, noise_radius=self.params["noise"]) for h in self.const_space.hypotheses]
         for idx in range(self.const_space.atom_count):
             gradients = self.objective_grad(tt_trains)
-            for i in range(self.const_space.hypothesis_count):
+            for i, tt_train in enumerate(tt_trains):
                 gradient = gradients[i][idx]
-                tt_trains[i][idx] -= self.params["lr"] * gradient
-                tt_trains[i][idx] += self.params["lr"] * tt_grad_inner_prod(tt_trains[i], tt_trains[i], gradient, idx) * \
-                             tt_trains[i][idx]
-                tt_trains[i] = tt_normalise(tt_trains[i], idx=idx)
+                tt_train[idx] -= self.params["lr"] * gradient
+                tt_train[idx] += self.params["lr"] * tt_grad_inner_prod(tt_train, tt_train, gradient, idx) * \
+                             tt_train[idx]
+                tt_train = tt_normalise(tt_train, idx=idx)
         for h, tt_train in zip(self.const_space.hypotheses, tt_trains):
             h.value = tt_train
 
     def _project(self):
-        for h in self.const_space.hypotheses:
+        for h in self.const_space.permuted_hypotheses:
             self.const_space.project(h)
 
     def _init_hypotheses(self):
+        print("Initialising hypotheses...")
         criterion = np.inf
         while criterion >= 0.1*self.error_bound * self.params["lr"]:
             hypotheses_copies = deepcopy([h.value for h in self.const_space.hypotheses])
@@ -79,6 +80,7 @@ class ILPSolver:
     def _riemannian_grad(self):
         criterion = np.inf
         self._init_hypotheses()
+        print("Optimising the relaxation...")
         while criterion >= 0.1*self.error_bound*self.params["lr"]:  # Gradient induced change, i.e. similar to first-order sufficient condition
             hypotheses_copies = deepcopy([h.value for h in self.const_space.hypotheses])
             self._gradient_update()
@@ -88,6 +90,7 @@ class ILPSolver:
         print("\n", flush=True)
 
     def _round_solution(self):
+        print("Rounding the solution...")
         criterion_score = np.mean([self.boolean_criterion(h.value) for h in self.const_space.hypotheses])
         while criterion_score > self.error_bound:
             for h in self.const_space.hypotheses:

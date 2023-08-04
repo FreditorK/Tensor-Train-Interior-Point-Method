@@ -126,9 +126,10 @@ def tt_noise_loss(tt_train, likelihoods, expected_truth):
     return (tt_inner_prod(noised_tt_train, noised_tt_train) - expected_truth) ** 2
 
 
-def tt_rank_reduce(tt_train: List[np.array], tt_bound=1e-4):
+def tt_rank_reduce(tt_train: List[np.array]):
     """ Might reduce TT-rank """
     tt_train = tt_rl_orthogonalize(tt_train)
+    tt_bound = 1/2**len(tt_train)
     rank = 1
     for idx in range(len(tt_train) - 1):
         idx_shape = tt_train[idx].shape
@@ -491,7 +492,7 @@ def tt_xnor(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.a
     tt_train_2 = tt_bool_op(tt_train_2)
     tt_train_xnor = tt_hadamard(tt_train_1, tt_train_2)
     tt_train_xnor = tt_bool_op_inv(tt_train_xnor)
-    return tt_rank_reduce(tt_train_xnor, tt_bound=1e-5)
+    return tt_rank_reduce(tt_train_xnor)
 
 
 def tt_xor(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.array]:
@@ -507,7 +508,7 @@ def tt_and(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.ar
     half = tt_mul_scal(-0.5, tt_one(len(tt_train_1)))
     tt_train_and = tt_add(tt_add(half, tt_mul), tt_add(tt_train_1, tt_train_2))
     tt_train_and = tt_bool_op_inv(tt_train_and)
-    return tt_rank_reduce(tt_train_and, tt_bound=1e-5)
+    return tt_rank_reduce(tt_train_and)
 
 
 def tt_or(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.array]:
@@ -543,7 +544,7 @@ def tt_round_iteration(tt_train):
     tt_train_p3 = tt_mul_scal(-0.5, tt_hadamard(tt_hadamard(tt_train, tt_train), tt_train))
     tt_train = tt_mul_scal(1.5, deepcopy(tt_train))
     tt_train = tt_add(tt_train, tt_train_p3)
-    return tt_rank_reduce(tt_train, tt_bound=0)
+    return tt_rank_reduce(tt_train)
 
 
 def tt_round(tt_train, iterations=100):
