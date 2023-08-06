@@ -280,19 +280,17 @@ class LogicConstraint(ABC):
     def __init__(self, tt_expr: TTExpression, hypotheses_to_insert: List[Hypothesis], percent):
         self.tt_expr = tt_expr
         self.hypotheses_to_insert = hypotheses_to_insert
-        print("To insert", hypotheses_to_insert)
         self.percent = percent
         self.s_lower = 2 ** (-tt_expr.par_space.atom_count)
 
     def _get_hyperplane(self):
         tt_expr = deepcopy(self.tt_expr)
-        print("lenght", len(tt_expr.cores), tt_expr.substituted)
         for h in self.hypotheses_to_insert:
             tt_expr = h.substitute_into(tt_expr)
         bias = tt_leading_entry(tt_expr.cores) - self.percent
         last_normal_core = np.einsum("ldr, rk -> ldk", tt_expr.cores[-2], tt_expr.cores[-1][:, 1, :])
         normal = tt_expr.cores[:-2] + [last_normal_core]
-        print([t.shape for t in normal])
+        normal = tt_mul_scal(1/jnp.sqrt(tt_inner_prod(normal, normal)), normal)
         return normal, bias
 
     @abstractmethod
@@ -310,14 +308,10 @@ class ExistentialConstraint(LogicConstraint):
         func_result = tt_inner_prod(tt_h, tt_n)
         condition = func_result + bias <= self.s_lower
         if condition:
-            alpha = 1 if func_result == 0 else func_result
-            tt_n = tt_mul_scal(-alpha / tt_inner_prod(tt_n, tt_n), tt_n)
-            proj_tt_h = tt_add(tt_h, tt_n)
-            beta = jnp.sqrt((1 - abs(bias - self.s_lower)) / tt_inner_prod(proj_tt_h, proj_tt_h))
-            proj_tt_h = tt_mul_scal(beta, proj_tt_h)
-            tt_n = tt_mul_scal((bias - self.s_lower) / alpha, tt_n)
-            proj_tt_h = tt_add(proj_tt_h, tt_n)
-            tt_h = tt_rank_reduce(proj_tt_h)
+            alpha = np.sqrt((1-(bias- self.s_lower)**2)/(1 - func_result**2))
+            beta = bias - self.s_lower + alpha*func_result
+            tt_h = tt_add(tt_mul_scal(alpha, tt_h), tt_mul_scal(-beta, deepcopy(tt_n)))
+            tt_h = tt_rank_reduce(tt_h)
         return tt_h, condition
 
 
@@ -327,14 +321,10 @@ class UniversalConstraint(LogicConstraint):
         func_result = tt_inner_prod(tt_h, tt_n)
         condition = abs(func_result + bias) >= self.s_lower
         if condition:
-            alpha = 1 if func_result == 0 else func_result
-            tt_n = tt_mul_scal(-alpha / tt_inner_prod(tt_n, tt_n), tt_n)
-            proj_tt_h = tt_add(tt_h, tt_n)
-            beta = jnp.sqrt((1 - abs(bias)) / tt_inner_prod(proj_tt_h, proj_tt_h))
-            proj_tt_h = tt_mul_scal(beta, proj_tt_h)
-            tt_n = tt_mul_scal(bias / alpha, tt_n)
-            proj_tt_h = tt_add(proj_tt_h, tt_n)
-            tt_h = tt_rank_reduce(proj_tt_h)
+            alpha = np.sqrt((1-bias**2)/(1 - func_result**2))
+            beta = bias + alpha*func_result
+            tt_h = tt_add(tt_mul_scal(alpha, tt_h), tt_mul_scal(-beta, deepcopy(tt_n)))
+            tt_h = tt_rank_reduce(tt_h)
         return tt_h, condition
 
 
@@ -400,7 +390,6 @@ class ConstraintSpace(ParameterSpace, ABC):
     def for_all(self, expr: Expression, percent=1):
         tt_train = TTExpression.from_expression(expr)
         relevant_hs = tt_train.hypotheses
-        print(expr, relevant_hs)
         for i, h in enumerate(relevant_hs):
             self.eq_constraints[h].append(
                 UniversalConstraint(tt_train, relevant_hs[:i] + relevant_hs[i + 1:], percent))
