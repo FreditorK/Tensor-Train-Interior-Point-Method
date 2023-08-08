@@ -1,3 +1,5 @@
+from collections import deque
+
 import numpy as np
 from operators import D_func
 from tt_op import *
@@ -30,7 +32,8 @@ class ILPSolver:
         self.boolean_criterion = tt_boolean_criterion(self.const_space.atom_count)
         self.params = {
             "lr": 0.075,
-            "noise": 0.9 * self.error_bound
+            "noise": 0.9 * self.error_bound,
+            "patience": 5
         }
 
     def _const_satisfied(self):
@@ -93,23 +96,28 @@ class ILPSolver:
         print("\n", flush=True)
 
     def _riemannian_grad(self):
-        criterion = np.inf
+        criterions = deque([np.inf], maxlen=self.params["patience"])
         self._init_hypotheses()
-        while criterion >= 0.1 * self.error_bound * self.params["lr"]:  # Gradient induced change, i.e. similar to first-order sufficient condition
+        while criterions[-1] >= 0.05 * self.error_bound:  # Gradient induced change, i.e. similar to first-order sufficient condition
             hypotheses_copies = deepcopy([h.value for h in self.const_space.hypotheses])
             self._gradient_update()
             self._project()
             criterion = self.const_space.stopping_criterion([h.value for h in self.const_space.hypotheses],
                                                             hypotheses_copies)
+            criterions.append(criterion)
             print(f"Stopping Criterion: {criterion} \r", end="")
+            if (np.array(criterions)[:-1] - np.array(criterions)[1:]).mean() > 0:
+                self.params["lr"] *= 0.99
         print("\n", flush=True)
 
     def _round_solution(self):
         criterion_score = np.mean([self.boolean_criterion(h.value) for h in self.const_space.hypotheses])
+        print(self._const_satisfied())
         while criterion_score > self.error_bound:
             for h in self.const_space.hypotheses:
                 self.const_space.round(h)
                 h.value = tt_rank_retraction([core.shape[-1] for core in h.value[:-1]], h.value)
+                print(self._const_satisfied())
             criterion_score = np.mean([self.boolean_criterion(h.value) for h in self.const_space.hypotheses])
             print(f"Boolean Criterion: {criterion_score} \r", end="")
         print("\n", flush=True)

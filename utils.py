@@ -298,8 +298,9 @@ class LogicConstraint(ABC):
 
     def get_projection(self):
         normal, bias = self._get_hyperplane()
-        normed_normal = tt_mul_scal(1/jnp.sqrt(tt_inner_prod(normal, normal)), normal)
-        return lambda tt_h: self._projection(tt_h, normed_normal, bias)
+        if abs(bias) > 1:  # TODO: Then it is unsatisfiable, only happens in Multi-Hypothesis case
+            return lambda tt_h: (tt_h, False)
+        return lambda tt_h: self._projection(tt_h, normal, bias)
 
     @abstractmethod
     def is_satisfied(self, tt_h):
@@ -313,8 +314,9 @@ class ExistentialConstraint(LogicConstraint):
         func_result = tt_inner_prod(tt_h, tt_n)
         condition = func_result + bias <= self.s_lower
         if condition:
-            alpha = np.sqrt((1-(bias- self.s_lower)**2)/(1 - func_result**2))
-            beta = bias - self.s_lower + alpha*func_result
+            tt_n = tt_mul_scal(1 / jnp.sqrt(tt_inner_prod(tt_n, tt_n)), tt_n)
+            alpha = np.sqrt((1 - (bias - self.s_lower) ** 2) / (1 - func_result ** 2))
+            beta = bias - self.s_lower + alpha * func_result
             tt_h = tt_add(tt_mul_scal(alpha, tt_h), tt_mul_scal(-beta, tt_n))
             tt_h = tt_rank_reduce(tt_h)
         return tt_h, condition
@@ -331,8 +333,9 @@ class UniversalConstraint(LogicConstraint):
         func_result = tt_inner_prod(tt_h, tt_n)
         condition = abs(func_result + bias) >= self.s_lower
         if condition:
-            alpha = np.sqrt((1-bias**2)/(1 - func_result**2))
-            beta = bias + alpha*func_result
+            tt_n = tt_mul_scal(1 / jnp.sqrt(tt_inner_prod(tt_n, tt_n)), tt_n)
+            alpha = np.sqrt((1 - bias ** 2) / (1 - func_result ** 2))
+            beta = bias + alpha * func_result
             tt_h = tt_add(tt_mul_scal(alpha, tt_h), tt_mul_scal(-beta, tt_n))
             tt_h = tt_rank_reduce(tt_h)
         return tt_h, condition
@@ -416,7 +419,7 @@ class ConstraintSpace(ParameterSpace, ABC):
         not_converged = True
         while not_converged:
             not_converged = False
-            for proj in np.random.permutation(projections):
+            for proj in projections:
                 proj_tt_train, is_violated = proj(proj_tt_train)
                 not_converged = not_converged or is_violated
         hypothesis.value = proj_tt_train
