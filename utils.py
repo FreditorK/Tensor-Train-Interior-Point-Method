@@ -416,7 +416,7 @@ class ConstraintSpace(ParameterSpace, ABC):
         not_converged = True
         while not_converged:
             not_converged = False
-            for proj in projections:
+            for proj in np.random.permutation(projections):
                 proj_tt_train, is_violated = proj(proj_tt_train)
                 not_converged = not_converged or is_violated
         hypothesis.value = proj_tt_train
