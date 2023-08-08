@@ -290,7 +290,6 @@ class LogicConstraint(ABC):
         bias = tt_leading_entry(tt_expr.cores) - self.percent
         last_normal_core = np.einsum("ldr, rk -> ldk", tt_expr.cores[-2], tt_expr.cores[-1][:, 1, :])
         normal = tt_expr.cores[:-2] + [last_normal_core]
-        normal = tt_mul_scal(1/jnp.sqrt(tt_inner_prod(normal, normal)), normal)
         return normal, bias
 
     @abstractmethod
@@ -299,33 +298,48 @@ class LogicConstraint(ABC):
 
     def get_projection(self):
         normal, bias = self._get_hyperplane()
-        return lambda tt_h: self._projection(tt_h, normal, bias)
+        normed_normal = tt_mul_scal(1/jnp.sqrt(tt_inner_prod(normal, normal)), normal)
+        return lambda tt_h: self._projection(tt_h, normed_normal, bias)
+
+    @abstractmethod
+    def is_satisfied(self, tt_h):
+        ...
 
 
 class ExistentialConstraint(LogicConstraint):
 
     def _projection(self, tt_h, tt_n, bias):
+        tt_n = deepcopy(tt_n)
         func_result = tt_inner_prod(tt_h, tt_n)
         condition = func_result + bias <= self.s_lower
         if condition:
             alpha = np.sqrt((1-(bias- self.s_lower)**2)/(1 - func_result**2))
             beta = bias - self.s_lower + alpha*func_result
-            tt_h = tt_add(tt_mul_scal(alpha, tt_h), tt_mul_scal(-beta, deepcopy(tt_n)))
+            tt_h = tt_add(tt_mul_scal(alpha, tt_h), tt_mul_scal(-beta, tt_n))
             tt_h = tt_rank_reduce(tt_h)
         return tt_h, condition
+
+    def is_satisfied(self, tt_h):
+        normal, bias = self._get_hyperplane()
+        return tt_inner_prod(tt_h, normal) + bias > self.s_lower
 
 
 class UniversalConstraint(LogicConstraint):
 
     def _projection(self, tt_h, tt_n, bias):
+        tt_n = deepcopy(tt_n)
         func_result = tt_inner_prod(tt_h, tt_n)
         condition = abs(func_result + bias) >= self.s_lower
         if condition:
             alpha = np.sqrt((1-bias**2)/(1 - func_result**2))
             beta = bias + alpha*func_result
-            tt_h = tt_add(tt_mul_scal(alpha, tt_h), tt_mul_scal(-beta, deepcopy(tt_n)))
+            tt_h = tt_add(tt_mul_scal(alpha, tt_h), tt_mul_scal(-beta, tt_n))
             tt_h = tt_rank_reduce(tt_h)
         return tt_h, condition
+
+    def is_satisfied(self, tt_h):
+        normal, bias = self._get_hyperplane()
+        return abs(tt_inner_prod(tt_h, normal) + bias) < self.s_lower
 
 
 class ConstraintSpace(ParameterSpace, ABC):

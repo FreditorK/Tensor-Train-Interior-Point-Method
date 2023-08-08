@@ -150,7 +150,7 @@ def tt_rank_reduce(tt_train: List[np.array]):
 
 
 def tt_rank(tt_train):
-    return np.max([max(t.shape[0], t.shape[1]) for t in tt_train])
+    return np.max([max(t.shape[0], t.shape[-1]) for t in tt_train])
 
 
 def tt_rank_retraction(tt_upper_ranks: List[int], tt_train: List[np.array]):
@@ -521,8 +521,8 @@ def tt_neg(tt_train: List[np.array]) -> List[np.array]:
 
 
 def tt_mul_scal(alpha, tt_train, idx=0):
-    tt_train[idx] *= alpha
-    return tt_train
+    mul = alpha*tt_train[idx]
+    return tt_train[:idx] + [mul] + tt_train[idx+1:]
 
 
 def tt_normalise(tt_train, radius=1, idx=0):

@@ -15,10 +15,11 @@ def coin_symmetry(tt_train):
 
 
 const_space.for_all(h >> (head_c1 ^ tail_c1))
+const_space.for_all(h >> (head_c2 ^ tail_c2))
 opt = ILPSolver(const_space, objective=coin_symmetry)
 t_1 = time()
 hypothesis = opt.solve()
 t_2 = time()
-print("TT-rank: ", [f"{h}: {tt_rank(h.value)}" for h in const_space.hypotheses])
+print("TT-rank: ", [f"{h}: {tt_rank(h.value)}" for h in const_space.hypotheses], [f"{h}: {[c.shape for c in h.value]}" for h in const_space.hypotheses])
 print(f"Conjunctive Normal Form: h{const_space.atoms} =", h.to_CNF(), flush=True)
 print(f"Total time taken: {t_2 - t_1}s.")

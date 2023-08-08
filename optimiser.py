@@ -30,8 +30,18 @@ class ILPSolver:
         self.boolean_criterion = tt_boolean_criterion(self.const_space.atom_count)
         self.params = {
             "lr": 0.08,
-            "noise": 0.9*self.error_bound
+            "noise": 0.9 * self.error_bound
         }
+
+    def _const_satisfied(self):
+        is_satisfied = True
+        for h in self.const_space.hypotheses:
+            for c in self.const_space.eq_constraints[h]:
+                is_satisfied = is_satisfied & c.is_satisfied(h.value)
+                print(c, c.is_satisfied(h.value))
+            for c in self.const_space.iq_constraints[h]:
+                is_satisfied = is_satisfied & c.is_satisfied(h.value)
+        return is_satisfied
 
     def solve(self, timeout=100):
         iter_function = self._project if self.objective_grad is None else self._riemannian_grad
@@ -39,10 +49,9 @@ class ILPSolver:
             print(f"----------Iteration {i}----------")
             iter_function()
             self._round_solution()
-            #criterion_score = self.const_space.stopping_criterion() TODO
-            if True: #criterion_score < self.error_bound:
+            self._const_satisfied()
+            if self._const_satisfied():
                 break
-            print(f"Constraint Criterion after rounding: {criterion_score}")
             self._stir_up()
 
     def _stir_up(self):
@@ -51,15 +60,16 @@ class ILPSolver:
             h.value = tt_add_noise(h.value, rank=rank, noise_radius=self.error_bound)
 
     def _gradient_update(self):
-        tt_trains = [tt_add_noise(h.value, rank=1, noise_radius=self.params["noise"]) for h in self.const_space.hypotheses]
+        tt_trains = [tt_add_noise(h.value, rank=1, noise_radius=self.params["noise"]) for h in
+                     self.const_space.hypotheses]
         for idx in range(self.const_space.atom_count):
             gradients = self.objective_grad(tt_trains)
-            for i, tt_train in enumerate(tt_trains):
+            for i in range(self.const_space.hypothesis_count):
                 gradient = gradients[i][idx]
-                tt_train[idx] -= self.params["lr"] * gradient
-                tt_train[idx] += self.params["lr"] * tt_grad_inner_prod(tt_train, tt_train, gradient, idx) * \
-                             tt_train[idx]
-                tt_train = tt_normalise(tt_train, idx=idx)
+                tt_trains[i][idx] -= self.params["lr"] * gradient
+                tt_trains[i][idx] += self.params["lr"] * tt_grad_inner_prod(tt_trains[i], tt_trains[i], gradient, idx) * \
+                                 tt_trains[i][idx]
+                tt_trains[i] = tt_normalise(tt_trains[i], idx=idx)
         for h, tt_train in zip(self.const_space.hypotheses, tt_trains):
             h.value = tt_train
 
@@ -70,10 +80,11 @@ class ILPSolver:
     def _init_hypotheses(self):
         print("Initialising hypotheses...")
         criterion = np.inf
-        while criterion >= 0.1*self.error_bound * self.params["lr"]:
+        while criterion >= 0.1 * self.error_bound * self.params["lr"]:
             hypotheses_copies = deepcopy([h.value for h in self.const_space.hypotheses])
             self._gradient_update()
-            criterion = self.const_space.stopping_criterion([h.value for h in self.const_space.hypotheses], hypotheses_copies)
+            criterion = self.const_space.stopping_criterion([h.value for h in self.const_space.hypotheses],
+                                                            hypotheses_copies)
             print(f"Stopping Criterion: {criterion} \r", end="")
         print("\n", flush=True)
 
@@ -81,11 +92,13 @@ class ILPSolver:
         criterion = np.inf
         self._init_hypotheses()
         print("Optimising the relaxation...")
-        while criterion >= 0.1*self.error_bound*self.params["lr"]:  # Gradient induced change, i.e. similar to first-order sufficient condition
+        while criterion >= 0.1 * self.error_bound * self.params[
+            "lr"]:  # Gradient induced change, i.e. similar to first-order sufficient condition
             hypotheses_copies = deepcopy([h.value for h in self.const_space.hypotheses])
             self._gradient_update()
             self._project()
-            criterion = self.const_space.stopping_criterion([h.value for h in self.const_space.hypotheses], hypotheses_copies)
+            criterion = self.const_space.stopping_criterion([h.value for h in self.const_space.hypotheses],
+                                                            hypotheses_copies)
             print(f"Stopping Criterion: {criterion} \r", end="")
         print("\n", flush=True)
 
