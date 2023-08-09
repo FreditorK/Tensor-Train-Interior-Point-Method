@@ -112,12 +112,10 @@ class ILPSolver:
 
     def _round_solution(self):
         criterion_score = np.mean([self.boolean_criterion(h.value) for h in self.const_space.hypotheses])
-        print(self._const_satisfied())
         while criterion_score > self.error_bound:
             for h in self.const_space.hypotheses:
                 self.const_space.round(h)
                 h.value = tt_rank_retraction([core.shape[-1] for core in h.value[:-1]], h.value)
-                print(self._const_satisfied())
             criterion_score = np.mean([self.boolean_criterion(h.value) for h in self.const_space.hypotheses])
             print(f"Boolean Criterion: {criterion_score} \r", end="")
         print("\n", flush=True)
