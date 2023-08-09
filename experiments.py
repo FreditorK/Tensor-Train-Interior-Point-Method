@@ -1,19 +1,17 @@
 from time import time
-from optimiser import AnswerSetSolver, ILPSolver
 from utils import *
-import jax.numpy as jnp
+from optimiser import ILPSolver, AnswerSetSolver
 
-vocab_size = 3
-x = Atom(vocab_size, "x")
-y = Atom(vocab_size, "y")
-z = Atom(vocab_size, "z")
-func = (x & y & z).to_tt_train()
-a = tt_to_tensor(tt_bool_op(func))
-print(a)
-b = jnp.sqrt(jnp.linalg.norm(a.reshape(4, 2), ord=2))
-print(b)
-a = tt_to_tensor(tt_bool_op(tt_add_noise(func, noise_radius=0.6)))
-print(a)
-b = jnp.sqrt(jnp.linalg.norm(a.reshape(4, 2), ord=2))
-print(b)
-#print(tt_shared_influence(func, np.array([0, 1, 2])))
+const_space = ConstraintSpace()
+head_c1 = const_space.Atom("head(c_1)")
+tail_c1 = const_space.Atom("tail(c_1)")
+head_c2 = const_space.Atom("head(c_2)")
+tail_c2 = const_space.Atom("tail(c_2)")
+
+a = TTExpression.from_expression((head_c1 ^ tail_c1) & (head_c2 ^ tail_c2))
+b = TTExpression(tt_permute(a.cores, axes=[(0, 2)]), const_space)
+#c = TTExpression([t[:, [1, 0], :] for t in a.cores], const_space)
+#print(tt_to_tensor(tt_permute(a.cores)))
+print(a.to_CNF())
+print(b.to_CNF())
+#print(c.to_CNF())

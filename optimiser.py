@@ -76,7 +76,7 @@ class ILPSolver:
                 gradient = gradients[i][idx]
                 tt_trains[i][idx] -= self.params["lr"] * gradient
                 tt_trains[i][idx] += self.params["lr"] * tt_grad_inner_prod(tt_trains[i], tt_trains[i], gradient, idx) * \
-                                 tt_trains[i][idx]
+                                     tt_trains[i][idx]
                 tt_trains[i] = tt_normalise(tt_trains[i], idx=idx)
         for h, tt_train in zip(self.const_space.hypotheses, tt_trains):
             h.value = tt_train
@@ -98,7 +98,8 @@ class ILPSolver:
     def _riemannian_grad(self):
         criterions = deque([np.inf], maxlen=self.params["patience"])
         self._init_hypotheses()
-        while criterions[-1] >= 0.05 * self.error_bound:  # Gradient induced change, i.e. similar to first-order sufficient condition
+        while criterions[
+            -1] >= 0.05 * self.error_bound:  # Gradient induced change, i.e. similar to first-order sufficient condition
             hypotheses_copies = deepcopy([h.value for h in self.const_space.hypotheses])
             self._gradient_update()
             self._project()
