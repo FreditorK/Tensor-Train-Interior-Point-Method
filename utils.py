@@ -428,9 +428,7 @@ class ConstraintSpace(ParameterSpace, ABC):
         tt_train = hypothesis.value
         tt_table = tt_bool_op(tt_train)
         tt_table_p3 = tt_mul_scal(-0.5, tt_hadamard(tt_hadamard(tt_table, tt_table), tt_table))
-        tt_table = tt_mul_scal(0.5, tt_table)
-        tt_table = tt_rank_reduce(tt_add(tt_table, tt_table_p3))
-        tt_update = tt_bool_op_inv(tt_table)
+        tt_update = tt_rank_reduce(tt_bool_op_inv(tt_table_p3))
         tt_train = tt_mul_scal(1 - tt_inner_prod(tt_update, tt_train), tt_train)
         tt_train = tt_add(tt_train, tt_update)
         tt_train = tt_mul_scal(1 / jnp.sqrt(tt_inner_prod(tt_train, tt_train)), tt_train)
