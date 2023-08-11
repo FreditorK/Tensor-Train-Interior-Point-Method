@@ -352,7 +352,10 @@ class ConstraintSpace(ParameterSpace, ABC):
         self.objectives: Dict[List] = dict()
         self.iq_constraints: Dict[List] = dict()
         self.eq_constraints: Dict[List] = dict()
+        self.exclusions: Dict[List] = dict()
 
+    def add_exclusion(self, hypothesis: Hypothesis):
+        self.exclusions[hypothesis].append(tt_rank_reduce(tt_bool_op(hypothesis.value)))
     @property
     def atoms(self):
         return self.atom_list
@@ -392,6 +395,7 @@ class ConstraintSpace(ParameterSpace, ABC):
         self.hypotheses.append(h)
         self.iq_constraints[h] = []
         self.eq_constraints[h] = []
+        self.exclusions[h] = [tt_mul_scal(-1, tt_one(self.atom_count))]
         return h
 
     def there_exists(self, expr: Expression):
@@ -424,15 +428,28 @@ class ConstraintSpace(ParameterSpace, ABC):
                 not_converged = not_converged or is_violated
         hypothesis.value = proj_tt_train
 
-    def round(self, hypothesis: Hypothesis):
+    def round(self, hypothesis: Hypothesis, error_bound):
         tt_train = hypothesis.value
         tt_table = tt_bool_op(tt_train)
-        tt_table_p3 = tt_mul_scal(-0.5, tt_hadamard(tt_hadamard(tt_table, tt_table), tt_table))
-        tt_update = tt_rank_reduce(tt_bool_op_inv(tt_table_p3))
+        tt_table_p2 = tt_hadamard(tt_table, tt_table)
+        tt_table_p3 = tt_hadamard(tt_table_p2, tt_table)
+        if error_bound > 0:
+            tt_table_p3 = self._add_repellers(tt_train, tt_table_p3, tt_table_p2, self.exclusions[hypothesis], error_bound)
+        tt_update = tt_mul_scal(-0.5, tt_rank_reduce(tt_bool_op_inv(tt_table_p3)))
         tt_train = tt_mul_scal(1 - tt_inner_prod(tt_update, tt_train), tt_train)
         tt_train = tt_add(tt_train, tt_update)
         tt_train = tt_mul_scal(1 / jnp.sqrt(tt_inner_prod(tt_train, tt_train)), tt_train)
         hypothesis.value = tt_train
+
+    def _add_repellers(self, tt_train, tt_table_p3, tt_table_p2, exclusions, error_bound):
+        excl_to_apply = [excl for excl in exclusions if 1 - tt_inner_prod(tt_bool_op_inv(excl), tt_train) < error_bound]
+        if len(excl_to_apply) > 0:
+            repeller = excl_to_apply[0]
+            for excl in excl_to_apply[1:]:
+                repeller = tt_rank_reduce(tt_add(repeller, excl))
+            repeller = tt_hadamard(tt_add(tt_one(self.atom_count), tt_mul_scal(-1, tt_table_p2)), repeller)
+            tt_table_p3 = tt_rank_reduce(tt_add(tt_table_p3, repeller))
+        return tt_table_p3
 
     def stopping_criterion(self, tt_trains, prev_tt_trains):
         return np.mean([

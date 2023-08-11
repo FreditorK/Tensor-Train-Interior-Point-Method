@@ -3,7 +3,7 @@ from collections import deque
 import numpy as np
 from operators import D_func
 from tt_op import *
-from utils import ConstraintSpace
+from utils import ConstraintSpace, TTExpression
 from functools import partial
 
 
@@ -46,28 +46,20 @@ class ILPSolver:
         return is_satisfied
 
     def solve(self, timeout=100):
-        print("Optimising the relaxation...")
         if self.objective_grad is None:
             self._project()
         else:
             self._riemannian_grad()
-        print("Rounding the solution...")
         self._round_solution()
-        if not self._const_satisfied():
-            self._stir_up(timeout)
-
-    def _stir_up(self, timeout):
-        tt_save = [h.value for h in self.const_space.hypotheses]
-        for i in range(timeout):
-            print(f"----------Stir up {i}----------")
-            for h in self.const_space.hypotheses:
-                rank = tt_rank(h.value)
-                h.value = tt_add_noise(h.value, rank=rank, noise_radius=0.5)
-            self._round_solution()
-            if self._const_satisfied():
-                break
-            for j, h in enumerate(self.const_space.hypotheses):
-                h.value = tt_save[j]
+        while not self._const_satisfied():
+            for i in range(timeout):
+                for h in self.const_space.hypotheses:
+                    self.const_space.add_exclusion(h)
+                if self.objective_grad is None:
+                    self._project()
+                else:
+                    self._riemannian_grad()
+                self._round_solution()
 
     def _gradient_update(self):
         tt_trains = [tt_add_noise(h.value, rank=1, noise_radius=self.params["noise"]) for h in
@@ -117,11 +109,11 @@ class ILPSolver:
         criterion_score = np.mean([self.boolean_criterion(h.value) for h in self.const_space.hypotheses])
         while criterion_score > self.error_bound:
             for h in self.const_space.hypotheses:
-                self.const_space.round(h)
+                self.const_space.round(h, 2*self.error_bound)
                 h.value = tt_rank_retraction([core.shape[-1] for core in h.value[:-1]], h.value)
             criterion_score = np.mean([self.boolean_criterion(h.value) for h in self.const_space.hypotheses])
             print(f"Boolean Criterion: {criterion_score} \r", end="")
         print("\n", flush=True)
         for h in self.const_space.hypotheses:
-            self.const_space.round(h)
+            self.const_space.round(h, 0)
             h.value = tt_rank_reduce(h.value)

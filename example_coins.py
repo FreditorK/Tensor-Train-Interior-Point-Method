@@ -14,10 +14,6 @@ def symmetry_objective(tt_train):
     return -tt_inner_prod(tt_train, [jnp.swapaxes(t, 0, -1) for t in tt_train[::-1]])
 
 
-#print(symmetry_objective(TTExpression.from_expression((head_c1 ^ tail_c1) & (head_c2 ^ tail_c2)).cores))
-#print(symmetry_objective(TTExpression.from_expression((head_c1 ^ tail_c1)).cores))
-
-
 const_space.for_all(h >> (head_c1 ^ tail_c1))
 const_space.there_exists(~(h << (head_c1 ^ tail_c1)))
 opt = ILPSolver(const_space, objective=symmetry_objective)
