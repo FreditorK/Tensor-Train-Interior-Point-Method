@@ -57,15 +57,17 @@ class ILPSolver:
             self._stir_up(timeout)
 
     def _stir_up(self, timeout):
+        tt_save = [h.value for h in self.const_space.hypotheses]
         for i in range(timeout):
             print(f"----------Stir up {i}----------")
-            self._project()
             for h in self.const_space.hypotheses:
                 rank = tt_rank(h.value)
                 h.value = tt_add_noise(h.value, rank=rank, noise_radius=0.5)
             self._round_solution()
             if self._const_satisfied():
                 break
+            for j, h in enumerate(self.const_space.hypotheses):
+                h.value = tt_save[j]
 
     def _gradient_update(self):
         tt_trains = [tt_add_noise(h.value, rank=1, noise_radius=self.params["noise"]) for h in

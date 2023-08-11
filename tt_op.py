@@ -597,10 +597,10 @@ def tt_permute(tt_train: List[np.array], axes: List[Tuple]) -> List[np.array]:
         max_idx = max(idx_1, idx_2)
         sub_half_core_min = np.zeros_like(tt_train[min_idx][:, None, 1, :])
         sub_half_core_max = np.zeros_like(tt_train[max_idx][:, None, 1, :])
-        tt_min = tt_train[:min_idx] + [np.concatenate((tt_train[min_idx][:, None, 1, :], sub_half_core_min), axis=1)] + tt_train[min_idx + 1:max_idx] + [np.concatenate((tt_train[max_idx][:, None, 0, :], sub_half_core_max), axis=1)] +tt_train[max_idx+1:]
-        tt_max = tt_train[:min_idx] + [np.concatenate((tt_train[min_idx][:, None, 0, :], sub_half_core_min), axis=1)] + tt_train[min_idx + 1:max_idx] + [np.concatenate((tt_train[max_idx][:, None, 1, :], sub_half_core_max), axis=1)] + tt_train[max_idx + 1:]
-        tt_basis_1 = tt_train[:min_idx] + [np.concatenate((tt_train[min_idx][:, None, 0, :], sub_half_core_min), axis=1)] + tt_train[min_idx + 1:max_idx] + [np.concatenate((tt_train[max_idx][:, None, 0, :], sub_half_core_max), axis=1)] + tt_train[max_idx + 1:]
-        tt_basis_2 = tt_train[:min_idx] + [np.concatenate((sub_half_core_min, tt_train[min_idx][:, None, 1, :]), axis=1)] + tt_train[min_idx + 1:max_idx] + [np.concatenate((sub_half_core_max, tt_train[max_idx][:, None, 1, :]), axis=1)] + tt_train[max_idx + 1:]
+        tt_min = tt_train[:min_idx] + [jnp.concatenate((tt_train[min_idx][:, None, 1, :], sub_half_core_min), axis=1)] + tt_train[min_idx + 1:max_idx] + [jnp.concatenate((tt_train[max_idx][:, None, 0, :], sub_half_core_max), axis=1)] +tt_train[max_idx+1:]
+        tt_max = tt_train[:min_idx] + [jnp.concatenate((tt_train[min_idx][:, None, 0, :], sub_half_core_min), axis=1)] + tt_train[min_idx + 1:max_idx] + [jnp.concatenate((tt_train[max_idx][:, None, 1, :], sub_half_core_max), axis=1)] + tt_train[max_idx + 1:]
+        tt_basis_1 = tt_train[:min_idx] + [jnp.concatenate((tt_train[min_idx][:, None, 0, :], sub_half_core_min), axis=1)] + tt_train[min_idx + 1:max_idx] + [jnp.concatenate((tt_train[max_idx][:, None, 0, :], sub_half_core_max), axis=1)] + tt_train[max_idx + 1:]
+        tt_basis_2 = tt_train[:min_idx] + [jnp.concatenate((sub_half_core_min, tt_train[min_idx][:, None, 1, :]), axis=1)] + tt_train[min_idx + 1:max_idx] + [jnp.concatenate((sub_half_core_max, tt_train[max_idx][:, None, 1, :]), axis=1)] + tt_train[max_idx + 1:]
         tt_min = tt_xnor(tt_min, tt_atom_train(max_idx, len(tt_min)))
         tt_max = tt_xnor(tt_max, tt_atom_train(min_idx, len(tt_max)))
         tt_train = tt_rank_reduce(tt_add(tt_add(tt_basis_1, tt_min), tt_add(tt_basis_2, tt_max)))
