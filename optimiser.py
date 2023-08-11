@@ -31,6 +31,7 @@ class ILPSolver:
         self.error_bound = 2 ** (-self.const_space.atom_count)
         self.boolean_criterion = tt_boolean_criterion(self.const_space.atom_count)
         self.params = {
+            "orig_lr": 0.075,
             "lr": 0.075,
             "noise": 0.9 * self.error_bound,
             "patience": 5
@@ -45,21 +46,16 @@ class ILPSolver:
                 is_satisfied = is_satisfied & c.is_satisfied(h.value)
         return is_satisfied
 
-    def solve(self, timeout=100):
-        if self.objective_grad is None:
-            self._project()
-        else:
-            self._riemannian_grad()
+    def solve(self):
+        iter_function = self._project if self.objective_grad is None else self._riemannian_grad
+        iter_function()
         self._round_solution()
         while not self._const_satisfied():
-            for i in range(timeout):
-                for h in self.const_space.hypotheses:
-                    self.const_space.add_exclusion(h)
-                if self.objective_grad is None:
-                    self._project()
-                else:
-                    self._riemannian_grad()
-                self._round_solution()
+            for h in self.const_space.hypotheses:
+                self.const_space.add_exclusion(h)
+            self.params["lr"] = self.params["orig_lr"]
+            iter_function()
+            self._round_solution()
 
     def _gradient_update(self):
         tt_trains = [tt_add_noise(h.value, rank=1, noise_radius=self.params["noise"]) for h in
@@ -79,21 +75,10 @@ class ILPSolver:
         for h in self.const_space.permuted_hypotheses:
             self.const_space.project(h)
 
-    def _init_hypotheses(self):
-        criterion = np.inf
-        while criterion >= 0.1 * self.error_bound * self.params["lr"]:
-            hypotheses_copies = deepcopy([h.value for h in self.const_space.hypotheses])
-            self._gradient_update()
-            criterion = self.const_space.stopping_criterion([h.value for h in self.const_space.hypotheses],
-                                                            hypotheses_copies)
-            print(f"Stopping Criterion: {criterion} \r", end="")
-        print("\n", flush=True)
-
     def _riemannian_grad(self):
         criterions = deque([np.inf], maxlen=self.params["patience"])
-        self._init_hypotheses()
         while criterions[
-            -1] >= 0.05 * self.error_bound:  # Gradient induced change, i.e. similar to first-order sufficient condition
+            -1] >= 0.1 * self.error_bound * self.params["lr"]:  # Gradient induced change, i.e. similar to first-order sufficient condition
             hypotheses_copies = deepcopy([h.value for h in self.const_space.hypotheses])
             self._gradient_update()
             self._project()
