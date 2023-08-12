@@ -313,11 +313,12 @@ class ExistentialConstraint(LogicConstraint):
     def _projection(self, tt_h, tt_n, bias):
         tt_n = deepcopy(tt_n)
         func_result = np.clip(tt_inner_prod(tt_h, tt_n), a_min=-1, a_max=1)
-        condition = func_result + bias <= self.s_lower
+        condition = func_result + bias < 1.9*self.s_lower
         if condition:
-            tt_n = tt_mul_scal(1 / jnp.sqrt(tt_inner_prod(tt_n, tt_n)), tt_n)
-            alpha = np.sqrt((1 - (bias - self.s_lower) ** 2) / (1 - func_result ** 2))
-            beta = (bias - self.s_lower) + alpha * func_result
+            bias = bias - 1.95*self.s_lower
+            tt_n = tt_normalise(tt_n)
+            alpha = np.sqrt((1 - bias ** 2) / (1 - func_result ** 2))
+            beta = bias + alpha * func_result
             tt_h = tt_add(tt_mul_scal(alpha, tt_h), tt_mul_scal(-beta, tt_n))
             tt_h = tt_rank_reduce(tt_h)
         return tt_h, condition
@@ -334,7 +335,7 @@ class UniversalConstraint(LogicConstraint):
         func_result = np.clip(tt_inner_prod(tt_h, tt_n), a_min=-1, a_max=1)
         condition = abs(func_result + bias) >= self.s_lower
         if condition:
-            tt_n = tt_mul_scal(1 / jnp.sqrt(tt_inner_prod(tt_n, tt_n)), tt_n)
+            tt_n = tt_normalise(tt_n)
             alpha = np.sqrt((1 - bias ** 2) / (1 - func_result ** 2))
             beta = bias + alpha * func_result
             tt_h = tt_add(tt_mul_scal(alpha, tt_h), tt_mul_scal(-beta, tt_n))
@@ -354,11 +355,10 @@ class ConstraintSpace(ParameterSpace, ABC):
         self.eq_constraints: Dict[List] = dict()
 
     def add_exclusions(self):
-        pass
-        #expr = self.hypotheses[0] ^ Boolean_Function(self, f"prev_{self.hypotheses[0]}", self.hypotheses[0].value + [np.array([1, 0], dtype=float).reshape(1, 2, 1)]*self.hypothesis_count)
-        #for h in self.hypotheses[1:]:
-        #    expr = expr & (h ^ Boolean_Function(self, f"prev_{h}", h.value + [np.array([1, 0], dtype=float).reshape(1, 2, 1)]*self.hypothesis_count))
-        #self.there_exists(expr)
+        expr = self.hypotheses[0] ^ Boolean_Function(self, f"prev_{self.hypotheses[0]}", self.hypotheses[0].value + [np.array([1, 0], dtype=float).reshape(1, 2, 1)]*self.hypothesis_count)
+        for h in self.hypotheses[1:]:
+            expr = expr & (h ^ Boolean_Function(self, f"prev_{h}", h.value + [np.array([1, 0], dtype=float).reshape(1, 2, 1)]*self.hypothesis_count))
+        self.there_exists(expr)
     @property
     def atoms(self):
         return self._atom_list

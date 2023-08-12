@@ -545,17 +545,6 @@ def tt_add_noise(tt_train, noise_radius, rank):
     return tt_train
 
 
-def tt_alt_add_noise(tt_train, noise_radius):
-    noise_train = [np.random.randn(*core.shape) for core in tt_train]
-    noise_train = tt_normalise(noise_train)
-    # projection onto tangent space of tt_train
-    for i, noise_core in enumerate(noise_train):
-        tt_train[i] -= (noise_radius/3)*noise_core
-        tt_train[i] += tt_grad_inner_prod(tt_train, tt_train, noise_core, i) * tt_train[i]
-        tt_train = tt_normalise(tt_train, idx=i)
-    return tt_train
-
-
 def tt_round_iteration(tt_train):
     tt_train_p3 = tt_mul_scal(-0.5, tt_hadamard(tt_hadamard(tt_train, tt_train), tt_train))
     tt_train = tt_mul_scal(1.5, deepcopy(tt_train))
@@ -571,7 +560,7 @@ def tt_round(tt_train, iterations=100):
 
 def tt_abs(tt_train):
     rounded_tt_train = tt_round(tt_train)
-    absolute_tt_train = tt_rl_orthogonalize(tt_rank_reduce(tt_hadamard(rounded_tt_train, tt_train)))
+    absolute_tt_train = tt_rank_reduce(tt_hadamard(rounded_tt_train, tt_train))
     return absolute_tt_train
 
 

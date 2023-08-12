@@ -31,8 +31,8 @@ class ILPSolver:
         self.error_bound = 2 ** (-self.const_space.atom_count)
         self.boolean_criterion = tt_boolean_criterion(self.const_space.atom_count)
         self.params = {
-            "orig_lr": 0.075,
-            "lr": 0.075,
+            "orig_lr": 1.95*self.error_bound,
+            "lr": 1.95*self.error_bound, # It cannot be lower, otherwise it skips functions, i.e. distance between functions is error_bound
             "noise": self.error_bound/3,
             "patience": 5
         }
@@ -90,7 +90,7 @@ class ILPSolver:
                                                             hypotheses_copies)
             criterions.append(criterion)
             if (np.array(criterions)[:-1] - np.array(criterions)[1:]).mean() > 0:
-                self.params["lr"] = max(0.99*self.params["lr"], self.error_bound)
+                self.params["lr"] = max(0.99*self.params["lr"], 0.5*self.error_bound)
 
     def _round_solution(self):
         criterion_score = np.mean([self.boolean_criterion(h.value) for h in self.const_space.hypotheses])
