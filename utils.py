@@ -1,5 +1,6 @@
 import copy
 import random
+from functools import reduce
 from typing import Dict
 
 import numpy as np
@@ -311,12 +312,12 @@ class ExistentialConstraint(LogicConstraint):
 
     def _projection(self, tt_h, tt_n, bias):
         tt_n = deepcopy(tt_n)
-        func_result = tt_inner_prod(tt_h, tt_n)
+        func_result = np.clip(tt_inner_prod(tt_h, tt_n), a_min=-1, a_max=1)
         condition = func_result + bias <= self.s_lower
         if condition:
             tt_n = tt_mul_scal(1 / jnp.sqrt(tt_inner_prod(tt_n, tt_n)), tt_n)
             alpha = np.sqrt((1 - (bias - self.s_lower) ** 2) / (1 - func_result ** 2))
-            beta = bias - self.s_lower + alpha * func_result
+            beta = (bias - self.s_lower) + alpha * func_result
             tt_h = tt_add(tt_mul_scal(alpha, tt_h), tt_mul_scal(-beta, tt_n))
             tt_h = tt_rank_reduce(tt_h)
         return tt_h, condition
@@ -330,7 +331,7 @@ class UniversalConstraint(LogicConstraint):
 
     def _projection(self, tt_h, tt_n, bias):
         tt_n = deepcopy(tt_n)
-        func_result = tt_inner_prod(tt_h, tt_n)
+        func_result = np.clip(tt_inner_prod(tt_h, tt_n), a_min=-1, a_max=1)
         condition = abs(func_result + bias) >= self.s_lower
         if condition:
             tt_n = tt_mul_scal(1 / jnp.sqrt(tt_inner_prod(tt_n, tt_n)), tt_n)
@@ -347,18 +348,20 @@ class UniversalConstraint(LogicConstraint):
 
 class ConstraintSpace(ParameterSpace, ABC):
     def __init__(self):
-        self.atom_list: List[Atom] = []
-        self.hypothesis_list: List[Hypothesis] = []
-        self.objectives: Dict[List] = dict()
+        self._atom_list: List[Atom] = []
+        self._hypothesis_list: List[Hypothesis] = []
         self.iq_constraints: Dict[List] = dict()
         self.eq_constraints: Dict[List] = dict()
-        self.exclusions: Dict[List] = dict()
 
-    def add_exclusion(self, hypothesis: Hypothesis):
-        self.exclusions[hypothesis].append(tt_rank_reduce(tt_bool_op(hypothesis.value)))
+    def add_exclusions(self):
+        pass
+        #expr = self.hypotheses[0] ^ Boolean_Function(self, f"prev_{self.hypotheses[0]}", self.hypotheses[0].value + [np.array([1, 0], dtype=float).reshape(1, 2, 1)]*self.hypothesis_count)
+        #for h in self.hypotheses[1:]:
+        #    expr = expr & (h ^ Boolean_Function(self, f"prev_{h}", h.value + [np.array([1, 0], dtype=float).reshape(1, 2, 1)]*self.hypothesis_count))
+        #self.there_exists(expr)
     @property
     def atoms(self):
-        return self.atom_list
+        return self._atom_list
 
     @property
     def atom_count(self):
@@ -366,22 +369,22 @@ class ConstraintSpace(ParameterSpace, ABC):
 
     @property
     def hypotheses(self):
-        return self.hypothesis_list
+        return self._hypothesis_list
 
     @property
     def permuted_hypotheses(self):
-        return list(np.random.permutation(self.hypothesis_list))
+        return list(np.random.permutation(self._hypothesis_list))
 
     @property
     def hypothesis_count(self):
-        return len(self.hypothesis_list)
+        return len(self._hypothesis_list)
 
     def generate_atoms(self, n):
         atoms = []
         k = self.atom_count
         for i in range(n):
             a = Atom(self, f"x_{k + i}")
-            self.atom_list.append(a)
+            self._atom_list.append(a)
             atoms.append(a)
         return atoms
 
@@ -395,7 +398,6 @@ class ConstraintSpace(ParameterSpace, ABC):
         self.hypotheses.append(h)
         self.iq_constraints[h] = []
         self.eq_constraints[h] = []
-        self.exclusions[h] = [tt_mul_scal(-1, tt_one(self.atom_count))]
         return h
 
     def there_exists(self, expr: Expression):
@@ -430,28 +432,14 @@ class ConstraintSpace(ParameterSpace, ABC):
 
     def round(self, hypothesis: Hypothesis, error_bound):
         tt_train = hypothesis.value
-        rank = tt_rank(tt_train)
-        tt_train = tt_add_noise(tt_train, rank=rank, noise_radius=error_bound/2)
-        tt_table = tt_bool_op(tt_train)
-        tt_table_p2 = tt_hadamard(tt_table, tt_table)
-        tt_table_p3 = tt_hadamard(tt_table_p2, tt_table)
-        if error_bound > 0:
-            tt_table_p3 = self._add_repellers(tt_train, tt_table_p3, tt_table_p2, self.exclusions[hypothesis], error_bound)
+        tt_train = tt_add_noise(tt_train, error_bound, rank=tt_rank(tt_train))
+        tt_table = tt_rank_reduce(tt_bool_op(tt_train))
+        tt_table_p3 = tt_hadamard(tt_hadamard(tt_table, tt_table), tt_table)
         tt_update = tt_mul_scal(-0.5, tt_rank_reduce(tt_bool_op_inv(tt_table_p3)))
         tt_train = tt_mul_scal(1 - tt_inner_prod(tt_update, tt_train), tt_train)
         tt_train = tt_add(tt_train, tt_update)
-        tt_train = tt_mul_scal(1 / jnp.sqrt(tt_inner_prod(tt_train, tt_train)), tt_train)
-        hypothesis.value = tt_train
-
-    def _add_repellers(self, tt_train, tt_table_p3, tt_table_p2, exclusions, error_bound):
-        excl_to_apply = [excl for excl in exclusions if 1 - tt_inner_prod(tt_bool_op_inv(excl), tt_train) < error_bound]
-        if len(excl_to_apply) > 0:
-            repeller = excl_to_apply[0]
-            for excl in excl_to_apply[1:]:
-                repeller = tt_rank_reduce(tt_add(repeller, excl))
-            repeller = tt_hadamard(tt_add(tt_one(self.atom_count), tt_mul_scal(-1, tt_table_p2)), repeller)
-            tt_table_p3 = tt_rank_reduce(tt_add(tt_table_p3, repeller))
-        return tt_table_p3
+        tt_train = tt_normalise(tt_train)
+        hypothesis.value = tt_rank_reduce(tt_train)
 
     def stopping_criterion(self, tt_trains, prev_tt_trains):
         return np.mean([

@@ -53,9 +53,8 @@ class ILPSolver:
         print("Rounding solution...")
         self._round_solution()
         while not self._const_satisfied():
-            for h in self.const_space.hypotheses:
-                print(h, h.to_CNF())
-                self.const_space.add_exclusion(h)
+            print([(str(h), h.to_CNF()) for h in self.const_space.hypotheses])
+            self.const_space.add_exclusions()
             self.params["lr"] = self.params["orig_lr"]
             print("Solving relaxation...")
             iter_function()
@@ -63,7 +62,7 @@ class ILPSolver:
             self._round_solution()
 
     def _gradient_update(self):
-        tt_trains = [tt_add_noise(h.value, rank=1, noise_radius=self.params["noise"]) for h in
+        tt_trains = [tt_add_noise(h.value, self.params["noise"], rank=1) for h in
                      self.const_space.hypotheses]
         for idx in range(self.const_space.atom_count):
             gradients = self.objective_grad(tt_trains)
@@ -91,13 +90,13 @@ class ILPSolver:
                                                             hypotheses_copies)
             criterions.append(criterion)
             if (np.array(criterions)[:-1] - np.array(criterions)[1:]).mean() > 0:
-                self.params["lr"] *= 0.99
+                self.params["lr"] = max(0.99*self.params["lr"], self.error_bound)
 
     def _round_solution(self):
         criterion_score = np.mean([self.boolean_criterion(h.value) for h in self.const_space.hypotheses])
         while criterion_score > self.error_bound:
-            for h in self.const_space.hypotheses:
-                self.const_space.round(h, 2*self.error_bound)
+            for h in self.const_space.permuted_hypotheses:
+                self.const_space.round(h, self.error_bound)
                 h.value = tt_rank_retraction([core.shape[-1] for core in h.value[:-1]], h.value)
             criterion_score = np.mean([self.boolean_criterion(h.value) for h in self.const_space.hypotheses])
         for h in self.const_space.hypotheses:
