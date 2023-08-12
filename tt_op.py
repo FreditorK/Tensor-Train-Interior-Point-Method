@@ -531,7 +531,7 @@ def tt_normalise(tt_train, radius=1, idx=0):
 
 def tt_add_noise(tt_train, rank=3, noise_radius=0.1):
     n = len(tt_train)
-    noise_train = [np.random.randn(rank if idx != 0 else 1, 2, rank if idx != n - 1 else 1) / 3 for idx in range(n)]
+    noise_train = [np.random.randn(rank if idx != 0 else 1, 2, rank if idx != n - 1 else 1) for idx in range(n)]
     noise_train = tt_mul_scal(noise_radius / jnp.sqrt(tt_inner_prod(noise_train, noise_train)), noise_train)
     # projection onto tangent space of tt_train
     tt_train = tt_mul_scal(1 - tt_inner_prod(noise_train, tt_train), tt_train)

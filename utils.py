@@ -430,6 +430,8 @@ class ConstraintSpace(ParameterSpace, ABC):
 
     def round(self, hypothesis: Hypothesis, error_bound):
         tt_train = hypothesis.value
+        rank = tt_rank(tt_train)
+        tt_train = tt_add_noise(tt_train, rank=rank, noise_radius=error_bound/2)
         tt_table = tt_bool_op(tt_train)
         tt_table_p2 = tt_hadamard(tt_table, tt_table)
         tt_table_p3 = tt_hadamard(tt_table_p2, tt_table)
