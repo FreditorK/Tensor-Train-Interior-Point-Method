@@ -311,7 +311,6 @@ class LogicConstraint(ABC):
 class ExistentialConstraint(LogicConstraint):
 
     def _projection(self, tt_h, tt_n, bias):
-        tt_n = deepcopy(tt_n)
         func_result = np.clip(tt_inner_prod(tt_h, tt_n), a_min=-1, a_max=1)
         condition = func_result + bias < 1.9*self.s_lower
         if condition:
@@ -331,7 +330,6 @@ class ExistentialConstraint(LogicConstraint):
 class UniversalConstraint(LogicConstraint):
 
     def _projection(self, tt_h, tt_n, bias):
-        tt_n = deepcopy(tt_n)
         func_result = np.clip(tt_inner_prod(tt_h, tt_n), a_min=-1, a_max=1)
         condition = abs(func_result + bias) >= self.s_lower
         if condition:
@@ -371,9 +369,9 @@ class ConstraintSpace(ParameterSpace, ABC):
     def hypotheses(self):
         return self._hypothesis_list
 
-    @property
-    def permuted_hypotheses(self):
-        return list(np.random.permutation(self._hypothesis_list))
+    def random_hypothesis(self):
+        i = np.random.randint(self.hypothesis_count)
+        return self._hypothesis_list[i]
 
     @property
     def hypothesis_count(self):
@@ -423,11 +421,13 @@ class ConstraintSpace(ParameterSpace, ABC):
                                                                                              hypothesis]]
         proj_tt_train = hypothesis.value
         not_converged = True
+        i = 0
         while not_converged:
             not_converged = False
             for proj in projections:
                 proj_tt_train, is_violated = proj(proj_tt_train)
                 not_converged = not_converged or is_violated
+            i +=1
         hypothesis.value = proj_tt_train
 
     def round(self, hypothesis: Hypothesis, error_bound):

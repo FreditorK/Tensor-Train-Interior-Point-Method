@@ -31,8 +31,8 @@ class ILPSolver:
         self.error_bound = 2 ** (-self.const_space.atom_count)
         self.boolean_criterion = tt_boolean_criterion(self.const_space.atom_count)
         self.params = {
-            "orig_lr": 1.95*self.error_bound,
-            "lr": 1.95*self.error_bound, # It cannot be lower, otherwise it skips functions, i.e. distance between functions is error_bound
+            "orig_lr": 1.9*self.error_bound,
+            "lr": 1.9*self.error_bound, # It cannot be lower, otherwise it skips functions, i.e. distance between functions is error_bound
             "noise": self.error_bound/3,
             "patience": 5
         }
@@ -62,22 +62,20 @@ class ILPSolver:
             self._round_solution()
 
     def _gradient_update(self):
-        tt_trains = [tt_add_noise(h.value, self.params["noise"], rank=1) for h in
-                     self.const_space.hypotheses]
+        h = self.const_space.random_hypothesis()
+        h_index = h.index-self.const_space.atom_count
+        tt_train = tt_add_noise(h.value, self.params["noise"], rank=1)
+        tt_trains = [h.value for h in self.const_space.hypotheses[:h_index]]
         for idx in range(self.const_space.atom_count):
-            gradients = self.objective_grad(tt_trains)
-            for i in range(self.const_space.hypothesis_count):
-                gradient = gradients[i][idx]
-                tt_trains[i][idx] -= self.params["lr"] * gradient
-                tt_trains[i][idx] += self.params["lr"] * tt_grad_inner_prod(tt_trains[i], tt_trains[i], gradient, idx) * \
-                                     tt_trains[i][idx]
-                tt_trains[i] = tt_normalise(tt_trains[i], idx=idx)
-        for h, tt_train in zip(self.const_space.hypotheses, tt_trains):
-            h.value = tt_rank_reduce(tt_train)
+            gradients = self.objective_grad(tt_trains[:h_index] + [tt_train] + tt_trains[h_index+1:])
+            gradient = gradients[h_index][idx]
+            tt_train[idx] -= self.params["lr"] * gradient
+            tt_train[idx] += self.params["lr"] * tt_grad_inner_prod(tt_train, tt_train, gradient, idx) * tt_train[idx]
+            tt_train = tt_normalise(tt_train, idx=idx)
+        h.value = tt_rank_reduce(tt_train)
 
     def _project(self):
-        for h in self.const_space.permuted_hypotheses:
-            self.const_space.project(h)
+        self.const_space.project(self.const_space.random_hypothesis())
 
     def _riemannian_grad(self):
         criterions = deque([np.inf], maxlen=self.params["patience"])
@@ -95,7 +93,7 @@ class ILPSolver:
     def _round_solution(self):
         criterion_score = np.mean([self.boolean_criterion(h.value) for h in self.const_space.hypotheses])
         while criterion_score > self.error_bound:
-            for h in self.const_space.permuted_hypotheses:
+            for h in self.const_space.hypotheses:
                 self.const_space.round(h, self.error_bound)
                 h.value = tt_rank_retraction([core.shape[-1] for core in h.value[:-1]], h.value)
             criterion_score = np.mean([self.boolean_criterion(h.value) for h in self.const_space.hypotheses])
