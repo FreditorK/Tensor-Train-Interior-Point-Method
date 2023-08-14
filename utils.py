@@ -138,11 +138,11 @@ class TTExpression:
             # TODO: This condition might need a bit more thought
             if np.sum(
                 np.abs(tt_train[h.index][:, 1, :])
-            ) <= 1 / 2 ** (expr.par_space.atom_count + expr.par_space.hypothesis_count):
+            ) < 1 / 2 ** (expr.par_space.atom_count + expr.par_space.hypothesis_count):
                 not_involved_hypotheses_idxs.append(h.index)
         for i in sorted(not_involved_hypotheses_idxs, reverse=True):
             tt_train[i - 1] = np.einsum("ldr, rk -> ldk", tt_train[i - 1], tt_train[i][:, 0, :])
-            tt_train.pop(i)
+            tt_train = tt_train[:i] + tt_train[i+1:]
         return cls(tt_train, expr.par_space, substituted=not_involved_hypotheses_idxs)
 
     @property
@@ -213,7 +213,7 @@ class TTExpression:
         return TTExpression(new_cores, self.par_space)
 
     def to_ANF(self):
-        vocab = self.par_space.atoms + [h for h in self.par_space.hypotheses if h not in self.substituted]
+        vocab = self.par_space.atoms + [h for h in self.par_space.hypotheses if h.index not in self.substituted]
         variable_names = " ".join([a.name for a in vocab])
         variables = symbols(variable_names)
         truth_table_labels = ((np.round(tt_to_tensor(tt_bool_op(self.cores))) + 1) / 2).astype(int).flatten()
@@ -255,7 +255,7 @@ class Hypothesis(Expression):
         return TTExpression(new_cores, self.par_space, substituted=tt_train.substituted + [self.index])
 
     def to_CNF(self):
-        return TTExpression(self.value, self.par_space, substituted=self.par_space.hypotheses).to_CNF()
+        return TTExpression(self.value, self.par_space, substituted=[h.index for h in self.par_space.hypotheses]).to_CNF()
 
     def __eq__(self, other):
         if isinstance(other, Hypothesis):
@@ -286,11 +286,17 @@ class LogicConstraint(ABC):
 
     def _get_hyperplane(self):
         tt_expr = deepcopy(self.tt_expr)
+        #print("----")
+        #print("Pre", tt_expr.to_CNF())
         for h in self.hypotheses_to_insert:
+            #print(h)
             tt_expr = h.substitute_into(tt_expr)
+        #print("Post", tt_expr.to_CNF())
         bias = tt_leading_entry(tt_expr.cores) - self.percent
         last_normal_core = np.einsum("ldr, rk -> ldk", tt_expr.cores[-2], tt_expr.cores[-1][:, 1, :])
         normal = tt_expr.cores[:-2] + [last_normal_core]
+        #print(tt_inner_prod(normal, normal))
+        #print("----")
         return normal, bias
 
     @abstractmethod
@@ -299,7 +305,7 @@ class LogicConstraint(ABC):
 
     def get_projection(self):
         normal, bias = self._get_hyperplane()
-        if abs(bias) > 1:  # TODO: Then it is unsatisfiable, only happens in Multi-Hypothesis case
+        if abs(bias) > 1 or tt_inner_prod(normal, normal) < self.s_lower:  # TODO: Then it is unsatisfiable, only happens in Multi-Hypothesis case
             return lambda tt_h: (tt_h, False)
         return lambda tt_h: self._projection(tt_h, normal, bias)
 
@@ -314,7 +320,7 @@ class ExistentialConstraint(LogicConstraint):
         func_result = np.clip(tt_inner_prod(tt_h, tt_n), a_min=-1, a_max=1)
         condition = func_result + bias < 1.9*self.s_lower
         if condition:
-            bias = bias - 1.95*self.s_lower
+            bias = bias - 2*self.s_lower
             tt_n = tt_normalise(tt_n)
             alpha = np.sqrt((1 - bias ** 2) / (1 - func_result ** 2))
             beta = bias + alpha * func_result
@@ -351,12 +357,16 @@ class ConstraintSpace(ParameterSpace, ABC):
         self._hypothesis_list: List[Hypothesis] = []
         self.iq_constraints: Dict[List] = dict()
         self.eq_constraints: Dict[List] = dict()
+        self.repeller_check: TTExpression = None
+        self.current_repeller: Dict[List] = dict()
 
-    def add_exclusions(self):
-        expr = self.hypotheses[0] ^ Boolean_Function(self, f"prev_{self.hypotheses[0]}", self.hypotheses[0].value + [np.array([1, 0], dtype=float).reshape(1, 2, 1)]*self.hypothesis_count)
-        for h in self.hypotheses[1:]:
-            expr = expr & (h ^ Boolean_Function(self, f"prev_{h}", h.value + [np.array([1, 0], dtype=float).reshape(1, 2, 1)]*self.hypothesis_count))
-        self.there_exists(expr)
+    def extend_repeller(self):
+        if self.repeller_check is None:
+            self.repeller_check = TTExpression(tt_one(self.atom_count + self.hypothesis_count), self)
+        expr = Boolean_Function(self, f"T", tt_one(self.atom_count + self.hypothesis_count))
+        for h in self.hypotheses:
+            expr = expr & ~(h ^ Boolean_Function(self, f"prev_{h}", h.value + [np.array([1, 0], dtype=float).reshape(1, 2, 1)]*self.hypothesis_count))
+        self.repeller_check = TTExpression.from_expression(Boolean_Function(self, f"Repeller", self.repeller_check.cores) | expr)
     @property
     def atoms(self):
         return self._atom_list
@@ -396,6 +406,7 @@ class ConstraintSpace(ParameterSpace, ABC):
         self.hypotheses.append(h)
         self.iq_constraints[h] = []
         self.eq_constraints[h] = []
+        self.current_repeller[h] = None
         return h
 
     def there_exists(self, expr: Expression):
@@ -434,12 +445,24 @@ class ConstraintSpace(ParameterSpace, ABC):
         tt_train = hypothesis.value
         tt_train = tt_add_noise(tt_train, error_bound, rank=tt_rank(tt_train))
         tt_table = tt_rank_reduce(tt_bool_op(tt_train))
-        tt_table_p3 = tt_hadamard(tt_hadamard(tt_table, tt_table), tt_table)
+        tt_table_p2 = tt_hadamard(tt_table, tt_table)
+        tt_table_p3 = tt_hadamard(tt_table_p2, tt_table)
+        if error_bound > 0 and self.repeller_check is not None:
+            tt_table_p3 = self._add_repeller(tt_table_p3, tt_table_p2, tt_table, error_bound)
         tt_update = tt_mul_scal(-0.5, tt_rank_reduce(tt_bool_op_inv(tt_table_p3)))
         tt_train = tt_mul_scal(1 - tt_inner_prod(tt_update, tt_train), tt_train)
         tt_train = tt_add(tt_train, tt_update)
         tt_train = tt_normalise(tt_train)
         hypothesis.value = tt_rank_reduce(tt_train)
+
+    def _add_repeller(self, tt_table_p3, tt_table_p2, tt_table, error_bound):
+        print(1-tt_leading_entry(tt_substitute(self.repeller_check.cores, [h.value for h in reversed(self.hypotheses)])))
+        if 1-tt_leading_entry(tt_substitute(self.repeller_check.cores, [h.value for h in reversed(self.hypotheses)])) < error_bound:
+            print("Hi")
+            repel = tt_rank_reduce(tt_add(tt_mul_scal(1.5, tt_table), tt_mul_scal(-0.5, tt_table_p3)))
+            repeller = tt_hadamard(tt_add(tt_one(self.atom_count), tt_mul_scal(-1, tt_table_p2)), repel)
+            tt_table_p3 = tt_rank_reduce(tt_add(tt_table_p3, repeller))
+        return tt_table_p3
 
     def stopping_criterion(self, tt_trains, prev_tt_trains):
         return np.mean([

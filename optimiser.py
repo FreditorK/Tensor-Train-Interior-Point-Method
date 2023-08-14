@@ -33,7 +33,6 @@ class ILPSolver:
         self.params = {
             "orig_lr": 1.9*self.error_bound,
             "lr": 1.9*self.error_bound, # It cannot be lower, otherwise it skips functions, i.e. distance between functions is error_bound
-            "noise": self.error_bound/3,
             "patience": 5
         }
 
@@ -54,17 +53,20 @@ class ILPSolver:
         self._round_solution()
         while not self._const_satisfied():
             print([(str(h), h.to_CNF()) for h in self.const_space.hypotheses])
-            self.const_space.add_exclusions()
-            self.params["lr"] = self.params["orig_lr"]
-            print("Solving relaxation...")
-            iter_function()
+            self.const_space.extend_repeller()
+            #self.params["lr"] = self.params["orig_lr"]
+            #print("Solving relaxation...")
+            #iter_function()
+            for _ in range(10):
+                for h in self.const_space.hypotheses:
+                    self.const_space.round(h, self.error_bound)
             print("Rounding solution...")
             self._round_solution()
 
     def _gradient_update(self):
         h = self.const_space.random_hypothesis()
         h_index = h.index-self.const_space.atom_count
-        tt_train = tt_add_noise(h.value, self.params["noise"], rank=1)
+        tt_train = tt_add_noise(h.value, self.error_bound/3, rank=1)
         tt_trains = [h.value for h in self.const_space.hypotheses[:h_index]]
         for idx in range(self.const_space.atom_count):
             gradients = self.objective_grad(tt_trains[:h_index] + [tt_train] + tt_trains[h_index+1:])
@@ -75,7 +77,8 @@ class ILPSolver:
         h.value = tt_rank_reduce(tt_train)
 
     def _project(self):
-        self.const_space.project(self.const_space.random_hypothesis())
+        h = self.const_space.random_hypothesis()
+        self.const_space.project(h)
 
     def _riemannian_grad(self):
         criterions = deque([np.inf], maxlen=self.params["patience"])
@@ -99,4 +102,3 @@ class ILPSolver:
             criterion_score = np.mean([self.boolean_criterion(h.value) for h in self.const_space.hypotheses])
         for h in self.const_space.hypotheses:
             self.const_space.round(h, 0)
-            h.value = tt_rank_reduce(h.value)

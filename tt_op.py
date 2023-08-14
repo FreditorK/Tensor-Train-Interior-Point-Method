@@ -521,8 +521,7 @@ def tt_or(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.arr
 
 
 def tt_neg(tt_train: List[np.array]) -> List[np.array]:
-    tt_train[0] *= -1
-    return tt_train
+    return tt_mul_scal(-1, tt_train)
 
 
 def tt_mul_scal(alpha, tt_train, idx=0):
@@ -547,7 +546,7 @@ def tt_add_noise(tt_train, noise_radius, rank):
 
 def tt_round_iteration(tt_train):
     tt_train_p3 = tt_mul_scal(-0.5, tt_hadamard(tt_hadamard(tt_train, tt_train), tt_train))
-    tt_train = tt_mul_scal(1.5, deepcopy(tt_train))
+    tt_train = tt_mul_scal(1.5, tt_train)
     tt_train = tt_add(tt_train, tt_train_p3)
     return tt_rank_reduce(tt_train)
 
@@ -573,12 +572,14 @@ def tt_substitute(tt_train: List[np.array], substitutions: List[np.array]) -> Li
      indices in tt_train without gap in indices
     :return:
     """
-    for i, tt_s in enumerate(substitutions):
-        tt_core_without_basis = np.einsum("ldr, rk -> ldk", tt_train[-(2 + i)], tt_train[-(1 + i)][:, 0, :])
-        tt_core_with_basis = np.einsum("ldr, rk -> ldk", tt_train[-(2 + i)], tt_train[-(1 + i)][:, 1, :])
-        new_cores = tt_xnor(tt_train[:-(2 + i)] + [tt_core_with_basis],
-                            tt_s + [np.array([1, 0]).reshape(1, 2, 1)] * (i + 1))
-        tt_train = tt_rank_reduce(tt_add(tt_train[:-(2 + i)] + [tt_core_without_basis], new_cores))
+    add_length = len(tt_train) - len(substitutions[0])
+    for tt_s in substitutions:
+        add_length -= 1
+        tt_core_without_basis = np.einsum("ldr, rk -> ldk", tt_train[-2], tt_train[-1][:, 0, :])
+        tt_core_with_basis = np.einsum("ldr, rk -> ldk", tt_train[-2], tt_train[-1][:, 1, :])
+        new_cores = tt_xnor(tt_train[:-2] + [tt_core_with_basis],
+                            tt_s + [np.array([1, 0]).reshape(1, 2, 1)] * add_length)
+        tt_train = tt_rank_reduce(tt_add(tt_train[:-2] + [tt_core_without_basis], new_cores))
     return tt_train
 
 
