@@ -286,17 +286,11 @@ class LogicConstraint(ABC):
 
     def _get_hyperplane(self):
         tt_expr = deepcopy(self.tt_expr)
-        #print("----")
-        #print("Pre", tt_expr.to_CNF())
         for h in self.hypotheses_to_insert:
-            #print(h)
             tt_expr = h.substitute_into(tt_expr)
-        #print("Post", tt_expr.to_CNF())
         bias = tt_leading_entry(tt_expr.cores) - self.percent
         last_normal_core = np.einsum("ldr, rk -> ldk", tt_expr.cores[-2], tt_expr.cores[-1][:, 1, :])
         normal = tt_expr.cores[:-2] + [last_normal_core]
-        #print(tt_inner_prod(normal, normal))
-        #print("----")
         return normal, bias
 
     @abstractmethod
@@ -362,11 +356,12 @@ class ConstraintSpace(ParameterSpace, ABC):
 
     def extend_repeller(self):
         if self.repeller_check is None:
-            self.repeller_check = TTExpression(tt_one(self.atom_count + self.hypothesis_count), self)
-        expr = Boolean_Function(self, f"T", tt_one(self.atom_count + self.hypothesis_count))
+            self.repeller_check = TTExpression(tt_mul_scal(-1, tt_leading_one(self.atom_count + self.hypothesis_count)), self)
+        expr = Boolean_Function(self, f"T", tt_leading_one(self.atom_count + self.hypothesis_count))
         for h in self.hypotheses:
             expr = expr & ~(h ^ Boolean_Function(self, f"prev_{h}", h.value + [np.array([1, 0], dtype=float).reshape(1, 2, 1)]*self.hypothesis_count))
         self.repeller_check = TTExpression.from_expression(Boolean_Function(self, f"Repeller", self.repeller_check.cores) | expr)
+        # TODO: tt_train somehow too short
     @property
     def atoms(self):
         return self._atom_list
@@ -456,9 +451,7 @@ class ConstraintSpace(ParameterSpace, ABC):
         hypothesis.value = tt_rank_reduce(tt_train)
 
     def _add_repeller(self, tt_table_p3, tt_table_p2, tt_table, error_bound):
-        print(1-tt_leading_entry(tt_substitute(self.repeller_check.cores, [h.value for h in reversed(self.hypotheses)])))
         if 1-tt_leading_entry(tt_substitute(self.repeller_check.cores, [h.value for h in reversed(self.hypotheses)])) < error_bound:
-            print("Hi")
             repel = tt_rank_reduce(tt_add(tt_mul_scal(1.5, tt_table), tt_mul_scal(-0.5, tt_table_p3)))
             repeller = tt_hadamard(tt_add(tt_one(self.atom_count), tt_mul_scal(-1, tt_table_p2)), repel)
             tt_table_p3 = tt_rank_reduce(tt_add(tt_table_p3, repeller))

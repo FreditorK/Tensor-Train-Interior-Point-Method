@@ -54,14 +54,13 @@ class ILPSolver:
         while not self._const_satisfied():
             print([(str(h), h.to_CNF()) for h in self.const_space.hypotheses])
             self.const_space.extend_repeller()
-            #self.params["lr"] = self.params["orig_lr"]
-            #print("Solving relaxation...")
-            #iter_function()
-            for _ in range(10):
-                for h in self.const_space.hypotheses:
-                    self.const_space.round(h, self.error_bound)
+            self.params["lr"] = self.params["orig_lr"]
+            print("Solving relaxation...")
+            iter_function()
             print("Rounding solution...")
             self._round_solution()
+        for h in self.const_space.hypotheses:
+            self.const_space.round(h, 0)
 
     def _gradient_update(self):
         h = self.const_space.random_hypothesis()
@@ -100,5 +99,3 @@ class ILPSolver:
                 self.const_space.round(h, self.error_bound)
                 h.value = tt_rank_retraction([core.shape[-1] for core in h.value[:-1]], h.value)
             criterion_score = np.mean([self.boolean_criterion(h.value) for h in self.const_space.hypotheses])
-        for h in self.const_space.hypotheses:
-            self.const_space.round(h, 0)
