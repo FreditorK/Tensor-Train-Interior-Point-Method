@@ -93,9 +93,8 @@ class ILPSolver:
                 self.params["lr"] = max(0.99*self.params["lr"], 0.5*self.error_bound)
 
     def _round_solution(self):
-        criterion_score = np.mean([self.boolean_criterion(h.value) for h in self.const_space.hypotheses])
+        criterion_score = np.inf
         while criterion_score > self.error_bound:
             for h in self.const_space.hypotheses:
                 self.const_space.round(h, self.error_bound)
-                h.value = tt_rank_retraction([core.shape[-1] for core in h.value[:-1]], h.value)
             criterion_score = np.mean([self.boolean_criterion(h.value) for h in self.const_space.hypotheses])

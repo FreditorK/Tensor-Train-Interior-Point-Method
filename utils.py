@@ -142,7 +142,7 @@ class TTExpression:
                 not_involved_hypotheses_idxs.append(h.index)
         for i in sorted(not_involved_hypotheses_idxs, reverse=True):
             tt_train[i - 1] = np.einsum("ldr, rk -> ldk", tt_train[i - 1], tt_train[i][:, 0, :])
-            tt_train = tt_train[:i] + tt_train[i+1:]
+            tt_train = tt_train[:i] + tt_train[i + 1:]
         return cls(tt_train, expr.par_space, substituted=not_involved_hypotheses_idxs)
 
     @property
@@ -255,7 +255,8 @@ class Hypothesis(Expression):
         return TTExpression(new_cores, self.par_space, substituted=tt_train.substituted + [self.index])
 
     def to_CNF(self):
-        return TTExpression(self.value, self.par_space, substituted=[h.index for h in self.par_space.hypotheses]).to_CNF()
+        return TTExpression(self.value, self.par_space,
+                            substituted=[h.index for h in self.par_space.hypotheses]).to_CNF()
 
     def __eq__(self, other):
         if isinstance(other, Hypothesis):
@@ -299,7 +300,8 @@ class LogicConstraint(ABC):
 
     def get_projection(self):
         normal, bias = self._get_hyperplane()
-        if abs(bias) > 1 or tt_inner_prod(normal, normal) < self.s_lower:  # TODO: Then it is unsatisfiable, only happens in Multi-Hypothesis case
+        if abs(bias) > 1 or tt_inner_prod(normal,
+                                          normal) < self.s_lower:  # TODO: Then it is unsatisfiable, only happens in Multi-Hypothesis case
             return lambda tt_h: (tt_h, False)
         return lambda tt_h: self._projection(tt_h, normal, bias)
 
@@ -312,9 +314,9 @@ class ExistentialConstraint(LogicConstraint):
 
     def _projection(self, tt_h, tt_n, bias):
         func_result = np.clip(tt_inner_prod(tt_h, tt_n), a_min=-1, a_max=1)
-        condition = func_result + bias < 1.9*self.s_lower
+        condition = func_result + bias < 1.9 * self.s_lower
         if condition:
-            bias = bias - 2*self.s_lower
+            bias = bias - 2 * self.s_lower
             tt_n = tt_normalise(tt_n)
             alpha = np.sqrt((1 - bias ** 2) / (1 - func_result ** 2))
             beta = bias + alpha * func_result
@@ -356,12 +358,16 @@ class ConstraintSpace(ParameterSpace, ABC):
 
     def extend_repeller(self):
         if self.repeller_check is None:
-            self.repeller_check = TTExpression(tt_mul_scal(-1, tt_leading_one(self.atom_count + self.hypothesis_count)), self)
+            self.repeller_check = TTExpression(tt_mul_scal(-1, tt_leading_one(self.atom_count + self.hypothesis_count)),
+                                               self)
         expr = Boolean_Function(self, f"T", tt_leading_one(self.atom_count + self.hypothesis_count))
         for h in self.hypotheses:
-            expr = expr & ~(h ^ Boolean_Function(self, f"prev_{h}", h.value + [np.array([1, 0], dtype=float).reshape(1, 2, 1)]*self.hypothesis_count))
-        self.repeller_check = TTExpression.from_expression(Boolean_Function(self, f"Repeller", self.repeller_check.cores) | expr)
+            expr = expr & ~(h ^ Boolean_Function(self, f"prev_{h}", h.value + [
+                np.array([1, 0], dtype=float).reshape(1, 2, 1)] * self.hypothesis_count))
+        self.repeller_check = TTExpression.from_expression(
+            Boolean_Function(self, f"Repeller", self.repeller_check.cores) | expr)
         # TODO: tt_train somehow too short
+
     @property
     def atoms(self):
         return self._atom_list
@@ -421,19 +427,19 @@ class ConstraintSpace(ParameterSpace, ABC):
             self.eq_constraints[h].append(
                 UniversalConstraint(tt_train, relevant_hs[:i] + relevant_hs[i + 1:], percent))
 
-    def project(self, hypothesis: Hypothesis):
+    def project(self, hypothesis: Hypothesis, timeout=20):
         projections = [eq.get_projection() for eq in self.eq_constraints[hypothesis]] + [iq.get_projection() for iq in
                                                                                          self.iq_constraints[
                                                                                              hypothesis]]
+        projections = np.random.permutation(projections)
         proj_tt_train = hypothesis.value
-        not_converged = True
-        i = 0
-        while not_converged:
+        for _ in range(timeout):
             not_converged = False
             for proj in projections:
                 proj_tt_train, is_violated = proj(proj_tt_train)
                 not_converged = not_converged or is_violated
-            i +=1
+            if ~not_converged:
+                break
         hypothesis.value = proj_tt_train
 
     def round(self, hypothesis: Hypothesis, error_bound):
@@ -442,20 +448,24 @@ class ConstraintSpace(ParameterSpace, ABC):
         tt_table = tt_rank_reduce(tt_bool_op(tt_train))
         tt_table_p2 = tt_hadamard(tt_table, tt_table)
         tt_table_p3 = tt_hadamard(tt_table_p2, tt_table)
-        if error_bound > 0 and self.repeller_check is not None:
-            tt_table_p3 = self._add_repeller(tt_table_p3, tt_table_p2, tt_table, error_bound)
         tt_update = tt_mul_scal(-0.5, tt_rank_reduce(tt_bool_op_inv(tt_table_p3)))
-        tt_train = tt_mul_scal(1 - tt_inner_prod(tt_update, tt_train), tt_train)
-        tt_train = tt_add(tt_train, tt_update)
-        tt_train = tt_normalise(tt_train)
-        hypothesis.value = tt_rank_reduce(tt_train)
+        next_tt_train = tt_mul_scal(1 - tt_inner_prod(tt_update, tt_train), tt_train)
+        next_tt_train = tt_add(next_tt_train, tt_update)
+        next_tt_train = tt_normalise(next_tt_train)
+        next_tt_train = tt_rank_reduce(next_tt_train)
+        if error_bound > 0 and self.repeller_check is not None:
+            next_tt_train = self._interaction_kernel(tt_train, next_tt_train, tt_table, tt_table_p2, error_bound)
+        hypothesis.value = next_tt_train
 
-    def _add_repeller(self, tt_table_p3, tt_table_p2, tt_table, error_bound):
-        if 1-tt_leading_entry(tt_substitute(self.repeller_check.cores, [h.value for h in reversed(self.hypotheses)])) < error_bound:
-            repel = tt_rank_reduce(tt_add(tt_mul_scal(1.5, tt_table), tt_mul_scal(-0.5, tt_table_p3)))
-            repeller = tt_hadamard(tt_add(tt_one(self.atom_count), tt_mul_scal(-1, tt_table_p2)), repel)
-            tt_table_p3 = tt_rank_reduce(tt_add(tt_table_p3, repeller))
-        return tt_table_p3
+    def _interaction_kernel(self, tt_train, next_tt_train, tt_table, tt_table_p2, error_bound):
+        if 1 - tt_leading_entry(
+            tt_substitute(self.repeller_check.cores, [h.value for h in reversed(self.hypotheses)])) < error_bound:
+            repel = tt_rank_reduce(
+                tt_add(tt_table_p2, tt_mul_scal(-1, tt_hadamard(tt_table, tt_bool_op(next_tt_train)))))
+            next_tt_train = tt_add(tt_train, tt_mul_scal(0.5, tt_bool_op_inv(repel)))
+            next_tt_train = tt_normalise(next_tt_train)
+            next_tt_train = tt_rank_reduce(next_tt_train)
+        return next_tt_train
 
     def stopping_criterion(self, tt_trains, prev_tt_trains):
         return np.mean([
