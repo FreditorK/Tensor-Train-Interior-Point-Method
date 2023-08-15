@@ -3,6 +3,7 @@ import random
 from functools import reduce
 from typing import Dict
 
+import jax
 import numpy as np
 from sympy.logic.boolalg import ANFform, to_cnf, to_dnf, to_anf
 from sympy import symbols
@@ -216,7 +217,7 @@ class TTExpression:
         vocab = self.par_space.atoms + [h for h in self.par_space.hypotheses if h.index not in self.substituted]
         variable_names = " ".join([a.name for a in vocab])
         variables = symbols(variable_names)
-        truth_table_labels = ((np.round(tt_to_tensor(tt_bool_op(self.cores))) + 1) / 2).astype(int).flatten()
+        truth_table_labels = ((np.round(tt_to_tensor(tt_walsh_op(self.cores))) + 1) / 2).astype(int).flatten()
         anf = ANFform(variables, list(reversed(truth_table_labels)))
         return anf
 
@@ -278,6 +279,15 @@ class Boolean_Function(Expression):
         return self.tt_e
 
 
+@jax.jit
+def _projection(tt_h, tt_n, func_result, bias):
+    tt_n = tt_normalise(tt_n)
+    alpha = jnp.sqrt((1 - bias ** 2) / (1 - func_result ** 2))
+    beta = bias + alpha * func_result
+    tt_h = tt_add(tt_mul_scal(alpha, tt_h), tt_mul_scal(-beta, tt_n))
+    return tt_h
+
+
 class LogicConstraint(ABC):
     def __init__(self, tt_expr: TTExpression, hypotheses_to_insert: List[Hypothesis], percent):
         self.tt_expr = tt_expr
@@ -316,11 +326,7 @@ class ExistentialConstraint(LogicConstraint):
         func_result = np.clip(tt_inner_prod(tt_h, tt_n), a_min=-1, a_max=1)
         condition = func_result + bias < 1.9 * self.s_lower
         if condition:
-            bias = bias - 2 * self.s_lower
-            tt_n = tt_normalise(tt_n)
-            alpha = np.sqrt((1 - bias ** 2) / (1 - func_result ** 2))
-            beta = bias + alpha * func_result
-            tt_h = tt_add(tt_mul_scal(alpha, tt_h), tt_mul_scal(-beta, tt_n))
+            tt_h = _projection(tt_h, tt_n, func_result, bias - 2 * self.s_lower)
             tt_h = tt_rank_reduce(tt_h)
         return tt_h, condition
 
@@ -335,16 +341,19 @@ class UniversalConstraint(LogicConstraint):
         func_result = np.clip(tt_inner_prod(tt_h, tt_n), a_min=-1, a_max=1)
         condition = abs(func_result + bias) >= self.s_lower
         if condition:
-            tt_n = tt_normalise(tt_n)
-            alpha = np.sqrt((1 - bias ** 2) / (1 - func_result ** 2))
-            beta = bias + alpha * func_result
-            tt_h = tt_add(tt_mul_scal(alpha, tt_h), tt_mul_scal(-beta, tt_n))
+            tt_h = _projection(tt_h, tt_n, func_result, bias)
             tt_h = tt_rank_reduce(tt_h)
         return tt_h, condition
 
     def is_satisfied(self, tt_h):
         normal, bias = self._get_hyperplane()
         return abs(tt_inner_prod(tt_h, normal) + bias) < self.s_lower
+
+
+def stopping_criterion(tt_trains, prev_tt_trains):
+    return 1 - (1/len(tt_trains))*sum([
+        tt_inner_prod(tt_train, prev_tt_train) for tt_train, prev_tt_train in zip(tt_trains, prev_tt_trains)
+    ])
 
 
 class ConstraintSpace(ParameterSpace, ABC):
@@ -354,18 +363,23 @@ class ConstraintSpace(ParameterSpace, ABC):
         self.iq_constraints: Dict[List] = dict()
         self.eq_constraints: Dict[List] = dict()
         self.repeller_check: TTExpression = None
-        self.current_repeller: Dict[List] = dict()
 
     def extend_repeller(self):
-        if self.repeller_check is None:
-            self.repeller_check = TTExpression(tt_mul_scal(-1, tt_leading_one(self.atom_count + self.hypothesis_count)),
-                                               self)
-        expr = Boolean_Function(self, f"T", tt_leading_one(self.atom_count + self.hypothesis_count))
-        for h in self.hypotheses:
+        expr = ~(
+            self.hypotheses[0] ^ Boolean_Function(
+            self,
+            f"prev_{self.hypotheses[0]}",
+            self.hypotheses[0].value
+            + [np.array([1, 0], dtype=float).reshape(1, 2, 1)] * self.hypothesis_count
+        ))
+        for h in self.hypotheses[1:]:
             expr = expr & ~(h ^ Boolean_Function(self, f"prev_{h}", h.value + [
                 np.array([1, 0], dtype=float).reshape(1, 2, 1)] * self.hypothesis_count))
-        self.repeller_check = TTExpression.from_expression(
-            Boolean_Function(self, f"Repeller", self.repeller_check.cores) | expr)
+        if self.repeller_check is not None:
+            self.repeller_check = TTExpression.from_expression(
+                Boolean_Function(self, f"Repeller", self.repeller_check.cores) | expr)
+        else:
+            self.repeller_check = TTExpression.from_expression(expr)
         # TODO: tt_train somehow too short
 
     @property
@@ -407,7 +421,6 @@ class ConstraintSpace(ParameterSpace, ABC):
         self.hypotheses.append(h)
         self.iq_constraints[h] = []
         self.eq_constraints[h] = []
-        self.current_repeller[h] = None
         return h
 
     def there_exists(self, expr: Expression):
@@ -427,11 +440,11 @@ class ConstraintSpace(ParameterSpace, ABC):
             self.eq_constraints[h].append(
                 UniversalConstraint(tt_train, relevant_hs[:i] + relevant_hs[i + 1:], percent))
 
-    def project(self, hypothesis: Hypothesis, timeout=20):
-        projections = [eq.get_projection() for eq in self.eq_constraints[hypothesis]] + [iq.get_projection() for iq in
-                                                                                         self.iq_constraints[
-                                                                                             hypothesis]]
-        projections = np.random.permutation(projections)
+    def project(self, hypothesis: Hypothesis, timeout=25):
+        projections = np.random.permutation(
+            [eq.get_projection() for eq in self.eq_constraints[hypothesis]] + [iq.get_projection() for iq in
+                                                                               self.iq_constraints[hypothesis]]
+        )
         proj_tt_train = hypothesis.value
         for _ in range(timeout):
             not_converged = False
@@ -444,11 +457,11 @@ class ConstraintSpace(ParameterSpace, ABC):
 
     def round(self, hypothesis: Hypothesis, error_bound):
         tt_train = hypothesis.value
-        tt_train = tt_add_noise(tt_train, error_bound, rank=tt_rank(tt_train))
-        tt_table = tt_rank_reduce(tt_bool_op(tt_train))
+        #tt_train = tt_add_noise(tt_train, error_bound, rank=tt_rank(tt_train))
+        tt_table = tt_rank_reduce(tt_walsh_op(tt_train))
         tt_table_p2 = tt_hadamard(tt_table, tt_table)
         tt_table_p3 = tt_hadamard(tt_table_p2, tt_table)
-        tt_update = tt_mul_scal(-0.5, tt_rank_reduce(tt_bool_op_inv(tt_table_p3)))
+        tt_update = tt_mul_scal(-0.5, tt_rank_reduce(tt_walsh_op_inv(tt_table_p3)))
         next_tt_train = tt_mul_scal(1 - tt_inner_prod(tt_update, tt_train), tt_train)
         next_tt_train = tt_add(next_tt_train, tt_update)
         next_tt_train = tt_normalise(next_tt_train)
@@ -459,15 +472,12 @@ class ConstraintSpace(ParameterSpace, ABC):
 
     def _interaction_kernel(self, tt_train, next_tt_train, tt_table, tt_table_p2, error_bound):
         if 1 - tt_leading_entry(
-            tt_substitute(self.repeller_check.cores, [h.value for h in reversed(self.hypotheses)])) < error_bound:
+            tt_substitute(self.repeller_check.cores, [h.value for h in reversed(self.hypotheses)])
+        ) < error_bound:
             repel = tt_rank_reduce(
-                tt_add(tt_table_p2, tt_mul_scal(-1, tt_hadamard(tt_table, tt_bool_op(next_tt_train)))))
-            next_tt_train = tt_add(tt_train, tt_mul_scal(0.5, tt_bool_op_inv(repel)))
+                tt_add(tt_table_p2, tt_mul_scal(-1, tt_hadamard(tt_table, tt_walsh_op(next_tt_train))))
+            )
+            next_tt_train = tt_add(tt_train, tt_mul_scal(0.5, tt_walsh_op_inv(repel)))
             next_tt_train = tt_normalise(next_tt_train)
             next_tt_train = tt_rank_reduce(next_tt_train)
         return next_tt_train
-
-    def stopping_criterion(self, tt_trains, prev_tt_trains):
-        return np.mean([
-            1 - tt_inner_prod(tt_train, prev_tt_train) for tt_train, prev_tt_train in zip(tt_trains, prev_tt_trains)
-        ])

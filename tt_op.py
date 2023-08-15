@@ -77,7 +77,7 @@ def tt_bond_at(tt_train, idx):
     return tt_train
 
 
-def tt_part_bond(tt_train, idx):
+def tt_break_bond(tt_train, idx):
     """ Breaks up a bond between two cores """
     core = tt_train[idx]
     shape = core.shape
@@ -96,7 +96,7 @@ def tt_part_bond(tt_train, idx):
 def tt_inf_schatten_norm(tt_train):
     """Loss criterion on the TT-rank"""
     tt_train = tt_train + [jnp.array([1, 0]).reshape(1, 2, 1)] if len(tt_train) % 2 == 1 else tt_train
-    tt_train = tt_bool_op(tt_train)
+    tt_train = tt_walsh_op(tt_train)
     return jnp.product(jnp.array([  # TODO: prod or max or logsum?
         jnp.linalg.norm(jnp.einsum("abc, cde -> abde", tt_train[idx], tt_train[idx + 1]).reshape(
             tt_train[idx].shape[0] * tt_train[idx + 1].shape[-1], -1), ord=2) for idx in range(0, len(tt_train) - 1, 2)
@@ -107,7 +107,7 @@ def tt_inf_schatten_norm(tt_train):
 def tt_nuc_schatten_norm(tt_train):
     """Loss criterion on the TT-rank"""
     tt_train = tt_train + [jnp.array([1, 0]).reshape(1, 2, 1)] if len(tt_train) % 2 == 1 else tt_train
-    tt_train = tt_bool_op(tt_train)
+    tt_train = tt_walsh_op(tt_train)
     return jnp.max(jnp.array([  # TODO: prod or max or logsum?
         jnp.linalg.norm(jnp.einsum("abc, cde -> abde", tt_train[idx], tt_train[idx + 1]).reshape(
             tt_train[idx].shape[0] * tt_train[idx + 1].shape[-1], -1), ord='nuc') for idx in
@@ -116,23 +116,13 @@ def tt_nuc_schatten_norm(tt_train):
     ]))
 
 
-def tt_denoise_loss(tt_train, likelihoods):
-    denoised_tt_train = tt_noise_op_inv(tt_train, likelihoods)
-    return (tt_inner_prod(denoised_tt_train, denoised_tt_train) - 1) ** 2
-
-
-def tt_noise_loss(tt_train, likelihoods, expected_truth):
-    noised_tt_train = tt_noise_op(tt_train, likelihoods)
-    return (tt_inner_prod(noised_tt_train, noised_tt_train) - expected_truth) ** 2
-
-
 def tt_rank_reduce(tt_train: List[np.array]):
     """ Might reduce TT-rank """
     tt_train = tt_rl_orthogonalize(tt_train)
     tt_bound = 1 / 2 ** (len(tt_train) + 1)
     rank = 1
-    for idx in range(len(tt_train) - 1):
-        idx_shape = tt_train[idx].shape
+    for idx, tt_core in enumerate(tt_train[:-1]):
+        idx_shape = tt_core.shape
         next_idx_shape = tt_train[idx + 1].shape
         U, S, V_T = np.linalg.svd(tt_train[idx].reshape(rank * idx_shape[1], -1))
         abs_S = np.abs(S)
@@ -219,16 +209,6 @@ def tt_leading_entry(tt_train: List[np.array]) -> np.array:
         jnp.linalg.multi_dot([core[tuple([slice(None)] + [0] * (len(core.shape) - 2))] for core in tt_train]))
 
 
-def tt_shifted_leading_entry(tt_train: List[np.array], idx: int) -> np.array:
-    """
-    Returns the leading entry of a TT-train with a bias at index idx
-    """
-    return jnp.sum(
-        jnp.linalg.multi_dot(
-            [core[tuple([slice(None)] + [1 if i == idx else 0] * (len(core.shape) - 2))] for i, core in
-             enumerate(tt_train)]))
-
-
 def tt_entry(tt_train: List[np.array], indices: List[int]) -> np.array:
     """
     Returns the entry of a TT-train according to the indices
@@ -289,7 +269,7 @@ def bool_to_tt_train(bool_values: List[bool]):
     """
     Converts a list of boolean values into its respective tensor train
     """
-    return tt_bool_op_inv([jnp.array([1, 2 * float(b_value) - 1]).reshape(1, 2, 1) for b_value in bool_values])
+    return tt_walsh_op_inv([jnp.array([1, 2 * float(b_value) - 1]).reshape(1, 2, 1) for b_value in bool_values])
 
 
 def _tt_core_collapse(core_1: np.array, core_2: np.array):
@@ -311,8 +291,11 @@ def tt_inner_prod(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> flo
 def tt_grad_inner_prod(tt_train_1: List[np.array], tt_train_2: List[np.array], gradient_core: np.array, idx):
     return jnp.sum(
         jnp.linalg.multi_dot(
-            [_tt_core_collapse(core_1, gradient_core) if i == idx else _tt_core_collapse(core_1, core_2) for
-             i, (core_1, core_2) in enumerate(zip(tt_train_1, tt_train_2))]))
+            [_tt_core_collapse(core_1, core_2) for core_1, core_2 in zip(tt_train_1[:idx], tt_train_2[:idx])]
+            + [_tt_core_collapse(tt_train_1[idx], gradient_core)]
+            + [_tt_core_collapse(core_1, core_2) for core_1, core_2 in zip(tt_train_1[idx+1:], tt_train_2[idx+1:])]
+        )
+    )
 
 
 def _tt_influence_core_collapse(core, idx):
@@ -347,12 +330,6 @@ def tt_shared_influence(tt_train: List[np.array], idxs: np.array):
             [_tt_shared_influence_core_collapse(core, idxs - i) for i, core in enumerate(tt_train)]))
 
 
-def _tt_core_fan(core: np.array, basis_core: np.array):
-    return sum([
-        jnp.kron(jnp.expand_dims(core[(slice(None),) + i], 1), basis_core) for i in product(*[[0, 1]])
-    ])
-
-
 def _tt_phi_core(core: np.array):
     return sum([
         jnp.kron(
@@ -361,7 +338,7 @@ def _tt_phi_core(core: np.array):
         ) for i in product(*([[0, 1]] * (len(core.shape) - 2)))])
 
 
-def tt_bool_op(tt_train: List[np.array]) -> List[np.array]:
+def tt_walsh_op(tt_train: List[np.array]) -> List[np.array]:
     """
     Produces the truth table result tensor
     """
@@ -381,14 +358,14 @@ def _tt_phi_core_inv(core: np.array):
         ) for i in product(*([[0, 1]] * (len(core.shape) - 2)))])
 
 
-def tt_bool_op_inv(tt_train: List[np.array]) -> List[np.array]:
+def tt_walsh_op_inv(tt_train: List[np.array]) -> List[np.array]:
     """
     Produces the truth table result tensor
     """
     return [_tt_phi_core_inv(core) for core in tt_train]
 
 
-def _tt_measure_core(core: np.array, p_mat):
+def _tt_noisy_walsh_core(core: np.array, p_mat):
     return sum([
         jnp.kron(
             jnp.expand_dims(core[(slice(None),) + i], list(range(1, 1 + len(i)))),
@@ -396,17 +373,17 @@ def _tt_measure_core(core: np.array, p_mat):
         ) for i in product(*([[0, 1]] * (len(core.shape) - 2)))])
 
 
-def tt_measure(tt_train: List[np.array], likelihoods: np.array):
+def tt_noisy_walsh(tt_train: List[np.array], likelihoods: np.array):
     """
     Returns a formula weighted by a measure defined via the likelihoods
     """
-    return [_tt_measure_core(
+    return [_tt_noisy_walsh_core(
         core,
         jnp.array([[1, 1], [p, -p]], dtype=float).reshape(1, 2, 2, 1)
     ) for core, p in zip(tt_train, likelihoods)]
 
 
-def _tt_measure_core_inv(core: np.array, p_mat):
+def _tt_noisy_walsh_core_inv(core: np.array, p_mat):
     return sum([
         jnp.kron(
             jnp.expand_dims(core[(slice(None),) + i], list(range(1, 1 + len(i)))),
@@ -414,23 +391,23 @@ def _tt_measure_core_inv(core: np.array, p_mat):
         ) for i in product(*([[0, 1]] * (len(core.shape) - 2)))])
 
 
-def tt_measure_inv(tt_train: List[np.array], likelihoods: np.array):
+def tt_noisy_walsh_inv(tt_train: List[np.array], likelihoods: np.array):
     """
     Returns a formula weighted by a measure defined via the likelihoods
     """
     likelihoods = 1 / jnp.maximum(likelihoods, 1e-3)
-    return [_tt_measure_core_inv(
+    return [_tt_noisy_walsh_core_inv(
         core,
         (1 / 2) * jnp.array([[1, p], [1, -p]], dtype=float).reshape(1, 2, 2, 1)
     ) for core, p in zip(tt_train, likelihoods)]
 
 
 def tt_noise_op(tt_train: List[np.array], likelihoods: np.array):
-    return tt_bool_op_inv(tt_measure(tt_train, likelihoods))
+    return tt_walsh_op_inv(tt_noisy_walsh(tt_train, likelihoods))
 
 
 def tt_noise_op_inv(tt_train: List[np.array], likelihoods: np.array):
-    return tt_measure_inv(tt_bool_op(tt_train), likelihoods)
+    return tt_noisy_walsh_inv(tt_walsh_op(tt_train), likelihoods)
 
 
 def tt_boolean_criterion(dimension):
@@ -438,9 +415,8 @@ def tt_boolean_criterion(dimension):
     one[0] *= -1.0
 
     def criterion(tt_train):
-        tt_train = tt_bool_op(tt_train)
+        tt_train = tt_walsh_op(tt_train)
         squared_Ttt_1 = tt_hadamard(tt_train, tt_train)
-        squared_Ttt_1 = tt_rl_orthogonalize(squared_Ttt_1)
         minus_1_squared_Ttt_1 = tt_add(squared_Ttt_1, one)
         return tt_inner_prod(minus_1_squared_Ttt_1, minus_1_squared_Ttt_1)
 
@@ -452,10 +428,10 @@ def tt_noisy_boolean_criterion(dimension):
     one[0] *= -1.0
 
     def criterion(tt_train, likelihoods):
-        tt_train = tt_bool_op(tt_noise_op_inv(tt_train, likelihoods))
+        tt_train = tt_walsh_op(tt_noise_op_inv(tt_train, likelihoods))
         tt_train = tt_mul_scal(1 / jnp.sqrt(tt_inner_prod(tt_train, tt_train)), tt_train)
         squared_Ttt_1 = tt_hadamard(tt_train, tt_train)
-        squared_Ttt_1 = tt_rl_orthogonalize(squared_Ttt_1)
+        squared_Ttt_1 = tt_rank_reduce(squared_Ttt_1)
         minus_1_squared_Ttt_1 = tt_add(squared_Ttt_1, one)
         return tt_inner_prod(minus_1_squared_Ttt_1, minus_1_squared_Ttt_1)
 
@@ -465,7 +441,7 @@ def tt_noisy_boolean_criterion(dimension):
 def tt_extract_seq(tt_train, assignments):
     N = len(tt_train)
     eps = 0.5 ** (1 / N) + 1 / 2 ** N
-    tt_ttable = tt_rl_orthogonalize(tt_bool_op(tt_train))
+    tt_ttable = tt_rl_orthogonalize(tt_walsh_op(tt_train))
     answer = [np.array([1 - eps, eps]).reshape(1, 2, 1) for _ in range(N)]  # Sum over tensor sums to 1
     indices = list(range(N))
     for i in assignments.keys():
@@ -493,10 +469,10 @@ def tt_xnor(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.a
     """
     Produces the truth table result tensor
     """
-    tt_train_1 = tt_bool_op(tt_train_1)
-    tt_train_2 = tt_bool_op(tt_train_2)
+    tt_train_1 = tt_walsh_op(tt_train_1)
+    tt_train_2 = tt_walsh_op(tt_train_2)
     tt_train_xnor = tt_hadamard(tt_train_1, tt_train_2)
-    tt_train_xnor = tt_bool_op_inv(tt_train_xnor)
+    tt_train_xnor = tt_walsh_op_inv(tt_train_xnor)
     return tt_rank_reduce(tt_train_xnor)
 
 
@@ -505,14 +481,14 @@ def tt_xor(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.ar
 
 
 def tt_and(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.array]:
-    tt_train_1 = tt_bool_op(tt_train_1)
-    tt_train_2 = tt_bool_op(tt_train_2)
+    tt_train_1 = tt_walsh_op(tt_train_1)
+    tt_train_2 = tt_walsh_op(tt_train_2)
     tt_train_1 = tt_mul_scal(0.5, tt_train_1)
     tt_mul = tt_hadamard(tt_train_1, tt_train_2)
     tt_train_2 = tt_mul_scal(0.5, tt_train_2)
     half = tt_mul_scal(-0.5, tt_one(len(tt_train_1)))
     tt_train_and = tt_add(tt_add(half, tt_mul), tt_add(tt_train_1, tt_train_2))
-    tt_train_and = tt_bool_op_inv(tt_train_and)
+    tt_train_and = tt_walsh_op_inv(tt_train_and)
     return tt_rank_reduce(tt_train_and)
 
 
@@ -530,11 +506,12 @@ def tt_mul_scal(alpha, tt_train, idx=0):
 
 
 def tt_normalise(tt_train, radius=1, idx=0):
-    return tt_mul_scal(radius / np.sqrt(tt_inner_prod(tt_train, tt_train)), tt_train, idx)
+    return tt_mul_scal(radius / jnp.sqrt(tt_inner_prod(tt_train, tt_train)), tt_train, idx)
 
 
 def tt_add_noise(tt_train, noise_radius, rank):
     n = len(tt_train)
+    # approximately uniform noise on the sphere
     noise_train = [np.random.randn(rank if idx != 0 else 1, 2, rank if idx != n - 1 else 1) for idx in range(n)]
     noise_train = tt_mul_scal(noise_radius / jnp.sqrt(tt_inner_prod(noise_train, noise_train)), noise_train)
     # projection onto tangent space of tt_train

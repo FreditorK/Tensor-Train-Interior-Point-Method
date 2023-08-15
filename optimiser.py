@@ -3,7 +3,7 @@ from collections import deque
 import numpy as np
 from operators import D_func
 from tt_op import *
-from utils import ConstraintSpace, TTExpression
+from utils import ConstraintSpace, TTExpression, stopping_criterion
 from functools import partial
 
 
@@ -66,9 +66,10 @@ class ILPSolver:
         h = self.const_space.random_hypothesis()
         h_index = h.index-self.const_space.atom_count
         tt_train = tt_add_noise(h.value, self.error_bound/3, rank=1)
-        tt_trains = [h.value for h in self.const_space.hypotheses[:h_index]]
+        tt_trains_before = [h.value for h in self.const_space.hypotheses[:h_index]]
+        tt_trains_after = [h.value for h in self.const_space.hypotheses[h_index+1:]]
         for idx in range(self.const_space.atom_count):
-            gradients = self.objective_grad(tt_trains[:h_index] + [tt_train] + tt_trains[h_index+1:])
+            gradients = self.objective_grad(tt_trains_before + [tt_train] + tt_trains_after)
             gradient = gradients[h_index][idx]
             tt_train[idx] -= self.params["lr"] * gradient
             tt_train[idx] += self.params["lr"] * tt_grad_inner_prod(tt_train, tt_train, gradient, idx) * tt_train[idx]
@@ -86,7 +87,7 @@ class ILPSolver:
             hypotheses_copies = deepcopy([h.value for h in self.const_space.hypotheses])
             self._gradient_update()
             self._project()
-            criterion = self.const_space.stopping_criterion([h.value for h in self.const_space.hypotheses],
+            criterion = stopping_criterion([h.value for h in self.const_space.hypotheses],
                                                             hypotheses_copies)
             criterions.append(criterion)
             if (np.array(criterions)[:-1] - np.array(criterions)[1:]).mean() > 0:

@@ -16,7 +16,7 @@ atoms = const_space.generate_atoms(number_of_nodes) # i.e. graph with 2^3 nodes
 h = const_space.Hypothesis()
 graph_edges = [(0, 1), (1, 7), (7, 2), (7, 6), (2, 3), (2, 4), (3, 4), (3, 5), (5, 6)]
 graph = tt_svd(-2 * tt_graph_to_tensor(number_of_nodes, graph_edges) + 1)
-bool_graph = tt_bool_op_inv(graph)
+bool_graph = tt_walsh_op_inv(graph)
 
 
 def maxcut_objective(tt_train):
@@ -30,7 +30,7 @@ if args.stats:
     for i in range(100):
         print(f"---Trial {i}---")
         opt.solve()
-        set_partition = tt_to_tensor(tt_bool_op(h.value)).flatten()
+        set_partition = tt_to_tensor(tt_walsh_op(h.value)).flatten()
         cut_edges = [e for e in graph_edges if set_partition[e[0]] * set_partition[e[1]] < 0]
         number_of_edges_in_cut.append(len(cut_edges))
     mean = np.mean(number_of_edges_in_cut)
@@ -40,7 +40,7 @@ else:
     t_1 = time()
     opt.solve()
     t_2 = time()
-    set_partition = tt_to_tensor(tt_bool_op(h.value)).flatten()
+    set_partition = tt_to_tensor(tt_walsh_op(h.value)).flatten()
     cut_edges = [e for e in graph_edges if set_partition[e[0]] * set_partition[e[1]] < 0]
     print("The cut edges are: ", cut_edges)
     G = nx.Graph()

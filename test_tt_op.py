@@ -62,7 +62,7 @@ def test_tt_inner_product(tensor_tuple):
 @pytest.mark.parametrize("tensor", [T_1, T_2])
 def test_tt_bool_op(tensor):
     tt = tt_svd(tensor)
-    Ttt = tt_bool_op(tt)
+    Ttt = tt_walsh_op(tt)
     squared_Ttt_1 = tt_hadamard(Ttt, Ttt)
     minus_one = tt_one(len(Ttt))
     minus_one[0] *= -1
