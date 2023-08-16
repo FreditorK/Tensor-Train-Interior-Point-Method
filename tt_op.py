@@ -116,6 +116,30 @@ def tt_nuc_schatten_norm(tt_train):
     ]))
 
 
+def tt_rl_contraction(tt_train_1: List[np.array], tt_train_2: List[np.array]):
+    new_cores = [tt_train_1[-1].reshape(tt_train_1[-1].shape[0], -1) @ tt_train_2[-1].reshape(tt_train_2[-1].shape[0], -1).T]
+    for core_1, core_2 in zip(tt_train_1[-2:0:-1], tt_train_2[-2:0:-1]):
+        core_w = new_cores[-1]
+        core_z = core_1.reshape(-1, core_w.shape[0]) @ core_w
+        new_cores.append(core_z.reshape(core_1.shape[0], -1) @ core_2.reshape(core_2.shape[0], -1).T)
+    return new_cores[::-1]
+
+
+def tt_randomise_orthogonalise(tt_train: List[np.array], target_ranks: List[int]) -> List[np.array]:
+    target_ranks = [1] + target_ranks + [1]
+    tt_gaussian = [(1/l_n*2*l_np1)*np.random.randn(l_n, 2, l_np1) for l_n, l_np1 in zip(target_ranks[:-1], target_ranks[1:])]
+    tt_gaussian_contractions = tt_rl_contraction(tt_train, tt_gaussian)
+    for i, core_w in enumerate(tt_gaussian_contractions):
+        r_ip1, dim, r_ip2 = tt_train[i+1].shape
+        core_z = tt_train[i].reshape(-1, r_ip1)  # R_i * 2 x R_{i+1}
+        core_y = core_z @ core_w  # R_i * 2 x target_r
+        Q_T, _ = jnp.linalg.qr(core_y)  # R_i * 2 x unknown
+        tt_train[i] = Q_T.reshape(tt_train[i].shape[0], tt_train[i].shape[1], -1)   # R_i * 2 x unknown
+        core_m = Q_T.T @ core_z  # unknown x R_{i+1}
+        tt_train[i+1] = (core_m @ tt_train[i+1].reshape(r_ip1, -1)).reshape(-1, dim, r_ip2) # unknown x 2 * R_{i+2}
+    return tt_train
+
+
 def tt_rank_reduce(tt_train: List[np.array]):
     """ Might reduce TT-rank """
     tt_train = tt_rl_orthogonalize(tt_train)
@@ -293,7 +317,7 @@ def tt_grad_inner_prod(tt_train_1: List[np.array], tt_train_2: List[np.array], g
         jnp.linalg.multi_dot(
             [_tt_core_collapse(core_1, core_2) for core_1, core_2 in zip(tt_train_1[:idx], tt_train_2[:idx])]
             + [_tt_core_collapse(tt_train_1[idx], gradient_core)]
-            + [_tt_core_collapse(core_1, core_2) for core_1, core_2 in zip(tt_train_1[idx+1:], tt_train_2[idx+1:])]
+            + [_tt_core_collapse(core_1, core_2) for core_1, core_2 in zip(tt_train_1[idx + 1:], tt_train_2[idx + 1:])]
         )
     )
 
