@@ -8,6 +8,7 @@ tail_c1 = const_space.Atom("tail(c_1)")
 tail_c2 = const_space.Atom("tail(c_2)")
 head_c2 = const_space.Atom("head(c_2)")
 h = const_space.Hypothesis("h_0")
+np.random.seed(7)
 
 
 def symmetry_objective(tt_train):

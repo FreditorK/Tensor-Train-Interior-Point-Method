@@ -326,8 +326,9 @@ class ExistentialConstraint(LogicConstraint):
         func_result = np.clip(tt_inner_prod(tt_h, tt_n), a_min=-1, a_max=1)
         condition = func_result + bias < 1.9 * self.s_lower
         if condition:
+            ranks = tt_ranks(tt_h)
             tt_h = _projection(tt_h, tt_n, func_result, bias - 2 * self.s_lower)
-            tt_h = tt_rank_reduce(tt_h)
+            tt_h = tt_randomise_orthogonalise(tt_h, ranks)
         return tt_h, condition
 
     def is_satisfied(self, tt_h):
@@ -341,8 +342,9 @@ class UniversalConstraint(LogicConstraint):
         func_result = np.clip(tt_inner_prod(tt_h, tt_n), a_min=-1, a_max=1)
         condition = abs(func_result + bias) >= self.s_lower
         if condition:
+            ranks = tt_ranks(tt_h)
             tt_h = _projection(tt_h, tt_n, func_result, bias)
-            tt_h = tt_rank_reduce(tt_h)
+            tt_h = tt_randomise_orthogonalise(tt_h, ranks)
         return tt_h, condition
 
     def is_satisfied(self, tt_h):
@@ -376,8 +378,8 @@ class ConstraintSpace(ParameterSpace, ABC):
             expr = expr & ~(h ^ Boolean_Function(self, f"prev_{h}", h.value + [
                 np.array([1, 0], dtype=float).reshape(1, 2, 1)] * self.hypothesis_count))
         if self.repeller_check is not None:
-            self.repeller_check = TTExpression.from_expression(
-                Boolean_Function(self, f"Repeller", self.repeller_check.cores) | expr)
+            repeller = Boolean_Function(self, f"Repeller", self.repeller_check.cores)
+            self.repeller_check = TTExpression.from_expression(repeller | expr)
         else:
             self.repeller_check = TTExpression.from_expression(expr)
         # TODO: tt_train somehow too short
@@ -457,17 +459,19 @@ class ConstraintSpace(ParameterSpace, ABC):
 
     def round(self, hypothesis: Hypothesis, error_bound):
         tt_train = hypothesis.value
-        #tt_train = tt_add_noise(tt_train, error_bound, rank=tt_rank(tt_train))
-        tt_table = tt_rank_reduce(tt_walsh_op(tt_train))
-        tt_table_p2 = tt_hadamard(tt_table, tt_table)
-        tt_table_p3 = tt_hadamard(tt_table_p2, tt_table)
-        tt_update = tt_mul_scal(-0.5, tt_rank_reduce(tt_walsh_op_inv(tt_table_p3)))
+        ranks = tt_ranks(tt_train)
+        # We can use tt_random_ortho here as we know the ranks should stay the same if we take each entry to a power
+        # Additionally the ranks should also always remain the same after the walsh_op
+        tt_table = tt_walsh_op(tt_train)
+        tt_table_p2 = tt_randomise_orthogonalise(tt_hadamard(tt_table, tt_table), ranks)
+        tt_table_p3 = tt_randomise_orthogonalise(tt_hadamard(tt_table_p2, tt_table), ranks)
+        tt_update = tt_mul_scal(-0.5, tt_walsh_op_inv(tt_table_p3))
         next_tt_train = tt_mul_scal(1 - tt_inner_prod(tt_update, tt_train), tt_train)
         next_tt_train = tt_add(next_tt_train, tt_update)
-        next_tt_train = tt_normalise(next_tt_train)
         next_tt_train = tt_rank_reduce(next_tt_train)
+        next_tt_train = tt_normalise(next_tt_train)
         if error_bound > 0 and self.repeller_check is not None:
-            next_tt_train = self._interaction_kernel(tt_train, next_tt_train, tt_table, tt_table_p2, error_bound)
+            next_tt_train = self._interaction_kernel(tt_update, next_tt_train, tt_table, tt_table_p2, error_bound)
         hypothesis.value = next_tt_train
 
     def _interaction_kernel(self, tt_train, next_tt_train, tt_table, tt_table_p2, error_bound):
@@ -477,7 +481,9 @@ class ConstraintSpace(ParameterSpace, ABC):
             repel = tt_rank_reduce(
                 tt_add(tt_table_p2, tt_mul_scal(-1, tt_hadamard(tt_table, tt_walsh_op(next_tt_train))))
             )
-            next_tt_train = tt_add(tt_train, tt_mul_scal(0.5, tt_walsh_op_inv(repel)))
+            tt_update = tt_mul_scal(0.5, tt_walsh_op_inv(repel))
+            next_tt_train = tt_mul_scal(1 - tt_inner_prod(tt_update, tt_train), tt_train)
+            next_tt_train = tt_add(next_tt_train, tt_update)
             next_tt_train = tt_normalise(next_tt_train)
             next_tt_train = tt_rank_reduce(next_tt_train)
         return next_tt_train

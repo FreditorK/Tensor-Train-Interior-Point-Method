@@ -1,6 +1,9 @@
 from collections import deque
 
 import numpy as np
+import scipy
+from matplotlib import pyplot as plt
+
 from operators import D_func
 from tt_op import *
 from utils import ConstraintSpace, TTExpression, stopping_criterion
@@ -49,16 +52,22 @@ class ILPSolver:
         iter_function = self._project if self.objective_grad is None else self._riemannian_grad
         print("Solving relaxation...")
         iter_function()
+        orig_cop = deepcopy(self.const_space.hypotheses[0].value)
+        a = tt_to_tensor(tt_walsh_op(orig_cop))
+        print("Sim", (1/2**4)*np.sum(a*(a/np.abs(a))))
         print("Rounding solution...")
         self._round_solution()
+        print("Sim_score", tt_inner_prod(self.const_space.hypotheses[0].value, orig_cop))
         while not self._const_satisfied():
-            print([(str(h), h.to_CNF()) for h in self.const_space.hypotheses])
+            print([(str(h), h.to_CNF(), tt_leading_entry(h.value)) for h in self.const_space.hypotheses])
             self.const_space.extend_repeller()
             self.params["lr"] = self.params["orig_lr"]
             print("Solving relaxation...")
             iter_function()
+            cop = deepcopy(self.const_space.hypotheses[0].value)
             print("Rounding solution...")
             self._round_solution()
+            print("Sim_score", tt_inner_prod(self.const_space.hypotheses[0].value, cop), tt_inner_prod(self.const_space.hypotheses[0].value, orig_cop))
         for h in self.const_space.hypotheses:
             self.const_space.round(h, 0)
 
@@ -83,7 +92,7 @@ class ILPSolver:
     def _riemannian_grad(self):
         criterions = deque([np.inf], maxlen=self.params["patience"])
         # Gradient induced change, i.e. similar to first-order sufficient condition
-        while np.array(criterions)[-3:].mean() >= (self.params["lr"]/8)*self.error_bound:
+        while np.array(criterions)[-3:].mean() >= (self.params["lr"]/6)*self.error_bound:
             hypotheses_copies = deepcopy([h.value for h in self.const_space.hypotheses])
             self._gradient_update()
             self._project()
@@ -99,3 +108,5 @@ class ILPSolver:
             for h in self.const_space.hypotheses:
                 self.const_space.round(h, self.error_bound)
             criterion_score = np.mean([self.boolean_criterion(h.value) for h in self.const_space.hypotheses])
+            print(f"Boolean Criterion: {criterion_score} \r", end="")
+        print("\n", flush=True)

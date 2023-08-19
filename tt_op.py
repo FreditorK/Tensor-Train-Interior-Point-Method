@@ -166,6 +166,9 @@ def tt_rank_reduce(tt_train: List[np.array]):
 def tt_rank(tt_train):
     return np.max([max(t.shape[0], t.shape[-1]) for t in tt_train])
 
+def tt_ranks(tt_train):
+    return [t.shape[-1] for t in tt_train[:-1]]
+
 
 def tt_rank_retraction(tt_upper_ranks: List[int], tt_train: List[np.array]):
     """ Might reduce TT-rank """
@@ -574,6 +577,7 @@ def tt_substitute(tt_train: List[np.array], substitutions: List[np.array]) -> Li
     :return:
     """
     add_length = len(tt_train) - len(substitutions[0])
+    assert add_length > 0, "There is no variable to substitute!"
     for tt_s in substitutions:
         add_length -= 1
         tt_core_without_basis = np.einsum("ldr, rk -> ldk", tt_train[-2], tt_train[-1][:, 0, :])
