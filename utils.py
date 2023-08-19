@@ -364,25 +364,15 @@ class ConstraintSpace(ParameterSpace, ABC):
         self._hypothesis_list: List[Hypothesis] = []
         self.iq_constraints: Dict[List] = dict()
         self.eq_constraints: Dict[List] = dict()
-        self.repeller_check: TTExpression = None
+        self.repeller_check: Dict[TTExpression] = dict()
 
     def extend_repeller(self):
-        expr = ~(
-            self.hypotheses[0] ^ Boolean_Function(
-            self,
-            f"prev_{self.hypotheses[0]}",
-            self.hypotheses[0].value
-            + [np.array([1, 0], dtype=float).reshape(1, 2, 1)] * self.hypothesis_count
-        ))
-        for h in self.hypotheses[1:]:
-            expr = expr & ~(h ^ Boolean_Function(self, f"prev_{h}", h.value + [
-                np.array([1, 0], dtype=float).reshape(1, 2, 1)] * self.hypothesis_count))
-        if self.repeller_check is not None:
-            repeller = Boolean_Function(self, f"Repeller", self.repeller_check.cores)
-            self.repeller_check = TTExpression.from_expression(repeller | expr)
-        else:
-            self.repeller_check = TTExpression.from_expression(expr)
-        # TODO: tt_train somehow too short
+        for h in self.hypotheses:
+            expr = TTExpression.from_expression(h & Boolean_Function(self, f"prev_{h}", h.value + [np.array([1, 0], dtype=float).reshape(1, 2, 1)] * self.hypothesis_count))
+            if self.repeller_check[h] is None:
+                self.repeller_check[h] = expr
+            else:
+                self.repeller_check[h] = self.repeller_check[h] | expr
 
     @property
     def atoms(self):
@@ -423,6 +413,7 @@ class ConstraintSpace(ParameterSpace, ABC):
         self.hypotheses.append(h)
         self.iq_constraints[h] = []
         self.eq_constraints[h] = []
+        self.repeller_check[h] = None
         return h
 
     def there_exists(self, expr: Expression):
@@ -462,6 +453,7 @@ class ConstraintSpace(ParameterSpace, ABC):
         ranks = tt_ranks(tt_train)
         # We can use tt_random_ortho here as we know the ranks should stay the same if we take each entry to a power
         # Additionally the ranks should also always remain the same after the walsh_op
+        tt_train = tt_randomise_orthogonalise(tt_add_noise(tt_train, error_bound, target_ranks=ranks), ranks)
         tt_table = tt_walsh_op(tt_train)
         tt_table_p2 = tt_randomise_orthogonalise(tt_hadamard(tt_table, tt_table), ranks)
         tt_table_p3 = tt_randomise_orthogonalise(tt_hadamard(tt_table_p2, tt_table), ranks)
@@ -470,14 +462,12 @@ class ConstraintSpace(ParameterSpace, ABC):
         next_tt_train = tt_add(next_tt_train, tt_update)
         next_tt_train = tt_rank_reduce(next_tt_train)
         next_tt_train = tt_normalise(next_tt_train)
-        if error_bound > 0 and self.repeller_check is not None:
-            next_tt_train = self._interaction_kernel(tt_update, next_tt_train, tt_table, tt_table_p2, error_bound)
+        if error_bound > 0 and self.repeller_check[hypothesis] is not None:
+            next_tt_train = self._interaction_kernel(tt_train, next_tt_train, tt_table, tt_table_p2, error_bound)
         hypothesis.value = next_tt_train
 
     def _interaction_kernel(self, tt_train, next_tt_train, tt_table, tt_table_p2, error_bound):
-        if 1 - tt_leading_entry(
-            tt_substitute(self.repeller_check.cores, [h.value for h in reversed(self.hypotheses)])
-        ) < error_bound:
+        if self._kernel_check(error_bound):
             repel = tt_rank_reduce(
                 tt_add(tt_table_p2, tt_mul_scal(-1, tt_hadamard(tt_table, tt_walsh_op(next_tt_train))))
             )
@@ -487,3 +477,9 @@ class ConstraintSpace(ParameterSpace, ABC):
             next_tt_train = tt_normalise(next_tt_train)
             next_tt_train = tt_rank_reduce(next_tt_train)
         return next_tt_train
+
+    def _kernel_check(self, error_bound):
+        for h in self.hypotheses:
+            if 1 - tt_inner_prod(h.substitute_into(self.repeller_check[h]).cores, h.value) >= error_bound:
+                return False
+        return True

@@ -52,29 +52,23 @@ class ILPSolver:
         iter_function = self._project if self.objective_grad is None else self._riemannian_grad
         print("Solving relaxation...")
         iter_function()
-        orig_cop = deepcopy(self.const_space.hypotheses[0].value)
-        a = tt_to_tensor(tt_walsh_op(orig_cop))
-        print("Sim", (1/2**4)*np.sum(a*(a/np.abs(a))))
         print("Rounding solution...")
         self._round_solution()
-        print("Sim_score", tt_inner_prod(self.const_space.hypotheses[0].value, orig_cop))
         while not self._const_satisfied():
-            print([(str(h), h.to_CNF(), tt_leading_entry(h.value)) for h in self.const_space.hypotheses])
+            #print([(str(h), h.to_CNF(), tt_leading_entry(h.value)) for h in self.const_space.hypotheses])
             self.const_space.extend_repeller()
             self.params["lr"] = self.params["orig_lr"]
             print("Solving relaxation...")
             iter_function()
-            cop = deepcopy(self.const_space.hypotheses[0].value)
             print("Rounding solution...")
             self._round_solution()
-            print("Sim_score", tt_inner_prod(self.const_space.hypotheses[0].value, cop), tt_inner_prod(self.const_space.hypotheses[0].value, orig_cop))
         for h in self.const_space.hypotheses:
             self.const_space.round(h, 0)
 
     def _gradient_update(self):
         h = self.const_space.random_hypothesis()
         h_index = h.index-self.const_space.atom_count
-        tt_train = tt_add_noise(h.value, self.error_bound/3, rank=1)
+        tt_train = tt_add_noise(h.value, self.error_bound/3, target_ranks=[1]*(self.const_space.atom_count-1))
         tt_trains_before = [h.value for h in self.const_space.hypotheses[:h_index]]
         tt_trains_after = [h.value for h in self.const_space.hypotheses[h_index+1:]]
         for idx in range(self.const_space.atom_count):
