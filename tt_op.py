@@ -135,7 +135,7 @@ def tt_randomise_orthogonalise(tt_train: List[np.array], target_ranks: List[int]
         r_ip1, dim, r_ip2 = tt_train[i + 1].shape
         core_z = tt_train[i].reshape(-1, r_ip1)  # R_i * 2 x R_{i+1}
         core_y = core_z @ core_w  # R_i * 2 x target_r
-        Q_T, _ = jnp.linalg.qr(core_y)  # R_i * 2 x unknown
+        Q_T, _ = np.linalg.qr(core_y)  # R_i * 2 x unknown
         tt_train[i] = Q_T.reshape(tt_train[i].shape[0], tt_train[i].shape[1], -1)  # R_i * 2 x unknown
         core_m = Q_T.T @ core_z  # unknown x R_{i+1}
         tt_train[i + 1] = (core_m @ tt_train[i + 1].reshape(r_ip1, -1)).reshape(-1, dim, r_ip2)  # unknown x 2 * R_{i+2}

@@ -463,14 +463,12 @@ class ConstraintSpace(ParameterSpace, ABC):
         next_tt_train = tt_rank_reduce(next_tt_train)
         next_tt_train = tt_normalise(next_tt_train)
         if error_bound > 0 and self.repeller_check[hypothesis] is not None:
-            next_tt_train = self._interaction_kernel(tt_train, next_tt_train, tt_table, tt_table_p2, error_bound)
+            next_tt_train = self._interaction_kernel(tt_train, next_tt_train, tt_table, tt_table_p2, ranks, error_bound)
         hypothesis.value = next_tt_train
 
-    def _interaction_kernel(self, tt_train, next_tt_train, tt_table, tt_table_p2, error_bound):
+    def _interaction_kernel(self, tt_train, next_tt_train, tt_table, tt_table_p2, ranks, error_bound):
         if self._kernel_check(error_bound):
-            repel = tt_rank_reduce(
-                tt_add(tt_table_p2, tt_mul_scal(-1, tt_hadamard(tt_table, tt_walsh_op(next_tt_train))))
-            )
+            repel = tt_randomise_orthogonalise(tt_add(tt_table_p2, tt_mul_scal(-1, tt_hadamard(tt_table, tt_walsh_op(next_tt_train)))), ranks)
             tt_update = tt_mul_scal(0.5, tt_walsh_op_inv(repel))
             next_tt_train = tt_mul_scal(1 - tt_inner_prod(tt_update, tt_train), tt_train)
             next_tt_train = tt_add(next_tt_train, tt_update)

@@ -55,7 +55,7 @@ class ILPSolver:
         print("Rounding solution...")
         self._round_solution()
         while not self._const_satisfied():
-            #print([(str(h), h.to_CNF(), tt_leading_entry(h.value)) for h in self.const_space.hypotheses])
+            print([(str(h), h.to_CNF(), tt_leading_entry(h.value)) for h in self.const_space.hypotheses])
             self.const_space.extend_repeller()
             self.params["lr"] = self.params["orig_lr"]
             print("Solving relaxation...")
