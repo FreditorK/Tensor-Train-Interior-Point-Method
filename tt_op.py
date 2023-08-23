@@ -318,6 +318,22 @@ def tt_inner_prod(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> flo
     )
 
 
+def tt_partial_inner_prod(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> float:
+    min_n = min(len(tt_train_1), len(tt_train_2))
+    long_tt = tt_train_1[min_n:] if len(tt_train_1) > min_n else tt_train_2[min_n:]
+    contraction_min_n = np.linalg.multi_dot(
+        [_tt_core_collapse(core_1, core_2) for core_1, core_2 in zip(tt_train_1[:min_n], tt_train_2[:min_n])])
+    long_tt[0] = np.einsum("lr, rdk -> ldk", contraction_min_n, long_tt[0])
+    return long_tt
+
+
+def tt_fast_to_tensor(tt_train):
+    tensor = tt_train[0]
+    for core in tt_train[1:]:
+        tensor = np.tensordot(tensor, core, axes=(-1, 0))
+    return np.sum(tensor, axis=(0, -1))
+
+
 def tt_grad_inner_prod(tt_train_1: List[np.array], tt_train_2: List[np.array], gradient_core: np.array, idx):
     return jnp.sum(
         jnp.linalg.multi_dot(

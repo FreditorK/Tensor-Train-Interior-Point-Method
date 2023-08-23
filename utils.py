@@ -364,15 +364,21 @@ class ConstraintSpace(ParameterSpace, ABC):
         self._hypothesis_list: List[Hypothesis] = []
         self.iq_constraints: Dict[List] = dict()
         self.eq_constraints: Dict[List] = dict()
-        self.repeller_check: Dict[TTExpression] = dict()
+        self.repeller: Dict[List] = dict()
+        self.repel_count = 0
 
     def extend_repeller(self):
+        self.repel_count += 1
+        add_on_length = int(np.ceil(np.log(self.repel_count)))
+        h_add_on = [np.array([1-int(i), int(i)]).reshape(1, 2, 1) for i in bin(add_on_length)[2:]]
+        repeller_add_on = [np.array([1, 0]).reshape(1, 2, 1)]*((self.atom_count+self.hypothesis_count+add_on_length)-len(self.repeller))
         for h in self.hypotheses:
-            expr = TTExpression.from_expression(h & Boolean_Function(self, f"prev_{h}", h.value + [np.array([1, 0], dtype=float).reshape(1, 2, 1)] * self.hypothesis_count))
-            if self.repeller_check[h] is None:
-                self.repeller_check[h] = expr
+            repel = h.value + h_add_on
+            if self.repeller[h] is None:
+                self.repeller[h] = repel
             else:
-                self.repeller_check[h] = self.repeller_check[h] | expr
+                self.repeller[h] = tt_rank_reduce(tt_add(self.repeller[h] + repeller_add_on, repel))
+        # TODO: Cap at some point if rank increases too much
 
     @property
     def atoms(self):
@@ -413,7 +419,7 @@ class ConstraintSpace(ParameterSpace, ABC):
         self.hypotheses.append(h)
         self.iq_constraints[h] = []
         self.eq_constraints[h] = []
-        self.repeller_check[h] = None
+        self.repeller[h] = None
         return h
 
     def there_exists(self, expr: Expression):
@@ -462,7 +468,7 @@ class ConstraintSpace(ParameterSpace, ABC):
         next_tt_train = tt_add(next_tt_train, tt_update)
         next_tt_train = tt_rank_reduce(next_tt_train)
         next_tt_train = tt_normalise(next_tt_train)
-        if error_bound > 0 and self.repeller_check[hypothesis] is not None:
+        if error_bound > 0 and self.repeller[hypothesis] is not None:
             next_tt_train = self._interaction_kernel(tt_train, next_tt_train, tt_table, tt_table_p2, ranks, error_bound)
         hypothesis.value = next_tt_train
 
@@ -477,7 +483,12 @@ class ConstraintSpace(ParameterSpace, ABC):
         return next_tt_train
 
     def _kernel_check(self, error_bound):
-        for h in self.hypotheses:
-            if 1 - tt_inner_prod(h.substitute_into(self.repeller_check[h]).cores, h.value) >= error_bound:
+        h = self.hypotheses[0]
+        check = (1 - tt_fast_to_tensor(tt_partial_inner_prod(self.repeller[h], h.value))) < error_bound
+        if ~np.any(check):
+            return False
+        for h in self.hypotheses[1:]:
+            check = check * ((1 - tt_fast_to_tensor(tt_partial_inner_prod(self.repeller[h], h.value))) < error_bound)
+            if ~np.any(check):
                 return False
         return True
