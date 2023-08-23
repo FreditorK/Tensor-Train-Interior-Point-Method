@@ -569,7 +569,7 @@ def tt_abs(tt_train):
     return absolute_tt_train
 
 
-def tt_substitute(tt_train: List[np.array], substitutions: List[np.array]) -> List[np.array]:
+def tt_substitute(tt_train: List[np.array], substitutions: List[List[np.array]]) -> List[np.array]:
     """
 
     :param self:
@@ -604,7 +604,7 @@ def tt_graph_to_tensor(n, edges):  # Start numbering nodes at 0
 
 def tt_permute(tt_train: List[np.array], axes: List[Tuple]) -> List[np.array]:
     """
-    Produces the truth table result tensor
+    Permutes a list of index tuples
     """
     for idx_1, idx_2 in axes:
         min_idx = min(idx_1, idx_2)
