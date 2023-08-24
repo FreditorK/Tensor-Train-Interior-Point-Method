@@ -99,7 +99,7 @@ class ILPSolver:
     def _round_solution(self):
         criterion_score = np.inf
         while criterion_score > self.error_bound:
-            for h in self.const_space.random_hypothesis():
+            for h in self.const_space.hypotheses():
                 self.const_space.round(h, self.error_bound)
             criterion_score = np.mean([self.boolean_criterion(h.value) for h in self.const_space.hypotheses])
             print(f"Boolean Criterion: {criterion_score} \r", end="")
