@@ -2,6 +2,7 @@ from time import time
 from utils import *
 from optimiser import ILPSolver, AnswerSetSolver
 
+np.random.seed(7)
 const_space = ConstraintSpace()
 x = const_space.Atom("x")
 y = const_space.Atom("y")
@@ -13,10 +14,8 @@ h_1 = const_space.Hypothesis("h_1")
 const_space.for_all(h_0 << (x & y & z))
 const_space.for_all(h_0 >> x)
 const_space.there_exists(h_0 << (x & w))
-const_space.there_exists(h_0 << (x << (y & z)))
 const_space.for_all(h_1 << (h_0 & ~z & ~y))
 const_space.for_all(h_1 >> ~z & h_0)
-const_space.there_exists(h_1 | ~(u & w))
 opt = ILPSolver(const_space)
 t_1 = time()
 opt.solve()

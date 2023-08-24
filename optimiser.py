@@ -6,7 +6,7 @@ from matplotlib import pyplot as plt
 
 from operators import D_func
 from tt_op import *
-from utils import ConstraintSpace, TTExpression, stopping_criterion
+from utils import ConstraintSpace, TTExpression, stopping_criterion, Hypothesis
 from functools import partial
 
 
@@ -34,8 +34,9 @@ class ILPSolver:
         self.error_bound = 2 ** (-self.const_space.atom_count)
         self.boolean_criterion = tt_boolean_criterion(self.const_space.atom_count)
         self.params = {
-            "orig_lr": 1.9*self.error_bound,
-            "lr": 1.9*self.error_bound, # It cannot be lower, otherwise it skips functions, i.e. distance between functions is error_bound
+            "orig_lr": 1.9 * self.error_bound,
+            "lr": 1.9 * self.error_bound,
+            # It cannot be lower, otherwise it skips functions, i.e. distance between functions is error_bound
             "patience": 5
         }
 
@@ -49,58 +50,48 @@ class ILPSolver:
         return is_satisfied
 
     def solve(self):
-        iter_function = self._project if self.objective_grad is None else self._riemannian_grad
-        print("Solving relaxation...")
-        iter_function()
-        print("Rounding solution...")
-        self._round_solution()
+        iter_function = self.const_space.project if self.objective_grad is None else self._riemannian_grad
+        for hypothesis in self.const_space.permuted_hypotheses:
+            iter_function(hypothesis)
+            self._round_solution(hypothesis)
         while not self._const_satisfied():
-            print([(str(h), h.to_CNF(), tt_leading_entry(h.value)) for h in self.const_space.hypotheses])
+            print([(str(h), h.to_CNF()) for h in self.const_space.hypotheses])
             self.const_space.extend_repeller()
-            self.params["lr"] = self.params["orig_lr"]
-            print("Solving relaxation...")
-            iter_function()
-            print("Rounding solution...")
-            self._round_solution()
+            for hypothesis in self.const_space.permuted_hypotheses:
+                iter_function(hypothesis)
+                self._round_solution(hypothesis)
         for h in self.const_space.hypotheses:
             self.const_space.round(h, 0)
 
-    def _gradient_update(self):
-        h = self.const_space.random_hypothesis()
-        h_index = h.index-self.const_space.atom_count
-        tt_train = tt_add_noise(h.value, self.error_bound/3, target_ranks=[1]*(self.const_space.atom_count-1))
+    def _gradient_update(self, hypothesis: Hypothesis):
+        h_index = hypothesis.index - self.const_space.atom_count
+        tt_train = tt_add_noise(hypothesis.value, self.error_bound / 3, target_ranks=[1] * (self.const_space.atom_count - 1))
         tt_trains_before = [h.value for h in self.const_space.hypotheses[:h_index]]
-        tt_trains_after = [h.value for h in self.const_space.hypotheses[h_index+1:]]
+        tt_trains_after = [h.value for h in self.const_space.hypotheses[h_index + 1:]]
         for idx in range(self.const_space.atom_count):
             gradients = self.objective_grad(tt_trains_before + [tt_train] + tt_trains_after)
             gradient = gradients[h_index][idx]
             tt_train[idx] -= self.params["lr"] * gradient
             tt_train[idx] += self.params["lr"] * tt_grad_inner_prod(tt_train, tt_train, gradient, idx) * tt_train[idx]
             tt_train = tt_normalise(tt_train, idx=idx)
-        h.value = tt_rank_reduce(tt_train)
+        hypothesis.value = tt_rank_reduce(tt_train)
 
-    def _project(self):
-        h = self.const_space.random_hypothesis()
-        self.const_space.project(h)
-
-    def _riemannian_grad(self):
+    def _riemannian_grad(self, hypothesis: Hypothesis):
         criterions = deque([np.inf], maxlen=self.params["patience"])
         # Gradient induced change, i.e. similar to first-order sufficient condition
-        while np.array(criterions)[-3:].mean() >= (self.params["lr"]/6)*self.error_bound:
-            hypotheses_copies = deepcopy([h.value for h in self.const_space.hypotheses])
-            self._gradient_update()
-            self._project()
-            criterion = stopping_criterion([h.value for h in self.const_space.hypotheses],
-                                                            hypotheses_copies)
-            criterions.append(criterion)
+        while np.array(criterions)[-3:].mean() >= (self.params["lr"] / 6) * self.error_bound:
+            hypothesis_copy = deepcopy(hypothesis.value)
+            self._gradient_update(hypothesis)
+            self.const_space.project(hypothesis)
+            criterions.append(stopping_criterion(hypothesis.value, hypothesis_copy))
             if (np.array(criterions)[:-1] - np.array(criterions)[1:]).mean() > 0:
-                self.params["lr"] = max(0.99*self.params["lr"], 0.5*self.error_bound)
+                self.params["lr"] = max(0.99 * self.params["lr"], 0.5 * self.error_bound)
+        self.params["lr"] = self.params["orig_lr"]
 
-    def _round_solution(self):
+    def _round_solution(self, hypothesis: Hypothesis):
         criterion_score = np.inf
         while criterion_score > self.error_bound:
-            for h in self.const_space.hypotheses():
-                self.const_space.round(h, self.error_bound)
-            criterion_score = np.mean([self.boolean_criterion(h.value) for h in self.const_space.hypotheses])
+            self.const_space.round(hypothesis, self.error_bound)
+            criterion_score = self.boolean_criterion(hypothesis.value)
             print(f"Boolean Criterion: {criterion_score} \r", end="")
         print("\n", flush=True)

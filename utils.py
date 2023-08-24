@@ -352,10 +352,8 @@ class UniversalConstraint(LogicConstraint):
         return abs(tt_inner_prod(tt_h, normal) + bias) < self.s_lower
 
 
-def stopping_criterion(tt_trains, prev_tt_trains):
-    return 1 - (1/len(tt_trains))*sum([
-        tt_inner_prod(tt_train, prev_tt_train) for tt_train, prev_tt_train in zip(tt_trains, prev_tt_trains)
-    ])
+def stopping_criterion(tt_train, prev_tt_train):
+    return 1- tt_inner_prod(tt_train, prev_tt_train)
 
 
 class ConstraintSpace(ParameterSpace, ABC):
@@ -366,19 +364,22 @@ class ConstraintSpace(ParameterSpace, ABC):
         self.eq_constraints: Dict[List] = dict()
         self.repeller: Dict[List] = dict()
         self.repel_count = 0
+        self.repel_rank_limit = 15
 
     def extend_repeller(self):
         self.repel_count += 1
         add_on_length = int(np.ceil(np.log(self.repel_count)))
         h_add_on = [np.array([1-int(i), int(i)]).reshape(1, 2, 1) for i in bin(add_on_length)[2:]]
-        repeller_add_on = [np.array([1, 0]).reshape(1, 2, 1)]*((self.atom_count+self.hypothesis_count+add_on_length)-len(self.repeller))
+        repeller_add_on = [np.array([1, 0]).reshape(1, 2, 1)]*(add_on_length-int(np.ceil(np.log(max(1, self.repel_count-1)))))
         for h in self.hypotheses:
             repel = h.value + h_add_on
             if self.repeller[h] is None:
                 self.repeller[h] = repel
             else:
                 self.repeller[h] = tt_rank_reduce(tt_add(self.repeller[h] + repeller_add_on, repel))
-        # TODO: Cap at some point if rank increases too much
+                ranks = np.array(tt_ranks(self.repeller[h]))
+                if any(ranks > self.repel_rank_limit):
+                    self.repeller[h] = tt_randomise_orthogonalise(self.repeller[h], [min(r, self.repel_rank_limit) for r in ranks])
 
     @property
     def atoms(self):
@@ -391,6 +392,10 @@ class ConstraintSpace(ParameterSpace, ABC):
     @property
     def hypotheses(self):
         return self._hypothesis_list
+
+    @property
+    def permuted_hypotheses(self):
+        return np.random.permutation(self._hypothesis_list)
 
     def random_hypothesis(self):
         i = np.random.randint(self.hypothesis_count)
