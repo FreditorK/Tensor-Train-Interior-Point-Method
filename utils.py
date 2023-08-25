@@ -1,23 +1,46 @@
 import copy
 import random
+from functools import reduce
+from typing import Dict
 
+import jax
+import numpy as np
 from sympy.logic.boolalg import ANFform, to_cnf, to_dnf, to_anf
 from sympy import symbols
 from tt_op import *
 from copy import deepcopy
 from operators import partial_D, D_func
+from abc import ABC, abstractmethod
+
+
+class ParameterSpace(ABC):
+
+    @property
+    @abstractmethod
+    def atom_count(self):
+        ...
+
+    @property
+    @abstractmethod
+    def atoms(self):
+        ...
+
+    @property
+    @abstractmethod
+    def hypothesis_count(self):
+        ...
+
+    @property
+    @abstractmethod
+    def hypotheses(self):
+        ...
 
 
 class Expression:
-    count = 0
 
-    def __init__(self, name: str, args, op):
-        if name is None:
-            self.name = f"e_{str(Expression.count)}"
-            Expression.count += 1
-        else:
-            self.name = name
-
+    def __init__(self, par_space: ParameterSpace, name: str, args, op):
+        self.par_space = par_space
+        self.name = name
         self.op = op
         self.args = args
 
@@ -34,25 +57,36 @@ class Expression:
         return self.args[key]
 
     def __and__(self, other):
-        return Expression(f"({self.name} ∧ {other.name})", [self, other], tt_and)
+        if isinstance(self, Atom) and isinstance(other, Atom):
+            return Boolean_Function(self.par_space, f"({self.name} ∧ {other.name})",
+                                    tt_and(self.to_tt_train(), other.to_tt_train()))
+        return Expression(self.par_space, f"({self.name} ∧ {other.name})", [self, other], tt_and)
 
     def __rand__(self, other):
         return other.__and__(self)
 
     def __or__(self, other):
-        return Expression(f"({self.name} v {other.name})", [self, other], tt_or)
+        if isinstance(self, Atom) and isinstance(other, Atom):
+            return Boolean_Function(self.par_space, f"({self.name} v {other.name})",
+                                    tt_or(self.to_tt_train(), other.to_tt_train()))
+        return Expression(self.par_space, f"({self.name} v {other.name})", [self, other], tt_or)
 
     def __ror__(self, other):
         return other.__or__(self)
 
     def __xor__(self, other):
-        return Expression(f"({self.name} ⊻ {other.name})", [self, other], tt_xor)
+        if isinstance(self, Atom) and isinstance(other, Atom):
+            return Boolean_Function(self.par_space, f"({self.name} ⊻ {other.name})",
+                                    tt_xor(self.to_tt_train(), other.to_tt_train()))
+        return Expression(self.par_space, f"({self.name} ⊻ {other.name})", [self, other], tt_xor)
 
     def __rxor__(self, other):
-        return other.__or__(self)
+        return other.__xor__(self)
 
     def __invert__(self):
-        return Expression(f"¬{self.name}", [self], tt_neg)
+        if isinstance(self, Atom):
+            return Boolean_Function(self.par_space, f"¬{self.name}", tt_neg(self.to_tt_train()))
+        return Expression(self.par_space, f"¬{self.name}", [self], tt_neg)
 
     def __lshift__(self, other):  # <-
         return self.__ror__(other.__invert__())
@@ -68,403 +102,398 @@ class Expression:
 
 
 class Atom(Expression):
-    counter = 0
 
-    def __init__(self, vocab_size, name=None):
+    def __init__(self, par_space: ParameterSpace, name=None):
         if name is None:
-            name = f"a_{str(Atom.counter)}"
-        super().__init__(name, [self], lambda x: x)
-        self.index = Atom.counter
-        self.vocab_size = vocab_size
-        Atom.counter += 1
+            name = f"a_{par_space.atom_count}"
+        super().__init__(par_space, name, [self], lambda x: x)
+        self.index = par_space.atom_count
+
+    def __eq__(self, other):
+        if isinstance(other, Atom):
+            return self.index == other.index
+        return False
 
     def to_tt_train(self):
-        return tt_atom_train(self.index, self.vocab_size)
+        return tt_atom_train(self.index, self.par_space.atom_count + self.par_space.hypothesis_count)
+
+    def __hash__(self):
+        return self.index
 
 
-def get_ANF(atoms, hypothesis):
-    variable_names = " ".join([a.name for a in atoms])
-    variables = symbols(variable_names)
-    truth_table_labels = ((np.round(tt_to_tensor(tt_bool_op(hypothesis))) + 1) / 2).astype(int).flatten()
-    anf = ANFform(variables, list(reversed(truth_table_labels)))
-    return anf
+class TTExpression:
+    def __init__(self, cores: List[np.array], par_space: ParameterSpace, substituted=None):
+        assert par_space.atom_count <= len(cores) <= (
+            par_space.atom_count + par_space.hypothesis_count), "Labels do not match the tensor!"
+        self.cores = cores
+        self.par_space = par_space
+        self.substituted = substituted
+        if substituted is None:
+            self.substituted = []
 
+    @classmethod
+    def from_expression(cls, expr: Expression):
+        tt_train = expr.to_tt_train()
+        not_involved_hypotheses_idxs = []
+        for h in expr.par_space.hypotheses:
+            # TODO: This condition might need a bit more thought
+            if np.sum(
+                np.abs(tt_train[h.index][:, 1, :])
+            ) < 1 / 2 ** (expr.par_space.atom_count + expr.par_space.hypothesis_count):
+                not_involved_hypotheses_idxs.append(h.index)
+        for i in sorted(not_involved_hypotheses_idxs, reverse=True):
+            tt_train[i - 1] = np.einsum("ldr, rk -> ldk", tt_train[i - 1], tt_train[i][:, 0, :])
+            tt_train = tt_train[:i] + tt_train[i + 1:]
+        return cls(tt_train, expr.par_space, substituted=not_involved_hypotheses_idxs)
 
-def get_CNF(atoms, hypothesis):
-    anf = get_ANF(atoms, hypothesis)
-    return to_cnf(anf, simplify=True)
+    @property
+    def hypotheses(self):
+        return [h for h in self.par_space.hypotheses if h.index not in self.substituted]
 
+    def __add__(self, other):
+        if isinstance(other, TTExpression):
+            assert self.par_space == other.par_space, "Tensors live in different parameter spaces!"
+            return TTExpression(tt_add(self.cores, other.cores), self.par_space)
+        new_cores = tt_mul_scal(other, tt_one(len(self.cores)))
+        return TTExpression(tt_add(self.cores, new_cores), self.par_space)
 
-def get_DNF(atoms, hypothesis):
-    anf = get_ANF(atoms, hypothesis)
-    return to_dnf(anf, simplify=True)
+    def __radd__(self, other):
+        return other.__add__(self)
 
+    def __sub__(self, other):
+        if isinstance(other, TTExpression):
+            assert self.par_space == other.par_space, "Tensors live in different parameter spaces!"
+            new_cores = tt_mul_scal(-1, deepcopy(other.cores))
+            return TTExpression(tt_add(self.cores, new_cores), self.par_space)
+        new_cores = tt_mul_scal(-other, tt_one(len(self.cores)))
+        return TTExpression(tt_add(self.cores, new_cores), self.par_space)
 
-def generate_atoms(n):
-    atoms = []
-    for i in range(n):
-        atoms.append(Atom(n, f"x_{i}"))
-    return atoms
+    def __rsub__(self, other):
+        return other.__sub__(self)
 
+    def __mul__(self, other):
+        if isinstance(other, TTExpression):
+            assert self.par_space == other.par_space, "Tensors live in different parameter spaces!"
+            return TTExpression(tt_hadamard(self.cores, other.cores), self.par_space)
+        new_cores = tt_mul_scal(other, deepcopy(self.cores))
+        return TTExpression(new_cores, self.par_space)
 
-def influence_geq(atom, eps):
-    def influence_constraint(_):
-        idx = atom.index
-        return lambda h: tt_influence(h, idx) - eps
+    def __rmul__(self, other):
+        return other.__mul__(self)
 
-    return influence_constraint
+    def __and__(self, other):
+        assert isinstance(other, TTExpression), "The AND-operation can only be performed between to TensorTrains!"
+        assert self.par_space == other.par_space, "Tensors live in different parameter spaces!"
+        return TTExpression(tt_and(self.cores, other.cores), self.par_space)
 
-
-def influence_leq(atom, eps):
-    def influence_constraint(_):
-        idx = atom.index
-        return lambda h: eps - tt_influence(h, idx)
-
-    return influence_constraint
-
-
-class Meta_Boolean_Function:
-    count = 0
-
-    def __init__(self, name: str, normal_vec, offset, tt_example):
-        if name is None:
-            self.name = f"e_{str(Meta_Boolean_Function.count)}"
-            Meta_Boolean_Function.count += 1
-        else:
-            self.name = name
-
-        self.normal_vec = normal_vec
-        self.offset = offset
-        self.tt_example = tt_example
-
-    def to_tt_constraint(self):
-        return self.normal_vec, self.offset, self.tt_example
-
-    def __repr__(self):
-        return str(self)
-
-    def __str__(self):
-        return self.name
+    def __rand__(self, other):
+        return other.__and__(self)
 
     def __or__(self, other):
-        e = self.normal_vec
-        if isinstance(other, Boolean_Function) or isinstance(other, Boolean_Data_Lower):
-            e = other.normal_vec
-        bot = tt_leading_one(len(e))
-        bot[0] *= -1
-        return Meta_Boolean_Function(
-            f"({self.name} v {other.name})",
-            lambda e: tt_rl_orthogonalize(tt_add(e, bot)),
-            1 + tt_leading_entry(e),
-            e
-        )
+        assert isinstance(other, TTExpression), "The OR-operation can only be performed between to TensorTrains!"
+        assert self.par_space == other.par_space, "Tensors live in different parameter spaces!"
+        return TTExpression(tt_or(self.cores, other.cores), self.par_space)
 
     def __ror__(self, other):
-        other.__or__(self)
-        return other
-
-    def __xor__(self, other):
-        e = self.normal_vec
-        if isinstance(other, Boolean_Function) or isinstance(other, Boolean_Data_Lower):
-            e = other.normal_vec
-        return Meta_Boolean_Function(
-            f"({self.name} ⊻ {other.name})",
-            lambda e: tt_neg(e),
-            0,
-            e
-        )
-
-    def __rxor__(self, other):
         return other.__or__(self)
 
-    def __lshift__(self, other):  # <-
-        e = self.normal_vec
-        if isinstance(other, Boolean_Function) or isinstance(other, Boolean_Data_Lower):
-            e = other.normal_vec
-        top = tt_leading_one(len(e))
-        return Meta_Boolean_Function(
-            f"({self.name} <- {other.name})",
-            lambda e: tt_rl_orthogonalize(tt_add(e, top)),
-            1 - tt_leading_entry(e),
-            e
-        )
+    def __xor__(self, other):
+        assert isinstance(other, TTExpression), "The XOR-operation can only be performed between to TensorTrains!"
+        assert self.par_space == other.par_space, "Tensors live in different parameter spaces!"
+        return TTExpression(tt_xor(self.cores, other.cores), self.par_space)
 
-    def __rlshift__(self, other):
-        return other.__lshift(self)
+    def __rxor__(self, other):
+        return other.__xor__(self)
 
-    def __rshift__(self, other):
-        e = self.normal_vec
-        if isinstance(other, Boolean_Function) or isinstance(other, Boolean_Data_Lower):
-            e = other.normal_vec
-        bot = tt_leading_one(len(e))
-        bot[0] *= -1
-        return Meta_Boolean_Function(
-            f"({self.name} -> {other.name})",
-            lambda e: tt_rl_orthogonalize(tt_add(e, bot)),
-            1 + tt_leading_entry(e),
-            e
-        )
+    def __invert__(self):
+        new_cores = tt_mul_scal(-1, deepcopy(self.cores))
+        return TTExpression(new_cores, self.par_space)
 
-    def __rrshift__(self, other):
-        return other.__rshift(self)
+    def __neg__(self):
+        new_cores = tt_mul_scal(-1, deepcopy(self.cores))
+        return TTExpression(new_cores, self.par_space)
+
+    def to_ANF(self):
+        vocab = self.par_space.atoms + [h for h in self.par_space.hypotheses if h.index not in self.substituted]
+        variable_names = " ".join([a.name for a in vocab])
+        variables = symbols(variable_names)
+        truth_table_labels = ((np.round(tt_to_tensor(tt_walsh_op(self.cores))) + 1) / 2).astype(int).flatten()
+        anf = ANFform(variables, list(reversed(truth_table_labels)))
+        return anf
+
+    def to_CNF(self):
+        anf = self.to_ANF()
+        return to_cnf(anf, simplify=True)
+
+    def to_DNF(self):
+        anf = self.to_ANF()
+        return to_dnf(anf, simplify=True)
 
 
-class Hypothesis(Meta_Boolean_Function):
-    def __init__(self, name=None):
+class Hypothesis(Expression):
+
+    def __init__(self, par_space: ParameterSpace, name=None):
+        if name is None:
+            name = f"h_{par_space.hypothesis_count}"
+        super().__init__(par_space, name, [self], lambda x: x)
+        self.value = tt_leading_one(par_space.atom_count)
+        self.index = par_space.hypothesis_count + par_space.atom_count
+
+    def to_tt_train(self):
+        return tt_atom_train(self.index, self.par_space.atom_count + self.par_space.hypothesis_count)
+
+    def substitute_into(self, tt_train: TTExpression) -> TTExpression:
+        assert self.par_space.atoms == tt_train.par_space.atoms, "Hypothesis is not in the parameter space of the given TT."
+        assert self.par_space.hypotheses == tt_train.par_space.hypotheses, "Hypothesis is not in the hypothesis space of the given TT."
+        index = self.index - sum([1 for i in tt_train.substituted if i < self.index])
+        tt_core_without_basis = np.einsum("ldr, rk -> ldk", tt_train.cores[index - 1],
+                                          tt_train.cores[index][:, 0, :])
+        tt_core_with_basis = np.einsum("ldr, rk -> ldk", tt_train.cores[index - 1], tt_train.cores[index][:, 1, :])
+        new_cores = tt_xnor(tt_train.cores[:index - 1] + [tt_core_with_basis] + tt_train.cores[index + 1:],
+                            self.value + [np.array([1, 0]).reshape(1, 2, 1)] * self.par_space.hypothesis_count)
+        new_cores = tt_rank_reduce(
+            tt_add(tt_train.cores[:index - 1] + [tt_core_without_basis] + tt_train.cores[index + 1:], new_cores))
+        return TTExpression(new_cores, self.par_space, substituted=tt_train.substituted + [self.index])
+
+    def to_CNF(self):
+        return TTExpression(self.value, self.par_space,
+                            substituted=[h.index for h in self.par_space.hypotheses]).to_CNF()
+
+    def __eq__(self, other):
+        if isinstance(other, Hypothesis):
+            return self.index == other.index
+        return False
+
+    def __hash__(self):
+        return self.index
+
+
+class Boolean_Function(Expression):
+
+    def __init__(self, par_space, name: str, tt_e):
         self.name = name
-        if name is None:
-            self.name = "h"
-        super().__init__(self.name, None, None, None)
+        self.tt_e = tt_e
+        super().__init__(par_space, name, [self], lambda x: x)
+
+    def to_tt_train(self):
+        return self.tt_e
 
 
-class Boolean_Function(Meta_Boolean_Function):
-    count = 0
-
-    def __init__(self, expr: Expression, name: str = None):
-        if name is None:
-            self.name = f"e_{str(Boolean_Function.count)}"
-            Boolean_Function.count += 1
-        else:
-            self.name = name
-        tt_e = expr.to_tt_train()
-        super().__init__(name, tt_e, lambda x: tt_inner_prod(tt_e, x), tt_e)
+@jax.jit
+def _projection(tt_h, tt_n, func_result, bias):
+    tt_n = tt_normalise(tt_n)
+    alpha = jnp.sqrt((1 - bias ** 2) / (1 - func_result ** 2))
+    beta = bias + alpha * func_result
+    tt_h = tt_add(tt_mul_scal(alpha, tt_h), tt_mul_scal(-beta, tt_n))
+    return tt_h
 
 
-class Boolean_Data_Lower(Meta_Boolean_Function):
-    def __init__(self, dataset, labels):
-        # TODO: Estimate noise level through number of contradicting examples
-        self.dataset, indices = np.unique(dataset, return_index=True, axis=0)
-        self.labels = labels[indices]
-        self.compressed_data = tt_mul_scal(-1, tt_leading_one(self.dataset.shape[1]))
-        self._compress()
-        self.noise, self.radius = self._estimate_noise()
-        super().__init__("Dataset", self.compressed_data, lambda x: tt_inner_prod(self.compressed_data, x),
-                         self.compressed_data)
+class LogicConstraint(ABC):
+    def __init__(self, tt_expr: TTExpression, hypotheses_to_insert: List[Hypothesis], percent):
+        self.tt_expr = tt_expr
+        self.hypotheses_to_insert = hypotheses_to_insert
+        self.percent = percent
+        self.s_lower = 2 ** (-tt_expr.par_space.atom_count)
 
-    def _compress(self):
-        # TODO: Might want to consider a divide and conquer here
-        true_idxs = [i for i, l in enumerate(self.labels) if l > 0]
-        false_idxs = [i for i, l in enumerate(self.labels) if l < 0]
-        for i in zip(true_idxs):
-            instance_func = bool_to_tt_train(self.dataset[i])
-            self.compressed_data = tt_xor(self.compressed_data, instance_func)
-        for i in zip(false_idxs):
-            instance_func = bool_to_tt_train(self.dataset[i])
-            self.compressed_data = tt_and(self.compressed_data, tt_neg(instance_func))
+    def _get_hyperplane(self):
+        tt_expr = deepcopy(self.tt_expr)
+        for h in self.hypotheses_to_insert:
+            tt_expr = h.substitute_into(tt_expr)
+        bias = tt_leading_entry(tt_expr.cores) - self.percent
+        last_normal_core = np.einsum("ldr, rk -> ldk", tt_expr.cores[-2], tt_expr.cores[-1][:, 1, :])
+        normal = tt_expr.cores[:-2] + [last_normal_core]
+        return normal, bias
 
-    def _estimate_noise(self, lr=1e-2):
-        dataset = [[jnp.array([1, x]).reshape(1, 2, 1) for x in xs] for xs in self.dataset]
-        N = len(dataset)
-        gradient = partial_D(
-            lambda h, p, X, Y: (1 / N) * sum([(tt_inner_prod(tt_noise_op(h, p), x) - y) ** 2 for x, y in zip(X, Y)]),
-            idx=1)
-        prev_p = jnp.ones(self.dataset.shape[1]) + 1
-        p = jnp.ones_like(prev_p)
-        while jnp.sum(jnp.abs(prev_p - p)) > 1e-3:
-            prev_p = p
-            p = jnp.clip(p - lr * gradient(self.compressed_data, p, dataset, self.labels), a_min=0, a_max=1)
-        noisy_compressed_data = tt_noise_op(self.compressed_data, p)
-        return p, jnp.sqrt(tt_inner_prod(noisy_compressed_data, noisy_compressed_data))
+    @abstractmethod
+    def _projection(self, tt_h, tt_n, bias):
+        ...
+
+    def get_projection(self):
+        normal, bias = self._get_hyperplane()
+        if abs(bias) > 1 or tt_inner_prod(normal,
+                                          normal) < self.s_lower:  # TODO: Then it is unsatisfiable, only happens in Multi-Hypothesis case
+            return lambda tt_h: (tt_h, False)
+        return lambda tt_h: self._projection(tt_h, normal, bias)
+
+    @abstractmethod
+    def is_satisfied(self, tt_h):
+        ...
 
 
-class Boolean_Data_Upper(Boolean_Data_Lower):
-    def _compress(self):
-        # TODO: Might want to consider a divide and conquer here
-        true_idxs = [i for i, l in enumerate(self.labels) if l > 0]
-        false_idxs = [i for i, l in enumerate(self.labels) if l < 0]
-        for i in zip(true_idxs):
-            instance_func = bool_to_tt_train(self.dataset[i])
-            self.compressed_data = tt_or(self.compressed_data, instance_func)
-        for i in zip(false_idxs):
-            instance_func = bool_to_tt_train(self.dataset[i])
-            self.compressed_data = tt_and(self.compressed_data, tt_neg(instance_func))
+class ExistentialConstraint(LogicConstraint):
+
+    def _projection(self, tt_h, tt_n, bias):
+        func_result = np.clip(tt_inner_prod(tt_h, tt_n), a_min=-1, a_max=1)
+        condition = func_result + bias < 1.9 * self.s_lower
+        if condition:
+            ranks = tt_ranks(tt_h)
+            tt_h = _projection(tt_h, tt_n, func_result, bias - 2 * self.s_lower)
+            tt_h = tt_randomise_orthogonalise(tt_h, ranks)
+        return tt_h, condition
+
+    def is_satisfied(self, tt_h):
+        normal, bias = self._get_hyperplane()
+        return tt_inner_prod(tt_h, normal) + bias > self.s_lower
 
 
-class ConstraintSpace:
-    def __init__(self, dimension):
-        self.dimension = dimension
-        self.radius = 1.0
-        self.s_lower = 2 ** (-self.dimension) - 1  # -0.9999
-        self.projections = []
-        self.eq_constraints = []
-        self.iq_constraints = [lambda h: jnp.maximum(0, self.s_lower - tt_leading_entry(h))]
-        self.faulty_hypothesis = tt_mul_scal(-1, tt_leading_one(dimension))
-        self.eq_crit = lambda h: sum([jnp.sum(jnp.abs(c(h))) for c in self.eq_constraints])
-        self.iq_crit = lambda h: sum([jnp.sum(c(h)) for c in self.iq_constraints])
-        self.rank_gradient = D_func(lambda h: 0.0)
-        self.boolean_criterion = tt_boolean_criterion(dimension)
+class UniversalConstraint(LogicConstraint):
 
-    def normalise(self, tt_train, idx=0):
-        return tt_mul_scal(self.radius / np.sqrt(tt_inner_prod(tt_train, tt_train)), tt_train, idx)
+    def _projection(self, tt_h, tt_n, bias):
+        func_result = np.clip(tt_inner_prod(tt_h, tt_n), a_min=-1, a_max=1)
+        condition = abs(func_result + bias) >= self.s_lower
+        if condition:
+            ranks = tt_ranks(tt_h)
+            tt_h = _projection(tt_h, tt_n, func_result, bias)
+            tt_h = tt_randomise_orthogonalise(tt_h, ranks)
+        return tt_h, condition
 
-    def stopping_criterion(self, tt_train, prev_tt_train):
-        return 1 - tt_inner_prod(tt_train, prev_tt_train)
-
-    def round(self, tt_train):
-        tt_table = tt_bool_op(tt_train)
-        tt_table_p3 = tt_mul_scal(-0.5, tt_hadamard(tt_hadamard(tt_table, tt_table), tt_table))
-        tt_table = tt_mul_scal(0.5, tt_table)
-        tt_table = tt_rl_orthogonalize(tt_add(tt_table, tt_table_p3))
-        tt_update = tt_bool_op_inv(tt_table)
-        tt_train = tt_mul_scal(1 - tt_inner_prod(tt_update, tt_train), tt_train)
-        tt_train = tt_add(tt_train, tt_update)
-        tt_train = tt_mul_scal(1 / jnp.sqrt(tt_inner_prod(tt_train, tt_train)), tt_train)
-        return tt_train
-
-    def exists_S(self, example: Meta_Boolean_Function):
-        normal_vec, offset, tt_example = example.to_tt_constraint()  # TODO: We can pull the sum into the inner product, i.e. add all examples up before?
-        iq_func = lambda h: jnp.maximum(0, self.s_lower - tt_inner_prod(h, normal_vec(tt_example)) - offset)
-        self.iq_constraints.append(iq_func)
-
-        def projection(tt_train):
-            radius = jnp.sqrt(tt_inner_prod(tt_train, tt_train))
-            n = normal_vec(tt_example)
-            func_result = tt_inner_prod(tt_train, n)
-            if func_result == 0 and offset - 2 * self.s_lower <= 0:
-                proj_tt_train = tt_train
-                proj_tt_train[0] *= jnp.sqrt(
-                    (radius ** 2 - np.abs(0.5 * offset - self.s_lower)) / tt_inner_prod(proj_tt_train, proj_tt_train))
-                n = tt_mul_scal((offset - 2 * self.s_lower), n)
-                proj_tt_train = tt_add(proj_tt_train, n)
-                tt_train = proj_tt_train
-            if func_result + offset - 2 * self.s_lower <= 0:
-                n = tt_mul_scal(-(func_result / tt_inner_prod(n, n)), n)
-                proj_tt_train = tt_add(tt_train, n)
-                proj_tt_train[0] *= jnp.sqrt(
-                    (radius ** 2 - np.abs(0.5 * offset - self.s_lower)) / tt_inner_prod(proj_tt_train, proj_tt_train))
-                n = tt_mul_scal((offset - 2 * self.s_lower) / func_result, n)
-                proj_tt_train = tt_add(proj_tt_train, n)
-                tt_train = proj_tt_train
-            return tt_rank_reduce(tt_train)
-
-        self.projections.append(projection)
-
-    def forall_S(self, example: Meta_Boolean_Function):
-        normal_vec, offset, tt_example = example.to_tt_constraint()
-        eq_func = lambda h: jnp.abs(tt_inner_prod(h, normal_vec(tt_example)) + offset - 2)
-        self.eq_constraints.append(eq_func)
-
-        def projection(tt_train):
-            radius = jnp.sqrt(tt_inner_prod(tt_train, tt_train))
-            n = normal_vec(tt_example)
-            func_result = tt_inner_prod(tt_train, n)
-            if func_result == 0 and np.abs(offset - 2) >= self.s_lower + 1:
-                proj_tt_train = tt_train
-                proj_tt_train[0] *= jnp.sqrt(
-                    (radius ** 2 - np.abs((0.5 * offset - 1))) / tt_inner_prod(proj_tt_train, proj_tt_train))
-                n = tt_mul_scal((offset - 2), n)
-                proj_tt_train = tt_add(proj_tt_train, n)
-                tt_train = proj_tt_train
-            elif np.abs(func_result + offset - 2) >= self.s_lower + 1:
-                n = tt_mul_scal(-(func_result / tt_inner_prod(n, n)), n)
-                proj_tt_train = tt_add(tt_train, n)
-                proj_tt_train[0] *= jnp.sqrt(
-                    (radius ** 2 - np.abs((0.5 * offset - 1))) / tt_inner_prod(proj_tt_train, proj_tt_train))
-                n = tt_mul_scal((offset - 2) / func_result, n)
-                proj_tt_train = tt_add(proj_tt_train, n)
-                tt_train = proj_tt_train
-            return tt_rank_reduce(tt_train)
-
-        self.projections.append(projection)
-
-    def project(self, tt_train):
-        criterion_score = self.eq_crit(tt_train) + self.iq_crit(tt_train)
-        proj_tt_train = tt_train
-        while criterion_score >= self.s_lower + 1:
-            for proj in self.projections:
-                proj_tt_train = proj(proj_tt_train)
-            criterion_score = self.eq_crit(proj_tt_train) + self.iq_crit(proj_tt_train)
-        return proj_tt_train
+    def is_satisfied(self, tt_h):
+        normal, bias = self._get_hyperplane()
+        return abs(tt_inner_prod(tt_h, normal) + bias) < self.s_lower
 
 
-class NoisyConstraintSpace(ConstraintSpace):
-    def __init__(self, dimension):
-        super().__init__(dimension)
-        self.dimension = dimension
-        self.radius = 1.0
-        self.s_lower = 2 ** (-self.dimension) - 1  # -0.9999
-        self.projections = [self._false_projection]
-        self.eq_constraints = []
-        self.iq_constraints = [lambda h: jnp.maximum(0, self.s_lower - tt_leading_entry(h))]
-        self.faulty_hypothesis = tt_mul_scal(-1, tt_leading_one(dimension))
-        self.eq_crit = lambda h: sum([jnp.sum(jnp.abs(c(h))) for c in self.eq_constraints])
-        self.iq_crit = lambda h: sum([jnp.sum(c(h)) for c in self.iq_constraints])
-        self.rank_gradient = D_func(lambda h: tt_inf_schatten_norm(h))
+def stopping_criterion(tt_train, prev_tt_train):
+    return 1- tt_inner_prod(tt_train, prev_tt_train)
 
-        self.noise_op_measure = np.ones(dimension)
-        self.noise_gradient = partial_D(tt_noise_loss, 1)
-        self.denoise_gradient = partial_D(tt_denoise_loss, 1)
-        self.noisy_boolean_criterion = tt_noisy_boolean_criterion(dimension)
 
-    def boolean_criterion(self, tt_train):
-        return self.noisy_criterion(tt_train, self.noise_op_measure)
+class ConstraintSpace(ParameterSpace, ABC):
+    def __init__(self):
+        self._atom_list: List[Atom] = []
+        self._hypothesis_list: List[Hypothesis] = []
+        self.iq_constraints: Dict[List] = dict()
+        self.eq_constraints: Dict[List] = dict()
+        self.repeller: Dict[List] = dict()
+        self.repel_count = 0
+        self.repel_rank_limit = 15
 
-    def _false_projection(self, tt_train, q=1):
-        func_result = tt_leading_entry(tt_train)
-        if func_result - q * self.s_lower <= 0:
-            one = tt_leading_one(self.dimension)
-            tt_train = tt_mul_scal(np.sqrt(q), one)
-        return tt_train
+    def extend_repeller(self):
+        self.repel_count += 1
+        add_on_length = int(np.ceil(np.log(self.repel_count)))
+        h_add_on = [np.array([1-int(i), int(i)]).reshape(1, 2, 1) for i in bin(add_on_length)[2:]]
+        repeller_add_on = [np.array([1, 0]).reshape(1, 2, 1)]*(add_on_length-int(np.ceil(np.log(max(1, self.repel_count-1)))))
+        for h in self.hypotheses:
+            repel = h.value + h_add_on
+            if self.repeller[h] is None:
+                self.repeller[h] = repel
+            else:
+                self.repeller[h] = tt_rank_reduce(tt_add(self.repeller[h] + repeller_add_on, repel))
+                ranks = np.array(tt_ranks(self.repeller[h]))
+                if np.any(ranks > self.repel_rank_limit):
+                    self.repeller[h] = tt_randomise_orthogonalise(self.repeller[h], [min(r, self.repel_rank_limit) for r in ranks])
 
-    def round(self, tt_train):
-        tt_table = tt_bool_op(tt_train)
-        tt_table_p3 = tt_mul_scal(-0.5, tt_hadamard(tt_hadamard(tt_table, tt_table), tt_table))
-        tt_table = tt_mul_scal(0.5, tt_table)
-        tt_table = tt_rl_orthogonalize(tt_add(tt_table, tt_table_p3))
-        tt_update = tt_bool_op_inv(tt_table)
-        tt_train = tt_mul_scal(1 - tt_inner_prod(tt_update, tt_train), tt_train)
-        tt_train = tt_add(tt_train, tt_update)  # TODO: project this update onto the hyperlane subspace
-        tt_train = tt_mul_scal(1 / jnp.sqrt(tt_inner_prod(tt_train, tt_train)), tt_train)
-        return tt_rank_reduce(tt_train, tt_bound=0)
+    @property
+    def atoms(self):
+        return self._atom_list
 
-    def exists_S(self, example: Meta_Boolean_Function):
-        normal_vec, offset, tt_example = example.to_tt_constraint()  # TODO: We can pull the sum into the inner product, i.e. add all examples up before?
-        iq_func = lambda h, q=1: jnp.maximum(0, q * self.s_lower - tt_inner_prod(h, normal_vec(tt_example)) - offset)
-        self.iq_constraints.append(iq_func)
+    @property
+    def atom_count(self):
+        return len(self.atoms)
 
-        def projection(tt_train, q=1):
-            radius = jnp.sqrt(tt_inner_prod(tt_train, tt_train))
-            n = normal_vec(tt_example)
-            func_result = tt_inner_prod(tt_train, n)
-            if func_result + offset - 2 * q * self.s_lower <= 0:
-                n = tt_mul_scal(-(func_result / tt_inner_prod(n, n)), n)
-                proj_tt_train = tt_add(tt_train, n)
-                proj_tt_train[0] *= jnp.sqrt(
-                    (radius ** 2 - np.abs(0.5 * offset - q * self.s_lower)) / tt_inner_prod(proj_tt_train,
-                                                                                            proj_tt_train))
-                n = tt_mul_scal((offset - 2 * q * self.s_lower) / func_result, n)
-                proj_tt_train = tt_add(proj_tt_train, n)
-                tt_train = proj_tt_train
-            return tt_rl_orthogonalize(tt_train)
+    @property
+    def hypotheses(self):
+        return self._hypothesis_list
 
-        self.projections.append(projection)
+    @property
+    def permuted_hypotheses(self):
+        return np.random.permutation(self._hypothesis_list)
 
-    def forall_S(self, example: Meta_Boolean_Function):
-        normal_vec, offset, tt_example = example.to_tt_constraint()
-        eq_func = lambda h, q=1: jnp.abs(tt_inner_prod(h, normal_vec(tt_example)) + offset - 2 * q)
-        self.eq_constraints.append(eq_func)
+    def random_hypothesis(self):
+        i = np.random.randint(self.hypothesis_count)
+        return self._hypothesis_list[i]
 
-        def projection(tt_train, q=1):
-            radius = jnp.sqrt(tt_inner_prod(tt_train, tt_train))
-            n = normal_vec(tt_example)
-            func_result = tt_inner_prod(tt_train, n)
-            if np.abs(func_result + offset - 2 * q) >= self.s_lower + 1:
-                n = tt_mul_scal(-(func_result / tt_inner_prod(n, n)), n)
-                proj_tt_train = tt_add(tt_train, n)
-                proj_tt_train[0] *= jnp.sqrt(
-                    (radius ** 2 - np.abs((0.5 * offset - q))) / tt_inner_prod(proj_tt_train, proj_tt_train))
-                n = tt_mul_scal((offset - 2 * q) / func_result, n)
-                proj_tt_train = tt_add(proj_tt_train, n)
-                tt_train = proj_tt_train
-            return tt_rl_orthogonalize(tt_train)
+    @property
+    def hypothesis_count(self):
+        return len(self._hypothesis_list)
 
-        self.projections.append(projection)
+    def generate_atoms(self, n):
+        atoms = []
+        k = self.atom_count
+        for i in range(n):
+            a = Atom(self, f"x_{k + i}")
+            self._atom_list.append(a)
+            atoms.append(a)
+        return atoms
 
-    def project(self, tt_train):
-        criterion_score = self.eq_crit(tt_train) + self.iq_crit(tt_train)
-        proj_tt_train = tt_train
-        while criterion_score > self.s_lower + 1:
-            for proj in self.projections:
-                proj_tt_train = proj(proj_tt_train)
-            criterion_score = self.eq_crit(proj_tt_train) + self.iq_crit(proj_tt_train)
-        return tt_rank_reduce(proj_tt_train)
+    def Atom(self, name=None):
+        a = Atom(self, name)
+        self.atoms.append(a)
+        return a
+
+    def Hypothesis(self, name=None):
+        h = Hypothesis(self, name)
+        self.hypotheses.append(h)
+        self.iq_constraints[h] = []
+        self.eq_constraints[h] = []
+        self.repeller[h] = None
+        return h
+
+    def there_exists(self, expr: Expression):
+        return self.at_least(expr, -1)
+
+    def at_least(self, expr: Expression, percent):
+        tt_train = TTExpression.from_expression(expr)
+        relevant_hs = tt_train.hypotheses
+        for i, h in enumerate(relevant_hs):
+            self.iq_constraints[h].append(
+                ExistentialConstraint(tt_train, relevant_hs[:i] + relevant_hs[i + 1:], percent))
+
+    def for_all(self, expr: Expression, percent=1):
+        tt_train = TTExpression.from_expression(expr)
+        relevant_hs = tt_train.hypotheses
+        for i, h in enumerate(relevant_hs):
+            self.eq_constraints[h].append(
+                UniversalConstraint(tt_train, relevant_hs[:i] + relevant_hs[i + 1:], percent))
+
+    def project(self, hypothesis: Hypothesis, timeout=25):
+        projections = np.random.permutation(
+            [eq.get_projection() for eq in self.eq_constraints[hypothesis]] + [iq.get_projection() for iq in
+                                                                               self.iq_constraints[hypothesis]]
+        )
+        proj_tt_train = hypothesis.value
+        for _ in range(timeout):
+            not_converged = False
+            for proj in projections:
+                proj_tt_train, is_violated = proj(proj_tt_train)
+                not_converged = not_converged or is_violated
+            if ~not_converged:
+                break
+        hypothesis.value = proj_tt_train
+
+    def round(self, hypothesis: Hypothesis, error_bound):
+        tt_train = hypothesis.value
+        ranks = tt_ranks(tt_train)
+        # We can use tt_random_ortho here as we know the ranks should stay the same if we take each entry to a power
+        # Additionally the ranks should also always remain the same after the walsh_op
+        tt_train = tt_randomise_orthogonalise(tt_add_noise(tt_train, error_bound, target_ranks=ranks), ranks)
+        tt_table = tt_walsh_op(tt_train)
+        tt_table_p2 = tt_randomise_orthogonalise(tt_hadamard(tt_table, tt_table), ranks)
+        tt_table_p3 = tt_randomise_orthogonalise(tt_hadamard(tt_table_p2, tt_table), ranks)
+        tt_update = tt_mul_scal(-0.5, tt_walsh_op_inv(tt_table_p3))
+        next_tt_train = tt_mul_scal(1 - tt_inner_prod(tt_update, tt_train), tt_train)
+        next_tt_train = tt_add(next_tt_train, tt_update)
+        next_tt_train = tt_rank_reduce(next_tt_train)
+        next_tt_train = tt_normalise(next_tt_train)
+        if error_bound > 0 and self.repeller[hypothesis] is not None:
+            next_tt_train = self._interaction_kernel(tt_train, next_tt_train, tt_table, tt_table_p2, ranks, error_bound)
+        hypothesis.value = next_tt_train
+
+    def _interaction_kernel(self, tt_train, next_tt_train, tt_table, tt_table_p2, ranks, error_bound):
+        if self._kernel_check(error_bound):
+            repel = tt_randomise_orthogonalise(tt_add(tt_table_p2, tt_mul_scal(-1, tt_hadamard(tt_table, tt_walsh_op(next_tt_train)))), ranks)
+            tt_update = tt_mul_scal(0.5, tt_walsh_op_inv(repel))
+            al_next_tt_train = tt_mul_scal(1 - tt_inner_prod(tt_update, tt_train), tt_train)
+            al_next_tt_train = tt_add(al_next_tt_train, tt_update)
+            al_next_tt_train = tt_normalise(al_next_tt_train)
+            next_tt_train = tt_rank_reduce(al_next_tt_train)
+        return next_tt_train
+
+    def _kernel_check(self, error_bound):
+        h = self.hypotheses[0]
+        check = (1 - tt_fast_to_tensor(tt_partial_inner_prod(self.repeller[h], h.value))) < error_bound
+        if ~np.any(check):
+            return False
+        for h in self.hypotheses[1:]:
+            check = check * ((1 - tt_fast_to_tensor(tt_partial_inner_prod(self.repeller[h], h.value))) < error_bound)
+            if ~np.any(check):
+                return False
+        return True

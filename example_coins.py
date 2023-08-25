@@ -2,33 +2,27 @@ from time import time
 from utils import *
 from optimiser import ILPSolver, AnswerSetSolver
 
-vocab_size = 4
-head_coin_1 = Atom(vocab_size, "head_coin_1")
-tail_coin_1 = Atom(vocab_size, "tail_coin_1")
-head_coin_2 = Atom(vocab_size, "head_coin_2")
-tail_coin_2 = Atom(vocab_size, "tail_coin_2")
-h = Hypothesis()
+const_space = ConstraintSpace()
+head_c1 = const_space.Atom("head(c_1)")
+tail_c1 = const_space.Atom("tail(c_1)")
+tail_c2 = const_space.Atom("tail(c_2)")
+head_c2 = const_space.Atom("head(c_2)")
+h = const_space.Hypothesis("h_0")
+np.random.seed(7)
 
 
-def coin_symmetry(tt_train):
-    return -tt_shared_influence(tt_train, np.array([0, 1, 2, 3]))
+def symmetry_objective(tt_train):
+    return 1-tt_inner_prod(tt_train, [jnp.swapaxes(t, 0, -1) for t in tt_train[::-1]])
 
 
-const_space = ConstraintSpace(vocab_size)
-e_0 = Boolean_Function(head_coin_1 ^ tail_coin_1)
-#e_1 = Boolean_Function(head_coin_2 ^ tail_coin_2)
-const_space.forall_S(h >> e_0)
-#const_space.forall_S(h >> e_1)
-opt = ILPSolver(const_space, vocab_size, objective=coin_symmetry)
+const_space.for_all(h >> (head_c1 ^ tail_c1))
+const_space.there_exists(~(h << (head_c1 ^ tail_c1)))
+opt = ILPSolver(const_space, objective=symmetry_objective)
 t_1 = time()
-hypothesis = opt.find_feasible_hypothesis()
+opt.solve()
 t_2 = time()
-print("Shapes: ", [t.shape for t in hypothesis])
-print("Equality constraint Score: ", [jnp.sum(jnp.abs(c(hypothesis))) for c in const_space.eq_constraints])
-print("Inequality constraint Score: ", [jnp.sum(c(hypothesis)) for c in const_space.iq_constraints])
-print(get_CNF([head_coin_1, tail_coin_1, head_coin_2, tail_coin_2], hypothesis))
-print("Score:", tt_boolean_criterion(len(hypothesis))(hypothesis), tt_inner_prod(hypothesis, hypothesis))
+for h in const_space.hypotheses:
+    print(f"Conjunctive Normal Form: {h}{const_space.atoms} =", h.to_CNF(), flush=True)
+    print(f"TT-rank: {h}: {tt_rank(h.value)}")
+    print(f"Objective value: {symmetry_objective(h.value)}")
 print(f"Total time taken: {t_2 - t_1}s.")
-asp_solver = AnswerSetSolver([head_coin_1, tail_coin_1, head_coin_2, tail_coin_2])
-X = asp_solver.get_minimal_answer_set(hypothesis, head_coin_1=1)
-print(X)
