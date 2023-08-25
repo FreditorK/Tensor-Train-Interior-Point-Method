@@ -378,7 +378,7 @@ class ConstraintSpace(ParameterSpace, ABC):
             else:
                 self.repeller[h] = tt_rank_reduce(tt_add(self.repeller[h] + repeller_add_on, repel))
                 ranks = np.array(tt_ranks(self.repeller[h]))
-                if any(ranks > self.repel_rank_limit):
+                if np.any(ranks > self.repel_rank_limit):
                     self.repeller[h] = tt_randomise_orthogonalise(self.repeller[h], [min(r, self.repel_rank_limit) for r in ranks])
 
     @property
@@ -481,10 +481,10 @@ class ConstraintSpace(ParameterSpace, ABC):
         if self._kernel_check(error_bound):
             repel = tt_randomise_orthogonalise(tt_add(tt_table_p2, tt_mul_scal(-1, tt_hadamard(tt_table, tt_walsh_op(next_tt_train)))), ranks)
             tt_update = tt_mul_scal(0.5, tt_walsh_op_inv(repel))
-            next_tt_train = tt_mul_scal(1 - tt_inner_prod(tt_update, tt_train), tt_train)
-            next_tt_train = tt_add(next_tt_train, tt_update)
-            next_tt_train = tt_normalise(next_tt_train)
-            next_tt_train = tt_rank_reduce(next_tt_train)
+            al_next_tt_train = tt_mul_scal(1 - tt_inner_prod(tt_update, tt_train), tt_train)
+            al_next_tt_train = tt_add(al_next_tt_train, tt_update)
+            al_next_tt_train = tt_normalise(al_next_tt_train)
+            next_tt_train = tt_rank_reduce(al_next_tt_train)
         return next_tt_train
 
     def _kernel_check(self, error_bound):

@@ -90,7 +90,7 @@ class ILPSolver:
 
     def _round_solution(self, hypothesis: Hypothesis):
         criterion_score = np.inf
-        while criterion_score > self.error_bound:
+        while criterion_score >= self.error_bound:
             self.const_space.round(hypothesis, self.error_bound)
             criterion_score = self.boolean_criterion(hypothesis.value)
             print(f"Boolean Criterion: {criterion_score} \r", end="")

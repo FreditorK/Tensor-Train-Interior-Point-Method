@@ -17,6 +17,14 @@ b = (head_c1 | tail_c1) & (tail_c1 | ~tail_c2) & (tail_c2 | ~tail_c1)
 c = (tail_c1 | ~tail_c2) & (head_c1 | head_c2 | tail_c2) & (~head_c1 | ~tail_c2) & (tail_c2 | ~head_c2 | ~tail_c1)
 d = (head_c2 | ~tail_c2) & (head_c1 | ~head_c2 | ~tail_c1) & (tail_c1 | ~head_c1 | ~tail_c2)
 e = (tail_c1 | tail_c2) & (tail_c2 | ~head_c1)
+arr = [tt_add_noise(a.to_tt_train(), noise_radius=0.1, target_ranks=tt_ranks(a.to_tt_train())), tt_add_noise(b.to_tt_train(), noise_radius=0.1, target_ranks=tt_ranks(b.to_tt_train()))]
+#arr = [a.to_tt_train(), b.to_tt_train()]
+for tt in arr:
+    print("-----")
+    print(tt_fast_to_tensor(tt_walsh_op(tt)))
+    ta = tt_rank_round(tt_walsh_op(tt))
+    print("ii")
+    print(tt_fast_to_tensor(ta))
 """
 m = a & h
 t = TTExpression(m.to_tt_train(), const_space)
@@ -37,19 +45,19 @@ for k in [b, c, d, e]:
     t = TTExpression(m.to_tt_train(), const_space)
     print(t.to_CNF())
 """
-a = a.to_tt_train()
-print(tt_inner_prod(a, d.to_tt_train()))
-b = b.to_tt_train()
-print(tt_inner_prod(b, d.to_tt_train()))
-c = c.to_tt_train()
-print(tt_inner_prod(c, d.to_tt_train()))
-d = d.to_tt_train()
+#a = a.to_tt_train()
+#print(tt_inner_prod(a, d.to_tt_train()))
+#b = b.to_tt_train()
+#print(tt_inner_prod(b, d.to_tt_train()))
+#c = c.to_tt_train()
+#print(tt_inner_prod(c, d.to_tt_train()))
+#d = d.to_tt_train()
 
-a = a + [np.array([1, 0]).reshape(1, 2, 1), np.array([1, 0]).reshape(1, 2, 1)]
-b = b + [np.array([1, 0]).reshape(1, 2, 1), np.array([0, 1]).reshape(1, 2, 1)]
-c = c + [np.array([0, 1]).reshape(1, 2, 1), np.array([0, 1]).reshape(1, 2, 1)]
-f = tt_rank_reduce(tt_add(tt_add(a, b), c))
-print(tt_fast_to_tensor(tt_partial_inner_prod(f, d)))
+#a = a + [np.array([1, 0]).reshape(1, 2, 1), np.array([1, 0]).reshape(1, 2, 1)]
+#b = b + [np.array([1, 0]).reshape(1, 2, 1), np.array([0, 1]).reshape(1, 2, 1)]
+#c = c + [np.array([0, 1]).reshape(1, 2, 1), np.array([0, 1]).reshape(1, 2, 1)]
+#f = tt_rank_reduce(tt_add(tt_add(a, b), c))
+#print(tt_fast_to_tensor(tt_partial_inner_prod(f, d)))
 """
 d = d + [np.array([0, 1]).reshape(1, 2, 1), np.array([1, 0]).reshape(1, 2, 1)]
 f = tt_rank_reduce(tt_add(tt_add(a, b), tt_add(c, d)))
