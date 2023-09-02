@@ -607,7 +607,7 @@ def tt_substitute(tt_train: List[np.array], substitutions: List[List[np.array]])
 
 
 def tt_graph_to_tensor(n, edges):  # Start numbering nodes at 0
-    tensor = np.zeros([2] * n + [2] * n)
+    tensor = -np.ones([2] * n + [2] * n)
     for e in edges:
         index_1 = [int(x) for x in reversed(bin(e[0])[2:])]
         index_1 += [0] * (n - len(index_1))
