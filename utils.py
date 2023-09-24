@@ -464,7 +464,6 @@ class ConstraintSpace(ParameterSpace, ABC):
         ranks = tt_ranks(tt_train)
         # We can use tt_random_ortho here as we know the ranks should stay the same if we take each entry to a power
         # Additionally the ranks should also always remain the same after the walsh_op
-        tt_train = tt_randomise_orthogonalise(tt_add_noise(tt_train, error_bound, target_ranks=ranks), ranks)
         tt_table = tt_walsh_op(tt_train)
         tt_table_p2 = tt_randomise_orthogonalise(tt_hadamard(tt_table, tt_table), ranks)
         tt_table_p3 = tt_randomise_orthogonalise(tt_hadamard(tt_table_p2, tt_table), ranks)
@@ -489,11 +488,11 @@ class ConstraintSpace(ParameterSpace, ABC):
 
     def _kernel_check(self, error_bound):
         h = self.hypotheses[0]
-        check = (1 - tt_fast_to_tensor(tt_partial_inner_prod(self.repeller[h], h.value))) < error_bound
+        check = (1 - tt_to_tensor(tt_partial_inner_prod(self.repeller[h], h.value))) < error_bound
         if ~np.any(check):
             return False
         for h in self.hypotheses[1:]:
-            check = check * ((1 - tt_fast_to_tensor(tt_partial_inner_prod(self.repeller[h], h.value))) < error_bound)
+            check = check * ((1 - tt_to_tensor(tt_partial_inner_prod(self.repeller[h], h.value))) < error_bound)
             if ~np.any(check):
                 return False
         return True

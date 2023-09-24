@@ -128,7 +128,7 @@ def tt_rl_contraction(tt_train_1: List[np.array], tt_train_2: List[np.array]):
 
 def tt_randomise_orthogonalise(tt_train: List[np.array], target_ranks: List[int]) -> List[np.array]:
     target_ranks = [1] + target_ranks + [1]
-    tt_gaussian = [(1 / l_n * 2 * l_np1) * np.random.randn(l_n, 2, l_np1) for l_n, l_np1 in
+    tt_gaussian = [(1 / (l_n * 2 * l_np1)) * np.random.randn(l_n, 2, l_np1) for l_n, l_np1 in
                    zip(target_ranks[:-1], target_ranks[1:])]
     tt_gaussian_contractions = tt_rl_contraction(tt_train, tt_gaussian)
     for i, core_w in enumerate(tt_gaussian_contractions):
@@ -215,21 +215,6 @@ def tt_svd(fourier_tensor: np.array) -> List[np.array]:
     G_n = fourier_tensor.reshape(rank, 2, 1)
     cores.append(G_n)
     return cores
-
-
-def tt_to_tensor(tt_train: List[np.array]) -> np.array:
-    """
-    Converts a tensor train back into a tensor
-    """
-    fourier_tensor = np.zeros([t.shape[1] for t in tt_train])
-    multi_idxs = product(*[list(range(t.shape[1])) for t in tt_train])
-    for idx in multi_idxs:
-        dot_prod = tt_train[0][:, idx[0], :]
-        for i, core in enumerate(tt_train[1:]):
-            dot_prod = dot_prod @ core[:, idx[i + 1], :]
-        fourier_tensor[idx] = dot_prod
-    return fourier_tensor
-
 
 def tt_leading_entry(tt_train: List[np.array]) -> np.array:
     """
@@ -318,7 +303,20 @@ def tt_inner_prod(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> flo
     )
 
 
-def tt_partial_inner_prod(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> float:
+def tt_partial_inner_prod(tt_train_1: List[np.array], tt_train_2: List[np.array], reversed=False) -> float:
+    if reversed:
+        max_n = max(len(tt_train_1), len(tt_train_2))
+        if len(tt_train_1) < max_n:
+            short_tt = tt_train_1
+            long_tt = tt_train_2
+        else:
+            long_tt = tt_train_1
+            short_tt = tt_train_2
+        diff_n = len(long_tt) - len(short_tt)
+        contraction_min_n = np.linalg.multi_dot(
+            [_tt_core_collapse(core_1, core_2) for core_1, core_2 in zip(long_tt[diff_n:], short_tt)])
+        long_tt = long_tt[:diff_n-1] + [np.einsum("rdl, lk -> rdk", long_tt[diff_n-1], contraction_min_n)]
+        return long_tt
     min_n = min(len(tt_train_1), len(tt_train_2))
     long_tt = tt_train_1[min_n:] if len(tt_train_1) > min_n else tt_train_2[min_n:]
     contraction_min_n = np.linalg.multi_dot(
@@ -327,7 +325,7 @@ def tt_partial_inner_prod(tt_train_1: List[np.array], tt_train_2: List[np.array]
     return long_tt
 
 
-def tt_fast_to_tensor(tt_train):
+def tt_to_tensor(tt_train):
     tensor = tt_train[0]
     for core in tt_train[1:]:
         tensor = np.tensordot(tensor, core, axes=(-1, 0))
@@ -456,32 +454,11 @@ def tt_noise_op_inv(tt_train: List[np.array], likelihoods: np.array):
     return tt_noisy_walsh_inv(tt_walsh_op(tt_train), likelihoods)
 
 
-def tt_boolean_criterion(dimension):
-    one = tt_one(dimension)
-    one[0] *= -1.0
-
-    def criterion(tt_train):
-        tt_train = tt_walsh_op(tt_train)
-        squared_Ttt_1 = tt_hadamard(tt_train, tt_train)
-        minus_1_squared_Ttt_1 = tt_add(squared_Ttt_1, one)
-        return tt_inner_prod(minus_1_squared_Ttt_1, minus_1_squared_Ttt_1)
-
-    return criterion
-
-
-def tt_noisy_boolean_criterion(dimension):
-    one = tt_one(dimension)
-    one[0] *= -1.0
-
-    def criterion(tt_train, likelihoods):
-        tt_train = tt_walsh_op(tt_noise_op_inv(tt_train, likelihoods))
-        tt_train = tt_mul_scal(1 / jnp.sqrt(tt_inner_prod(tt_train, tt_train)), tt_train)
-        squared_Ttt_1 = tt_hadamard(tt_train, tt_train)
-        squared_Ttt_1 = tt_rank_reduce(squared_Ttt_1)
-        minus_1_squared_Ttt_1 = tt_add(squared_Ttt_1, one)
-        return tt_inner_prod(minus_1_squared_Ttt_1, minus_1_squared_Ttt_1)
-
-    return criterion
+def tt_boolean_criterion(tt_train: List[np.array]) -> float:
+    tt_train = tt_walsh_op(tt_train)
+    tt_train_xnor = tt_hadamard(tt_train, tt_train)
+    tt_train_xnor = tt_walsh_op_inv(tt_train_xnor)
+    return np.abs(tt_inner_prod(tt_train_xnor, tt_train_xnor)-1)
 
 
 def tt_extract_seq(tt_train, assignments):
@@ -555,11 +532,10 @@ def tt_normalise(tt_train, radius=1, idx=0):
     return tt_mul_scal(radius / jnp.sqrt(tt_inner_prod(tt_train, tt_train)), tt_train, idx)
 
 
-def tt_add_noise(tt_train, noise_radius, target_ranks):
+def tt_add_noise(tt_train, target_ranks):
     target_ranks = [1] + target_ranks + [1]
     # approximately uniform noise on the sphere
-    noise_train = [np.random.randn(l_n, 2, l_np1) for l_n, l_np1 in zip(target_ranks[:-1], target_ranks[1:])]
-    noise_train = tt_mul_scal(noise_radius / jnp.sqrt(tt_inner_prod(noise_train, noise_train)), noise_train)
+    noise_train = [(1 / (l_n * 2 * l_np1))*np.random.randn(l_n, 2, l_np1) for l_n, l_np1 in zip(target_ranks[:-1], target_ranks[1:])]
     # projection onto tangent space of tt_train
     tt_train = tt_mul_scal(1 - tt_inner_prod(noise_train, tt_train), tt_train)
     tt_train = tt_add(tt_train, noise_train)

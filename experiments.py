@@ -21,10 +21,10 @@ arr = [tt_add_noise(a.to_tt_train(), noise_radius=0.1, target_ranks=tt_ranks(a.t
 #arr = [a.to_tt_train(), b.to_tt_train()]
 for tt in arr:
     print("-----")
-    print(tt_fast_to_tensor(tt_walsh_op(tt)))
+    print(tt_to_tensor(tt_walsh_op(tt)))
     ta = tt_rank_round(tt_walsh_op(tt))
     print("ii")
-    print(tt_fast_to_tensor(ta))
+    print(tt_to_tensor(ta))
 """
 m = a & h
 t = TTExpression(m.to_tt_train(), const_space)
