@@ -459,7 +459,7 @@ class ConstraintSpace(ParameterSpace, ABC):
                 break
         hypothesis.value = proj_tt_train
 
-    def round(self, hypothesis: Hypothesis, error_bound):
+    def round(self, hypothesis: Hypothesis):
         tt_train = hypothesis.value
         ranks = tt_ranks(tt_train)
         # We can use tt_random_ortho here as we know the ranks should stay the same if we take each entry to a power
@@ -469,30 +469,6 @@ class ConstraintSpace(ParameterSpace, ABC):
         tt_table_p3 = tt_randomise_orthogonalise(tt_hadamard(tt_table_p2, tt_table), ranks)
         tt_update = tt_mul_scal(-0.5, tt_walsh_op_inv(tt_table_p3))
         next_tt_train = tt_mul_scal(1 - tt_inner_prod(tt_update, tt_train), tt_train)
-        next_tt_train = tt_add(next_tt_train, tt_update)
-        next_tt_train = tt_rank_reduce(next_tt_train)
+        next_tt_train = tt_randomise_orthogonalise(tt_add(next_tt_train, tt_update), ranks)
         next_tt_train = tt_normalise(next_tt_train)
-        if error_bound > 0 and self.repeller[hypothesis] is not None:
-            next_tt_train = self._interaction_kernel(tt_train, next_tt_train, tt_table, tt_table_p2, ranks, error_bound)
         hypothesis.value = next_tt_train
-
-    def _interaction_kernel(self, tt_train, next_tt_train, tt_table, tt_table_p2, ranks, error_bound):
-        if self._kernel_check(error_bound):
-            repel = tt_randomise_orthogonalise(tt_add(tt_table_p2, tt_mul_scal(-1, tt_hadamard(tt_table, tt_walsh_op(next_tt_train)))), ranks)
-            tt_update = tt_mul_scal(0.5, tt_walsh_op_inv(repel))
-            al_next_tt_train = tt_mul_scal(1 - tt_inner_prod(tt_update, tt_train), tt_train)
-            al_next_tt_train = tt_add(al_next_tt_train, tt_update)
-            al_next_tt_train = tt_normalise(al_next_tt_train)
-            next_tt_train = tt_rank_reduce(al_next_tt_train)
-        return next_tt_train
-
-    def _kernel_check(self, error_bound):
-        h = self.hypotheses[0]
-        check = (1 - tt_to_tensor(tt_partial_inner_prod(self.repeller[h], h.value))) < error_bound
-        if ~np.any(check):
-            return False
-        for h in self.hypotheses[1:]:
-            check = check * ((1 - tt_to_tensor(tt_partial_inner_prod(self.repeller[h], h.value))) < error_bound)
-            if ~np.any(check):
-                return False
-        return True

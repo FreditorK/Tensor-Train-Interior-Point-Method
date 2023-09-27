@@ -50,14 +50,9 @@ class ILPSolver:
         for hypothesis in self.const_space.permuted_hypotheses:
             iter_function(hypothesis)
             self._round_solution(hypothesis)
-        while not self._const_satisfied():
-            print([(str(h), h.to_CNF()) for h in self.const_space.hypotheses])
-            self.const_space.extend_repeller()
-            for hypothesis in self.const_space.permuted_hypotheses:
-                iter_function(hypothesis)
-                self._round_solution(hypothesis)
         for h in self.const_space.hypotheses:
-            self.const_space.round(h, 0)
+            self.const_space.round(h)
+        print("Constraints satisfied: ", self._const_satisfied())
 
     def _gradient_update(self, hypothesis: Hypothesis):
         h_index = hypothesis.index - self.const_space.atom_count
@@ -87,7 +82,7 @@ class ILPSolver:
     def _round_solution(self, hypothesis: Hypothesis):
         criterion_score = np.inf
         while criterion_score >= self.error_bound:
-            self.const_space.round(hypothesis, self.error_bound)
+            self.const_space.round(hypothesis)
             criterion_score = tt_boolean_criterion(hypothesis.value)
             print(f"Boolean Criterion: {criterion_score} \r", end="")
         print("\n", flush=True)

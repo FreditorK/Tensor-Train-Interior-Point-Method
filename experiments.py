@@ -17,14 +17,11 @@ b = (head_c1 | tail_c1) & (tail_c1 | ~tail_c2) & (tail_c2 | ~tail_c1)
 c = (tail_c1 | ~tail_c2) & (head_c1 | head_c2 | tail_c2) & (~head_c1 | ~tail_c2) & (tail_c2 | ~head_c2 | ~tail_c1)
 d = (head_c2 | ~tail_c2) & (head_c1 | ~head_c2 | ~tail_c1) & (tail_c1 | ~head_c1 | ~tail_c2)
 e = (tail_c1 | tail_c2) & (tail_c2 | ~head_c1)
-arr = [tt_add_noise(a.to_tt_train(), noise_radius=0.1, target_ranks=tt_ranks(a.to_tt_train())), tt_add_noise(b.to_tt_train(), noise_radius=0.1, target_ranks=tt_ranks(b.to_tt_train()))]
+#arr = [tt_add_noise(a.to_tt_train(), noise_radius=0.1, target_ranks=tt_ranks(a.to_tt_train())), tt_add_noise(b.to_tt_train(), noise_radius=0.1, target_ranks=tt_ranks(b.to_tt_train()))]
 #arr = [a.to_tt_train(), b.to_tt_train()]
-for tt in arr:
-    print("-----")
-    print(tt_to_tensor(tt_walsh_op(tt)))
-    ta = tt_rank_round(tt_walsh_op(tt))
-    print("ii")
-    print(tt_to_tensor(ta))
+target_ranks = tt_ranks(a.to_tt_train())
+a = [(1 / l_n * 2 * l_np1)*np.random.randn(l_n, 2, l_np1) for l_n, l_np1 in zip(target_ranks[:-1], target_ranks[1:])]
+print(tt_inner_prod(a, a))
 """
 m = a & h
 t = TTExpression(m.to_tt_train(), const_space)

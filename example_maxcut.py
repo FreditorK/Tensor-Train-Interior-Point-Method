@@ -1,7 +1,6 @@
 import networkx as nx
 import matplotlib.pyplot as plt
 import argparse
-from functools import reduce
 from time import time
 from utils import *
 from optimiser import ILPSolver, AnswerSetSolver
