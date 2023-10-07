@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import argparse
 from time import time
 from utils import *
-from optimiser import ILPSolver, AnswerSetSolver
+from optimiser import ILPSolver
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-s", "--stats", help="increase output verbosity", action="store_true")

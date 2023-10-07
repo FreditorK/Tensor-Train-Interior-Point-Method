@@ -1,6 +1,6 @@
 from time import time
 from utils import *
-from optimiser import ILPSolver, AnswerSetSolver
+from optimiser import ILPSolver
 
 const_space = ConstraintSpace()
 head_c1 = const_space.Atom("head(c_1)")
