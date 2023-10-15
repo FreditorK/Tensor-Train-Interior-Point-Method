@@ -1,6 +1,10 @@
+import os
+import sys
+
+sys.path.append(os.getcwd() + '/../')
 from time import time
-from utils import *
-from optimiser import ILPSolver
+from src.utils import *
+from src.optimiser import ILPSolver
 
 const_space = ConstraintSpace()
 head_c1 = const_space.Atom("head(c_1)")
