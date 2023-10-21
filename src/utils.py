@@ -1,15 +1,9 @@
-import copy
-import random
-from functools import reduce
-from typing import Dict
-
 import jax
-import numpy as np
-from sympy.logic.boolalg import ANFform, to_cnf, to_dnf, to_anf
+from typing import Dict
+from sympy.logic.boolalg import ANFform, to_cnf, to_dnf
 from sympy import symbols
-from tt_op import *
+from src.tt_op import *
 from copy import deepcopy
-from operators import partial_D, D_func
 from abc import ABC, abstractmethod
 
 
@@ -310,8 +304,8 @@ class LogicConstraint(ABC):
 
     def get_projection(self):
         normal, bias = self._get_hyperplane()
-        if abs(bias) > 1 or tt_inner_prod(normal,
-                                          normal) < self.s_lower:  # TODO: Then it is unsatisfiable, only happens in Multi-Hypothesis case
+        if np.less(1 - np.abs(bias), 0) or np.less(tt_inner_prod(normal,
+                                          normal) - self.s_lower, 0):  # TODO: Then it is unsatisfiable, only happens in Multi-Hypothesis case
             return lambda tt_h: (tt_h, False)
         return lambda tt_h: self._projection(tt_h, normal, bias)
 
@@ -324,7 +318,7 @@ class ExistentialConstraint(LogicConstraint):
 
     def _projection(self, tt_h, tt_n, bias):
         func_result = np.clip(tt_inner_prod(tt_h, tt_n), a_min=-1, a_max=1)
-        condition = func_result + bias < 1.9 * self.s_lower
+        condition = np.less(func_result + bias - 1.9 * self.s_lower, 0)
         if condition:
             ranks = tt_ranks(tt_h)
             tt_h = _projection(tt_h, tt_n, func_result, bias - 2 * self.s_lower)
@@ -333,14 +327,14 @@ class ExistentialConstraint(LogicConstraint):
 
     def is_satisfied(self, tt_h):
         normal, bias = self._get_hyperplane()
-        return tt_inner_prod(tt_h, normal) + bias > self.s_lower
+        return np.less(self.s_lower - (tt_inner_prod(tt_h, normal) + bias), 0)
 
 
 class UniversalConstraint(LogicConstraint):
 
     def _projection(self, tt_h, tt_n, bias):
         func_result = np.clip(tt_inner_prod(tt_h, tt_n), a_min=-1, a_max=1)
-        condition = abs(func_result + bias) >= self.s_lower
+        condition = np.less_equal(self.s_lower - np.abs(func_result + bias), 0)
         if condition:
             ranks = tt_ranks(tt_h)
             tt_h = _projection(tt_h, tt_n, func_result, bias)
@@ -349,7 +343,7 @@ class UniversalConstraint(LogicConstraint):
 
     def is_satisfied(self, tt_h):
         normal, bias = self._get_hyperplane()
-        return abs(tt_inner_prod(tt_h, normal) + bias) < self.s_lower
+        return np.less(np.abs(tt_inner_prod(tt_h, normal) + bias) - self.s_lower, 0)
 
 
 def stopping_criterion(tt_train, prev_tt_train):
@@ -471,4 +465,6 @@ class ConstraintSpace(ParameterSpace, ABC):
         next_tt_train = tt_mul_scal(1 - tt_inner_prod(tt_update, tt_train), tt_train)
         next_tt_train = tt_randomise_orthogonalise(tt_add(next_tt_train, tt_update), ranks)
         next_tt_train = tt_normalise(next_tt_train)
+        next_tt_train = tt_randomise_orthogonalise(tt_add_noise(next_tt_train, ranks), ranks)
         hypothesis.value = next_tt_train
+        self.project(hypothesis)

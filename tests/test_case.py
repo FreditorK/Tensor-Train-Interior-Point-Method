@@ -1,4 +1,4 @@
-from utils import *
+from src.utils import *
 
 const_space = ConstraintSpace()
 x = const_space.Atom("x")

@@ -1,10 +1,4 @@
-from time import time
-
-import numpy as np
-
 from utils import *
-from optimiser import ILPSolver, AnswerSetSolver
-
 const_space = ConstraintSpace()
 head_c1 = const_space.Atom("head(c_1)")
 tail_c1 = const_space.Atom("tail(c_1)")
@@ -17,11 +11,12 @@ b = (head_c1 | tail_c1) & (tail_c1 | ~tail_c2) & (tail_c2 | ~tail_c1)
 c = (tail_c1 | ~tail_c2) & (head_c1 | head_c2 | tail_c2) & (~head_c1 | ~tail_c2) & (tail_c2 | ~head_c2 | ~tail_c1)
 d = (head_c2 | ~tail_c2) & (head_c1 | ~head_c2 | ~tail_c1) & (tail_c1 | ~head_c1 | ~tail_c2)
 e = (tail_c1 | tail_c2) & (tail_c2 | ~head_c1)
-#arr = [tt_add_noise(a.to_tt_train(), noise_radius=0.1, target_ranks=tt_ranks(a.to_tt_train())), tt_add_noise(b.to_tt_train(), noise_radius=0.1, target_ranks=tt_ranks(b.to_tt_train()))]
-#arr = [a.to_tt_train(), b.to_tt_train()]
-target_ranks = tt_ranks(a.to_tt_train())
-a = [(1 / l_n * 2 * l_np1)*np.random.randn(l_n, 2, l_np1) for l_n, l_np1 in zip(target_ranks[:-1], target_ranks[1:])]
-print(tt_inner_prod(a, a))
+target_ranks = [1] + tt_ranks(a.to_tt_train()) + [1]
+a = tt_normalise([(1 / l_n * 2 * l_np1)*np.random.randn(l_n, 2, l_np1) for l_n, l_np1 in zip(target_ranks[:-1], target_ranks[1:])])
+k = tt_add(tt_one(len(a)), a)
+k = tt_rank_reduce(tt_hadamard(tt_hadamard(k, k), k))
+print(k)
+
 """
 m = a & h
 t = TTExpression(m.to_tt_train(), const_space)

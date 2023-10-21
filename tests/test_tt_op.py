@@ -1,5 +1,5 @@
 import pytest
-from tt_op import *
+from src.tt_op import *
 
 T_1 = np.array([[[0, 1 / 2],
                  [1 / 2, 0]],

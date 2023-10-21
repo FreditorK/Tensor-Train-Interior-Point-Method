@@ -1,9 +1,13 @@
+import os
+import sys
+
+sys.path.append(os.getcwd() + '/../')
 import networkx as nx
 import matplotlib.pyplot as plt
 import argparse
 from time import time
-from utils import *
-from optimiser import ILPSolver
+from src.utils import *
+from src.optimiser import ILPSolver
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-s", "--stats", help="increase output verbosity", action="store_true")

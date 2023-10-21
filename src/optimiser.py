@@ -1,13 +1,7 @@
 from collections import deque
-
-import numpy as np
-import scipy
-from matplotlib import pyplot as plt
-
-from operators import D_func
-from tt_op import *
-from utils import ConstraintSpace, TTExpression, stopping_criterion, Hypothesis
-from functools import partial
+from src.operators import D_func
+from src.tt_op import *
+from src.utils import ConstraintSpace, stopping_criterion, Hypothesis
 
 
 # np.random.seed(7)
@@ -66,23 +60,19 @@ class ILPSolver:
             gradients = self.objective_grad(tt_trains_before + [tt_train] + tt_trains_after)
             gradient = gradients[h_index][idx]
             tt_train[idx] -= 0.5 * gradient
-            tt_train[idx] += 0.5 * tt_grad_inner_prod(tt_train, tt_train, gradient, idx) * tt_train[idx]
+            tt_train[idx] += tt_grad_inner_prod(tt_train, tt_train, gradient, idx) * tt_train[idx]
             tt_train = tt_normalise(tt_train, idx=idx)
         hypothesis.value = tt_rank_reduce(tt_train)
 
     def _riemannian_grad(self, hypothesis: Hypothesis):
-        criterions = deque([np.inf], maxlen=self.params["patience"])
+        #criterions = deque([np.inf], maxlen=self.params["patience"])
         # Gradient induced change, i.e. similar to first-order sufficient condition
-        while np.array(criterions)[-3:].mean() >= self.error_bound:
-            hypothesis_copy = deepcopy(hypothesis.value)
+        for _ in range(70): # TODO: Need stopping criterion independent from scale, same for rounding, maybe sampling subtensors??
             self._gradient_update(hypothesis)
             self.const_space.project(hypothesis)
-            criterions.append(stopping_criterion(hypothesis.value, hypothesis_copy))
 
     def _round_solution(self, hypothesis: Hypothesis):
         criterion_score = np.inf
-        while criterion_score >= self.error_bound:
+        while np.less(self.error_bound, criterion_score):
             self.const_space.round(hypothesis)
             criterion_score = tt_boolean_criterion(hypothesis.value)
-            print(f"Boolean Criterion: {criterion_score} \r", end="")
-        print("\n", flush=True)

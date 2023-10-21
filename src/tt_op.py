@@ -1,17 +1,14 @@
-from copy import deepcopy
 import numpy as np
 import jax.numpy as jnp
 from typing import List, Tuple
 from itertools import product
+from copy import deepcopy
 
 PHI = np.array([[1, 1],
                 [1, -1]], dtype=float).reshape(1, 2, 2, 1)
 
 PHI_INV = np.array([[1 / 2, 1 / 2],
                     [1 / 2, -1 / 2]], dtype=float).reshape(1, 2, 2, 1)
-
-FAN = np.array([[1, 0],
-                [0, 1]], dtype=float).reshape(1, 2, 2, 1)
 
 
 def phi(num_bonds):
@@ -216,6 +213,7 @@ def tt_svd(fourier_tensor: np.array) -> List[np.array]:
     cores.append(G_n)
     return cores
 
+
 def tt_leading_entry(tt_train: List[np.array]) -> np.array:
     """
     Returns the leading entry of a TT-train
@@ -315,7 +313,7 @@ def tt_partial_inner_prod(tt_train_1: List[np.array], tt_train_2: List[np.array]
         diff_n = len(long_tt) - len(short_tt)
         contraction_min_n = np.linalg.multi_dot(
             [_tt_core_collapse(core_1, core_2) for core_1, core_2 in zip(long_tt[diff_n:], short_tt)])
-        long_tt = long_tt[:diff_n-1] + [np.einsum("rdl, lk -> rdk", long_tt[diff_n-1], contraction_min_n)]
+        long_tt = long_tt[:diff_n - 1] + [np.einsum("rdl, lk -> rdk", long_tt[diff_n - 1], contraction_min_n)]
         return long_tt
     min_n = min(len(tt_train_1), len(tt_train_2))
     long_tt = tt_train_1[min_n:] if len(tt_train_1) > min_n else tt_train_2[min_n:]
@@ -458,7 +456,7 @@ def tt_boolean_criterion(tt_train: List[np.array]) -> float:
     tt_train = tt_walsh_op(tt_train)
     tt_train_xnor = tt_hadamard(tt_train, tt_train)
     tt_train_xnor = tt_walsh_op_inv(tt_train_xnor)
-    return np.abs(tt_inner_prod(tt_train_xnor, tt_train_xnor)-1)
+    return np.abs(tt_inner_prod(tt_train_xnor, tt_train_xnor) - 1)
 
 
 def tt_extract_seq(tt_train, assignments):
@@ -535,7 +533,8 @@ def tt_normalise(tt_train, radius=1, idx=0):
 def tt_add_noise(tt_train, target_ranks):
     target_ranks = [1] + target_ranks + [1]
     # approximately uniform noise on the sphere
-    noise_train = [(1 / (l_n * 2 * l_np1))*np.random.randn(l_n, 2, l_np1) for l_n, l_np1 in zip(target_ranks[:-1], target_ranks[1:])]
+    noise_train = [(1 / (l_n * 2 * l_np1)) * np.random.randn(l_n, 2, l_np1) for l_n, l_np1 in
+                   zip(target_ranks[:-1], target_ranks[1:])]
     # projection onto tangent space of tt_train
     tt_train = tt_mul_scal(1 - tt_inner_prod(noise_train, tt_train), tt_train)
     tt_train = tt_add(tt_train, noise_train)
@@ -582,18 +581,6 @@ def tt_substitute(tt_train: List[np.array], substitutions: List[List[np.array]])
     return tt_train
 
 
-def tt_graph_to_tensor(n, edges):  # Start numbering nodes at 0
-    tensor = -np.ones([2] * n + [2] * n)
-    for e in edges:
-        index_1 = [int(x) for x in reversed(bin(e[0])[2:])]
-        index_1 += [0] * (n - len(index_1))
-        index_2 = [int(x) for x in reversed(bin(e[1])[2:])]
-        index_2 += [0] * (n - len(index_2))
-        tensor[tuple(index_1 + index_2)] = 1
-        tensor[tuple(index_2 + index_1)] = 1
-    return tensor
-
-
 def tt_permute(tt_train: List[np.array], axes: List[Tuple]) -> List[np.array]:
     """
     Permutes a list of index tuples
@@ -627,3 +614,15 @@ def tt_permute(tt_train: List[np.array], axes: List[Tuple]) -> List[np.array]:
         tt_max = tt_xnor(tt_max, tt_atom_train(min_idx, len(tt_max)))
         tt_train = tt_rank_reduce(tt_add(tt_add(tt_basis_1, tt_min), tt_add(tt_basis_2, tt_max)))
     return tt_train
+
+
+def tt_graph_to_tensor(n, edges):  # Start numbering nodes at 0
+    tensor = -np.ones([2] * n + [2] * n)
+    for e in edges:
+        index_1 = [int(x) for x in reversed(bin(e[0])[2:])]
+        index_1 += [0] * (n - len(index_1))
+        index_2 = [int(x) for x in reversed(bin(e[1])[2:])]
+        index_2 += [0] * (n - len(index_2))
+        tensor[tuple(index_1 + index_2)] = 1
+        tensor[tuple(index_2 + index_1)] = 1
+    return tensor
