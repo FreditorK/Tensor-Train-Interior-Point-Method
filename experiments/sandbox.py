@@ -43,19 +43,23 @@ for _ in range(100):
 print([a/1000 for a in t])
 """
 
-A = np.array([[1, 2, 1], [4, 1, -1]])
-B = np.array([[2, 1], [-2, -1], [3, 2]])
+A = 0.2*np.array([[1, 2, 1], [4, 1, -1]])
+B = 0.5*np.array([[2, 1], [-2, -1], [3, 2]])
 result = A @ B
 print(result, np.sum(np.diagonal(result)))
+AQ, AR = np.linalg.qr(A)
+ABQ, ABR = np.linalg.qr(AR @ B)
+ABQ = AQ @ ABQ
 m = 0
-factors = np.zeros(2)
-K = 50000
+factors = []
+K = 100
 for _ in range(K):
-    vec_1 = np.random.randn(1, 3)
-    vec_2 = np.random.randn(1, 2)
-    a = (vec_2 @ A @ vec_1.T).item()
-    b = (vec_1 @ B @ vec_2.T).item()
-    factors += np.array([a, b])
-    m += a * b
-print(factors/K)
+    vec_1 = np.random.randn(2, 1)
+    vec_2 = np.random.randn(2, 1)
+    #vec_3 = np.random.randn(1, 3)
+    #vec_4 = np.random.randn(1, 2)
+    a = (vec_1.T @ ABQ @ vec_2).item()
+    b = (vec_2.T @ ABR @ vec_1).item()
+    factors.append(np.array([a, b]))
+    m += a*b
 print(m/K)
