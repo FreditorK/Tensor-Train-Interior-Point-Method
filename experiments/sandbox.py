@@ -43,23 +43,24 @@ for _ in range(100):
 print([a/1000 for a in t])
 """
 
-A = 0.2*np.array([[1, 2, 1], [4, 1, -1]])
-B = 0.5*np.array([[2, 1], [-2, -1], [3, 2]])
-result = A @ B
-print(result, np.sum(np.diagonal(result)))
-AQ, AR = np.linalg.qr(A)
-ABQ, ABR = np.linalg.qr(AR @ B)
-ABQ = AQ @ ABQ
+A = np.array([[-3, 2], [4, 1]])
+B = np.array([[1, 2], [4, -1]])
+C = np.array([[2, 5], [4, -0.1]])
 m = 0
+n = 0
 factors = []
-K = 100
+K = 100000
 for _ in range(K):
     vec_1 = np.random.randn(2, 1)
     vec_2 = np.random.randn(2, 1)
-    #vec_3 = np.random.randn(1, 3)
-    #vec_4 = np.random.randn(1, 2)
-    a = (vec_1.T @ ABQ @ vec_2).item()
-    b = (vec_2.T @ ABR @ vec_1).item()
-    factors.append(np.array([a, b]))
-    m += a*b
-print(m/K)
+    vec_3 = np.random.randn(2, 1)
+    a = (vec_1.T @ A @ vec_2).item()
+    b = (vec_2.T @ B @ vec_3).item()
+    c = (vec_3.T @ C @ vec_1).item()
+    factors.append([a, b, c])
+print(np.trace(A @ B @ C))
+print(np.mean(np.prod(factors, axis=1)))
+factors = np.array(factors).T
+print(np.trace(A @ A.T), np.trace(B @ B.T), np.trace(C @ C.T))
+Cov_1 = np.cov(factors)
+print(Cov_1)

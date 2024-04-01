@@ -128,6 +128,7 @@ def tt_randomise_orthogonalise(tt_train: List[np.array], target_ranks: List[int]
     tt_gaussian = [(1 / (l_n * 2 * l_np1)) * np.random.randn(l_n, 2, l_np1) for l_n, l_np1 in
                    zip(target_ranks[:-1], target_ranks[1:])]
     tt_gaussian_contractions = tt_rl_contraction(tt_train, tt_gaussian)
+    print([t.shape for t in tt_gaussian_contractions])
     for i, core_w in enumerate(tt_gaussian_contractions):
         r_ip1, dim, r_ip2 = tt_train[i + 1].shape
         core_z = tt_train[i].reshape(-1, r_ip1)  # R_i * 2 x R_{i+1}
@@ -148,8 +149,7 @@ def tt_rank_reduce(tt_train: List[np.array]):
         idx_shape = tt_core.shape
         next_idx_shape = tt_train[idx + 1].shape
         U, S, V_T = np.linalg.svd(tt_train[idx].reshape(rank * idx_shape[1], -1))
-        abs_S = np.abs(S)
-        non_sing_eig_idxs = np.asarray(abs_S >= min(np.max(abs_S), tt_bound)).nonzero()
+        non_sing_eig_idxs = np.asarray(S >= min(np.max(S), tt_bound)).nonzero()
         S = S[non_sing_eig_idxs]
         next_rank = len(S)
         U = U[:, non_sing_eig_idxs]
@@ -285,7 +285,7 @@ def bool_to_tt_train(bool_values: List[bool]):
     return tt_walsh_op_inv([jnp.array([1, 2 * float(b_value) - 1]).reshape(1, 2, 1) for b_value in bool_values])
 
 
-def _tt_core_collapse(core_1: np.array, core_2: np.array):
+def _tt_core_collapse(core_1: np.array, core_2: np.array) -> np.array:
     return sum([
         jnp.kron(core_1[(slice(None),) + i], core_2[(slice(None),) + i])
         for i in product(*([[0, 1]] * (len(core_1.shape) - 2)))
@@ -626,3 +626,36 @@ def tt_graph_to_tensor(n, edges):  # Start numbering nodes at 0
         tensor[tuple(index_1 + index_2)] = 1
         tensor[tuple(index_2 + index_1)] = 1
     return tensor
+
+
+def tt_normed_inner_prod(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[float]:
+    """
+    Computes the inner product between two tensor trains
+    """
+    cores = [_tt_core_collapse(core_1, core_2) for core_1, core_2 in zip(tt_train_1, tt_train_2)]
+    factors = [np.clip(np.linalg.norm(cores[0]), a_min=0.5, a_max=1)]
+    vec = cores[0]
+    for c in cores[1:-1]:
+        vec = vec / factors[-1] @ c
+        factors.append(np.clip(np.linalg.norm(vec), a_min=0.5, a_max=1))
+    factors.append((vec @ cores[-1]).item())
+    return factors
+
+
+def tt_decomposed_inner_prod(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[float]:
+    """
+    Computes the inner product between two tensor trains
+    """
+    cores = [_tt_core_collapse(core_1, core_2) for core_1, core_2 in zip(tt_train_1, tt_train_2)]
+    cores = [c.reshape(c.shape[0], 1, c.shape[-1]) for c in cores]
+    cores = [np.concatenate((c, c), axis=1) for c in cores]
+    cores = tt_randomise_orthogonalise(cores, [1] + [3] * (len(cores) - 2) + [1])
+    print([c[:, 0, :] for c in cores])
+    # return np.product([c[0] for c in cores])
+
+
+def tt_normed_boolean_criterion(tt_train: List[np.array]) -> float:
+    tt_train = tt_walsh_op(tt_train)
+    tt_train_xnor = tt_hadamard(tt_train, tt_train)
+    tt_train_xnor = tt_walsh_op_inv(tt_train_xnor)
+    return np.abs(tt_normed_inner_prod(tt_train_xnor, tt_train_xnor) - 1)
