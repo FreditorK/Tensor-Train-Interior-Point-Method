@@ -642,20 +642,52 @@ def tt_normed_inner_prod(tt_train_1: List[np.array], tt_train_2: List[np.array])
     return factors
 
 
-def tt_decomposed_inner_prod(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[float]:
-    """
-    Computes the inner product between two tensor trains
-    """
-    cores = [_tt_core_collapse(core_1, core_2) for core_1, core_2 in zip(tt_train_1, tt_train_2)]
-    cores = [c.reshape(c.shape[0], 1, c.shape[-1]) for c in cores]
-    cores = [np.concatenate((c, c), axis=1) for c in cores]
-    cores = tt_randomise_orthogonalise(cores, [1] + [3] * (len(cores) - 2) + [1])
-    print([c[:, 0, :] for c in cores])
-    # return np.product([c[0] for c in cores])
-
-
 def tt_normed_boolean_criterion(tt_train: List[np.array]) -> float:
     tt_train = tt_walsh_op(tt_train)
     tt_train_xnor = tt_hadamard(tt_train, tt_train)
     tt_train_xnor = tt_walsh_op_inv(tt_train_xnor)
     return np.abs(tt_normed_inner_prod(tt_train_xnor, tt_train_xnor) - 1)
+
+
+def tt_decomposed_inner_prod(tt_train_1: List[np.array], tt_train_2: List[np.array], iterations=250, error_bound=1) -> \
+List[float]:
+    matrices = [_tt_core_collapse(core_1, core_2) for core_1, core_2 in zip(tt_train_1, tt_train_2)]
+    return _decomposed_matrix_product(matrices, iterations, error_bound)
+
+
+def _decomposed_matrix_product(matrices, iterations, error_bound):
+    np.random.seed(2)
+    matrices = matrices[1:-1] + [matrices[-1] @ matrices[0]]
+    norms = [np.linalg.norm(m) for m in matrices]
+    normed_matrices = [m / norm for m, norm in zip(matrices, norms)]
+    factors_batch = []
+    for _ in range(iterations):
+        vecs = [2 * np.round(np.random.rand(m.shape[0], 1)) - 1 for m in normed_matrices]
+        factors = [(vec_1.T @ m @ vec_2).item() for vec_1, m, vec_2 in zip(vecs, normed_matrices, vecs[1:] + [vecs[0]])]
+        factors_batch.append(factors)
+    sign_batch = np.array(factors_batch, dtype=float)
+    prev_theta = 0.0
+    theta = 0.0
+    step = 1
+    step_sign = 0
+    print("Approx", None, None, theta, np.mean(np.prod(sign_batch, axis=1)))
+    # TODO: There are problems when the approximation is negative currently
+    for j in range(iterations):
+        step *= 0.75
+        sign_batch[:, 0] -= (theta - prev_theta)
+        sign_batch[:, 1:] += (theta - prev_theta)
+        sign_count = np.sum(np.prod(np.sign(sign_batch), axis=1))
+        prev_theta = theta
+        print("Approx", j, sign_count, theta, np.mean(np.prod(sign_batch, axis=1)))
+        if sign_count > 0:
+            step_sign *= -1
+            if theta == 0:
+                step_sign = -1
+        elif sign_count < 0:
+            step_sign *= -1
+            if theta == 0:
+                step_sign = -1
+        theta += step_sign*step
+        if step == 0 or sign_count == 0:
+            break
+    return np.array(norms) * theta
