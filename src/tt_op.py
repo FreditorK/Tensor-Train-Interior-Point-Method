@@ -1,3 +1,4 @@
+import jax.random
 import numpy as np
 import jax.numpy as jnp
 from typing import List, Tuple
@@ -128,7 +129,6 @@ def tt_randomise_orthogonalise(tt_train: List[np.array], target_ranks: List[int]
     tt_gaussian = [(1 / (l_n * 2 * l_np1)) * np.random.randn(l_n, 2, l_np1) for l_n, l_np1 in
                    zip(target_ranks[:-1], target_ranks[1:])]
     tt_gaussian_contractions = tt_rl_contraction(tt_train, tt_gaussian)
-    print([t.shape for t in tt_gaussian_contractions])
     for i, core_w in enumerate(tt_gaussian_contractions):
         r_ip1, dim, r_ip2 = tt_train[i + 1].shape
         core_z = tt_train[i].reshape(-1, r_ip1)  # R_i * 2 x R_{i+1}
@@ -562,7 +562,6 @@ def tt_abs(tt_train):
 
 def tt_substitute(tt_train: List[np.array], substitutions: List[List[np.array]]) -> List[np.array]:
     """
-
     :param self:
     :param tt_train:
     :param substitutions: List of TTs to substitute into tt_train, substitutions must be in descending order of their
@@ -628,66 +627,38 @@ def tt_graph_to_tensor(n, edges):  # Start numbering nodes at 0
     return tensor
 
 
-def tt_normed_inner_prod(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[float]:
-    """
-    Computes the inner product between two tensor trains
-    """
-    cores = [_tt_core_collapse(core_1, core_2) for core_1, core_2 in zip(tt_train_1, tt_train_2)]
-    factors = [np.clip(np.linalg.norm(cores[0]), a_min=0.5, a_max=1)]
-    vec = cores[0]
-    for c in cores[1:-1]:
-        vec = vec / factors[-1] @ c
-        factors.append(np.clip(np.linalg.norm(vec), a_min=0.5, a_max=1))
-    factors.append((vec @ cores[-1]).item())
-    return factors
+def tt_tensor_matrix(tt_trains: List[np.array]):
+    n = len(tt_trains)
+    bin_length = len(bin(n)[2:])
+    index = [np.array([1, 0])] * bin_length
+    tt_tensor_matrix = index + tt_trains[0]
+    for i in range(1, n):
+        binary_i = bin(i)[2:]
+        binary_i = '1' * (bin_length - len(binary_i)) + binary_i
+        index = [np.array([1 - int(b), int(b)]) for b in binary_i]
+        tt_tensor_matrix = tt_rank_reduce(tt_add(tt_tensor_matrix, index + tt_trains[i]))
+
+    return tt_tensor_matrix
 
 
-def tt_normed_boolean_criterion(tt_train: List[np.array]) -> float:
-    tt_train = tt_walsh_op(tt_train)
-    tt_train_xnor = tt_hadamard(tt_train, tt_train)
-    tt_train_xnor = tt_walsh_op_inv(tt_train_xnor)
-    return np.abs(tt_normed_inner_prod(tt_train_xnor, tt_train_xnor) - 1)
+def tt_gram_tensor_matrix(tt_tensor):
+    last_core = np.linalg.multi_dot([_tt_core_collapse(core, core) for core in tt_tensor[1:]])
+    return [tt_tensor[0], last_core.reshape(tt_tensor[0].shape[-1], -1, 1)]
 
 
-def tt_decomposed_inner_prod(tt_train_1: List[np.array], tt_train_2: List[np.array], iterations=250, error_bound=1) -> \
-List[float]:
-    matrices = [_tt_core_collapse(core_1, core_2) for core_1, core_2 in zip(tt_train_1, tt_train_2)]
-    return _decomposed_matrix_product(matrices, iterations, error_bound)
-
-
-def _decomposed_matrix_product(matrices, iterations, error_bound):
-    np.random.seed(2)
-    matrices = matrices[1:-1] + [matrices[-1] @ matrices[0]]
-    norms = [np.linalg.norm(m) for m in matrices]
-    normed_matrices = [m / norm for m, norm in zip(matrices, norms)]
-    factors_batch = []
-    for _ in range(iterations):
-        vecs = [2 * np.round(np.random.rand(m.shape[0], 1)) - 1 for m in normed_matrices]
-        factors = [(vec_1.T @ m @ vec_2).item() for vec_1, m, vec_2 in zip(vecs, normed_matrices, vecs[1:] + [vecs[0]])]
-        factors_batch.append(factors)
-    sign_batch = np.array(factors_batch, dtype=float)
-    prev_theta = 0.0
-    theta = 0.0
-    step = 1
-    step_sign = 0
-    print("Approx", None, None, theta, np.mean(np.prod(sign_batch, axis=1)))
-    # TODO: There are problems when the approximation is negative currently
-    for j in range(iterations):
-        step *= 0.75
-        sign_batch[:, 0] -= (theta - prev_theta)
-        sign_batch[:, 1:] += (theta - prev_theta)
-        sign_count = np.sum(np.prod(np.sign(sign_batch), axis=1))
-        prev_theta = theta
-        print("Approx", j, sign_count, theta, np.mean(np.prod(sign_batch, axis=1)))
-        if sign_count > 0:
-            step_sign *= -1
-            if theta == 0:
-                step_sign = -1
-        elif sign_count < 0:
-            step_sign *= -1
-            if theta == 0:
-                step_sign = -1
-        theta += step_sign*step
-        if step == 0 or sign_count == 0:
-            break
-    return np.array(norms) * theta
+def tt_conjugate_gradient(tt_tensor_matrix, tt_train):
+    project_ranks = tt_ranks(tt_train)
+    x = tt_one(len(tt_tensor_matrix) - len(tt_train))
+    r = tt_add(tt_train, tt_mul_scal(-1, tt_partial_inner_prod(x, tt_tensor_matrix, reversed=True)))
+    p = r
+    r_2 = tt_inner_prod(r, r)
+    for _ in range(10):
+        prev_r_2 = r_2
+        alpha = prev_r_2 / tt_inner_prod(tt_tensor_matrix, p + p)
+        x = tt_randomise_orthogonalise(tt_add(x, tt_mul_scal(alpha, p)), project_ranks)
+        r = tt_randomise_orthogonalise(
+            tt_add(r, tt_mul_scal(-alpha, tt_partial_inner_prod(p, tt_tensor_matrix, reversed=True))), project_ranks)
+        r_2 = tt_inner_prod(r, r)
+        beta = r_2 / prev_r_2
+        p = tt_randomise_orthogonalise(tt_add(r, tt_mul_scal(beta, p)), project_ranks)
+    return x
