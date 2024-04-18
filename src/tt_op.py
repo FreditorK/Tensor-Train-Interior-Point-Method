@@ -31,6 +31,10 @@ def phi_inv(num_bonds):
         tensor = jnp.kron(jnp.expand_dims(tensor, (-1, -2)), new_PHI)
     return tensor
 
+def safe_multi_dot(matrices: List[np.array]):
+    if len(matrices) > 1:
+        return np.linalg.multi_dot(matrices)
+    return matrices[0]
 
 def tt_one(dim):
     """ Returns an all-one tensor of dimension 2**dim """
@@ -125,18 +129,19 @@ def tt_rl_contraction(tt_train_1: List[np.array], tt_train_2: List[np.array]):
 
 
 def tt_randomise_orthogonalise(tt_train: List[np.array], target_ranks: List[int]) -> List[np.array]:
-    target_ranks = [1] + target_ranks + [1]
-    tt_gaussian = [(1 / (l_n * 2 * l_np1)) * np.random.randn(l_n, 2, l_np1) for l_n, l_np1 in
-                   zip(target_ranks[:-1], target_ranks[1:])]
-    tt_gaussian_contractions = tt_rl_contraction(tt_train, tt_gaussian)
-    for i, core_w in enumerate(tt_gaussian_contractions):
-        r_ip1, dim, r_ip2 = tt_train[i + 1].shape
-        core_z = tt_train[i].reshape(-1, r_ip1)  # R_i * 2 x R_{i+1}
-        core_y = core_z @ core_w  # R_i * 2 x target_r
-        Q_T, _ = np.linalg.qr(core_y)  # R_i * 2 x unknown
-        tt_train[i] = Q_T.reshape(tt_train[i].shape[0], tt_train[i].shape[1], -1)  # R_i * 2 x unknown
-        core_m = Q_T.T @ core_z  # unknown x R_{i+1}
-        tt_train[i + 1] = (core_m @ tt_train[i + 1].reshape(r_ip1, -1)).reshape(-1, dim, r_ip2)  # unknown x 2 * R_{i+2}
+    if len(tt_train) > 1:
+        target_ranks = [1] + target_ranks + [1]
+        tt_gaussian = [(1 / (l_n * 2 * l_np1)) * np.random.randn(l_n, 2, l_np1) for l_n, l_np1 in
+                       zip(target_ranks[:-1], target_ranks[1:])]
+        tt_gaussian_contractions = tt_rl_contraction(tt_train, tt_gaussian)
+        for i, core_w in enumerate(tt_gaussian_contractions):
+            r_ip1, dim, r_ip2 = tt_train[i + 1].shape
+            core_z = tt_train[i].reshape(-1, r_ip1)  # R_i * 2 x R_{i+1}
+            core_y = core_z @ core_w  # R_i * 2 x target_r
+            Q_T, _ = np.linalg.qr(core_y)  # R_i * 2 x unknown
+            tt_train[i] = Q_T.reshape(tt_train[i].shape[0], tt_train[i].shape[1], -1)  # R_i * 2 x unknown
+            core_m = Q_T.T @ core_z  # unknown x R_{i+1}
+            tt_train[i + 1] = (core_m @ tt_train[i + 1].reshape(r_ip1, -1)).reshape(-1, dim, r_ip2)  # unknown x 2 * R_{i+2}
     return tt_train
 
 
@@ -244,9 +249,11 @@ def tt_add(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.ar
     """
     Adds two tensor trains
     """
-    return [jnp.concatenate((tt_train_1[0], tt_train_2[0]), axis=-1)] + \
-        [_block_diag_tensor(core_1, core_2) for core_1, core_2 in zip(tt_train_1[1:-1], tt_train_2[1:-1])] + \
-        [jnp.concatenate((tt_train_1[-1], tt_train_2[-1]), axis=0)]
+    if len(tt_train_1) > 1:
+        return [jnp.concatenate((tt_train_1[0], tt_train_2[0]), axis=-1)] + \
+            [_block_diag_tensor(core_1, core_2) for core_1, core_2 in zip(tt_train_1[1:-1], tt_train_2[1:-1])] + \
+            [jnp.concatenate((tt_train_1[-1], tt_train_2[-1]), axis=0)]
+    return [tt_train_1[0] + tt_train_2[0]]
 
 
 def _tt_train_kron(core_1: np.array, core_2: np.array) -> np.array:
@@ -297,27 +304,26 @@ def tt_inner_prod(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> flo
     Computes the inner product between two tensor trains
     """
     return jnp.sum(
-        jnp.linalg.multi_dot([_tt_core_collapse(core_1, core_2) for core_1, core_2 in zip(tt_train_1, tt_train_2)])
+        safe_multi_dot([_tt_core_collapse(core_1, core_2) for core_1, core_2 in zip(tt_train_1, tt_train_2)])
     )
 
 
 def tt_partial_inner_prod(tt_train_1: List[np.array], tt_train_2: List[np.array], reversed=False) -> float:
     if reversed:
         max_n = max(len(tt_train_1), len(tt_train_2))
+        long_tt = tt_train_1
+        short_tt = tt_train_2
         if len(tt_train_1) < max_n:
             short_tt = tt_train_1
             long_tt = tt_train_2
-        else:
-            long_tt = tt_train_1
-            short_tt = tt_train_2
         diff_n = len(long_tt) - len(short_tt)
-        contraction_min_n = np.linalg.multi_dot(
+        contraction_min_n = safe_multi_dot(
             [_tt_core_collapse(core_1, core_2) for core_1, core_2 in zip(long_tt[diff_n:], short_tt)])
         long_tt = long_tt[:diff_n - 1] + [np.einsum("rdl, lk -> rdk", long_tt[diff_n - 1], contraction_min_n)]
         return long_tt
     min_n = min(len(tt_train_1), len(tt_train_2))
     long_tt = tt_train_1[min_n:] if len(tt_train_1) > min_n else tt_train_2[min_n:]
-    contraction_min_n = np.linalg.multi_dot(
+    contraction_min_n = safe_multi_dot(
         [_tt_core_collapse(core_1, core_2) for core_1, core_2 in zip(tt_train_1[:min_n], tt_train_2[:min_n])])
     long_tt[0] = np.einsum("lr, rdk -> ldk", contraction_min_n, long_tt[0])
     return long_tt
@@ -630,12 +636,12 @@ def tt_graph_to_tensor(n, edges):  # Start numbering nodes at 0
 def tt_tensor_matrix(tt_trains: List[np.array]):
     n = len(tt_trains)
     bin_length = len(bin(n)[2:])
-    index = [np.array([1, 0])] * bin_length
+    index = [np.array([1, 0]).reshape(1, 2, 1)] * bin_length
     tt_tensor_matrix = index + tt_trains[0]
     for i in range(1, n):
         binary_i = bin(i)[2:]
         binary_i = '1' * (bin_length - len(binary_i)) + binary_i
-        index = [np.array([1 - int(b), int(b)]) for b in binary_i]
+        index = [np.array([1 - int(b), int(b)]).reshape(1, 2, 1) for b in binary_i]
         tt_tensor_matrix = tt_rank_reduce(tt_add(tt_tensor_matrix, index + tt_trains[i]))
 
     return tt_tensor_matrix
@@ -646,15 +652,16 @@ def tt_gram_tensor_matrix(tt_tensor):
     return [tt_tensor[0], last_core.reshape(tt_tensor[0].shape[-1], -1, 1)]
 
 
-def tt_conjugate_gradient(tt_tensor_matrix, tt_train):
+def tt_conjugate_gradient(tt_tensor_matrix: List[np.array], tt_train: List[np.array]):
     project_ranks = tt_ranks(tt_train)
-    x = tt_one(len(tt_tensor_matrix) - len(tt_train))
+    x = tt_one(len(tt_train))
     r = tt_add(tt_train, tt_mul_scal(-1, tt_partial_inner_prod(x, tt_tensor_matrix, reversed=True)))
-    p = r
     r_2 = tt_inner_prod(r, r)
-    for _ in range(10):
+    p = r
+    for _ in range(5):
         prev_r_2 = r_2
         alpha = prev_r_2 / tt_inner_prod(tt_tensor_matrix, p + p)
+        print(r_2, alpha)
         x = tt_randomise_orthogonalise(tt_add(x, tt_mul_scal(alpha, p)), project_ranks)
         r = tt_randomise_orthogonalise(
             tt_add(r, tt_mul_scal(-alpha, tt_partial_inner_prod(p, tt_tensor_matrix, reversed=True))), project_ranks)
