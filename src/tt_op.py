@@ -31,10 +31,18 @@ def phi_inv(num_bonds):
         tensor = jnp.kron(jnp.expand_dims(tensor, (-1, -2)), new_PHI)
     return tensor
 
+
 def safe_multi_dot(matrices: List[np.array]):
     if len(matrices) > 1:
         return np.linalg.multi_dot(matrices)
     return matrices[0]
+
+
+def tt_random_binary(target_ranks: List[int]):
+    target_ranks = [1] + target_ranks + [1]
+    return [2 * np.random.randint(low=0, high=2, size=(l_n, 2, l_np1)) - 1 for l_n, l_np1 in
+            zip(target_ranks[:-1], target_ranks[1:])]
+
 
 def tt_one(dim):
     """ Returns an all-one tensor of dimension 2**dim """
@@ -141,7 +149,8 @@ def tt_randomise_orthogonalise(tt_train: List[np.array], target_ranks: List[int]
             Q_T, _ = np.linalg.qr(core_y)  # R_i * 2 x unknown
             tt_train[i] = Q_T.reshape(tt_train[i].shape[0], tt_train[i].shape[1], -1)  # R_i * 2 x unknown
             core_m = Q_T.T @ core_z  # unknown x R_{i+1}
-            tt_train[i + 1] = (core_m @ tt_train[i + 1].reshape(r_ip1, -1)).reshape(-1, dim, r_ip2)  # unknown x 2 * R_{i+2}
+            tt_train[i + 1] = (core_m @ tt_train[i + 1].reshape(r_ip1, -1)).reshape(-1, dim,
+                                                                                    r_ip2)  # unknown x 2 * R_{i+2}
     return tt_train
 
 
@@ -635,33 +644,32 @@ def tt_graph_to_tensor(n, edges):  # Start numbering nodes at 0
 
 def tt_tensor_matrix(tt_trains: List[np.array]):
     n = len(tt_trains)
-    bin_length = len(bin(n)[2:])
+    bin_length = len(bin(n-1)[2:])
     index = [np.array([1, 0]).reshape(1, 2, 1)] * bin_length
     tt_tensor_matrix = index + tt_trains[0]
     for i in range(1, n):
         binary_i = bin(i)[2:]
-        binary_i = '1' * (bin_length - len(binary_i)) + binary_i
+        binary_i = '0' * (bin_length - len(binary_i)) + binary_i
         index = [np.array([1 - int(b), int(b)]).reshape(1, 2, 1) for b in binary_i]
-        tt_tensor_matrix = tt_rank_reduce(tt_add(tt_tensor_matrix, index + tt_trains[i]))
+        tt_tensor_matrix = tt_add(tt_tensor_matrix, index + tt_trains[i])
 
-    return tt_tensor_matrix
-
-
-def tt_gram_tensor_matrix(tt_tensor):
-    last_core = np.linalg.multi_dot([_tt_core_collapse(core, core) for core in tt_tensor[1:]])
-    return [tt_tensor[0], last_core.reshape(tt_tensor[0].shape[-1], -1, 1)]
+    return tt_tensor_matrix, bin_length
 
 
-def tt_conjugate_gradient(tt_tensor_matrix: List[np.array], tt_train: List[np.array]):
+def tt_gram_tensor_matrix(tt_tensor, index_length):
+    last_core = safe_multi_dot([_tt_core_collapse(core, core) for core in tt_tensor[index_length:]])
+    return tt_tensor[:index_length] + [last_core.reshape(tt_tensor[0].shape[-1], -1, 1)]
+
+
+def tt_conjugate_gradient(tt_tensor_matrix: List[np.array], tt_train: List[np.array], num_iter=10):
     project_ranks = tt_ranks(tt_train)
-    x = tt_one(len(tt_train))
+    x = [np.zeros((1, 2, 1)) for _ in range(len(tt_train))]
     r = tt_add(tt_train, tt_mul_scal(-1, tt_partial_inner_prod(x, tt_tensor_matrix, reversed=True)))
     r_2 = tt_inner_prod(r, r)
     p = r
-    for _ in range(5):
+    for _ in range(num_iter):
         prev_r_2 = r_2
         alpha = prev_r_2 / tt_inner_prod(tt_tensor_matrix, p + p)
-        print(r_2, alpha)
         x = tt_randomise_orthogonalise(tt_add(x, tt_mul_scal(alpha, p)), project_ranks)
         r = tt_randomise_orthogonalise(
             tt_add(r, tt_mul_scal(-alpha, tt_partial_inner_prod(p, tt_tensor_matrix, reversed=True))), project_ranks)
@@ -669,3 +677,7 @@ def tt_conjugate_gradient(tt_tensor_matrix: List[np.array], tt_train: List[np.ar
         beta = r_2 / prev_r_2
         p = tt_randomise_orthogonalise(tt_add(r, tt_mul_scal(beta, p)), project_ranks)
     return x
+
+
+def tt_transpose(tt_train: List[np.array]):
+    return [c.reshape(*reversed(c.shape)) for c in reversed(tt_train)]
