@@ -646,12 +646,14 @@ def tt_tensor_matrix(tt_trains: List[np.array]):
     n = len(tt_trains)
     bin_length = len(bin(n-1)[2:])
     index = [np.array([1, 0]).reshape(1, 2, 1)] * bin_length
+    index_length = len(index)
     tt_tensor_matrix = index + tt_trains[0]
     for i in range(1, n):
         binary_i = bin(i)[2:]
         binary_i = '0' * (bin_length - len(binary_i)) + binary_i
         index = [np.array([1 - int(b), int(b)]).reshape(1, 2, 1) for b in binary_i]
         tt_tensor_matrix = tt_add(tt_tensor_matrix, index + tt_trains[i])
+        tt_tensor_matrix = tt_tensor_matrix[:index_length] + tt_rl_orthogonalize(tt_tensor_matrix[index_length:])
 
     return tt_tensor_matrix, bin_length
 
@@ -674,6 +676,8 @@ def tt_conjugate_gradient(tt_tensor_matrix: List[np.array], tt_train: List[np.ar
         r = tt_randomise_orthogonalise(
             tt_add(r, tt_mul_scal(-alpha, tt_partial_inner_prod(p, tt_tensor_matrix, reversed=True))), project_ranks)
         r_2 = tt_inner_prod(r, r)
+        if np.equal(r_2, 0.0):
+            break
         beta = r_2 / prev_r_2
         p = tt_randomise_orthogonalise(tt_add(r, tt_mul_scal(beta, p)), project_ranks)
     return x
