@@ -9,8 +9,8 @@ from src.tt_op import *
 
 @dataclass
 class Config:
-    num_columns = 4
-    tt_length = 4
+    num_columns = 9
+    tt_length = 8
     tt_max_rank = 5
 
 np.random.seed(12)

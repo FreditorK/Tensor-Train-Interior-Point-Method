@@ -663,10 +663,11 @@ def tt_tensor_matrix(tt_trains: List[np.array]):
 
     return tt_tensor_matrix, bin_length
 
+
 def tt_matrix_transpose(tt_tensor_matrix, index_length):
     index = [np.array([1, 0]).reshape(1, 2, 1)] * index_length
     tt_tensor_matrix_t = tt_partial_inner_prod(index, tt_tensor_matrix) + index
-    for i in range(1, 2**index_length):
+    for i in range(1, 2 ** index_length):
         binary_i = bin(i)[2:]
         binary_i = '0' * (index_length - len(binary_i)) + binary_i
         index = [np.array([1 - int(b), int(b)]).reshape(1, 2, 1) for b in binary_i]
@@ -678,10 +679,12 @@ def tt_matrix_transpose(tt_tensor_matrix, index_length):
 
 def tt_gram_tensor_matrix(tt_tensor, tt_tensor_t, index_length):
     # TODO: We have to reshape more stuff for higher dimensions, all the results have to be in tt-format/decomposed
-    cores = [_tt_core_collapse(core_1, core_2) for core_1, core_2 in zip(tt_tensor[index_length:], tt_tensor_t[:-index_length])]
+    cores = [_tt_core_collapse(core_1, core_2) for core_1, core_2 in
+             zip(tt_tensor[index_length:], tt_tensor_t[:-index_length])]
     core = safe_multi_dot(cores)
-    index_contraction = np.einsum("abc, cd -> abd", tt_tensor[index_length-1], core)
-    return tt_tensor[:index_length-1] + [index_contraction] + tt_tensor_t[-index_length:]
+    index_contraction = np.einsum("abc, cd -> abd", tt_tensor[index_length - 1], core)
+    return tt_tensor[:index_length - 1] + [index_contraction] + tt_tensor_t[-index_length:]
+
 
 def tt_conjugate_gradient(tt_tensor_matrix: List[np.array], tt_train: List[np.array], num_iter=10):
     project_ranks = tt_ranks(tt_train)
@@ -692,9 +695,6 @@ def tt_conjugate_gradient(tt_tensor_matrix: List[np.array], tt_train: List[np.ar
     for _ in range(num_iter):
         prev_r_2 = r_2
         p_rest = tt_inner_prod(tt_tensor_matrix, p + p)
-        if p_rest < 0.01:
-            break
-        print("P rest ", p_rest)
         alpha = prev_r_2 / p_rest
         x = tt_randomise_orthogonalise(tt_add(x, tt_mul_scal(alpha, p)), project_ranks)
         r = tt_randomise_orthogonalise(
@@ -710,5 +710,44 @@ def tt_conjugate_gradient(tt_tensor_matrix: List[np.array], tt_train: List[np.ar
     return x
 
 
+def tt_conjugate_gradient_exp(tt_tensor_matrix: List[np.array], tt_train: List[np.array], num_iter=10):
+    project_ranks = tt_ranks(tt_train)
+    x = [np.zeros((1, 2, 1)) for _ in range(len(tt_train))]
+    r = tt_add(tt_train, tt_mul_scal(-1, tt_partial_inner_prod(x, tt_tensor_matrix)))
+    r_2 = tt_inner_prod(r, r)
+    p = r
+    for _ in range(num_iter):
+        prev_r_2 = r_2
+        p_rest = tt_inner_prod(tt_tensor_matrix, p + p)
+        alpha = prev_r_2 / p_rest
+        r = tt_rl_orthogonalize(tt_add(r, tt_mul_scal(-alpha, tt_partial_inner_prod(tt_tensor_matrix, p, reversed=True), idx=np.random.randint(low=0, high=len(p)))))
+        r_2 = tt_inner_prod(r, r)
+        print(p_rest, r_2)
+        beta = r_2 / prev_r_2
+        if np.less_equal(beta, r_2):
+            break
+        prev_p = p
+        x = tt_rl_orthogonalize(tt_add(x, tt_mul_scal(alpha, p, idx=np.random.randint(low=0, high=len(p)))))
+        p = tt_rl_orthogonalize(tt_add(r, tt_mul_scal(beta, p, idx=np.random.randint(low=0, high=len(p)))))
+        print("Is conjugate? ", tt_inner_prod(tt_tensor_matrix, p + prev_p))
+    return tt_rank_reduce(x)
+
+
+
 def tt_swap_all(tt_train: List[np.array]):
     return [np.swapaxes(c, 0, -1) for c in reversed(tt_train)]
+
+
+def tt_randomise_upsample(tt_train: List[np.array], target_ranks: List[int]) -> List[np.array]:
+    if len(tt_train) > 1:
+        r_i, dim, r_ip1 = tt_train[0].shape
+        core_z = tt_train[0].reshape(-1, r_i)
+        core_z = np.concatenate((core_z, np.zeros((core_z.shape[0], target_ranks[0]- r_i))), axis=-1)
+        tt_train[0] = core_z.reshape(-1, 2, target_ranks[0])
+
+        r_i, dim, r_ip1 = tt_train[1].shape
+        core_z = tt_train[1].reshape(r_i, -1)
+        core_z = np.concatenate((core_z, np.zeros((target_ranks[0] - r_i, core_z.shape[1]))), axis=0)
+        tt_train[1] = core_z.reshape(target_ranks[0], 2, -1)
+
+    return tt_train
