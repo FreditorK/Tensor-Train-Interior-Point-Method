@@ -665,12 +665,14 @@ def tt_tensor_matrix(tt_trains: List[np.array]):
     n = len(tt_trains)
     bin_length = len(bin(n - 1)[2:])
     binary_i = '0' * bin_length
-    index = [(np.expand_dims(np.zeros_like(c), 1), np.expand_dims(c, 1)) if bool(int(b)) else (np.expand_dims(c, 1), np.expand_dims(np.zeros_like(c), 1)) for b, c in zip(binary_i, tt_trains[0][-bin_length:])]
+    index = [(np.expand_dims(np.zeros_like(c), 1), np.expand_dims(c, 1)) if bool(int(b)) else (
+    np.expand_dims(c, 1), np.expand_dims(np.zeros_like(c), 1)) for b, c in zip(binary_i, tt_trains[0][-bin_length:])]
     tt_tensor_matrix = tt_trains[0][:-bin_length] + [np.concatenate(tup, axis=1) for tup in index]
     for i in range(1, n):
         binary_i = bin(i)[2:]
         binary_i = '0' * (bin_length - len(binary_i)) + binary_i
-        index = [(np.expand_dims(np.zeros_like(c), 1), np.expand_dims(c, 1)) if bool(int(b)) else (np.expand_dims(c, 1), np.expand_dims(np.zeros_like(c), 1)) for
+        index = [(np.expand_dims(np.zeros_like(c), 1), np.expand_dims(c, 1)) if bool(int(b)) else (
+        np.expand_dims(c, 1), np.expand_dims(np.zeros_like(c), 1)) for
                  b, c in zip(binary_i, tt_trains[i][-bin_length:])]
         current_column = tt_trains[i][:-bin_length] + [np.concatenate(tup, axis=1) for tup in index]
         tt_tensor_matrix = tt_add(tt_tensor_matrix, current_column)
@@ -757,11 +759,14 @@ def tt_linear_op(tt_linear_op, tt_train: List[np.array]) -> List[np.array]:
     """
     Produces the truth table result tensor
     """
-    half_core = safe_multi_dot([_tt_core_collapse(core_op, core) for core_op, core in zip(tt_linear_op, tt_train) if len(core_op.shape) <= 3])
-    full_cores = [_tt_op_core_collapse(core_op, core) for core_op, core in zip(tt_linear_op, tt_train) if len(core_op.shape) > 3]
+    half_core = safe_multi_dot(
+        [_tt_core_collapse(core_op, core) for core_op, core in zip(tt_linear_op, tt_train) if len(core_op.shape) <= 3])
+    full_cores = [_tt_op_core_collapse(core_op, core) for core_op, core in zip(tt_linear_op, tt_train) if
+                  len(core_op.shape) > 3]
     if len(half_core) >= 1:
         full_cores[0] = np.einsum("ab, bce -> ace", half_core, full_cores[0])
     return full_cores
+
 
 def _tt_op_op_collapse(linear_core_op_1, linear_core_op_2):
     return np.concatenate([
@@ -771,15 +776,19 @@ def _tt_op_op_collapse(linear_core_op_1, linear_core_op_2):
 
 
 def tt_linear_op_compose(tt_linear_op_1, tt_linear_op_2):
-    half_core = safe_multi_dot([_tt_core_collapse(core_op_1, core_op_2) for core_op_1, core_op_2 in zip(tt_linear_op_1, tt_linear_op_2) if len(core_op_1.shape) <= 3])
-    full_cores = [_tt_op_op_collapse(core_op_1, core_op_2) for core_op_1, core_op_2 in zip(tt_linear_op_1, tt_linear_op_2) if len(core_op_1.shape) > 3]
+    half_core = safe_multi_dot(
+        [_tt_core_collapse(core_op_1, core_op_2) for core_op_1, core_op_2 in zip(tt_linear_op_1, tt_linear_op_2) if
+         len(core_op_1.shape) <= 3])
+    full_cores = [_tt_op_op_collapse(core_op_1, core_op_2) for core_op_1, core_op_2 in
+                  zip(tt_linear_op_1, tt_linear_op_2) if len(core_op_1.shape) > 3]
     print("hi", [np.round(c, decimals=2) for c in full_cores])
     full_cores[0] = np.einsum("ab, bcde -> acde", half_core, full_cores[0])
     return full_cores
 
 
 def tt_transpose(tt_linear_op):
-    return [c for c in tt_linear_op if len(c.shape) <= 3] + [np.flip(c, axis=1) for c in tt_linear_op if len(c.shape) > 3]
+    return [c for c in tt_linear_op if len(c.shape) <= 3] + [np.swapaxes(c, axis1=1, axis2=2) for c in tt_linear_op if
+                                                             len(c.shape) > 3]
 
 
 def tt_gram(tt_linear_op):
