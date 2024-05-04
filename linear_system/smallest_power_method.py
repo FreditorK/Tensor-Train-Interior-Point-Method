@@ -22,10 +22,18 @@ columns = [
     ])) for _ in range(Config.num_columns)
 ]
 
-tensor_matrix = tt_tensor_matrix_2(columns)
+
+tensor_matrix, length = tt_tensor_matrix(columns[:2])
 print([c.shape for c in tensor_matrix])
-gram = tt_gram(tensor_matrix)
-print([c.shape for c in gram])
+print(tt_to_tensor(tt_linear_op(tensor_matrix, columns[1])))
+#print([c.shape for c in tensor_matrix])
+#gram = tt_gram(tensor_matrix)
+#print([c.shape for c in gram])
+#print(np.round(tt_to_tensor(gram), decimals=2))
+print(tt_inner_prod(columns[0], columns[0]))
+print(tt_inner_prod(columns[0], columns[1]))
+print(tt_inner_prod(columns[1], columns[0]))
+print(tt_inner_prod(columns[1], columns[1]))
 
 """
 tensor_matrix_t = tt_matrix_transpose(tensor_matrix, index_length)
