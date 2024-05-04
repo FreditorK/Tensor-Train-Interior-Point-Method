@@ -23,23 +23,25 @@ columns = [
 ]
 
 
-tensor_matrix, length = tt_tensor_matrix(columns[:2])
+tensor_matrix, length = tt_tensor_matrix(columns)
 print([c.shape for c in tensor_matrix])
-gram = tt_gram(tensor_matrix)
-print([c.shape for c in gram])
-print(np.round(tt_to_tensor(gram), decimals=2))
-print(tt_inner_prod(columns[0], columns[0]))
-print(tt_inner_prod(columns[0], columns[1]))
-print(tt_inner_prod(columns[1], columns[0]))
-print(tt_inner_prod(columns[1], columns[1]))
-
-"""
-tensor_matrix_t = tt_matrix_transpose(tensor_matrix, index_length)
-gram_tensor = tt_gram_tensor_matrix(tensor_matrix, tensor_matrix_t, index_length)
-matrix = tt_to_tensor(gram_tensor).reshape(4, 4)
+gram_tensor = tt_gram(tensor_matrix)
+print([c.shape for c in gram_tensor])
+matrix = np.array([[tt_inner_prod(columns[i], columns[j]) for i in range(len(columns))] for j in range(len(columns))])
 print(scipy.linalg.eigvals(matrix))
-tt_eig, tt_eig_val = tt_smallest_power_method(gram_tensor, num_iter=1)
+matrix = matrix/np.sqrt(np.trace(matrix.T @ matrix))
+print(scipy.linalg.eigvals(matrix))
+matrix = 2*np.eye(4) - matrix
+print(scipy.linalg.eigvals(matrix))
+x = np.random.randn(4, 1)
+for _ in range(30):
+    x = matrix @ x
+    x = x / np.linalg.norm(x)
+y = matrix @ x
+y = x/np.linalg.norm(y)
+x = matrix @ y
+print(x.T @ y)
+tt_eig, tt_eig_val = tt_smallest_power_method(gram_tensor, num_iter=50)
 print("Eigen tensor: \n", tt_to_tensor(tt_eig))
 print("Ranks of eigen tensor: ", [c.shape for c in tt_eig])
 print("Eigen value: ", tt_eig_val)
-"""

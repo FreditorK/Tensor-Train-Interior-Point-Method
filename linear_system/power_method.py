@@ -22,9 +22,9 @@ columns = [
 ]
 
 tensor_matrix, index_length = tt_tensor_matrix(columns)
-tensor_matrix_t = tt_matrix_transpose(tensor_matrix, index_length)
-gram_tensor = tt_gram_tensor_matrix(tensor_matrix, tensor_matrix_t, index_length)
-tt_eig, tt_eig_val = tt_power_method(gram_tensor, num_iter=10)
+gram_tensor = tt_gram(tensor_matrix)
+print("Ranks of gram tensor: ", [c.shape for c in gram_tensor])
+tt_eig, tt_eig_val = tt_power_method(gram_tensor, num_iter=4)
 print("Eigen tensor: \n", tt_to_tensor(tt_eig))
 print("Ranks of eigen tensor: ", [c.shape for c in tt_eig])
 print("Eigen value: ", tt_eig_val)
