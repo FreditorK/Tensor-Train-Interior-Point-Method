@@ -9,8 +9,8 @@ from src.tt_op import *
 
 @dataclass
 class Config:
-    num_columns = 4 # TODO: Num of columns has to be power of 2 for the tensor_matrix to be full rank, gram not to be rank deficient
-    tt_length = 6
+    num_columns = 9
+    tt_length = 8
     tt_max_rank = 8
 
 np.random.seed(11)
@@ -23,9 +23,10 @@ columns = [
 
 tensor_matrix, index_length = tt_tensor_matrix(columns)
 gram_tensor = tt_gram(tensor_matrix)  # row_index + inner results
-tt_train_b = tt_random_binary([
-    np.random.randint(low=1, high=Config.tt_max_rank + 1) for _ in range(index_length-1)
-])
+# We have to zero out the entries in b that will be zeroed out by gram as gram is rank-deficient
+tt_train_b = tt_linear_op(gram_tensor, tt_scale(3*np.random.rand(), tt_random_binary([
+     np.random.randint(low=1, high=Config.tt_max_rank + 1) for _ in range(index_length-1)
+])))
 print("Ranks of gram tensor: ", [c.shape for c in gram_tensor])
 print("Ranks of tensor bias: ", [c.shape for c in tt_train_b])
 index_sol = tt_conjugate_gradient(gram_tensor, tt_train_b, num_iter=25)

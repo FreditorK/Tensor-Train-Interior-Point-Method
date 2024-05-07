@@ -707,9 +707,6 @@ def tt_conjugate_gradient(linear_op: List[np.array], tt_train: List[np.array], n
         if np.less_equal(r_2, tol):
             break
         p = tt_rl_orthogonalize(tt_add(r, tt_scale(beta, p, idx=np.random.randint(low=0, high=len(p)))))
-        if np.greater_equal(tt_inner_prod(p, l_op_p), 0.01):
-            print("Is conjugate? ", tt_inner_prod(p, l_op_p))
-            break
     return x
 
 
