@@ -148,7 +148,7 @@ class TTExpression:
         if isinstance(other, TTExpression):
             assert self.par_space == other.par_space, "Tensors live in different parameter spaces!"
             return TTExpression(tt_add(self.cores, other.cores), self.par_space)
-        new_cores = tt_mul_scal(other, tt_one(len(self.cores)))
+        new_cores = tt_scale(other, tt_one(len(self.cores)))
         return TTExpression(tt_add(self.cores, new_cores), self.par_space)
 
     def __radd__(self, other):
@@ -157,9 +157,9 @@ class TTExpression:
     def __sub__(self, other):
         if isinstance(other, TTExpression):
             assert self.par_space == other.par_space, "Tensors live in different parameter spaces!"
-            new_cores = tt_mul_scal(-1, deepcopy(other.cores))
+            new_cores = tt_scale(-1, deepcopy(other.cores))
             return TTExpression(tt_add(self.cores, new_cores), self.par_space)
-        new_cores = tt_mul_scal(-other, tt_one(len(self.cores)))
+        new_cores = tt_scale(-other, tt_one(len(self.cores)))
         return TTExpression(tt_add(self.cores, new_cores), self.par_space)
 
     def __rsub__(self, other):
@@ -169,7 +169,7 @@ class TTExpression:
         if isinstance(other, TTExpression):
             assert self.par_space == other.par_space, "Tensors live in different parameter spaces!"
             return TTExpression(tt_hadamard(self.cores, other.cores), self.par_space)
-        new_cores = tt_mul_scal(other, deepcopy(self.cores))
+        new_cores = tt_scale(other, deepcopy(self.cores))
         return TTExpression(new_cores, self.par_space)
 
     def __rmul__(self, other):
@@ -200,11 +200,11 @@ class TTExpression:
         return other.__xor__(self)
 
     def __invert__(self):
-        new_cores = tt_mul_scal(-1, deepcopy(self.cores))
+        new_cores = tt_scale(-1, deepcopy(self.cores))
         return TTExpression(new_cores, self.par_space)
 
     def __neg__(self):
-        new_cores = tt_mul_scal(-1, deepcopy(self.cores))
+        new_cores = tt_scale(-1, deepcopy(self.cores))
         return TTExpression(new_cores, self.par_space)
 
     def to_ANF(self):
@@ -278,7 +278,7 @@ def _projection(tt_h, tt_n, func_result, bias):
     tt_n = tt_normalise(tt_n)
     alpha = jnp.sqrt((1 - bias ** 2) / (1 - func_result ** 2))
     beta = bias + alpha * func_result
-    tt_h = tt_add(tt_mul_scal(alpha, tt_h), tt_mul_scal(-beta, tt_n))
+    tt_h = tt_add(tt_scale(alpha, tt_h), tt_scale(-beta, tt_n))
     return tt_h
 
 
@@ -461,8 +461,8 @@ class ConstraintSpace(ParameterSpace, ABC):
         tt_table = tt_walsh_op(tt_train)
         tt_table_p2 = tt_randomise_orthogonalise(tt_hadamard(tt_table, tt_table), ranks)
         tt_table_p3 = tt_randomise_orthogonalise(tt_hadamard(tt_table_p2, tt_table), ranks)
-        tt_update = tt_mul_scal(-0.5, tt_walsh_op_inv(tt_table_p3))
-        next_tt_train = tt_mul_scal(1 - tt_inner_prod(tt_update, tt_train), tt_train)
+        tt_update = tt_scale(-0.5, tt_walsh_op_inv(tt_table_p3))
+        next_tt_train = tt_scale(1 - tt_inner_prod(tt_update, tt_train), tt_train)
         next_tt_train = tt_randomise_orthogonalise(tt_add(next_tt_train, tt_update), ranks)
         next_tt_train = tt_normalise(next_tt_train)
         next_tt_train = tt_randomise_orthogonalise(tt_add_noise(next_tt_train, ranks), ranks)

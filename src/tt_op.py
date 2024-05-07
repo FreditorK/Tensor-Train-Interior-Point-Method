@@ -541,10 +541,10 @@ def tt_xor(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.ar
 def tt_and(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.array]:
     tt_train_1 = tt_walsh_op(tt_train_1)
     tt_train_2 = tt_walsh_op(tt_train_2)
-    tt_train_1 = tt_mul_scal(0.5, tt_train_1)
+    tt_train_1 = tt_scale(0.5, tt_train_1)
     tt_mul = tt_hadamard(tt_train_1, tt_train_2)
-    tt_train_2 = tt_mul_scal(0.5, tt_train_2)
-    half = tt_mul_scal(-0.5, tt_one(len(tt_train_1)))
+    tt_train_2 = tt_scale(0.5, tt_train_2)
+    half = tt_scale(-0.5, tt_one(len(tt_train_1)))
     tt_train_and = tt_add(tt_add(half, tt_mul), tt_add(tt_train_1, tt_train_2))
     tt_train_and = tt_walsh_op_inv(tt_train_and)
     return tt_rank_reduce(tt_train_and)
@@ -555,16 +555,16 @@ def tt_or(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.arr
 
 
 def tt_neg(tt_train: List[np.array]) -> List[np.array]:
-    return tt_mul_scal(-1, tt_train)
+    return tt_scale(-1, tt_train)
 
 
-def tt_mul_scal(alpha, tt_train, idx=0):
+def tt_scale(alpha, tt_train, idx=0):
     mul = alpha * tt_train[idx]
     return tt_train[:idx] + [mul] + tt_train[idx + 1:]
 
 
 def tt_normalise(tt_train, radius=1, idx=0):
-    return tt_mul_scal(radius / jnp.sqrt(tt_inner_prod(tt_train, tt_train)), tt_train, idx)
+    return tt_scale(radius / jnp.sqrt(tt_inner_prod(tt_train, tt_train)), tt_train, idx)
 
 
 def tt_add_noise(tt_train, target_ranks):
@@ -573,14 +573,14 @@ def tt_add_noise(tt_train, target_ranks):
     noise_train = [(1 / (l_n * 2 * l_np1)) * np.random.randn(l_n, 2, l_np1) for l_n, l_np1 in
                    zip(target_ranks[:-1], target_ranks[1:])]
     # projection onto tangent space of tt_train
-    tt_train = tt_mul_scal(1 - tt_inner_prod(noise_train, tt_train), tt_train)
+    tt_train = tt_scale(1 - tt_inner_prod(noise_train, tt_train), tt_train)
     tt_train = tt_add(tt_train, noise_train)
     return tt_normalise(tt_train)
 
 
 def tt_round_iteration(tt_train):
-    tt_train_p3 = tt_mul_scal(-0.5, tt_hadamard(tt_hadamard(tt_train, tt_train), tt_train))
-    tt_train = tt_mul_scal(1.5, tt_train)
+    tt_train_p3 = tt_scale(-0.5, tt_hadamard(tt_hadamard(tt_train, tt_train), tt_train))
+    tt_train = tt_scale(1.5, tt_train)
     tt_train = tt_add(tt_train, tt_train_p3)
     return tt_rank_reduce(tt_train)
 
@@ -669,43 +669,48 @@ def tt_tensor_matrix(tt_trains: List[np.array]):
     bin_length = len(bin(n - 1)[2:])
     binary_i = '0' * bin_length
     index = [(np.expand_dims(np.zeros_like(c), 1), np.expand_dims(c, 1)) if bool(int(b)) else (
-    np.expand_dims(c, 1), np.expand_dims(np.zeros_like(c), 1)) for b, c in zip(binary_i, tt_trains[0][-bin_length:])]
+        np.expand_dims(c, 1), np.expand_dims(np.zeros_like(c), 1)) for b, c in
+             zip(binary_i, tt_trains[0][-bin_length:])]
     tt_tensor_matrix = tt_trains[0][:-bin_length] + [np.concatenate(tup, axis=1) for tup in index]
     for i in range(1, n):
         binary_i = bin(i)[2:]
         binary_i = '0' * (bin_length - len(binary_i)) + binary_i
         index = [(np.expand_dims(np.zeros_like(c), 1), np.expand_dims(c, 1)) if bool(int(b)) else (
-        np.expand_dims(c, 1), np.expand_dims(np.zeros_like(c), 1)) for
+            np.expand_dims(c, 1), np.expand_dims(np.zeros_like(c), 1)) for
                  b, c in zip(binary_i, tt_trains[i][-bin_length:])]
         current_column = tt_trains[i][:-bin_length] + [np.concatenate(tup, axis=1) for tup in index]
         tt_tensor_matrix = tt_add(tt_tensor_matrix, current_column)
-        tt_tensor_matrix = tt_tensor_matrix[:-bin_length] + sum([break_core_bond(c) for c in tt_tensor_matrix[-bin_length:]], [])
+        tt_tensor_matrix = tt_tensor_matrix[:-bin_length] + sum(
+            [break_core_bond(c) for c in tt_tensor_matrix[-bin_length:]], [])
         tt_tensor_matrix = tt_rank_reduce(tt_tensor_matrix)
-        tt_tensor_matrix = tt_tensor_matrix[:-2*bin_length] + [core_bond(c_1, c_2) for c_1, c_2 in zip(tt_tensor_matrix[-bin_length*2::2], tt_tensor_matrix[-bin_length*2+1::2])]
+        tt_tensor_matrix = tt_tensor_matrix[:-2 * bin_length] + [core_bond(c_1, c_2) for c_1, c_2 in
+                                                                 zip(tt_tensor_matrix[-bin_length * 2::2],
+                                                                     tt_tensor_matrix[-bin_length * 2 + 1::2])]
 
     return tt_tensor_matrix, bin_length
 
-def tt_conjugate_gradient(tt_tensor_matrix: List[np.array], tt_train: List[np.array], num_iter=10):
+
+def tt_conjugate_gradient(linear_op: List[np.array], tt_train: List[np.array], num_iter=10, tol=1e-6):
     x = [np.zeros((1, 2, 1)) for _ in range(len(tt_train))]
-    r = tt_add(tt_train, tt_mul_scal(-1, tt_partial_inner_prod(x, tt_tensor_matrix)))
+    r = tt_train
     r_2 = tt_inner_prod(r, r)
     p = r
     for _ in range(num_iter):
         prev_r_2 = r_2
-        p_rest = tt_inner_prod(tt_tensor_matrix, p + p)
+        l_op_p = tt_linear_op(linear_op, p)
+        p_rest = tt_inner_prod(p, l_op_p)
         alpha = prev_r_2 / p_rest
-        r = tt_rl_orthogonalize(tt_add(r, tt_mul_scal(-alpha, tt_partial_inner_prod(tt_tensor_matrix, p, reversed=True),
-                                                      idx=np.random.randint(low=0, high=len(p)))))
+        r = tt_rl_orthogonalize(tt_add(r, tt_scale(-alpha, l_op_p, idx=np.random.randint(low=0, high=len(p)))))
         r_2 = tt_inner_prod(r, r)
-        print(p_rest, r_2)
         beta = r_2 / prev_r_2
-        if np.less_equal(beta, r_2):
+        x = tt_rl_orthogonalize(tt_add(x, tt_scale(alpha, p, idx=np.random.randint(low=0, high=len(p)))))
+        if np.less_equal(r_2, tol):
             break
-        prev_p = p
-        x = tt_rl_orthogonalize(tt_add(x, tt_mul_scal(alpha, p, idx=np.random.randint(low=0, high=len(p)))))
-        p = tt_rl_orthogonalize(tt_add(r, tt_mul_scal(beta, p, idx=np.random.randint(low=0, high=len(p)))))
-        print("Is conjugate? ", tt_inner_prod(tt_tensor_matrix, p + prev_p))
-    return tt_rank_reduce(x)
+        p = tt_rl_orthogonalize(tt_add(r, tt_scale(beta, p, idx=np.random.randint(low=0, high=len(p)))))
+        if np.greater_equal(tt_inner_prod(p, l_op_p), 0.01):
+            print("Is conjugate? ", tt_inner_prod(p, l_op_p))
+            break
+    return x
 
 
 def tt_swap_all(tt_train: List[np.array]):
@@ -718,10 +723,10 @@ def tt_power_method(linear_op: List[np.array], num_iter=10):
     eig_vec = tt_normalise([np.random.randn(1, 2, 1) for _ in range(vec_dim)], radius=1,
                            idx=np.random.randint(low=0, high=vec_dim))
     for _ in range(num_iter):
-        eig_vec = tt_rl_orthogonalize(tt_linear_op(linear_op, eig_vec))
+        eig_vec = tt_linear_op(linear_op, eig_vec)
         eig_vec = tt_normalise(eig_vec, radius=1, idx=np.random.randint(low=0, high=vec_dim))
     prev_eig_vec = eig_vec
-    eig_vec = tt_rl_orthogonalize(tt_linear_op(linear_op, eig_vec))
+    eig_vec = tt_linear_op(linear_op, eig_vec)
     eig_val = tt_inner_prod(prev_eig_vec, eig_vec)
     return tt_normalise(eig_vec, radius=1, idx=np.random.randint(low=0, high=vec_dim)), eig_val
 
@@ -735,12 +740,17 @@ def _tt_op_core_collapse(linear_core_op: np.array, core_2: np.array) -> np.array
 
 def tt_linear_op(linear_op, tt_train: List[np.array]) -> List[np.array]:
     split_idx = np.argmax([len(c.shape) for c in linear_op])
-    half_core = safe_multi_dot(
-        [_tt_core_collapse(core_op, core) for core_op, core in zip(linear_op[:split_idx], tt_train[:split_idx])])
-    full_cores = [_tt_op_core_collapse(core_op, core) for core_op, core in zip(linear_op[split_idx:], tt_train[split_idx:])]
-    if split_idx >= 1:
+    op_length = len(linear_op) - split_idx
+    full_cores = [_tt_op_core_collapse(core_op, core) for core_op, core in
+                  zip(linear_op[split_idx:], tt_train[-op_length:])]
+    left_overs = len(tt_train) - op_length
+    if left_overs > 0:
+        half_core = safe_multi_dot(
+            [_tt_core_collapse(core_op, core) for core_op, core in zip(linear_op[split_idx-left_overs:split_idx], tt_train[:-op_length])]
+        )
         full_cores[0] = np.einsum("ab, bce -> ace", half_core, full_cores[0])
-    return full_cores
+    full_cores = linear_op[:split_idx-left_overs] + full_cores
+    return tt_rl_orthogonalize(full_cores)
 
 
 def _tt_op_op_collapse(linear_core_op_1, linear_core_op_2):
@@ -753,10 +763,12 @@ def _tt_op_op_collapse(linear_core_op_1, linear_core_op_2):
 def tt_linear_op_compose(tt_linear_op_1, tt_linear_op_2):
     split_idx = np.argmax([len(c.shape) for c in tt_linear_op_1])
     half_core = safe_multi_dot([
-        _tt_core_collapse(core_op_1, core_op_2) for core_op_1, core_op_2 in zip(tt_linear_op_1[:split_idx], tt_linear_op_2[:split_idx])
+        _tt_core_collapse(core_op_1, core_op_2) for core_op_1, core_op_2 in
+        zip(tt_linear_op_1[:split_idx], tt_linear_op_2[:split_idx])
     ])
     full_cores = [
-        _tt_op_op_collapse(core_op_1, core_op_2) for core_op_1, core_op_2 in zip(tt_linear_op_1[split_idx:], tt_linear_op_2[split_idx:])
+        _tt_op_op_collapse(core_op_1, core_op_2) for core_op_1, core_op_2 in
+        zip(tt_linear_op_1[split_idx:], tt_linear_op_2[split_idx:])
     ]
     full_cores[0] = np.einsum("ab, bcde -> acde", half_core, full_cores[0])
     return full_cores
@@ -769,41 +781,51 @@ def tt_transpose(tt_linear_op):
 
 def tt_gram(tt_linear_op):
     tt_linear_op_t = tt_transpose(tt_linear_op)
-    return tt_linear_op_compose(tt_linear_op, tt_linear_op_t)
+    gram = tt_linear_op_compose(tt_linear_op, tt_linear_op_t)
+    gram = sum([break_core_bond(c) for c in gram], [])
+    gram = tt_rank_reduce(gram)
+    gram = [core_bond(c_1, c_2) for c_1, c_2 in zip(gram[:-1:2], gram[1::2])]
+    return gram
 
 
 def tt_smallest_power_method(linear_op: List[np.array], num_iter=10):
     n = len(linear_op)
     normalisation = np.sqrt(tt_inner_prod(linear_op, linear_op))
-    linear_op = tt_mul_scal(-(1/normalisation), linear_op, idx=0)
+    linear_op = tt_scale(-(1 / normalisation), linear_op, idx=0)
     identity = [I for _ in range(n)]
-    identity = tt_mul_scal(2, identity, idx=np.random.randint(low=0, high=n))
+    identity = tt_scale(2, identity, idx=np.random.randint(low=0, high=n))
     linear_op = tt_add(identity, linear_op)
     eig_vec = tt_normalise([np.random.randn(1, 2, 1) for _ in range(n)], radius=1, idx=np.random.randint(low=0, high=n))
     for _ in range(num_iter):
-        eig_vec = tt_rl_orthogonalize(tt_linear_op(linear_op, eig_vec))
+        eig_vec = tt_linear_op(linear_op, eig_vec)
         eig_vec = tt_normalise(eig_vec, radius=1, idx=np.random.randint(low=0, high=n))
     prev_eig_vec = eig_vec
-    eig_vec = tt_rl_orthogonalize(tt_linear_op(linear_op, eig_vec))
+    eig_vec = tt_linear_op(linear_op, eig_vec)
     eig_val = tt_inner_prod(prev_eig_vec, eig_vec)
-    return tt_normalise(eig_vec, radius=1, idx=np.random.randint(low=0, high=len(eig_vec))), normalisation*(2 - eig_val)
+    return tt_normalise(eig_vec, radius=1, idx=np.random.randint(low=0, high=len(eig_vec))), normalisation * (
+            2 - eig_val)
 
 
-def _tt_frank_wolfe_iteration(tt_obj_sdp, tt_tensor_matrix_sdp, tt_x, it):
-    tt_gradient = tt_partial_inner_prod(tt_x, tt_tensor_matrix_sdp) + tt_partial_inner_prod(tt_tensor_matrix_sdp, tt_x,
-                                                                                            reversed=True)
-    # TODO Q = 2I - tt_gradient ==> I has potentially pretty high rank which is bad, I might not be I-matrix in tt_presentation but whatever has x = <I, x>_partial
-    # TODO What if we project 2I - tt_gradient down to a rank one tensor, do we get the eigentensor?
-    # Or in power method iterate y = 2y- Ay,  I = [[1, 0], [0, 1]] ... [[1, 0], [0, 1]], write tt_gradient with bonded cores, then
-    # do 2I - tt_gradient
-    # TODO: add fixed trace part, add obj part
-    #tt_eig, eig_val = tt_power_method(Q)
-    # TODO: Question is whether you can also do this interpolation core-wise
-    # alpha = np.min(1, 2/it)
-    #tt_update = tt_mul_scal(alpha, tt_eig, idx=np.random.randint(low=0, high=len(tt_eig)))
-    #tt_x = tt_mul_scal(1 - alpha, tt_x, idx=np.random.randint(low=0, high=len(tt_eig)))
-    #tt_x = tt_rank_reduce(tt_add(tt_x, tt_update))
-    #return tt_x
+def tt_sdp_add(tt_left_half_1: List[np.array], tt_left_half_2: List[np.array]) -> List[np.array]:
+    """
+    Adds two tensor trains in the symmetric sense
+    """
+    if len(tt_left_half_1) > 1:
+        return [jnp.concatenate((tt_left_half_1[0], tt_left_half_2[0]), axis=-1)] + \
+            [_block_diag_tensor(core_1, core_2) for core_1, core_2 in zip(tt_left_half_1[1:], tt_left_half_2[1:])]
+    return [tt_left_half_1[0] + tt_left_half_2[0]]
+
+
+def _tt_frank_wolfe_iteration(tt_obj_sdp, linear_op_sdp, tt_x, it):
+    tt_gradient = tt_linear_op(linear_op_sdp, tt_x)
+    sdp_gradient = tt_gradient + tt_swap_all(tt_gradient)
+    sdp_gradient = [core_bond(c_1, c_2) for c_1, c_2 in zip(sdp_gradient[:-1:2], sdp_gradient[1::2])]
+    tt_eig, eig_val = tt_smallest_power_method(sdp_gradient)
+    alpha = np.sqrt(np.min(1, 2 / it))  # take square root as update is tt_eig tt_eig.T
+    tt_update = tt_scale(alpha, tt_eig, idx=np.random.randint(low=0, high=len(tt_eig)))
+    tt_x = tt_scale(1 - alpha, tt_x, idx=np.random.randint(low=0, high=len(tt_eig)))
+    tt_x = tt_rank_reduce(tt_sdp_add(tt_x, tt_update))  # TODO: special rank reduce for sdp
+    return tt_x
 
 
 def tt_lifted_frank_wolfe(tt_obj, tt_tensor_matrix, tt_train_bias):

@@ -16,7 +16,7 @@ class Config:
 np.random.seed(12)
 
 columns = [
-    tt_mul_scal(10*np.random.rand(), tt_random_binary([
+    tt_scale(10 * np.random.rand(), tt_random_binary([
         np.random.randint(low=1, high=Config.tt_max_rank + 1) for _ in range(Config.tt_length - 1)
     ])) for _ in range(Config.num_columns)
 ]
