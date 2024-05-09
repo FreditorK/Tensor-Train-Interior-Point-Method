@@ -690,34 +690,33 @@ def tt_tensor_matrix(tt_trains: List[np.array]):
     return tt_tensor_matrix, bin_length
 
 
-def tt_conjugate_gradient(linear_op: List[np.array], tt_train: List[np.array], num_iter=10, tol=1e-6):
+def tt_conjugate_gradient(linear_op: List[np.array], tt_train: List[np.array], num_iter=10, tol=1e-7):
     x = [np.zeros((1, 2, 1)) for _ in range(len(tt_train))]
-    r = tt_train
+    r = p = tt_train
     r_2 = tt_inner_prod(r, r)
-    p = r
     for _ in range(num_iter):
         prev_r_2 = r_2
         l_op_p = tt_linear_op(linear_op, p)
         p_rest = tt_inner_prod(p, l_op_p)
-        alpha = prev_r_2 / p_rest
+        alpha = np.divide(prev_r_2, p_rest)
         r = tt_rl_orthogonalize(tt_add(r, tt_scale(-alpha, l_op_p, idx=np.random.randint(low=0, high=len(p)))))
         r_2 = tt_inner_prod(r, r)
-        beta = r_2 / prev_r_2
+        beta = np.divide(r_2, prev_r_2)
         x = tt_rl_orthogonalize(tt_add(x, tt_scale(alpha, p, idx=np.random.randint(low=0, high=len(p)))))
         if np.less_equal(r_2, tol):
             break
         p = tt_rl_orthogonalize(tt_add(r, tt_scale(beta, p, idx=np.random.randint(low=0, high=len(p)))))
-    return x
+    return tt_rank_reduce(x)
 
 
 def tt_swap_all(tt_train: List[np.array]):
     return [np.swapaxes(c, 0, -1) for c in reversed(tt_train)]
 
 
-def tt_power_method(linear_op: List[np.array], num_iter=10):
+def tt_max_eigentensor(linear_op: List[np.array], num_iter=10):
     split_idx = np.argmax([len(c.shape) for c in linear_op])
     vec_dim = len(linear_op) - split_idx
-    eig_vec = tt_normalise([np.random.randn(1, 2, 1) for _ in range(vec_dim)], radius=1,
+    eig_vec = tt_normalise([np.random.randn(1, 2, 1) for _ in range(vec_dim)],
                            idx=np.random.randint(low=0, high=vec_dim))
     for _ in range(num_iter):
         eig_vec = tt_linear_op(linear_op, eig_vec)
@@ -735,7 +734,7 @@ def _tt_op_core_collapse(linear_core_op: np.array, core_2: np.array) -> np.array
     ])
 
 
-def tt_linear_op(linear_op, tt_train: List[np.array]) -> List[np.array]:
+def _tt_linear_op(linear_op, tt_train: List[np.array]) -> List[np.array]:
     split_idx = np.argmax([len(c.shape) for c in linear_op])
     op_length = len(linear_op) - split_idx
     full_cores = [_tt_op_core_collapse(core_op, core) for core_op, core in
@@ -743,11 +742,20 @@ def tt_linear_op(linear_op, tt_train: List[np.array]) -> List[np.array]:
     left_overs = len(tt_train) - op_length
     if left_overs > 0:
         half_core = safe_multi_dot(
-            [_tt_core_collapse(core_op, core) for core_op, core in zip(linear_op[split_idx-left_overs:split_idx], tt_train[:-op_length])]
+            [_tt_core_collapse(core_op, core) for core_op, core in
+             zip(linear_op[split_idx - left_overs:split_idx], tt_train[:-op_length])]
         )
         full_cores[0] = np.einsum("ab, bce -> ace", half_core, full_cores[0])
-    full_cores = linear_op[:split_idx-left_overs] + full_cores
-    return tt_rl_orthogonalize(full_cores)
+    full_cores = linear_op[:split_idx - left_overs] + full_cores
+    return full_cores
+
+
+def tt_linear_op(linear_op, tt_train: List[np.array]) -> List[np.array]:
+    return tt_rl_orthogonalize(_tt_linear_op(linear_op, tt_train))
+
+
+def tt_randomised_linear_op(linear_op, tt_train: List[np.array], ranks) -> List[np.array]:
+    return tt_randomise_orthogonalise(_tt_linear_op(linear_op, tt_train), target_ranks=ranks)
 
 
 def _tt_op_op_collapse(linear_core_op_1, linear_core_op_2):
@@ -767,8 +775,9 @@ def tt_linear_op_compose(tt_linear_op_1, tt_linear_op_2):
         _tt_op_op_collapse(core_op_1, core_op_2) for core_op_1, core_op_2 in
         zip(tt_linear_op_1[split_idx:], tt_linear_op_2[split_idx:])
     ]
-    full_cores[0] = np.einsum("ab, bcde -> acde", half_core, full_cores[0])
-    return full_cores
+    if len(half_core) > 0:
+        full_cores[0] = np.einsum("ab, bcde -> acde", half_core, full_cores[0])
+    return tt_transpose(full_cores)
 
 
 def tt_transpose(tt_linear_op):
@@ -785,7 +794,7 @@ def tt_gram(tt_linear_op):
     return gram
 
 
-def tt_smallest_power_method(linear_op: List[np.array], num_iter=10):
+def tt_min_eigentensor(linear_op: List[np.array], num_iter=10):
     n = len(linear_op)
     normalisation = np.sqrt(tt_inner_prod(linear_op, linear_op))
     linear_op = tt_scale(-(1 / normalisation), linear_op, idx=0)
@@ -794,13 +803,34 @@ def tt_smallest_power_method(linear_op: List[np.array], num_iter=10):
     linear_op = tt_add(identity, linear_op)
     eig_vec = tt_normalise([np.random.randn(1, 2, 1) for _ in range(n)], radius=1, idx=np.random.randint(low=0, high=n))
     for _ in range(num_iter):
-        eig_vec = tt_linear_op(linear_op, eig_vec)
+        eig_vec = tt_randomised_linear_op(linear_op, eig_vec)
         eig_vec = tt_normalise(eig_vec, radius=1, idx=np.random.randint(low=0, high=n))
     prev_eig_vec = eig_vec
     eig_vec = tt_linear_op(linear_op, eig_vec)
     eig_val = tt_inner_prod(prev_eig_vec, eig_vec)
     return tt_normalise(eig_vec, radius=1, idx=np.random.randint(low=0, high=len(eig_vec))), normalisation * (
-            2 - eig_val)
+        2 - eig_val)
+
+
+def tt_randomised_min_eigentensor(linear_op: List[np.array], num_iter=10):
+    n = len(linear_op)
+    normalisation = np.sqrt(tt_inner_prod(linear_op, linear_op))
+    linear_op = tt_scale(-(1 / normalisation), linear_op, idx=0)
+    identity = [I for _ in range(n)]
+    identity = tt_scale(2, identity, idx=np.random.randint(low=0, high=n))
+    linear_op = tt_add(identity, linear_op)
+    eig_vec = tt_normalise([np.random.randn(1, 2, 1) for _ in range(n)], radius=1, idx=np.random.randint(low=0, high=n))
+    eig_vec = tt_linear_op(linear_op, eig_vec)
+    eig_vec = tt_normalise(eig_vec, radius=1, idx=np.random.randint(low=0, high=n))
+    ranks = tt_ranks(eig_vec)
+    for _ in range(num_iter):
+        eig_vec = tt_randomised_linear_op(linear_op, eig_vec, ranks)
+        eig_vec = tt_normalise(eig_vec, radius=1, idx=np.random.randint(low=0, high=n))
+    prev_eig_vec = eig_vec
+    eig_vec = tt_linear_op(linear_op, eig_vec)
+    eig_val = tt_inner_prod(prev_eig_vec, eig_vec)
+    return tt_normalise(eig_vec, radius=1, idx=np.random.randint(low=0, high=len(eig_vec))), normalisation * (
+        2 - eig_val)
 
 
 def tt_sdp_add(tt_left_half_1: List[np.array], tt_left_half_2: List[np.array]) -> List[np.array]:
@@ -813,11 +843,11 @@ def tt_sdp_add(tt_left_half_1: List[np.array], tt_left_half_2: List[np.array]) -
     return [tt_left_half_1[0] + tt_left_half_2[0]]
 
 
-def _tt_frank_wolfe_iteration(tt_obj_sdp, linear_op_sdp, tt_x, it):
+def _tt_frank_wolfe_iteration(linear_op_sdp, tt_x, it):
     tt_gradient = tt_linear_op(linear_op_sdp, tt_x)
     sdp_gradient = tt_gradient + tt_swap_all(tt_gradient)
     sdp_gradient = [core_bond(c_1, c_2) for c_1, c_2 in zip(sdp_gradient[:-1:2], sdp_gradient[1::2])]
-    tt_eig, eig_val = tt_smallest_power_method(sdp_gradient)
+    tt_eig, eig_val = tt_min_eigentensor(sdp_gradient)
     alpha = np.sqrt(np.min(1, 2 / it))  # take square root as update is tt_eig tt_eig.T
     tt_update = tt_scale(alpha, tt_eig, idx=np.random.randint(low=0, high=len(tt_eig)))
     tt_x = tt_scale(1 - alpha, tt_x, idx=np.random.randint(low=0, high=len(tt_eig)))
