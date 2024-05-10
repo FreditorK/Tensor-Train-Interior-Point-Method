@@ -3,6 +3,8 @@ import os
 import time
 from copy import copy
 
+import numpy as np
+
 sys.path.append(os.getcwd() + '/../')
 from dataclasses import dataclass
 from src.tt_op import *
@@ -13,7 +15,7 @@ class Config:
     tt_length = 4
     tt_max_rank = 5
 
-np.random.seed(9)
+np.random.seed(5)
 
 columns = [
     tt_scale(10 * np.random.rand(), tt_random_binary([
@@ -31,13 +33,36 @@ print([c.shape for c in W])
 columns[0] = tt_swap_all(columns[0] + tt_swap_all(columns[0]))
 columns[1] = tt_swap_all(columns[1] + tt_swap_all(columns[1]))
 X = tt_add(columns[0], columns[1])
-X = [core_bond(c_1, c_2) for c_1, c_2 in zip(X[:-1:2], X[1::2])]
-#print([c.shape for c in tt_linear_op(x, tt_swap_all(w))])
-#print(tt_inner_prod(I, w + tt_linear_op(x, tt_swap_all(w))))
+print(tt_inner_prod(X, X))
+X = tt_rank_reduce(X)
+print(tt_inner_prod(X, X))
+
+
+"""
 W = W + tt_swap_all(W)
+w = copy(W)
 W = [core_bond(c_1, c_2) for c_1, c_2 in zip(W[:-1:2], W[1::2])]
-print(tt_inner_prod(tt_linear_op(X, y), tt_linear_op(W, z)))
-W_TX = tt_linear_op_compose(tt_transpose(W), X)
-print(tt_inner_prod(tt_linear_op(W_TX, y), z))
-X_TW = tt_linear_op_compose(tt_transpose(X), W)
-print(tt_inner_prod(y, tt_linear_op(X_TW, z)))
+SDP = tt_linear_op_compose(W, [core_bond(c_1, c_2) for c_1, c_2 in zip(X[:-1:2], X[1::2])])
+print(tt_trace(SDP))
+print(tt_inner_prod(tt_transpose(W), [core_bond(c_1, c_2) for c_1, c_2 in zip(X[:-1:2], X[1::2])]))
+x = X[:len(X)//2]
+x_2 = X[len(X)//2:]
+#print([c.shape for c in x_2])
+#print([c.shape for c in tt_linear_op(W, x)])
+res = tt_linear_op(W, x) + x_2
+print(tt_inner_prod(tt_linear_op(W, x), x_2))
+res = [core_bond(c_1, c_2) for c_1, c_2 in zip(res[:-1:2], res[1::2])]
+print([c.shape for c in res])
+print(tt_trace(res))
+print(tt_inner_prod(W, W))
+print(tt_inner_prod(tt_transpose(W), W))
+
+a = [np.expand_dims(c, 1) for c in x]
+b= [np.expand_dims(c, 2) for c in x]
+new_sym = [np.kron(c_a, c_b) for c_a, c_b in zip(a, b)]
+print([c.shape for c in new_sym])
+print(tt_inner_prod(y, tt_linear_op(new_sym, z)))
+print(tt_inner_prod(tt_linear_op(tt_transpose(new_sym), y), z))
+
+#TODO: Matrices constructed as x + x are not symmetric it seems
+"""

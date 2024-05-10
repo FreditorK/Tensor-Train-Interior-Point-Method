@@ -4,6 +4,7 @@ import jax.numpy as jnp
 from typing import List, Tuple
 from itertools import product
 from copy import deepcopy
+from tqdm import tqdm
 
 PHI = np.array([[1, 1],
                 [1, -1]], dtype=float).reshape(1, 2, 2, 1)
@@ -83,8 +84,8 @@ def tt_rl_orthogonalize(tt_train: List[np.array]):
         shape_p1 = tt_train[idx].shape
         shape = tt_train[idx - 1].shape
         Q_T, R = jnp.linalg.qr(tt_train[idx].reshape(shape_p1[0], -1).T)
-        tt_train[idx] = Q_T.T.reshape(-1, shape_p1[1], shape_p1[-1])
-        tt_train[idx - 1] = (tt_train[idx - 1].reshape(-1, R.shape[-1]) @ R.T).reshape(-1, shape[1],
+        tt_train[idx] = Q_T.T.reshape(-1, *shape_p1[1:-1], shape_p1[-1])
+        tt_train[idx - 1] = (tt_train[idx - 1].reshape(-1, R.shape[-1]) @ R.T).reshape(-1, *shape[1:-1],
                                                                                        tt_train[idx].shape[0])
     return tt_train
 
@@ -184,16 +185,17 @@ def tt_rank_reduce(tt_train: List[np.array]):
     for idx, tt_core in enumerate(tt_train[:-1]):
         idx_shape = tt_core.shape
         next_idx_shape = tt_train[idx + 1].shape
-        U, S, V_T = np.linalg.svd(tt_train[idx].reshape(rank * idx_shape[1], -1))
+        k = len(idx_shape) - 1
+        U, S, V_T = np.linalg.svd(tt_train[idx].reshape(rank * np.prod(idx_shape[1:k], dtype=int), -1))
         non_sing_eig_idxs = np.asarray(S >= min(np.max(S), tt_bound)).nonzero()
         S = S[non_sing_eig_idxs]
         next_rank = len(S)
         U = U[:, non_sing_eig_idxs]
         V_T = V_T[non_sing_eig_idxs, :]
-        tt_train[idx] = U.reshape(rank, idx_shape[1], next_rank)
-        tt_train[idx + 1] = (np.diag(S) @ V_T @ tt_train[idx + 1].reshape(V_T.shape[-1], -1)).reshape(next_rank,
-                                                                                                      next_idx_shape[1],
-                                                                                                      -1)
+        tt_train[idx] = U.reshape(rank, *idx_shape[1:-1], next_rank)
+        tt_train[idx + 1] = (
+            np.diag(S) @ V_T @ tt_train[idx + 1].reshape(V_T.shape[-1], -1)
+        ).reshape(next_rank, *next_idx_shape[1:-1], -1)
         rank = next_rank
     return tt_train
 
@@ -558,13 +560,14 @@ def tt_neg(tt_train: List[np.array]) -> List[np.array]:
     return tt_scale(-1, tt_train)
 
 
-def tt_scale(alpha, tt_train, idx=0):
+def tt_scale(alpha, tt_train):
+    idx = np.random.randint(low=0, high=len(tt_train))
     mul = alpha * tt_train[idx]
     return tt_train[:idx] + [mul] + tt_train[idx + 1:]
 
 
-def tt_normalise(tt_train, radius=1, idx=0):
-    return tt_scale(radius / jnp.sqrt(tt_inner_prod(tt_train, tt_train)), tt_train, idx)
+def tt_normalise(tt_train, radius=1):
+    return tt_scale(radius / jnp.sqrt(tt_inner_prod(tt_train, tt_train)), tt_train)
 
 
 def tt_add_noise(tt_train, target_ranks):
@@ -794,42 +797,47 @@ def tt_gram(tt_linear_op):
     return gram
 
 
+def tt_trace(linear_op):
+    I = tt_indentity(len(linear_op))
+    return tt_inner_prod(linear_op, I)
+
+
 def tt_min_eigentensor(linear_op: List[np.array], num_iter=10):
     n = len(linear_op)
     normalisation = np.sqrt(tt_inner_prod(linear_op, linear_op))
-    linear_op = tt_scale(-(1 / normalisation), linear_op, idx=0)
+    linear_op = tt_scale(-(1 / normalisation), linear_op)
     identity = [I for _ in range(n)]
-    identity = tt_scale(2, identity, idx=np.random.randint(low=0, high=n))
+    identity = tt_scale(2, identity)
     linear_op = tt_add(identity, linear_op)
-    eig_vec = tt_normalise([np.random.randn(1, 2, 1) for _ in range(n)], radius=1, idx=np.random.randint(low=0, high=n))
+    eig_vec = tt_normalise([np.random.randn(1, 2, 1) for _ in range(n)], radius=1)
     for _ in range(num_iter):
-        eig_vec = tt_randomised_linear_op(linear_op, eig_vec)
-        eig_vec = tt_normalise(eig_vec, radius=1, idx=np.random.randint(low=0, high=n))
+        eig_vec = tt_linear_op(linear_op, eig_vec)
+        eig_vec = tt_normalise(eig_vec, radius=1)
     prev_eig_vec = eig_vec
     eig_vec = tt_linear_op(linear_op, eig_vec)
     eig_val = tt_inner_prod(prev_eig_vec, eig_vec)
-    return tt_normalise(eig_vec, radius=1, idx=np.random.randint(low=0, high=len(eig_vec))), normalisation * (
+    return tt_normalise(eig_vec, radius=1), normalisation * (
         2 - eig_val)
 
 
 def tt_randomised_min_eigentensor(linear_op: List[np.array], num_iter=10):
     n = len(linear_op)
     normalisation = np.sqrt(tt_inner_prod(linear_op, linear_op))
-    linear_op = tt_scale(-(1 / normalisation), linear_op, idx=0)
+    linear_op = tt_scale(-(1 / normalisation), linear_op)
     identity = [I for _ in range(n)]
-    identity = tt_scale(2, identity, idx=np.random.randint(low=0, high=n))
+    identity = tt_scale(2, identity)
     linear_op = tt_add(identity, linear_op)
-    eig_vec = tt_normalise([np.random.randn(1, 2, 1) for _ in range(n)], radius=1, idx=np.random.randint(low=0, high=n))
+    eig_vec = tt_normalise([np.random.randn(1, 2, 1) for _ in range(n)], radius=1)
     eig_vec = tt_linear_op(linear_op, eig_vec)
-    eig_vec = tt_normalise(eig_vec, radius=1, idx=np.random.randint(low=0, high=n))
+    eig_vec = tt_normalise(eig_vec, radius=1)
     ranks = tt_ranks(eig_vec)
     for _ in range(num_iter):
         eig_vec = tt_randomised_linear_op(linear_op, eig_vec, ranks)
-        eig_vec = tt_normalise(eig_vec, radius=1, idx=np.random.randint(low=0, high=n))
+        eig_vec = tt_normalise(eig_vec, radius=1)
     prev_eig_vec = eig_vec
     eig_vec = tt_linear_op(linear_op, eig_vec)
     eig_val = tt_inner_prod(prev_eig_vec, eig_vec)
-    return tt_normalise(eig_vec, radius=1, idx=np.random.randint(low=0, high=len(eig_vec))), normalisation * (
+    return tt_normalise(eig_vec, radius=1), normalisation * (
         2 - eig_val)
 
 
@@ -843,17 +851,31 @@ def tt_sdp_add(tt_left_half_1: List[np.array], tt_left_half_2: List[np.array]) -
     return [tt_left_half_1[0] + tt_left_half_2[0]]
 
 
-def _tt_frank_wolfe_iteration(linear_op_sdp, tt_x, it):
-    tt_gradient = tt_linear_op(linear_op_sdp, tt_x)
-    sdp_gradient = tt_gradient + tt_swap_all(tt_gradient)
-    sdp_gradient = [core_bond(c_1, c_2) for c_1, c_2 in zip(sdp_gradient[:-1:2], sdp_gradient[1::2])]
+def _tt_cg_iteration(lag_mul_1, lag_mul_2, linear_op_sdp, bias, X, it, tol=1e-7):
+    # TODO: lagrangian_mul will become tensor
+    # TODO: Need to move reg term with lag_mul_2 when we have multiple constraints
+    sdp_gradient = tt_scale(lag_mul_1 + (lag_mul_2 * (tt_inner_prod(linear_op_sdp, X) - bias)), linear_op_sdp)
+    if np.less_equal(tt_inner_prod(sdp_gradient, sdp_gradient), tol):
+        return X
     tt_eig, eig_val = tt_min_eigentensor(sdp_gradient)
-    alpha = np.sqrt(np.min(1, 2 / it))  # take square root as update is tt_eig tt_eig.T
-    tt_update = tt_scale(alpha, tt_eig, idx=np.random.randint(low=0, high=len(tt_eig)))
-    tt_x = tt_scale(1 - alpha, tt_x, idx=np.random.randint(low=0, high=len(tt_eig)))
-    tt_x = tt_rank_reduce(tt_sdp_add(tt_x, tt_update))  # TODO: special rank reduce for sdp
-    return tt_x
+    alpha = np.sqrt(min(1.0, 2.0 / it))  # take square root as update is tt_eig tt_eig.T
+    tt_eig_sdp_1 = [np.expand_dims(c, 1) for c in tt_eig]
+    tt_eig_sdp_2 = [np.expand_dims(c, 2) for c in tt_eig]
+    tt_eig_sdp = [np.kron(c_1, c_2) for c_1, c_2 in zip(tt_eig_sdp_1, tt_eig_sdp_2)]
+    tt_eig_sdp = tt_rank_reduce(tt_eig_sdp)  # TODO: special rank reduce for sdp
+    tt_update = tt_scale(alpha, tt_eig_sdp)
+    X = tt_scale(1 - alpha, X)
+    X = tt_rank_reduce(tt_sdp_add(X, tt_update))  # TODO: special rank reduce for sdp
+    return X
 
 
-def tt_lifted_frank_wolfe(tt_obj, tt_tensor_matrix, tt_train_bias):
-    pass
+def tt_sdp_frank_wolfe(linear_op_sdp, bias, num_iter=10):
+    # TODO: Lagrangian multipliers as core in front of linear_op_sdp
+    lag_mul_1 = 1
+    lag_mul_2_init = 1
+    X = [np.zeros((1, 2, 2, 1)) for _ in range(len(linear_op_sdp))]
+    for it in tqdm(range(1, num_iter + 1)):
+        lag_mul_2 = lag_mul_2_init*np.sqrt(it + 1)
+        X = _tt_cg_iteration(lag_mul_1, lag_mul_2, linear_op_sdp, bias, X, it)
+        lag_mul_1 = lag_mul_1
+    return X
