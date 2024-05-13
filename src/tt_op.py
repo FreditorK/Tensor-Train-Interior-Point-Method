@@ -161,18 +161,41 @@ def tt_randomise_orthogonalise(tt_train: List[np.array], target_ranks: List[int]
     # TODO: Adapt for linear_ops
     if len(tt_train) > 1:
         target_ranks = [1] + target_ranks + [1]
-        tt_gaussian = [(1 / (l_n * 2 * l_np1)) * np.random.randn(l_n, 2, l_np1) for l_n, l_np1 in
-                       zip(target_ranks[:-1], target_ranks[1:])]
+        tt_gaussian = [
+            (1 / (l_n * 2 * l_np1)) * np.random.randn(l_n, *tt_train[i].shape[1:-1], l_np1)
+            for i, (l_n, l_np1) in enumerate(zip(target_ranks[:-1], target_ranks[1:]))
+        ]
         tt_gaussian_contractions = tt_rl_contraction(tt_train, tt_gaussian)
         for i, core_w in enumerate(tt_gaussian_contractions):
-            r_ip1, dim, r_ip2 = tt_train[i + 1].shape
-            core_z = tt_train[i].reshape(-1, r_ip1)  # R_i * 2 x R_{i+1}
+            shape_i1 = tt_train[i + 1].shape
+            core_z = tt_train[i].reshape(-1, shape_i1[0])  # R_i * 2 x R_{i+1}
             core_y = core_z @ core_w  # R_i * 2 x target_r
             Q_T, _ = np.linalg.qr(core_y)  # R_i * 2 x unknown
-            tt_train[i] = Q_T.reshape(tt_train[i].shape[0], tt_train[i].shape[1], -1)  # R_i * 2 x unknown
+            tt_train[i] = Q_T.reshape(*tt_train[i].shape[:-1], -1)  # R_i * 2 x unknown
             core_m = Q_T.T @ core_z  # unknown x R_{i+1}
-            tt_train[i + 1] = (core_m @ tt_train[i + 1].reshape(r_ip1, -1)).reshape(-1, dim,
-                                                                                    r_ip2)  # unknown x 2 * R_{i+2}
+            tt_train[i + 1] = (
+                core_m @ tt_train[i + 1].reshape(shape_i1[0], -1)
+            ).reshape(-1, *shape_i1[1:])  # unknown x 2 * R_{i+2}
+    return tt_train
+
+
+def tt_upsample(tt_train: List[np.array], target_ranks: List[int]) -> List[np.array]:
+    if len(tt_train) > 1:
+        target_ranks = [1] + target_ranks + [1]
+        tt_gaussian = [
+            (1 / (l_n * 2 * l_np1)) * np.random.randn(l_n, *tt_train[i].shape[1:-1], l_np1)
+            for i, (l_n, l_np1) in enumerate(zip(target_ranks[:-1], target_ranks[1:]))
+        ]
+        tt_gaussian_contractions = tt_rl_contraction(tt_train, tt_gaussian)
+        for i, core_w in enumerate(tt_gaussian_contractions):
+            shape_i1 = tt_train[i + 1].shape
+            core_z = tt_train[i].reshape(-1, shape_i1[0])  # R_i * 2 x R_{i+1}
+            core_y = core_z @ core_w  # R_i * 2 x target_r
+            tt_train[i] = core_y.reshape(*tt_train[i].shape[:-1], -1)  # R_i * 2 x unknown
+            core_m = core_y.T @ core_z  # unknown x R_{i+1}
+            tt_train[i + 1] = (
+                core_m @ tt_train[i + 1].reshape(shape_i1[0], -1)
+            ).reshape(-1, *shape_i1[1:])  # unknown x 2 * R_{i+2}
     return tt_train
 
 
@@ -840,6 +863,7 @@ def tt_randomised_min_eigentensor(linear_op: List[np.array], num_iter=10):
     return tt_normalise(eig_vec, radius=1), normalisation * (
         2 - eig_val)
 
+
 def _tt_cg_iteration(lag_mul_1, lag_mul_2, linear_op_sdp, bias, X, it, tol=1e-7):
     # TODO: lagrangian_mul will become tensor
     # TODO: Need to move reg term with lag_mul_2 when we have multiple constraints
@@ -847,10 +871,11 @@ def _tt_cg_iteration(lag_mul_1, lag_mul_2, linear_op_sdp, bias, X, it, tol=1e-7)
     sdp_gradient = tt_scale(lag_mul_1 + (lag_mul_2 * res), linear_op_sdp)
     if np.less_equal(tt_inner_prod(sdp_gradient, sdp_gradient), tol):
         return X
-    tt_eig, eig_val = tt_min_eigentensor(sdp_gradient)
+    tt_eig, eig_val = tt_randomised_min_eigentensor(
+        sdp_gradient)  # TODO: randomisd min eigentensor halves time basically
     alpha = np.sqrt(min(1.0, 2.0 / it))  # take square root as update is tt_eig tt_eig.T
     tt_eig_sdp = [np.kron(np.expand_dims(c, 1), np.expand_dims(c, 2)) for c in tt_eig]
-    tt_eig_sdp = tt_rank_reduce(tt_eig_sdp)  # TODO: special rank reduce for sdp
+    tt_eig_sdp = tt_randomise_orthogonalise(tt_eig_sdp, tt_ranks(tt_eig))  # TODO: special rank reduce for sdp
     tt_update = tt_scale(alpha, tt_eig_sdp)
     X = tt_scale(1 - alpha, X)
     X = tt_rank_reduce(tt_add(X, tt_update))  # TODO: special rank reduce for sdp
@@ -861,11 +886,11 @@ def tt_sdp_frank_wolfe(linear_op_sdp, bias, num_iter=10):
     # TODO: Lagrangian multipliers as core in front of linear_op_sdp
     lag_mul_1 = 1
     lag_mul_2_init = 1
-    gamma_init = 4 * lag_mul_2_init*tt_inner_prod(linear_op_sdp, linear_op_sdp)
+    gamma_init = 4 * lag_mul_2_init * tt_inner_prod(linear_op_sdp, linear_op_sdp)
     X = [np.zeros((1, 2, 2, 1)) for _ in range(len(linear_op_sdp))]
     for it in tqdm(range(1, num_iter + 1)):
-        lag_mul_2 = lag_mul_2_init*np.sqrt(it + 1)
-        gamma = gamma_init/(it + 1)**(3/2)
+        lag_mul_2 = lag_mul_2_init * np.sqrt(it + 1)
+        gamma = gamma_init / (it + 1) ** (3 / 2)
         X, res = _tt_cg_iteration(lag_mul_1, lag_mul_2, linear_op_sdp, bias, X, it)
-        lag_mul_1 = lag_mul_1 + gamma*res
+        lag_mul_1 = lag_mul_1 + gamma * res
     return X
