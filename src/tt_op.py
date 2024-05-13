@@ -840,42 +840,32 @@ def tt_randomised_min_eigentensor(linear_op: List[np.array], num_iter=10):
     return tt_normalise(eig_vec, radius=1), normalisation * (
         2 - eig_val)
 
-
-def tt_sdp_add(tt_left_half_1: List[np.array], tt_left_half_2: List[np.array]) -> List[np.array]:
-    """
-    Adds two tensor trains in the symmetric sense
-    """
-    if len(tt_left_half_1) > 1:
-        return [jnp.concatenate((tt_left_half_1[0], tt_left_half_2[0]), axis=-1)] + \
-            [_block_diag_tensor(core_1, core_2) for core_1, core_2 in zip(tt_left_half_1[1:], tt_left_half_2[1:])]
-    return [tt_left_half_1[0] + tt_left_half_2[0]]
-
-
 def _tt_cg_iteration(lag_mul_1, lag_mul_2, linear_op_sdp, bias, X, it, tol=1e-7):
     # TODO: lagrangian_mul will become tensor
     # TODO: Need to move reg term with lag_mul_2 when we have multiple constraints
-    sdp_gradient = tt_scale(lag_mul_1 + (lag_mul_2 * (tt_inner_prod(linear_op_sdp, X) - bias)), linear_op_sdp)
+    res = tt_inner_prod(linear_op_sdp, X) - bias
+    sdp_gradient = tt_scale(lag_mul_1 + (lag_mul_2 * res), linear_op_sdp)
     if np.less_equal(tt_inner_prod(sdp_gradient, sdp_gradient), tol):
         return X
     tt_eig, eig_val = tt_min_eigentensor(sdp_gradient)
     alpha = np.sqrt(min(1.0, 2.0 / it))  # take square root as update is tt_eig tt_eig.T
-    tt_eig_sdp_1 = [np.expand_dims(c, 1) for c in tt_eig]
-    tt_eig_sdp_2 = [np.expand_dims(c, 2) for c in tt_eig]
-    tt_eig_sdp = [np.kron(c_1, c_2) for c_1, c_2 in zip(tt_eig_sdp_1, tt_eig_sdp_2)]
+    tt_eig_sdp = [np.kron(np.expand_dims(c, 1), np.expand_dims(c, 2)) for c in tt_eig]
     tt_eig_sdp = tt_rank_reduce(tt_eig_sdp)  # TODO: special rank reduce for sdp
     tt_update = tt_scale(alpha, tt_eig_sdp)
     X = tt_scale(1 - alpha, X)
-    X = tt_rank_reduce(tt_sdp_add(X, tt_update))  # TODO: special rank reduce for sdp
-    return X
+    X = tt_rank_reduce(tt_add(X, tt_update))  # TODO: special rank reduce for sdp
+    return X, res
 
 
 def tt_sdp_frank_wolfe(linear_op_sdp, bias, num_iter=10):
     # TODO: Lagrangian multipliers as core in front of linear_op_sdp
     lag_mul_1 = 1
     lag_mul_2_init = 1
+    gamma_init = 4 * lag_mul_2_init*tt_inner_prod(linear_op_sdp, linear_op_sdp)
     X = [np.zeros((1, 2, 2, 1)) for _ in range(len(linear_op_sdp))]
     for it in tqdm(range(1, num_iter + 1)):
         lag_mul_2 = lag_mul_2_init*np.sqrt(it + 1)
-        X = _tt_cg_iteration(lag_mul_1, lag_mul_2, linear_op_sdp, bias, X, it)
-        lag_mul_1 = lag_mul_1
+        gamma = gamma_init/(it + 1)**(3/2)
+        X, res = _tt_cg_iteration(lag_mul_1, lag_mul_2, linear_op_sdp, bias, X, it)
+        lag_mul_1 = lag_mul_1 + gamma*res
     return X
