@@ -1,6 +1,4 @@
-import jax.random
 import numpy as np
-import jax.numpy as jnp
 from typing import List, Tuple
 from itertools import product
 from copy import deepcopy
@@ -25,8 +23,8 @@ def phi(num_bonds):
     tensor = PHI
     new_PHI = PHI
     for _ in range(2 ** (num_bonds) - 1):
-        new_PHI = jnp.expand_dims(new_PHI, (0, 1))
-        tensor = jnp.kron(jnp.expand_dims(tensor, (-1, -2)), new_PHI)
+        new_PHI = np.expand_dims(new_PHI, (0, 1))
+        tensor = np.kron(np.expand_dims(tensor, (-1, -2)), new_PHI)
     return tensor
 
 
@@ -35,8 +33,8 @@ def phi_inv(num_bonds):
     tensor = PHI_INV
     new_PHI = PHI_INV
     for _ in range(2 ** (num_bonds) - 1):
-        new_PHI = jnp.expand_dims(new_PHI, (0, 1))
-        tensor = jnp.kron(jnp.expand_dims(tensor, (-1, -2)), new_PHI)
+        new_PHI = np.expand_dims(new_PHI, (0, 1))
+        tensor = np.kron(np.expand_dims(tensor, (-1, -2)), new_PHI)
     return tensor
 
 
@@ -56,13 +54,13 @@ def tt_random_binary(target_ranks: List[int]):
 
 def tt_one(dim):
     """ Returns an all-one tensor of dimension 2**dim """
-    return [jnp.ones((1, 2, 1)) for _ in range(dim)]
+    return [np.ones((1, 2, 1)) for _ in range(dim)]
 
 
 def tt_one_bonded(dim, bond_dim):
     """ Returns an all-one tensor of dimension 2**dim with one bonded dimension"""
-    one = [jnp.ones((1, 2, 1)) for _ in range(dim - 2)]
-    one.insert(bond_dim, jnp.ones((1, 2, 2, 1)))
+    one = [np.ones((1, 2, 1)) for _ in range(dim - 2)]
+    one.insert(bond_dim, np.ones((1, 2, 2, 1)))
     return one
 
 
@@ -74,7 +72,7 @@ def tt_leading_one(dim):
 def tt_atom_train(idx, dim):
     """ Returns a tensor of dimension 2**dim with a one entry at the respective degree 1 monomial"""
     return [
-        jnp.array([0, 1], dtype=float).reshape(1, 2, 1) if idx == i else jnp.array([1, 0], dtype=float).reshape(1, 2, 1)
+        np.array([0, 1], dtype=float).reshape(1, 2, 1) if idx == i else np.array([1, 0], dtype=float).reshape(1, 2, 1)
         for i in range(dim)
     ]
 
@@ -83,7 +81,7 @@ def tt_rl_orthogonalize(tt_train: List[np.array]):
     for idx in range(len(tt_train) - 1, 0, -1):
         shape_p1 = tt_train[idx].shape
         shape = tt_train[idx - 1].shape
-        Q_T, R = jnp.linalg.qr(tt_train[idx].reshape(shape_p1[0], -1).T)
+        Q_T, R = np.linalg.qr(tt_train[idx].reshape(shape_p1[0], -1).T)
         tt_train[idx] = Q_T.T.reshape(-1, *shape_p1[1:-1], shape_p1[-1])
         tt_train[idx - 1] = (tt_train[idx - 1].reshape(-1, R.shape[-1]) @ R.T).reshape(-1, *shape[1:-1],
                                                                                        tt_train[idx].shape[0])
@@ -99,36 +97,36 @@ def tt_lr_orthogonalize(tt_train: List[np.array]):
 
 def tt_bond_at(tt_train, idx):
     if idx != -1:
-        tt_train = tt_train[:idx] + [jnp.einsum("abc, cde -> abde", tt_train[idx], tt_train[idx + 1])] + tt_train[
-                                                                                                         idx + 2:]
+        tt_train = tt_train[:idx] + [np.einsum("abc, cde -> abde", tt_train[idx], tt_train[idx + 1])] + tt_train[
+                                                                                                        idx + 2:]
     return tt_train
 
 
 def core_bond(core_1, core_2):
-    return jnp.einsum("abc, cde -> abde", core_1, core_2)
+    return np.einsum("abc, cde -> abde", core_1, core_2)
 
 
 def break_core_bond(core):
     """ Breaks up a bond between two cores """
     shape = core.shape
     A = core.reshape(shape[0] * shape[1], -1)
-    U, S, V_T = jnp.linalg.svd(A)
-    non_sing_eig_idxs = jnp.asarray(np.abs(S) > 0).nonzero()
+    U, S, V_T = np.linalg.svd(A)
+    non_sing_eig_idxs = np.asarray(np.abs(S) > 0).nonzero()
     S = S[non_sing_eig_idxs]
     next_rank = len(S)
     U = U[:, non_sing_eig_idxs]
     V_T = V_T[non_sing_eig_idxs, :]
     G_i = U.reshape(shape[0], shape[1], next_rank)
-    G_ip1 = (jnp.diag(S) @ V_T).reshape(next_rank, shape[2], shape[-1])
+    G_ip1 = (np.diag(S) @ V_T).reshape(next_rank, shape[2], shape[-1])
     return [G_i, G_ip1]
 
 
 def tt_inf_schatten_norm(tt_train):
     """Loss criterion on the TT-rank"""
-    tt_train = tt_train + [jnp.array([1, 0]).reshape(1, 2, 1)] if len(tt_train) % 2 == 1 else tt_train
+    tt_train = tt_train + [np.array([1, 0]).reshape(1, 2, 1)] if len(tt_train) % 2 == 1 else tt_train
     tt_train = tt_walsh_op(tt_train)
-    return jnp.product(jnp.array([  # TODO: prod or max or logsum?
-        jnp.linalg.norm(jnp.einsum("abc, cde -> abde", tt_train[idx], tt_train[idx + 1]).reshape(
+    return np.product(np.array([  # TODO: prod or max or logsum?
+        np.linalg.norm(np.einsum("abc, cde -> abde", tt_train[idx], tt_train[idx + 1]).reshape(
             tt_train[idx].shape[0] * tt_train[idx + 1].shape[-1], -1), ord=2) for idx in range(0, len(tt_train) - 1, 2)
         # largest singular value
     ]))
@@ -136,10 +134,10 @@ def tt_inf_schatten_norm(tt_train):
 
 def tt_nuc_schatten_norm(tt_train):
     """Loss criterion on the TT-rank"""
-    tt_train = tt_train + [jnp.array([1, 0]).reshape(1, 2, 1)] if len(tt_train) % 2 == 1 else tt_train
+    tt_train = tt_train + [np.array([1, 0]).reshape(1, 2, 1)] if len(tt_train) % 2 == 1 else tt_train
     tt_train = tt_walsh_op(tt_train)
-    return jnp.max(jnp.array([  # TODO: prod or max or logsum?
-        jnp.linalg.norm(jnp.einsum("abc, cde -> abde", tt_train[idx], tt_train[idx + 1]).reshape(
+    return np.max(np.array([  # TODO: prod or max or logsum?
+        np.linalg.norm(np.einsum("abc, cde -> abde", tt_train[idx], tt_train[idx + 1]).reshape(
             tt_train[idx].shape[0] * tt_train[idx + 1].shape[-1], -1), ord='nuc') for idx in
         range(0, len(tt_train) - 1, 2)
         # largest singular value
@@ -162,7 +160,8 @@ def tt_randomise_orthogonalise(tt_train: List[np.array], target_ranks: List[int]
     if len(tt_train) > 1:
         target_ranks = [1] + target_ranks + [1]
         tt_gaussian = [
-            (1 / (l_n * 2 * l_np1)) * np.random.randn(l_n, *tt_train[i].shape[1:-1], l_np1)
+            (1 / (l_n * np.prod(tt_train[i].shape[1:-1]) * l_np1)) * np.random.randn(l_n, *tt_train[i].shape[1:-1],
+                                                                                     l_np1)
             for i, (l_n, l_np1) in enumerate(zip(target_ranks[:-1], target_ranks[1:]))
         ]
         tt_gaussian_contractions = tt_rl_contraction(tt_train, tt_gaussian)
@@ -179,31 +178,11 @@ def tt_randomise_orthogonalise(tt_train: List[np.array], target_ranks: List[int]
     return tt_train
 
 
-def tt_upsample(tt_train: List[np.array], target_ranks: List[int]) -> List[np.array]:
-    if len(tt_train) > 1:
-        target_ranks = [1] + target_ranks + [1]
-        tt_gaussian = [
-            (1 / (l_n * 2 * l_np1)) * np.random.randn(l_n, *tt_train[i].shape[1:-1], l_np1)
-            for i, (l_n, l_np1) in enumerate(zip(target_ranks[:-1], target_ranks[1:]))
-        ]
-        tt_gaussian_contractions = tt_rl_contraction(tt_train, tt_gaussian)
-        for i, core_w in enumerate(tt_gaussian_contractions):
-            shape_i1 = tt_train[i + 1].shape
-            core_z = tt_train[i].reshape(-1, shape_i1[0])  # R_i * 2 x R_{i+1}
-            core_y = core_z @ core_w  # R_i * 2 x target_r
-            tt_train[i] = core_y.reshape(*tt_train[i].shape[:-1], -1)  # R_i * 2 x unknown
-            core_m = core_y.T @ core_z  # unknown x R_{i+1}
-            tt_train[i + 1] = (
-                core_m @ tt_train[i + 1].reshape(shape_i1[0], -1)
-            ).reshape(-1, *shape_i1[1:])  # unknown x 2 * R_{i+2}
-    return tt_train
-
-
 def tt_rank_reduce(tt_train: List[np.array]):
     """ Might reduce TT-rank """
     # TODO: Adapt for linear_ops
     tt_train = tt_rl_orthogonalize(tt_train)
-    tt_bound = 1 / 2 ** (len(tt_train) + 1)
+    tt_bound = np.divide(1, 2 ** (len(tt_train) + 2))
     rank = 1
     for idx, tt_core in enumerate(tt_train[:-1]):
         idx_shape = tt_core.shape
@@ -279,16 +258,16 @@ def tt_leading_entry(tt_train: List[np.array]) -> np.array:
     """
     Returns the leading entry of a TT-train
     """
-    return jnp.sum(
-        jnp.linalg.multi_dot([core[tuple([slice(None)] + [0] * (len(core.shape) - 2))] for core in tt_train]))
+    return np.sum(
+        np.linalg.multi_dot([core[tuple([slice(None)] + [0] * (len(core.shape) - 2))] for core in tt_train]))
 
 
 def tt_entry(tt_train: List[np.array], indices: List[int]) -> np.array:
     """
     Returns the entry of a TT-train according to the indices
     """
-    return jnp.sum(
-        jnp.linalg.multi_dot(
+    return np.sum(
+        np.linalg.multi_dot(
             [core[tuple([slice(None)] + [i] * (len(core.shape) - 2))] for i, core in zip(indices, tt_train)]))
 
 
@@ -296,9 +275,9 @@ def _block_diag_tensor(tensor_1: np.array, tensor_2: np.array) -> np.array:
     """
     For internal use: Concatenates two tensors to a block diagonal tensor
     """
-    column_1 = jnp.concatenate((tensor_1, np.zeros((tensor_2.shape[0],) + tensor_1.shape[1:])), axis=0)
-    column_2 = jnp.concatenate((jnp.zeros((tensor_1.shape[0],) + tensor_2.shape[1:]), tensor_2), axis=0)
-    return jnp.concatenate((column_1, column_2), axis=-1)
+    column_1 = np.concatenate((tensor_1, np.zeros((tensor_2.shape[0],) + tensor_1.shape[1:])), axis=0)
+    column_2 = np.concatenate((np.zeros((tensor_1.shape[0],) + tensor_2.shape[1:]), tensor_2), axis=0)
+    return np.concatenate((column_1, column_2), axis=-1)
 
 
 def tt_add(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.array]:
@@ -306,9 +285,9 @@ def tt_add(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> List[np.ar
     Adds two tensor trains
     """
     if len(tt_train_1) > 1:
-        return [jnp.concatenate((tt_train_1[0], tt_train_2[0]), axis=-1)] + \
+        return [np.concatenate((tt_train_1[0], tt_train_2[0]), axis=-1)] + \
             [_block_diag_tensor(core_1, core_2) for core_1, core_2 in zip(tt_train_1[1:-1], tt_train_2[1:-1])] + \
-            [jnp.concatenate((tt_train_1[-1], tt_train_2[-1]), axis=0)]
+            [np.concatenate((tt_train_1[-1], tt_train_2[-1]), axis=0)]
     return [tt_train_1[0] + tt_train_2[0]]
 
 
@@ -320,12 +299,12 @@ def _tt_train_kron(core_1: np.array, core_2: np.array) -> np.array:
     core_shape_length = len(core_1.shape)
     axes = list(range(1, core_shape_length - 1))
     layers = [
-        jnp.kron(
-            jnp.expand_dims(core_1[(slice(None),) + i], axis=axes),
-            jnp.expand_dims(core_2[(slice(None),) + i], axis=axes)
+        np.kron(
+            np.expand_dims(core_1[(slice(None),) + i], axis=axes),
+            np.expand_dims(core_2[(slice(None),) + i], axis=axes)
         ) for i in product(*([[0, 1]] * (core_shape_length - 2)))
     ]
-    return jnp.concatenate(layers, axis=1).reshape(
+    return np.concatenate(layers, axis=1).reshape(
         (core_1.shape[0] * core_2.shape[0],) + core_1.shape[1:-1] + (core_1.shape[-1] * core_2.shape[-1],)
     )
 
@@ -345,12 +324,12 @@ def bool_to_tt_train(bool_values: List[bool]):
     """
     Converts a list of boolean values into its respective tensor train
     """
-    return tt_walsh_op_inv([jnp.array([1, 2 * float(b_value) - 1]).reshape(1, 2, 1) for b_value in bool_values])
+    return tt_walsh_op_inv([np.array([1, 2 * float(b_value) - 1]).reshape(1, 2, 1) for b_value in bool_values])
 
 
 def _tt_core_collapse(core_1: np.array, core_2: np.array) -> np.array:
     return sum([
-        jnp.kron(core_1[(slice(None),) + i], core_2[(slice(None),) + i])
+        np.kron(core_1[(slice(None),) + i], core_2[(slice(None),) + i])
         for i in product(*([[0, 1]] * (len(core_1.shape) - 2)))
     ])
 
@@ -359,7 +338,7 @@ def tt_inner_prod(tt_train_1: List[np.array], tt_train_2: List[np.array]) -> flo
     """
     Computes the inner product between two tensor trains
     """
-    return jnp.sum(
+    return np.sum(
         safe_multi_dot([_tt_core_collapse(core_1, core_2) for core_1, core_2 in zip(tt_train_1, tt_train_2)])
     )
 
@@ -393,8 +372,8 @@ def tt_to_tensor(tt_train):
 
 
 def tt_grad_inner_prod(tt_train_1: List[np.array], tt_train_2: List[np.array], gradient_core: np.array, idx):
-    return jnp.sum(
-        jnp.linalg.multi_dot(
+    return np.sum(
+        np.linalg.multi_dot(
             [_tt_core_collapse(core_1, core_2) for core_1, core_2 in zip(tt_train_1[:idx], tt_train_2[:idx])]
             + [_tt_core_collapse(tt_train_1[idx], gradient_core)]
             + [_tt_core_collapse(core_1, core_2) for core_1, core_2 in zip(tt_train_1[idx + 1:], tt_train_2[idx + 1:])]
@@ -404,7 +383,7 @@ def tt_grad_inner_prod(tt_train_1: List[np.array], tt_train_2: List[np.array], g
 
 def _tt_influence_core_collapse(core, idx):
     return sum([
-        jnp.kron(core[(slice(None),) + i], core[(slice(None),) + i])
+        np.kron(core[(slice(None),) + i], core[(slice(None),) + i])
         for i in product(*[list(range(1, int(idx + k == 0) - 1, -1)) for k in range(len(core.shape) - 2)])
     ])
 
@@ -413,13 +392,13 @@ def tt_influence(tt_train: List[np.array], idx):
     """
     Returns the influence of an idx-index atom on a boolean function
     """
-    return jnp.sum(
-        jnp.linalg.multi_dot([_tt_influence_core_collapse(core, idx - i) for i, core in enumerate(tt_train)]))
+    return np.sum(
+        np.linalg.multi_dot([_tt_influence_core_collapse(core, idx - i) for i, core in enumerate(tt_train)]))
 
 
 def _tt_shared_influence_core_collapse(core, idxs):
     return sum([
-        jnp.kron(core[(slice(None),) + i], core[(slice(None),) + i])
+        np.kron(core[(slice(None),) + i], core[(slice(None),) + i])
         for i in product(*[list(range(1, int(np.max(idxs + k == 0)) - 1, -1)) for k in
                            range(len(core.shape) - 2)])
     ])
@@ -429,15 +408,15 @@ def tt_shared_influence(tt_train: List[np.array], idxs: np.array):
     """
     Returns the shared influence between an idx_1- and idx_2-index atom on a boolean function
     """
-    return jnp.sum(
-        jnp.linalg.multi_dot(
+    return np.sum(
+        np.linalg.multi_dot(
             [_tt_shared_influence_core_collapse(core, idxs - i) for i, core in enumerate(tt_train)]))
 
 
 def _tt_phi_core(core: np.array):
     return sum([
-        jnp.kron(
-            jnp.expand_dims(core[(slice(None),) + i], list(range(1, 1 + len(i)))),
+        np.kron(
+            np.expand_dims(core[(slice(None),) + i], list(range(1, 1 + len(i)))),
             phi(len(i) - 1)[(slice(None),) + sum(zip(i, [slice(None)] * len(i)), ())]
         ) for i in product(*([[0, 1]] * (len(core.shape) - 2)))])
 
@@ -456,8 +435,8 @@ def tt_pauli_op(tt_train: List[np.array], idx) -> List[np.array]:
 
 def _tt_phi_core_inv(core: np.array):
     return sum([
-        jnp.kron(
-            jnp.expand_dims(core[(slice(None),) + i], list(range(1, 1 + len(i)))),
+        np.kron(
+            np.expand_dims(core[(slice(None),) + i], list(range(1, 1 + len(i)))),
             phi_inv(len(i) - 1)[(slice(None),) + sum(zip(i, [slice(None)] * len(i)), ())]
         ) for i in product(*([[0, 1]] * (len(core.shape) - 2)))])
 
@@ -471,8 +450,8 @@ def tt_walsh_op_inv(tt_train: List[np.array]) -> List[np.array]:
 
 def _tt_noisy_walsh_core(core: np.array, p_mat):
     return sum([
-        jnp.kron(
-            jnp.expand_dims(core[(slice(None),) + i], list(range(1, 1 + len(i)))),
+        np.kron(
+            np.expand_dims(core[(slice(None),) + i], list(range(1, 1 + len(i)))),
             p_mat[(slice(None),) + sum(zip(i, [slice(None)] * len(i)), ())]
         ) for i in product(*([[0, 1]] * (len(core.shape) - 2)))])
 
@@ -483,14 +462,14 @@ def tt_noisy_walsh(tt_train: List[np.array], likelihoods: np.array):
     """
     return [_tt_noisy_walsh_core(
         core,
-        jnp.array([[1, 1], [p, -p]], dtype=float).reshape(1, 2, 2, 1)
+        np.array([[1, 1], [p, -p]], dtype=float).reshape(1, 2, 2, 1)
     ) for core, p in zip(tt_train, likelihoods)]
 
 
 def _tt_noisy_walsh_core_inv(core: np.array, p_mat):
     return sum([
-        jnp.kron(
-            jnp.expand_dims(core[(slice(None),) + i], list(range(1, 1 + len(i)))),
+        np.kron(
+            np.expand_dims(core[(slice(None),) + i], list(range(1, 1 + len(i)))),
             p_mat[(slice(None),) + sum(zip(i, [slice(None)] * len(i)), ())]
         ) for i in product(*([[0, 1]] * (len(core.shape) - 2)))])
 
@@ -499,10 +478,10 @@ def tt_noisy_walsh_inv(tt_train: List[np.array], likelihoods: np.array):
     """
     Returns a formula weighted by a measure defined via the likelihoods
     """
-    likelihoods = 1 / jnp.maximum(likelihoods, 1e-3)
+    likelihoods = 1 / np.maximum(likelihoods, 1e-3)
     return [_tt_noisy_walsh_core_inv(
         core,
-        (1 / 2) * jnp.array([[1, p], [1, -p]], dtype=float).reshape(1, 2, 2, 1)
+        (1 / 2) * np.array([[1, p], [1, -p]], dtype=float).reshape(1, 2, 2, 1)
     ) for core, p in zip(tt_train, likelihoods)]
 
 
@@ -590,7 +569,7 @@ def tt_scale(alpha, tt_train):
 
 
 def tt_normalise(tt_train, radius=1):
-    return tt_scale(radius / jnp.sqrt(tt_inner_prod(tt_train, tt_train)), tt_train)
+    return tt_scale(np.divide(radius, np.sqrt(tt_inner_prod(tt_train, tt_train))), tt_train)
 
 
 def tt_add_noise(tt_train, target_ranks):
@@ -653,25 +632,25 @@ def tt_permute(tt_train: List[np.array], axes: List[Tuple]) -> List[np.array]:
         sub_half_core_min = np.zeros_like(tt_train[min_idx][:, None, 1, :])
         sub_half_core_max = np.zeros_like(tt_train[max_idx][:, None, 1, :])
         tt_min = tt_train[:min_idx] + [
-            jnp.concatenate((tt_train[min_idx][:, None, 1, :], sub_half_core_min), axis=1)] + tt_train[
-                                                                                              min_idx + 1:max_idx] + [
-                     jnp.concatenate((tt_train[max_idx][:, None, 0, :], sub_half_core_max), axis=1)] + tt_train[
-                                                                                                       max_idx + 1:]
+            np.concatenate((tt_train[min_idx][:, None, 1, :], sub_half_core_min), axis=1)] + tt_train[
+                                                                                             min_idx + 1:max_idx] + [
+                     np.concatenate((tt_train[max_idx][:, None, 0, :], sub_half_core_max), axis=1)] + tt_train[
+                                                                                                      max_idx + 1:]
         tt_max = tt_train[:min_idx] + [
-            jnp.concatenate((tt_train[min_idx][:, None, 0, :], sub_half_core_min), axis=1)] + tt_train[
-                                                                                              min_idx + 1:max_idx] + [
-                     jnp.concatenate((tt_train[max_idx][:, None, 1, :], sub_half_core_max), axis=1)] + tt_train[
-                                                                                                       max_idx + 1:]
+            np.concatenate((tt_train[min_idx][:, None, 0, :], sub_half_core_min), axis=1)] + tt_train[
+                                                                                             min_idx + 1:max_idx] + [
+                     np.concatenate((tt_train[max_idx][:, None, 1, :], sub_half_core_max), axis=1)] + tt_train[
+                                                                                                      max_idx + 1:]
         tt_basis_1 = tt_train[:min_idx] + [
-            jnp.concatenate((tt_train[min_idx][:, None, 0, :], sub_half_core_min), axis=1)] + tt_train[
-                                                                                              min_idx + 1:max_idx] + [
-                         jnp.concatenate((tt_train[max_idx][:, None, 0, :], sub_half_core_max), axis=1)] + tt_train[
-                                                                                                           max_idx + 1:]
+            np.concatenate((tt_train[min_idx][:, None, 0, :], sub_half_core_min), axis=1)] + tt_train[
+                                                                                             min_idx + 1:max_idx] + [
+                         np.concatenate((tt_train[max_idx][:, None, 0, :], sub_half_core_max), axis=1)] + tt_train[
+                                                                                                          max_idx + 1:]
         tt_basis_2 = tt_train[:min_idx] + [
-            jnp.concatenate((sub_half_core_min, tt_train[min_idx][:, None, 1, :]), axis=1)] + tt_train[
-                                                                                              min_idx + 1:max_idx] + [
-                         jnp.concatenate((sub_half_core_max, tt_train[max_idx][:, None, 1, :]), axis=1)] + tt_train[
-                                                                                                           max_idx + 1:]
+            np.concatenate((sub_half_core_min, tt_train[min_idx][:, None, 1, :]), axis=1)] + tt_train[
+                                                                                             min_idx + 1:max_idx] + [
+                         np.concatenate((sub_half_core_max, tt_train[max_idx][:, None, 1, :]), axis=1)] + tt_train[
+                                                                                                          max_idx + 1:]
         tt_min = tt_xnor(tt_min, tt_atom_train(max_idx, len(tt_min)))
         tt_max = tt_xnor(tt_max, tt_atom_train(min_idx, len(tt_max)))
         tt_train = tt_rank_reduce(tt_add(tt_add(tt_basis_1, tt_min), tt_add(tt_basis_2, tt_max)))
@@ -742,20 +721,19 @@ def tt_swap_all(tt_train: List[np.array]):
 def tt_max_eigentensor(linear_op: List[np.array], num_iter=10):
     split_idx = np.argmax([len(c.shape) for c in linear_op])
     vec_dim = len(linear_op) - split_idx
-    eig_vec = tt_normalise([np.random.randn(1, 2, 1) for _ in range(vec_dim)],
-                           idx=np.random.randint(low=0, high=vec_dim))
+    eig_vec = tt_normalise([np.random.randn(1, 2, 1) for _ in range(vec_dim)])
     for _ in range(num_iter):
         eig_vec = tt_linear_op(linear_op, eig_vec)
-        eig_vec = tt_normalise(eig_vec, radius=1, idx=np.random.randint(low=0, high=vec_dim))
+        eig_vec = tt_normalise(eig_vec)
     prev_eig_vec = eig_vec
     eig_vec = tt_linear_op(linear_op, eig_vec)
     eig_val = tt_inner_prod(prev_eig_vec, eig_vec)
-    return tt_normalise(eig_vec, radius=1, idx=np.random.randint(low=0, high=vec_dim)), eig_val
+    return tt_normalise(eig_vec), eig_val
 
 
 def _tt_op_core_collapse(linear_core_op: np.array, core_2: np.array) -> np.array:
     return sum([
-        jnp.kron(linear_core_op[:, :, i], core_2[:, None, i])
+        np.kron(linear_core_op[:, :, i], core_2[:, None, i])
         for i in [0, 1]
     ])
 
@@ -778,6 +756,10 @@ def _tt_linear_op(linear_op, tt_train: List[np.array]) -> List[np.array]:
 
 def tt_linear_op(linear_op, tt_train: List[np.array]) -> List[np.array]:
     return tt_rl_orthogonalize(_tt_linear_op(linear_op, tt_train))
+
+
+def tt_rank_reduced_linear_op(linear_op, tt_train: List[np.array]) -> List[np.array]:
+    return tt_rank_reduce(_tt_linear_op(linear_op, tt_train))
 
 
 def tt_randomised_linear_op(linear_op, tt_train: List[np.array], ranks) -> List[np.array]:
@@ -825,72 +807,120 @@ def tt_trace(linear_op):
     return tt_inner_prod(linear_op, I)
 
 
-def tt_min_eigentensor(linear_op: List[np.array], num_iter=10):
+def tt_min_eigentensor(linear_op: List[np.array], num_iter=10, tol=1e-3):
     n = len(linear_op)
     normalisation = np.sqrt(tt_inner_prod(linear_op, linear_op))
     linear_op = tt_scale(-(1 / normalisation), linear_op)
     identity = [I for _ in range(n)]
     identity = tt_scale(2, identity)
     linear_op = tt_add(identity, linear_op)
-    eig_vec = tt_normalise([np.random.randn(1, 2, 1) for _ in range(n)], radius=1)
-    for _ in range(num_iter):
+    eig_vec = tt_normalise([np.random.randn(1, 2, 1) for _ in range(n)])
+    norm_2 = np.inf
+    for i in range(num_iter):
+        prev_norm_2 = norm_2
         eig_vec = tt_linear_op(linear_op, eig_vec)
-        eig_vec = tt_normalise(eig_vec, radius=1)
+        norm_2 = tt_inner_prod(eig_vec, eig_vec)
+        eig_vec = tt_scale(np.divide(1, np.sqrt(norm_2)), eig_vec)
+        if np.less_equal(np.abs(norm_2 - prev_norm_2), tol):
+            break
     prev_eig_vec = eig_vec
     eig_vec = tt_linear_op(linear_op, eig_vec)
     eig_val = tt_inner_prod(prev_eig_vec, eig_vec)
-    return tt_normalise(eig_vec, radius=1), normalisation * (
-        2 - eig_val)
+    return tt_normalise(eig_vec), normalisation * (2 - eig_val)
 
 
-def tt_randomised_min_eigentensor(linear_op: List[np.array], num_iter=10):
+def tt_randomised_min_eigentensor(linear_op: List[np.array], num_iter=10, tol=1e-3):
     n = len(linear_op)
     normalisation = np.sqrt(tt_inner_prod(linear_op, linear_op))
     linear_op = tt_scale(-(1 / normalisation), linear_op)
     identity = [I for _ in range(n)]
     identity = tt_scale(2, identity)
     linear_op = tt_add(identity, linear_op)
-    eig_vec = tt_normalise([np.random.randn(1, 2, 1) for _ in range(n)], radius=1)
+    eig_vec = tt_normalise([np.random.randn(1, 2, 1) for _ in range(n)])
     eig_vec = tt_linear_op(linear_op, eig_vec)
-    eig_vec = tt_normalise(eig_vec, radius=1)
+    eig_vec = tt_normalise(eig_vec)
     ranks = tt_ranks(eig_vec)
-    for _ in range(num_iter):
+    norm_2 = np.inf
+    for i in range(num_iter):
+        prev_norm_2 = norm_2
         eig_vec = tt_randomised_linear_op(linear_op, eig_vec, ranks)
-        eig_vec = tt_normalise(eig_vec, radius=1)
+        norm_2 = tt_inner_prod(eig_vec, eig_vec)
+        eig_vec = tt_scale(np.divide(1, np.sqrt(norm_2)), eig_vec)
+        if np.less_equal(np.abs(norm_2 - prev_norm_2), tol):
+            break
     prev_eig_vec = eig_vec
     eig_vec = tt_linear_op(linear_op, eig_vec)
     eig_val = tt_inner_prod(prev_eig_vec, eig_vec)
-    return tt_normalise(eig_vec, radius=1), normalisation * (
-        2 - eig_val)
+    return tt_normalise(eig_vec), normalisation * (2 - eig_val)
 
 
-def _tt_cg_iteration(lag_mul_1, lag_mul_2, linear_op_sdp, bias, X, it, tol=1e-7):
+def _tt_cg_iteration(lag_mul_1, lag_mul_2, obj_sdp, linear_op_sdp, res, X, it):
     # TODO: lagrangian_mul will become tensor
     # TODO: Need to move reg term with lag_mul_2 when we have multiple constraints
-    res = tt_inner_prod(linear_op_sdp, X) - bias
-    sdp_gradient = tt_scale(lag_mul_1 + (lag_mul_2 * res), linear_op_sdp)
-    if np.less_equal(tt_inner_prod(sdp_gradient, sdp_gradient), tol):
-        return X
-    tt_eig, eig_val = tt_randomised_min_eigentensor(
-        sdp_gradient)  # TODO: randomisd min eigentensor halves time basically
-    alpha = np.sqrt(min(1.0, 2.0 / it))  # take square root as update is tt_eig tt_eig.T
+    sdp_gradient = tt_rl_orthogonalize(tt_add(obj_sdp, tt_scale(lag_mul_1 + (lag_mul_2 * res), linear_op_sdp)))
+    tt_eig, eig_val = tt_randomised_min_eigentensor(sdp_gradient, num_iter=50)
     tt_eig_sdp = [np.kron(np.expand_dims(c, 1), np.expand_dims(c, 2)) for c in tt_eig]
-    tt_eig_sdp = tt_randomise_orthogonalise(tt_eig_sdp, tt_ranks(tt_eig))  # TODO: special rank reduce for sdp
+    tt_eig_sdp = tt_rank_reduce(tt_eig_sdp)
+    tt_eig_sdp = tt_normalise(tt_eig_sdp)
+    alpha = np.sqrt(min(1.0, 2.0 / it))  # take square root as update is tt_eig tt_eig.T
     tt_update = tt_scale(alpha, tt_eig_sdp)
     X = tt_scale(1 - alpha, X)
-    X = tt_rank_reduce(tt_add(X, tt_update))  # TODO: special rank reduce for sdp
-    return X, res
+    X = tt_add(X, tt_update)
+    return X
 
 
-def tt_sdp_frank_wolfe(linear_op_sdp, bias, num_iter=10):
+def _tt_cg_iteration_with_backtracking(lag_mul_1, lag_mul_2, obj_sdp, linear_op_sdp, bias, res, X, M, eta=0.99):
+    sdp_gradient = tt_rl_orthogonalize(tt_add(obj_sdp, tt_scale(lag_mul_1 + (lag_mul_2 * res), linear_op_sdp)))
+    tt_eig, eig_val = tt_randomised_min_eigentensor(sdp_gradient, num_iter=50)
+    tt_eig_sdp = [np.kron(np.expand_dims(c, 1), np.expand_dims(c, 2)) for c in tt_eig]
+    tt_eig_sdp = tt_rank_reduce(tt_eig_sdp)
+    tt_eig_sdp = tt_normalise(tt_eig_sdp)
+    # Backtracking
+    M *= eta
+    g = tt_inner_prod(tt_scale(-1, sdp_gradient), tt_eig_sdp)
+    d_squared = tt_inner_prod(tt_eig_sdp, tt_eig_sdp)
+    alpha = np.sqrt(np.abs(min(1.0, g / (M * d_squared))))  # take square root as update is tt_eig tt_eig.T
+    tt_update = tt_scale(alpha, tt_eig_sdp)
+    X_new = tt_scale(1 - alpha, X)
+    X_new = tt_add(X_new, tt_update)
+    obj = tt_inner_prod(obj_sdp, X) + lag_mul_1 * res + (lag_mul_2 / 2) * res ** 2
+    res = tt_inner_prod(linear_op_sdp, X_new) - bias
+    obj_new = tt_inner_prod(obj_sdp, X_new) + lag_mul_1 * res + (lag_mul_2 / 2) * res ** 2
+    (Q_1, Q_2) = (obj - alpha * g, (alpha ** 2 / 2) * d_squared)
+    M = (obj_new - Q_1) / Q_2
+    return X_new, M
+
+
+def tt_sdp_frank_wolfe_back(obj_sdp, linear_op_sdp, bias, num_iter=10):
     # TODO: Lagrangian multipliers as core in front of linear_op_sdp
     lag_mul_1 = 1
     lag_mul_2_init = 1
     gamma_init = 4 * lag_mul_2_init * tt_inner_prod(linear_op_sdp, linear_op_sdp)
     X = [np.zeros((1, 2, 2, 1)) for _ in range(len(linear_op_sdp))]
+    res = tt_inner_prod(linear_op_sdp, X) - bias
+    M = 1 # TODO: Better initalisation
     for it in tqdm(range(1, num_iter + 1)):
         lag_mul_2 = lag_mul_2_init * np.sqrt(it + 1)
-        gamma = gamma_init / (it + 1) ** (3 / 2)
-        X, res = _tt_cg_iteration(lag_mul_1, lag_mul_2, linear_op_sdp, bias, X, it)
+        X, M = _tt_cg_iteration_with_backtracking(lag_mul_1, lag_mul_2, obj_sdp, linear_op_sdp, bias, res, X, M)
+        X = tt_rank_reduce(X)
+        res = tt_inner_prod(linear_op_sdp, X) - bias
+        gamma = min(gamma_init / (res ** 2 * (it + 1) ** (3 / 2)), lag_mul_2_init)
+        lag_mul_1 = lag_mul_1 + gamma * res
+    return X
+
+
+def tt_sdp_frank_wolfe(obj_sdp, linear_op_sdp, bias, num_iter=10):
+    # TODO: Lagrangian multipliers as core in front of linear_op_sdp
+    lag_mul_1 = 1
+    lag_mul_2_init = 1
+    gamma_init = 4 * lag_mul_2_init * tt_inner_prod(linear_op_sdp, linear_op_sdp)
+    X = [np.zeros((1, 2, 2, 1)) for _ in range(len(linear_op_sdp))]
+    res = tt_inner_prod(linear_op_sdp, X) - bias
+    for it in tqdm(range(1, num_iter + 1)):
+        lag_mul_2 = lag_mul_2_init * np.sqrt(it + 1)
+        X = _tt_cg_iteration(lag_mul_1, lag_mul_2, obj_sdp, linear_op_sdp, res, X, it)
+        X = tt_rank_reduce(X)
+        res = tt_inner_prod(linear_op_sdp, X) - bias
+        gamma = min(gamma_init / (res ** 2 * (it + 1) ** (3 / 2)), lag_mul_2_init)
         lag_mul_1 = lag_mul_1 + gamma * res
     return X

@@ -13,20 +13,19 @@ class Config:
     tt_length = 4
     tt_max_rank = 5
 
-np.random.seed(3)
+np.random.seed(7)
 
-column = tt_scale(2 * np.random.rand(), tt_random_binary([np.random.randint(low=1, high=Config.tt_max_rank + 1) for _ in range(Config.tt_length - 1)]))
+column = tt_scale(2.4 * np.random.rand(), tt_random_binary([np.random.randint(low=1, high=Config.tt_max_rank + 1) for _ in range(Config.tt_length - 1)]))
 A_sym = [np.kron(np.expand_dims(c, 1), np.expand_dims(c, 2)) for c in column]
+A_sym = tt_normalise(A_sym)
 bias = 0.9
 
-#X = tt_sdp_frank_wolfe(A_sym, bias, num_iter=80)
-#print(f"AX={tt_inner_prod(A_sym, X)}, b={bias}")
-#print("Ranks of X: ", tt_ranks(X))
-print(tt_ranks(A_sym))
-ranks = np.array(tt_ranks(A_sym)) + 1
-A = tt_upsample(A_sym, target_ranks=list(ranks))
-print(tt_ranks(A))
-B = tt_add(A, tt_scale(-1, A_sym))
-print(tt_inner_prod(B, B))
+column = [5 * np.random.randn()*c for c in tt_random_binary([np.random.randint(low=1, high=Config.tt_max_rank + 1) for _ in range(Config.tt_length - 1)])]
+Obj_sym = [np.kron(np.expand_dims(c, 1), np.expand_dims(c, 2)) for c in column]
+Obj_sym = tt_normalise(Obj_sym)
 
+X = tt_sdp_frank_wolfe_back(Obj_sym, A_sym, bias, num_iter=9)
+print(f"Objective value: {tt_inner_prod(Obj_sym, X)}")
+print(f"AX={tt_inner_prod(A_sym, X)}, b={bias}")
+print("Ranks of X: ", tt_ranks(X))
 
