@@ -178,11 +178,12 @@ def tt_randomise_orthogonalise(tt_train: List[np.array], target_ranks: List[int]
     return tt_train
 
 
-def tt_rank_reduce(tt_train: List[np.array]):
+def tt_rank_reduce(tt_train: List[np.array], tt_bound=None):
     """ Might reduce TT-rank """
     # TODO: Adapt for linear_ops
     tt_train = tt_rl_orthogonalize(tt_train)
-    tt_bound = np.divide(1, 2 ** (len(tt_train) + 2))
+    if tt_bound is None:
+        tt_bound = np.divide(1, 2 ** (len(tt_train) + 2))
     rank = 1
     for idx, tt_core in enumerate(tt_train[:-1]):
         idx_shape = tt_core.shape
@@ -758,8 +759,8 @@ def tt_linear_op(linear_op, tt_train: List[np.array]) -> List[np.array]:
     return tt_rl_orthogonalize(_tt_linear_op(linear_op, tt_train))
 
 
-def tt_rank_reduced_linear_op(linear_op, tt_train: List[np.array]) -> List[np.array]:
-    return tt_rank_reduce(_tt_linear_op(linear_op, tt_train))
+def tt_rank_reduced_linear_op(linear_op, tt_train: List[np.array], bound=None) -> List[np.array]:
+    return tt_rank_reduce(_tt_linear_op(linear_op, tt_train), bound)
 
 
 def tt_randomised_linear_op(linear_op, tt_train: List[np.array], ranks) -> List[np.array]:
@@ -837,7 +838,7 @@ def tt_randomised_min_eigentensor(linear_op: List[np.array], num_iter=10, tol=1e
     identity = tt_scale(2, identity)
     linear_op = tt_add(identity, linear_op)
     eig_vec = tt_normalise([np.random.randn(1, 2, 1) for _ in range(n)])
-    eig_vec = tt_linear_op(linear_op, eig_vec)
+    eig_vec = tt_rank_reduced_linear_op(linear_op, eig_vec, bound=tol)
     eig_vec = tt_normalise(eig_vec)
     ranks = tt_ranks(eig_vec)
     norm_2 = np.inf
@@ -849,78 +850,81 @@ def tt_randomised_min_eigentensor(linear_op: List[np.array], num_iter=10, tol=1e
         if np.less_equal(np.abs(norm_2 - prev_norm_2), tol):
             break
     prev_eig_vec = eig_vec
-    eig_vec = tt_linear_op(linear_op, eig_vec)
+    eig_vec = tt_rank_reduced_linear_op(linear_op, eig_vec)
     eig_val = tt_inner_prod(prev_eig_vec, eig_vec)
     return tt_normalise(eig_vec), normalisation * (2 - eig_val)
 
 
-def _tt_cg_iteration(lag_mul_1, lag_mul_2, obj_sdp, linear_op_sdp, res, X, it):
+def _trivial_step_size(it):
+    return np.minimum(1.0, 2.0 / it), it + 1
+
+
+def _bt_step_size(sdp_gradient, eig_sdp, lag_mul_1, lag_mul_2, obj_sdp, linear_op_sdp, bias, X, M, eta=1.1, max_iter=10):
+    g = -tt_inner_prod(tt_normalise(sdp_gradient), eig_sdp)
+    Ax = tt_inner_prod(linear_op_sdp, X)
+    obj_1 = tt_inner_prod(obj_sdp, X)
+    obj_2 = lag_mul_1 * (Ax - bias)
+    Ad = tt_inner_prod(linear_op_sdp, eig_sdp)
+    update_1 = tt_inner_prod(obj_sdp, eig_sdp)
+    update_2 = lag_mul_1 * (Ad - bias)
+
+    Lag_new = lambda gamma: (1 - gamma) * (obj_1 + obj_2) + gamma * (update_1 + update_2) + (lag_mul_2 / 2) * ((1-gamma)*Ax + gamma*Ad - bias)**2
+    gamma = np.minimum(1.0, g / M)
+    current_obj = Lag_new(gamma)
+    for i in range(max_iter):
+        M *= eta
+        gamma = np.minimum(1.0, g / M)
+        prev_obj = current_obj
+        current_obj = Lag_new(gamma)
+        if np.less_equal(prev_obj, current_obj) or gamma==1:
+            M *= 1/eta
+            gamma = np.minimum(1.0, g / M)
+            break
+    return gamma, M+1
+
+
+def _cg_oracle(lag_mul_1, lag_mul_2, obj_sdp, linear_op_sdp, res):
+    sdp_gradient = tt_rank_reduce(tt_add(obj_sdp, tt_scale(lag_mul_1 + (lag_mul_2 * res), linear_op_sdp)))
+    tt_eig, eig_val = tt_randomised_min_eigentensor(sdp_gradient, num_iter=100)
+    eig_sdp = [np.kron(np.expand_dims(c, 1), np.expand_dims(c, 2)) for c in tt_eig]
+    eig_sdp = tt_rank_reduce(eig_sdp)
+    eig_sdp = tt_normalise(eig_sdp)
+    return eig_sdp, sdp_gradient
+
+
+def _interpolate(gamma, X, eig_sdp):
+    tt_update = tt_scale(gamma, eig_sdp)
+    X = tt_scale(1 - gamma, X)
+    X = tt_add(X, tt_update)
+    return tt_rank_reduce(X)
+
+
+def _tt_cg(lag_mul_1, lag_mul_2, obj_sdp, linear_op_sdp, _, res, X, M):
     # TODO: lagrangian_mul will become tensor
     # TODO: Need to move reg term with lag_mul_2 when we have multiple constraints
-    sdp_gradient = tt_rl_orthogonalize(tt_add(obj_sdp, tt_scale(lag_mul_1 + (lag_mul_2 * res), linear_op_sdp)))
-    tt_eig, eig_val = tt_randomised_min_eigentensor(sdp_gradient, num_iter=50)
-    tt_eig_sdp = [np.kron(np.expand_dims(c, 1), np.expand_dims(c, 2)) for c in tt_eig]
-    tt_eig_sdp = tt_rank_reduce(tt_eig_sdp)
-    tt_eig_sdp = tt_normalise(tt_eig_sdp)
-    alpha = np.sqrt(min(1.0, 2.0 / it))  # take square root as update is tt_eig tt_eig.T
-    tt_update = tt_scale(alpha, tt_eig_sdp)
-    X = tt_scale(1 - alpha, X)
-    X = tt_add(X, tt_update)
-    return X
+    eig_sdp, _ = _cg_oracle(lag_mul_1, lag_mul_2, obj_sdp, linear_op_sdp, res)
+    gamma, M = _trivial_step_size(M)  # take square root as update is tt_eig tt_eig.T
+    X = _interpolate(gamma, X, eig_sdp)
+    return X, M
 
 
-def _tt_cg_iteration_with_backtracking(lag_mul_1, lag_mul_2, obj_sdp, linear_op_sdp, bias, res, X, M, eta=0.99):
-    sdp_gradient = tt_rl_orthogonalize(tt_add(obj_sdp, tt_scale(lag_mul_1 + (lag_mul_2 * res), linear_op_sdp)))
-    tt_eig, eig_val = tt_randomised_min_eigentensor(sdp_gradient, num_iter=50)
-    tt_eig_sdp = [np.kron(np.expand_dims(c, 1), np.expand_dims(c, 2)) for c in tt_eig]
-    tt_eig_sdp = tt_rank_reduce(tt_eig_sdp)
-    tt_eig_sdp = tt_normalise(tt_eig_sdp)
-    # Backtracking
-    M *= eta
-    g = tt_inner_prod(tt_scale(-1, sdp_gradient), tt_eig_sdp)
-    d_squared = tt_inner_prod(tt_eig_sdp, tt_eig_sdp)
-    alpha = np.sqrt(np.abs(min(1.0, g / (M * d_squared))))  # take square root as update is tt_eig tt_eig.T
-    tt_update = tt_scale(alpha, tt_eig_sdp)
-    X_new = tt_scale(1 - alpha, X)
-    X_new = tt_add(X_new, tt_update)
-    obj = tt_inner_prod(obj_sdp, X) + lag_mul_1 * res + (lag_mul_2 / 2) * res ** 2
-    res = tt_inner_prod(linear_op_sdp, X_new) - bias
-    obj_new = tt_inner_prod(obj_sdp, X_new) + lag_mul_1 * res + (lag_mul_2 / 2) * res ** 2
-    (Q_1, Q_2) = (obj - alpha * g, (alpha ** 2 / 2) * d_squared)
-    M = (obj_new - Q_1) / Q_2
-    return X_new, M
+def _tt_cg_bt(lag_mul_1, lag_mul_2, obj_sdp, linear_op_sdp, bias, res, X, M):
+    eig_sdp, sdp_gradient = _cg_oracle(lag_mul_1, lag_mul_2, obj_sdp, linear_op_sdp, res)
+    gamma, M = _bt_step_size(sdp_gradient, eig_sdp, lag_mul_1, lag_mul_2, obj_sdp, linear_op_sdp, bias, X, M)
+    X = _interpolate(gamma, X, eig_sdp)
+    return X, M
 
 
-def tt_sdp_frank_wolfe_back(obj_sdp, linear_op_sdp, bias, num_iter=10):
-    # TODO: Lagrangian multipliers as core in front of linear_op_sdp
-    lag_mul_1 = 1
-    lag_mul_2_init = 1
-    gamma_init = 4 * lag_mul_2_init * tt_inner_prod(linear_op_sdp, linear_op_sdp)
+def tt_sdp_fw(obj_sdp, linear_op_sdp, bias, bt=True, num_iter=10):
+    cg_func = _tt_cg_bt if bt else _tt_cg
+    M = 1
     X = [np.zeros((1, 2, 2, 1)) for _ in range(len(linear_op_sdp))]
-    res = tt_inner_prod(linear_op_sdp, X) - bias
-    M = 1 # TODO: Better initalisation
-    for it in tqdm(range(1, num_iter + 1)):
-        lag_mul_2 = lag_mul_2_init * np.sqrt(it + 1)
-        X, M = _tt_cg_iteration_with_backtracking(lag_mul_1, lag_mul_2, obj_sdp, linear_op_sdp, bias, res, X, M)
-        X = tt_rank_reduce(X)
+    res = -bias
+    lag_mul_1 = 0
+    for it in range(1, num_iter+1):
+        lag_mul_2 = np.sqrt(M + 1)
+        X, M = cg_func(lag_mul_1, lag_mul_2, obj_sdp, linear_op_sdp, bias, res, X, M)
         res = tt_inner_prod(linear_op_sdp, X) - bias
-        gamma = min(gamma_init / (res ** 2 * (it + 1) ** (3 / 2)), lag_mul_2_init)
-        lag_mul_1 = lag_mul_1 + gamma * res
-    return X
-
-
-def tt_sdp_frank_wolfe(obj_sdp, linear_op_sdp, bias, num_iter=10):
-    # TODO: Lagrangian multipliers as core in front of linear_op_sdp
-    lag_mul_1 = 1
-    lag_mul_2_init = 1
-    gamma_init = 4 * lag_mul_2_init * tt_inner_prod(linear_op_sdp, linear_op_sdp)
-    X = [np.zeros((1, 2, 2, 1)) for _ in range(len(linear_op_sdp))]
-    res = tt_inner_prod(linear_op_sdp, X) - bias
-    for it in tqdm(range(1, num_iter + 1)):
-        lag_mul_2 = lag_mul_2_init * np.sqrt(it + 1)
-        X = _tt_cg_iteration(lag_mul_1, lag_mul_2, obj_sdp, linear_op_sdp, res, X, it)
-        X = tt_rank_reduce(X)
-        res = tt_inner_prod(linear_op_sdp, X) - bias
-        gamma = min(gamma_init / (res ** 2 * (it + 1) ** (3 / 2)), lag_mul_2_init)
-        lag_mul_1 = lag_mul_1 + gamma * res
+        alpha = np.divide(2, np.sqrt(M))
+        lag_mul_1 = lag_mul_1 + alpha * res
     return X
