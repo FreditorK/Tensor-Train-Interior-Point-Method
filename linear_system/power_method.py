@@ -9,11 +9,11 @@ from src.tt_op import *
 
 @dataclass
 class Config:
-    num_columns = 4
-    tt_length = 4
-    tt_max_rank = 5
+    num_columns = 8
+    tt_length = 8
+    tt_max_rank = 9
 
-np.random.seed(12)
+np.random.seed(16)
 
 columns = [
     tt_scale(10 * np.random.rand(), tt_random_binary([

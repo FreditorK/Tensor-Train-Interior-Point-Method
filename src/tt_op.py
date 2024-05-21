@@ -52,6 +52,12 @@ def tt_random_binary(target_ranks: List[int]):
                          zip(target_ranks[:-1], target_ranks[1:])])
 
 
+def tt_random_matrix(target_ranks: List[int]):
+    target_ranks = [1] + target_ranks + [1]
+    return tt_normalise([4 * (np.random.randn(l_n, 2, 2, l_np1)+0.3) for l_n, l_np1 in
+                         zip(target_ranks[:-1], target_ranks[1:])])
+
+
 def tt_one(dim):
     """ Returns an all-one tensor of dimension 2**dim """
     return [np.ones((1, 2, 1)) for _ in range(dim)]
@@ -686,12 +692,7 @@ def tt_tensor_matrix(tt_trains: List[np.array]):
                  b, c in zip(binary_i, tt_trains[i][-bin_length:])]
         current_column = tt_trains[i][:-bin_length] + [np.concatenate(tup, axis=1) for tup in index]
         tt_tensor_matrix = tt_add(tt_tensor_matrix, current_column)
-        tt_tensor_matrix = tt_tensor_matrix[:-bin_length] + sum(
-            [break_core_bond(c) for c in tt_tensor_matrix[-bin_length:]], [])
         tt_tensor_matrix = tt_rank_reduce(tt_tensor_matrix)
-        tt_tensor_matrix = tt_tensor_matrix[:-2 * bin_length] + [core_bond(c_1, c_2) for c_1, c_2 in
-                                                                 zip(tt_tensor_matrix[-bin_length * 2::2],
-                                                                     tt_tensor_matrix[-bin_length * 2 + 1::2])]
 
     return tt_tensor_matrix, bin_length
 
@@ -739,7 +740,7 @@ def _tt_op_core_collapse(linear_core_op: np.array, core_2: np.array) -> np.array
     ])
 
 
-def _tt_linear_op(linear_op, tt_train: List[np.array]) -> List[np.array]:
+def _tt_linear_op(linear_op: List[np.array], tt_train: List[np.array]) -> List[np.array]:
     split_idx = np.argmax([len(c.shape) for c in linear_op])
     op_length = len(linear_op) - split_idx
     full_cores = [_tt_op_core_collapse(core_op, core) for core_op, core in
@@ -760,7 +761,8 @@ def tt_linear_op(linear_op, tt_train: List[np.array]) -> List[np.array]:
 
 
 def tt_rank_reduced_linear_op(linear_op, tt_train: List[np.array], bound=None) -> List[np.array]:
-    return tt_rank_reduce(_tt_linear_op(linear_op, tt_train), bound)
+    tt_train = _tt_linear_op(linear_op, tt_train)
+    return tt_rank_reduce(tt_train, bound)
 
 
 def tt_randomised_linear_op(linear_op, tt_train: List[np.array], ranks) -> List[np.array]:
@@ -797,9 +799,7 @@ def tt_transpose(tt_linear_op):
 def tt_gram(tt_linear_op):
     tt_linear_op_t = tt_transpose(tt_linear_op)
     gram = tt_linear_op_compose(tt_linear_op, tt_linear_op_t)
-    gram = sum([break_core_bond(c) for c in gram], [])
     gram = tt_rank_reduce(gram)
-    gram = [core_bond(c_1, c_2) for c_1, c_2 in zip(gram[:-1:2], gram[1::2])]
     return gram
 
 
@@ -815,17 +815,18 @@ def tt_min_eigentensor(linear_op: List[np.array], num_iter=10, tol=1e-3):
     identity = [I for _ in range(n)]
     identity = tt_scale(2, identity)
     linear_op = tt_add(identity, linear_op)
+    linear_op = tt_rank_reduce(linear_op, tt_bound=0)
     eig_vec = tt_normalise([np.random.randn(1, 2, 1) for _ in range(n)])
     norm_2 = np.inf
     for i in range(num_iter):
         prev_norm_2 = norm_2
-        eig_vec = tt_linear_op(linear_op, eig_vec)
+        eig_vec = tt_rank_reduced_linear_op(linear_op, eig_vec, bound=1e-12)
         norm_2 = tt_inner_prod(eig_vec, eig_vec)
         eig_vec = tt_scale(np.divide(1, np.sqrt(norm_2)), eig_vec)
         if np.less_equal(np.abs(norm_2 - prev_norm_2), tol):
             break
     prev_eig_vec = eig_vec
-    eig_vec = tt_linear_op(linear_op, eig_vec)
+    eig_vec = tt_rank_reduced_linear_op(linear_op, eig_vec, bound=1e-12)
     eig_val = tt_inner_prod(prev_eig_vec, eig_vec)
     return tt_normalise(eig_vec), normalisation * (2 - eig_val)
 
@@ -833,14 +834,12 @@ def tt_min_eigentensor(linear_op: List[np.array], num_iter=10, tol=1e-3):
 def tt_randomised_min_eigentensor(linear_op: List[np.array], num_iter=10, tol=1e-3):
     n = len(linear_op)
     normalisation = np.sqrt(tt_inner_prod(linear_op, linear_op))
-    linear_op = tt_scale(-(1 / normalisation), linear_op)
+    linear_op = tt_scale(-np.divide(1, normalisation), linear_op)
     identity = [I for _ in range(n)]
     identity = tt_scale(2, identity)
-    linear_op = tt_add(identity, linear_op)
+    linear_op = tt_rank_reduce(tt_add(identity, linear_op), tt_bound=0)
     eig_vec = tt_normalise([np.random.randn(1, 2, 1) for _ in range(n)])
-    eig_vec = tt_rank_reduced_linear_op(linear_op, eig_vec, bound=tol)
-    eig_vec = tt_normalise(eig_vec)
-    ranks = tt_ranks(eig_vec)
+    ranks = tt_ranks(linear_op)
     norm_2 = np.inf
     for i in range(num_iter):
         prev_norm_2 = norm_2
@@ -859,16 +858,19 @@ def _trivial_step_size(it):
     return np.minimum(1.0, 2.0 / it), it + 1
 
 
-def _bt_step_size(sdp_gradient, eig_sdp, lag_mul_1, lag_mul_2, obj_sdp, linear_op_sdp, bias, X, M, eta=1.1, max_iter=10):
+def _bt_step_size(sdp_gradient, eig_sdp, lag_mul_1, lag_mul_2, obj_sdp, linear_op_sdp, bias, X, M, eta=1.1,
+                  max_iter=10):
+    ATy = _contract_lag(linear_op_sdp, lag_mul_1)
     g = -tt_inner_prod(tt_normalise(sdp_gradient), eig_sdp)
-    Ax = tt_inner_prod(linear_op_sdp, X)
+    Ax = tt_inner_prod(ATy, X)
     obj_1 = tt_inner_prod(obj_sdp, X)
     obj_2 = lag_mul_1 * (Ax - bias)
-    Ad = tt_inner_prod(linear_op_sdp, eig_sdp)
+    Ad = tt_inner_prod(ATy, eig_sdp)
     update_1 = tt_inner_prod(obj_sdp, eig_sdp)
     update_2 = lag_mul_1 * (Ad - bias)
 
-    Lag_new = lambda gamma: (1 - gamma) * (obj_1 + obj_2) + gamma * (update_1 + update_2) + (lag_mul_2 / 2) * ((1-gamma)*Ax + gamma*Ad - bias)**2
+    Lag_new = lambda gamma: (1 - gamma) * (obj_1 + obj_2) + gamma * (update_1 + update_2) + (lag_mul_2 / 2) * (
+        (1 - gamma) * Ax + gamma * Ad - bias) ** 2
     gamma = np.minimum(1.0, g / M)
     current_obj = Lag_new(gamma)
     for i in range(max_iter):
@@ -876,15 +878,30 @@ def _bt_step_size(sdp_gradient, eig_sdp, lag_mul_1, lag_mul_2, obj_sdp, linear_o
         gamma = np.minimum(1.0, g / M)
         prev_obj = current_obj
         current_obj = Lag_new(gamma)
-        if np.less_equal(prev_obj, current_obj) or gamma==1:
-            M *= 1/eta
+        if np.less_equal(prev_obj, current_obj) or gamma == 1:
+            M *= 1 / eta
             gamma = np.minimum(1.0, g / M)
             break
-    return gamma, M+1
+    return gamma, M + 1
+
+
+def _tt_lag_collapse(linear_core_op: np.array, core_2: np.array) -> np.array:
+    return sum([
+        np.kron(linear_core_op[:, i], core_2[:, i, None, None])
+        for i in [0, 1]
+    ])
+
+
+def _contract_lag(linear_op, lag_mul):
+    split_idx = np.argmax([len(c.shape) for c in linear_op])
+    return linear_op[:split_idx] + [_tt_lag_collapse(op, l) for op, l in zip(linear_op[split_idx:], lag_mul)]
 
 
 def _cg_oracle(lag_mul_1, lag_mul_2, obj_sdp, linear_op_sdp, res):
-    sdp_gradient = tt_rank_reduce(tt_add(obj_sdp, tt_scale(lag_mul_1 + (lag_mul_2 * res), linear_op_sdp)))
+    ATy = _contract_lag(linear_op_sdp, lag_mul_1)
+    Ares = tt_scale(lag_mul_2, _contract_lag(linear_op_sdp, res))
+    constraint_term = tt_rank_reduce(tt_add(ATy, Ares))
+    sdp_gradient = tt_rank_reduce(tt_add(obj_sdp, constraint_term))
     tt_eig, eig_val = tt_randomised_min_eigentensor(sdp_gradient, num_iter=100)
     eig_sdp = [np.kron(np.expand_dims(c, 1), np.expand_dims(c, 2)) for c in tt_eig]
     eig_sdp = tt_rank_reduce(eig_sdp)
@@ -915,16 +932,33 @@ def _tt_cg_bt(lag_mul_1, lag_mul_2, obj_sdp, linear_op_sdp, bias, res, X, M):
     return X, M
 
 
-def tt_sdp_fw(obj_sdp, linear_op_sdp, bias, bt=True, num_iter=10):
-    cg_func = _tt_cg_bt if bt else _tt_cg
+def _tt_lag_core_collapse(linear_core_op: np.array, core_2: np.array) -> np.array:
+    return sum([
+        np.kron(linear_core_op[:, :, i, j], core_2[:, None, i, j])
+        for (i, j) in product([0, 1], [0, 1])
+    ])
+
+
+def tt_get_lag(linear_op, X):
+    split_idx = np.argmax([len(c.shape) for c in linear_op])
+    factor = safe_multi_dot(
+        [_tt_core_collapse(core_1, core_2) for core_1, core_2 in zip(linear_op[:split_idx], X[:split_idx])])
+    full_cores = [_tt_lag_core_collapse(core_1, core_2) for core_1, core_2 in zip(linear_op[split_idx:], X[split_idx:])]
+    full_cores[0] = np.einsum("ab, bcd -> acd", factor, full_cores[0])
+    return full_cores
+
+
+def tt_sdp_fw(obj_sdp: List[np.array], linear_ops: List[np.array], bias: List[np.array], bt=True, num_iter=10):
     M = 1
-    X = [np.zeros((1, 2, 2, 1)) for _ in range(len(linear_op_sdp))]
-    res = -bias
-    lag_mul_1 = 0
-    for it in range(1, num_iter+1):
+    cg_func = _tt_cg_bt if bt else _tt_cg
+    X = [np.zeros((1, 2, 2, 1)) for _ in range(len(linear_ops))]
+    neg_bias = tt_scale(-1, bias)
+    res = neg_bias
+    lag_mul_1 = [np.zeros((1, 2, 1)) for _ in range(len(bias))]
+    for it in range(1, num_iter + 1):
         lag_mul_2 = np.sqrt(M + 1)
-        X, M = cg_func(lag_mul_1, lag_mul_2, obj_sdp, linear_op_sdp, bias, res, X, M)
-        res = tt_inner_prod(linear_op_sdp, X) - bias
+        X, M = cg_func(lag_mul_1, lag_mul_2, obj_sdp, linear_ops, bias, res, X, M)
+        res = tt_add(tt_get_lag(linear_ops, X), neg_bias)
         alpha = np.divide(2, np.sqrt(M))
-        lag_mul_1 = lag_mul_1 + alpha * res
+        lag_mul_1 = tt_rank_reduce(tt_add(lag_mul_1, tt_scale(alpha, res)))
     return X
