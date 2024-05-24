@@ -11,7 +11,7 @@ from src.tt_op import *
 @dataclass
 class Config:
     num_columns = 2
-    tt_length = 4
+    tt_length = 6
     tt_max_rank = 5
 
 np.random.seed(140)
@@ -43,5 +43,5 @@ X = tt_sdp_fw(Obj_sym, constraints, bias, bt=False, num_iter=100)
 t1 = time.time()
 print(f"Problem solved in {t1-t0}s")
 print(f"Objective value: {tt_inner_prod(Obj_sym, X)}")
-print(f"AX={tt_get_lag(constraints, X)}, \n b={bias}")
+print(f"AX={tt_eval_constraints(constraints, X)}, \n b={bias}")
 print("Ranks of X: ", tt_ranks(X))

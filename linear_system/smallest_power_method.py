@@ -23,7 +23,7 @@ np.random.seed(11)
 
 #tensor_matrix, length = tt_tensor_matrix(columns)
 #gram_tensor = tt_gram(tensor_matrix)
-gram_tensor = tt_random_matrix([4, 5, 4])
+gram_tensor = tt_random_gaussian_matrix([4, 5, 4])
 print("--------")
 t0 = time.time()
 tt_eig, tt_eig_val = tt_randomised_min_eigentensor(gram_tensor, num_iter=25)

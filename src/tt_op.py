@@ -52,9 +52,9 @@ def tt_random_binary(target_ranks: List[int]):
                          zip(target_ranks[:-1], target_ranks[1:])])
 
 
-def tt_random_matrix(target_ranks: List[int]):
+def tt_random_gaussian_matrix(target_ranks: List[int]):
     target_ranks = [1] + target_ranks + [1]
-    return tt_normalise([4 * (np.random.randn(l_n, 2, 2, l_np1)+0.3) for l_n, l_np1 in
+    return tt_normalise([1 / (l_n * 2 * 2 * l_np1) * np.random.randn(l_n, 2, 2, l_np1) for l_n, l_np1 in
                          zip(target_ranks[:-1], target_ranks[1:])])
 
 
@@ -721,16 +721,16 @@ def tt_swap_all(tt_train: List[np.array]):
 
 
 def tt_max_eigentensor(linear_op: List[np.array], num_iter=10):
-    split_idx = np.argmax([len(c.shape) for c in linear_op])
-    vec_dim = len(linear_op) - split_idx
-    eig_vec = tt_normalise([np.random.randn(1, 2, 1) for _ in range(vec_dim)])
+    normalisation = np.sqrt(tt_inner_prod(linear_op, linear_op))
+    linear_op = tt_scale(-(1 / normalisation), linear_op)
+    eig_vec = tt_normalise([np.random.randn(1, 2, 1) for _ in range(len(linear_op))])
     for _ in range(num_iter):
         eig_vec = tt_linear_op(linear_op, eig_vec)
         eig_vec = tt_normalise(eig_vec)
     prev_eig_vec = eig_vec
     eig_vec = tt_linear_op(linear_op, eig_vec)
     eig_val = tt_inner_prod(prev_eig_vec, eig_vec)
-    return tt_normalise(eig_vec), eig_val
+    return tt_normalise(eig_vec), normalisation*eig_val
 
 
 def _tt_op_core_collapse(linear_core_op: np.array, core_2: np.array) -> np.array:
@@ -860,7 +860,7 @@ def _trivial_step_size(it):
 
 def _bt_step_size(sdp_gradient, eig_sdp, lag_mul_1, lag_mul_2, obj_sdp, linear_op_sdp, bias, X, M, eta=1.1,
                   max_iter=10):
-    ATy = _contract_lag(linear_op_sdp, lag_mul_1)
+    ATy = tt_constraint_contract(linear_op_sdp, lag_mul_1)
     g = -tt_inner_prod(tt_normalise(sdp_gradient), eig_sdp)
     Ax = tt_inner_prod(ATy, X)
     obj_1 = tt_inner_prod(obj_sdp, X)
@@ -892,43 +892,91 @@ def _tt_lag_collapse(linear_core_op: np.array, core_2: np.array) -> np.array:
     ])
 
 
-def _contract_lag(linear_op, lag_mul):
+def tt_constraint_contract(linear_op, lag_mul):
     split_idx = np.argmax([len(c.shape) for c in linear_op])
     return linear_op[:split_idx] + [_tt_lag_collapse(op, l) for op, l in zip(linear_op[split_idx:], lag_mul)]
 
 
+def tt_outer_product(tt_train_1, tt_train_2):
+    return tt_rank_reduce(
+        [np.kron(np.expand_dims(c_1, 1), np.expand_dims(c_2, 2)) for c_1, c_2 in zip(tt_train_1, tt_train_2)])
+
+
+def tt_binary_round(tt_train, tol=1e-3):
+    for _ in range(100):
+        tt_table = tt_walsh_op(tt_train)
+        tt_table_p2 = tt_rank_reduce(tt_hadamard(tt_table, tt_table))
+        boolean_poly = tt_walsh_op_inv(tt_table_p2)
+        if np.less_equal(np.abs(tt_inner_prod(boolean_poly, boolean_poly) - 1), tol):
+            break
+        tt_table_p3 = tt_rank_reduce(tt_hadamard(tt_table_p2, tt_table))
+        tt_update = tt_scale(-0.5, tt_walsh_op_inv(tt_table_p3))
+        next_tt_train = tt_scale(1 - tt_inner_prod(tt_update, tt_train), tt_train)
+        next_tt_train = tt_rank_reduce(tt_add(next_tt_train, tt_update))
+        tt_train = tt_normalise(next_tt_train)
+    return tt_train
+
+
+def tt_random_graph(target_ranks):
+    matrix = tt_random_gaussian_matrix([int(np.ceil(r / 2)) for r in target_ranks])
+    matrix_t = tt_transpose(matrix)
+    symmetric_matrix = tt_rank_reduce(tt_add(matrix, matrix_t))
+    I_tensor = sum([break_core_bond(I) for _ in symmetric_matrix], [])
+    mask = tt_add(tt_one(len(I_tensor)), tt_scale(-1, I_tensor))
+    symmetric_matrix = sum([break_core_bond(core) for core in symmetric_matrix], [])
+    symmetric_matrix = tt_normalise(symmetric_matrix)
+    symmetric_matrix = tt_binary_round(symmetric_matrix)
+    symmetric_matrix = tt_walsh_op(symmetric_matrix)
+    symmetric_matrix = tt_hadamard(symmetric_matrix, mask)
+    symmetric_matrix = tt_add(symmetric_matrix, tt_scale(-1, I_tensor))
+    return tt_rank_reduce([core_bond(c_1, c_2) for c_1, c_2 in zip(symmetric_matrix[:-1:2], symmetric_matrix[1::2])])
+
+
+def tt_op_to_matrix(linear_op):
+    tensor = tt_to_tensor(linear_op)
+    n = 2**(len(tensor.shape)//2)
+    bin_length = len(bin(n - 1)[2:])
+    binary_i = '0' * bin_length
+    matrix = tensor[tuple(sum([[int(i), slice(None)] for i in binary_i], []))].reshape(-1, 1)
+    for i in range(1, n):
+        binary_i = bin(i)[2:]
+        binary_i = '0' * (bin_length - len(binary_i)) + binary_i
+        index = tuple(sum([[int(i), slice(None)] for i in binary_i], []))
+        matrix = np.hstack((matrix, tensor[index].reshape(-1, 1)))
+    return matrix
+
+
 def _cg_oracle(lag_mul_1, lag_mul_2, obj_sdp, linear_op_sdp, res):
-    ATy = _contract_lag(linear_op_sdp, lag_mul_1)
-    Ares = tt_scale(lag_mul_2, _contract_lag(linear_op_sdp, res))
+    ATy = tt_constraint_contract(linear_op_sdp, lag_mul_1)
+    Ares = tt_scale(lag_mul_2, tt_constraint_contract(linear_op_sdp, res))
     constraint_term = tt_rank_reduce(tt_add(ATy, Ares))
     sdp_gradient = tt_rank_reduce(tt_add(obj_sdp, constraint_term))
-    tt_eig, eig_val = tt_randomised_min_eigentensor(sdp_gradient, num_iter=100)
-    eig_sdp = [np.kron(np.expand_dims(c, 1), np.expand_dims(c, 2)) for c in tt_eig]
-    eig_sdp = tt_rank_reduce(eig_sdp)
+    tt_eig, _ = tt_randomised_min_eigentensor(sdp_gradient, num_iter=100)
+    eig_sdp = tt_outer_product(tt_eig, tt_eig)
     eig_sdp = tt_normalise(eig_sdp)
     return eig_sdp, sdp_gradient
 
 
-def _interpolate(gamma, X, eig_sdp):
-    tt_update = tt_scale(gamma, eig_sdp)
+def _interpolate(gamma, X, eig_sdp, trace_param):
+    tt_update = tt_scale(gamma*trace_param, eig_sdp)
     X = tt_scale(1 - gamma, X)
     X = tt_add(X, tt_update)
     return tt_rank_reduce(X)
 
 
-def _tt_cg(lag_mul_1, lag_mul_2, obj_sdp, linear_op_sdp, _, res, X, M):
+def _tt_cg(lag_mul_1, lag_mul_2, obj_sdp, linear_op_sdp, _, res, X, M, trace_param):
     # TODO: lagrangian_mul will become tensor
     # TODO: Need to move reg term with lag_mul_2 when we have multiple constraints
     eig_sdp, _ = _cg_oracle(lag_mul_1, lag_mul_2, obj_sdp, linear_op_sdp, res)
     gamma, M = _trivial_step_size(M)  # take square root as update is tt_eig tt_eig.T
-    X = _interpolate(gamma, X, eig_sdp)
+    X = _interpolate(gamma, X, eig_sdp, trace_param)
     return X, M
 
 
-def _tt_cg_bt(lag_mul_1, lag_mul_2, obj_sdp, linear_op_sdp, bias, res, X, M):
+def _tt_cg_bt(lag_mul_1, lag_mul_2, obj_sdp, linear_op_sdp, bias, res, X, M, trace_param):
     eig_sdp, sdp_gradient = _cg_oracle(lag_mul_1, lag_mul_2, obj_sdp, linear_op_sdp, res)
     gamma, M = _bt_step_size(sdp_gradient, eig_sdp, lag_mul_1, lag_mul_2, obj_sdp, linear_op_sdp, bias, X, M)
-    X = _interpolate(gamma, X, eig_sdp)
+    X = _interpolate(gamma, X, eig_sdp, trace_param)
     return X, M
 
 
@@ -939,16 +987,17 @@ def _tt_lag_core_collapse(linear_core_op: np.array, core_2: np.array) -> np.arra
     ])
 
 
-def tt_get_lag(linear_op, X):
+def tt_eval_constraints(linear_op, X):
     split_idx = np.argmax([len(c.shape) for c in linear_op])
     factor = safe_multi_dot(
         [_tt_core_collapse(core_1, core_2) for core_1, core_2 in zip(linear_op[:split_idx], X[:split_idx])])
     full_cores = [_tt_lag_core_collapse(core_1, core_2) for core_1, core_2 in zip(linear_op[split_idx:], X[split_idx:])]
-    full_cores[0] = np.einsum("ab, bcd -> acd", factor, full_cores[0])
+    if len(factor) > 0:
+        full_cores[0] = np.einsum("ab, bcd -> acd", factor, full_cores[0])
     return full_cores
 
 
-def tt_sdp_fw(obj_sdp: List[np.array], linear_ops: List[np.array], bias: List[np.array], bt=True, num_iter=10):
+def tt_sdp_fw(obj_sdp: List[np.array], linear_ops: List[np.array], bias: List[np.array], trace_param=1, bt=True, num_iter=10):
     M = 1
     cg_func = _tt_cg_bt if bt else _tt_cg
     X = [np.zeros((1, 2, 2, 1)) for _ in range(len(linear_ops))]
@@ -957,8 +1006,10 @@ def tt_sdp_fw(obj_sdp: List[np.array], linear_ops: List[np.array], bias: List[np
     lag_mul_1 = [np.zeros((1, 2, 1)) for _ in range(len(bias))]
     for it in range(1, num_iter + 1):
         lag_mul_2 = np.sqrt(M + 1)
-        X, M = cg_func(lag_mul_1, lag_mul_2, obj_sdp, linear_ops, bias, res, X, M)
-        res = tt_add(tt_get_lag(linear_ops, X), neg_bias)
-        alpha = np.divide(2, np.sqrt(M))
-        lag_mul_1 = tt_rank_reduce(tt_add(lag_mul_1, tt_scale(alpha, res)))
+        X, M = cg_func(lag_mul_1, lag_mul_2, obj_sdp, linear_ops, bias, res, X, M, trace_param)
+        res = tt_add(tt_eval_constraints(linear_ops, X), neg_bias)
+        alpha = np.divide(2, np.power(M, 1/2))
+        lag_mul_1 = tt_rank_reduce(tt_add(lag_mul_1, tt_scale(alpha, res)), tt_bound=0)
     return X
+
+
