@@ -4,7 +4,7 @@ import time
 
 sys.path.append(os.getcwd() + '/../')
 from dataclasses import dataclass
-from src.tt_op import *
+from src.tt_ops import *
 
 @dataclass
 class Config:
@@ -20,7 +20,7 @@ columns = [
     ])) for _ in range(Config.num_columns)
 ]
 
-tensor_matrix, index_length = tt_tensor_matrix(columns)
+tensor_matrix, index_length = tt_linear_op_from_columns(columns)
 t0 = time.time()
 gram_tensor = tt_gram(tensor_matrix)  # row_index + inner results
 t1 = time.time()

@@ -7,9 +7,9 @@ import numpy as np
 
 sys.path.append(os.getcwd() + '/../')
 from dataclasses import dataclass
-from src.tt_op import *
+from src.tt_ops import *
 from sklearn.utils.extmath import randomized_range_finder
-from src.tt_op import _tt_op_op_collapse
+from src.tt_ops import _tt_op_op_collapse
 
 @dataclass
 class Config:
@@ -17,13 +17,10 @@ class Config:
     tt_length = 6
     tt_max_rank = 5
 
-np.random.seed(10)
+np.random.seed(29)
 
-a = np.array([0.49, 0.2, 0.6])
-
-for _ in range(15):
-    a = 3*a**2 - 2*a**3
-print(a)
+linear_op = tt_random_gaussian_linear_op([2, 3, 2])
+linear_op = tt_add(linear_op, tt_transpose(linear_op))
 
 # TODO: This below is equal to taking the inner product between two tensor matrices
 """

@@ -1,34 +1,18 @@
-import sys
-import os
-import time
-
 import numpy as np
-
-sys.path.append(os.getcwd() + '/../')
 import networkx as nx
 import matplotlib.pyplot as plt
-from dataclasses import dataclass
-from src.tt_op import *
 
-@dataclass
-class Config:
-    seed = 33
 
-np.random.seed(Config.seed)
+def plot_maxcut(adj_matrix, nodes_in_cut, duality_gaps):
+    adj_matrix = np.round((adj_matrix + 1) / 2)
+    graph = nx.from_numpy_matrix(adj_matrix)
+    fig, axs = plt.subplots(1, 2, figsize=(10, 20))
+    axs[0].set_title("MaxCut")
+    axs[1].set_title("Duality Gap over iterations")
+    pos = nx.spring_layout(graph)
+    nx.draw_networkx(graph, pos, ax=axs[0], with_labels=True, node_color='lightblue', edge_color='gray', node_size=300,
+                     font_size=10, font_color='black')
+    nx.draw_networkx_nodes(graph, pos, ax=axs[0], nodelist=nodes_in_cut, alpha=1.0, node_color='r')
+    axs[1].plot(duality_gaps)
+    plt.show()
 
-graphs = []
-ranks = [[1, 1], [1, 8], [10, 5], [10, 10]]
-for i, rank in enumerate(ranks):
-    tensor = tt_random_graph(rank)
-    ranks[i] = tt_ranks(tensor)[::2]
-    matrix = np.round(np.round(tt_op_to_matrix(tensor), decimals=2))
-    G = nx.from_numpy_matrix(matrix)
-    graphs.append(G)
-
-fig, axes = plt.subplots(2, 2, figsize=(10, 10))
-axes = axes.flatten()
-for i, (rank, G) in enumerate(zip(ranks, graphs)):
-    pos = nx.spring_layout(G)
-    nx.draw_networkx(G, pos, ax=axes[i], with_labels=True, node_color='lightblue', edge_color='gray', node_size=300, font_size=10, font_color='black')
-    axes[i].set_title(f'Graph {rank}')
-plt.show()

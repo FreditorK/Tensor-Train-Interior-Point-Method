@@ -1,5 +1,5 @@
 import pytest
-from src.tt_op import *
+from src.tt_ops import *
 
 T_1 = np.array([[[0, 1 / 2],
                  [1 / 2, 0]],
@@ -74,7 +74,7 @@ def test_tt_bool_op(tensor):
 @pytest.mark.parametrize("tensor", [T_1, T_2])
 def test_tt_orthogonolize(tensor):
     tt = tt_svd(tensor)
-    tt_ortho = tt_rl_orthogonalize(tt)
+    tt_ortho = tt_rl_orthogonalise(tt)
     assert np.sum(np.abs(tt_to_tensor(tt_ortho) - tensor)) < 1e-5
 
 
