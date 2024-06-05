@@ -805,8 +805,7 @@ def _cg_oracle(X, lag_mul_1, lag_mul_2, obj_sdp, linear_op_sdp, res, trace_param
     sdp_gradient = tt_rank_reduce(tt_add(obj_sdp, constraint_term))
     tt_eig, min_eig_val = tt_randomised_min_eigentensor(sdp_gradient, num_iter=1000, tol=tol)
     eig_sdp = tt_outer_product(tt_eig, tt_eig)
-    eig_sdp = tt_normalise(eig_sdp)
-    duality_gap = (tt_inner_prod(obj_sdp, X) + tt_inner_prod(constraint_term, X) - trace_param_root_n**(len(X))*min_eig_val)
+    duality_gap = tt_inner_prod(obj_sdp, X) + tt_inner_prod(constraint_term, X) - np.power(trace_param_root_n, len(X))*min_eig_val
     return eig_sdp, duality_gap
 
 

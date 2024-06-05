@@ -11,7 +11,7 @@ from graph_plotting import *
 @dataclass
 class Config:
     seed = 9
-    ranks = [5, 5, 5, 5]
+    ranks = [5, 5]
 
 if __name__ == "__main__":
     np.random.seed(Config.seed)
@@ -34,6 +34,7 @@ if __name__ == "__main__":
     avg_error = np.sqrt(tt_inner_prod(scaled_error, scaled_error))
     print(f"Avg constraint error: {avg_error}")
     print("Ranks of X: ", tt_ranks(X))
+    print(np.round(tt_op_to_matrix(X), decimals=2))
     #tt_eig, eig_val = tt_randomised_max_eigentensor(X, num_iter=100)
     #tt_eig = tt_binary_round(tt_eig)
     #sol_vec = tt_to_tensor(tt_eig).flatten()

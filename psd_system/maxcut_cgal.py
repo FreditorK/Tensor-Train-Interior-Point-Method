@@ -7,6 +7,7 @@ import time
 from src.tt_ops import *
 from graph_plotting import *
 from maxcut import Config
+from src.baselines import cgal
 
 
 if __name__ == "__main__":
@@ -16,17 +17,15 @@ if __name__ == "__main__":
     t1 = time.time()
     print(f"Random graph produced in {t1 - t0:.3f}s")
     C = np.round(tt_op_to_matrix(G))
-    X = cp.Variable(C.shape, symmetric=True)
-    constraints = [X >> 0]
-    constraints += [cp.diag(X) == 1]
     t2 = time.time()
-    prob = cp.Problem(cp.Maximize(cp.trace(C @ X)), constraints)
-    prob.solve()
+    constraint_matrices = [np.outer(column, column) for column in np.eye(C.shape[0])]
+    bias = np.ones((C.shape[0], 1))
+    trace_param = np.sum(bias)
+    X, duality_gaps = cgal(-C, constraint_matrices, bias, trace_param)
+    print(np.round(X, decimals=2))
     t3 = time.time()
-
     print(f"Problem solved in {t3 - t2:.3f}s")
-    print(f"Objective value: {prob.value}")
-    chol = robust_cholesky(X.value, epsilon=1e-3)
+    print(f"Objective value: {np.trace(C.T @ X)}")
+    chol = robust_cholesky(X, epsilon=1e-3)
     nodes_in_cut = [i for i, v in enumerate(chol.T @ np.random.randn(chol.shape[0], 1)) if v > 0]
-    plot_maxcut(C, nodes_in_cut, [])
-
+    plot_maxcut(C, nodes_in_cut, duality_gaps)

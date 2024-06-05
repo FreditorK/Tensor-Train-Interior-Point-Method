@@ -1,6 +1,7 @@
 import sys
 import os
 import time
+import matplotlib.pyplot as plt
 
 import numpy as np
 
@@ -38,18 +39,19 @@ constraints, index_length = tt_linear_op_from_columns([A_sym_1, A_sym_2, A_sym_3
 bias = tt_rank_reduce(tt_eval_constraints(constraints, test_X))
 constraints = tt_rank_reduce(constraints)
 
-column = [5 * np.random.rand()*c for c in tt_random_binary([np.random.randint(low=1, high=Config.tt_max_rank + 1) for _ in range(Config.tt_length - 1)])]
+column = [np.abs(c*np.random.randn(*c.shape)) for c in tt_random_binary([np.random.randint(low=1, high=Config.tt_max_rank + 1) for _ in range(Config.tt_length - 1)])]
 Obj_sym = tt_rank_reduce([np.kron(np.expand_dims(c, 1), np.expand_dims(c, 2)) for c in column])
-Obj_sym = tt_normalise(Obj_sym)
+Obj_sym = Obj_sym
 
 print("...Problem created!")
 print(f"Objective Ranks: {tt_ranks(Obj_sym)}")
 print(f"Constraint Ranks: As {tt_ranks(constraints)}, bias {tt_ranks(bias)}")
-print(tt_ranks(tt_constraint_contract(constraints, [np.random.randn(1, 2, 2), np.random.randn(2, 2, 1)])))
 t0 = time.time()
-X = tt_sdp_fw(Obj_sym, constraints, bias, num_iter=100)
+X, duality_gaps = tt_sdp_fw(Obj_sym, constraints, bias, num_iter=100)
 t1 = time.time()
 print(f"Problem solved in {t1-t0}s")
 print(f"Objective value: {tt_inner_prod(Obj_sym, X)}")
 print(f"Avg Constraint error: {np.sum(np.abs(tt_to_tensor(tt_eval_constraints(constraints, X)) - tt_to_tensor(bias)))}")
 print("Ranks of X: ", tt_ranks(X))
+plt.plot(duality_gaps)
+plt.show()
