@@ -8,10 +8,12 @@ from dataclasses import dataclass
 from src.tt_ops import *
 from graph_plotting import *
 
+
 @dataclass
 class Config:
     seed = 9
-    ranks = [5, 5]
+    ranks = [5, 5, 5, 5, 5]
+
 
 if __name__ == "__main__":
     np.random.seed(Config.seed)
@@ -43,7 +45,3 @@ if __name__ == "__main__":
     nodes_in_cut = [i for i, v in enumerate(chol.T @ np.random.randn(chol.shape[0], 1)) if v > 0]
     adj_matrix = -tt_op_to_matrix(G)
     plot_maxcut(adj_matrix, nodes_in_cut, duality_gaps)
-
-
-
-

@@ -1,5 +1,7 @@
 # https://epubs.siam.org/doi/epdf/10.1137/19M1305045
 import numpy as np
+import scipy as scp
+from src.ops import *
 
 
 def cgal(obj_matrix, constraint_matrices, bias, trace_param, num_iter=100):
@@ -7,22 +9,52 @@ def cgal(obj_matrix, constraint_matrices, bias, trace_param, num_iter=100):
     res = -bias
     lag_mul_1 = np.zeros((len(constraint_matrices), 1))
     lag_mul_2 = 1
-    alpha_0 = 4 * np.sum([np.linalg.norm(A) for A in constraint_matrices]) * trace_param**2
+    alpha_0 = 4 * np.sum([np.linalg.norm(A) for A in constraint_matrices]) * trace_param ** 2
     duality_gaps = []
     for it in range(1, num_iter):
-        constraint_term = sum([A.T*(y_i + lag_mul_2*r) for A, y_i, r in zip(constraint_matrices, lag_mul_1.flatten(), res.flatten())])
+        constraint_term = sum(
+            [A.T * (y_i + lag_mul_2 * r) for A, y_i, r in zip(constraint_matrices, lag_mul_1.flatten(), res.flatten())])
         sdp_gradient = obj_matrix + constraint_term
-        eig, min_eig_val = power_method(2*np.eye(sdp_gradient.shape[0]) - sdp_gradient)
+        min_eig_val, eig = scp.sparse.linalg.eigsh(2 * np.eye(sdp_gradient.shape[0]) - sdp_gradient, k=1, which='LM')
         eta = np.divide(2, it + 1)
-        print(np.trace(obj_matrix @ X), np.trace(constraint_term @ X), trace_param, min_eig_val)
-        duality_gap = np.trace(obj_matrix @ X) + np.trace(constraint_term @ X) - trace_param*(2 - min_eig_val)
+        duality_gap = np.trace(obj_matrix @ X) + np.trace(constraint_term @ X) - trace_param * (2 - min_eig_val)
         duality_gaps.append(duality_gap)
-        X = (1 -eta)*X + eta*trace_param*np.outer(eig, eig)
+        X = (1 - eta) * X + eta * trace_param * np.outer(eig, eig)
         res = np.array([np.trace(A.T @ X) - b for A, b in zip(constraint_matrices, bias.flatten())]).reshape(-1, 1)
-        gamma = min(np.divide(alpha_0, np.power(it + 1, 3/2) * (res.T @ res)), 1)
-        lag_mul_1 = lag_mul_1 + gamma*res
-        lag_mul_2 = np.sqrt(it+1)
+        alpha = min(np.divide(alpha_0, np.power(it + 1, 3 / 2) * (res.T @ res)), 1)
+        lag_mul_1 = lag_mul_1 + alpha * res
+        lag_mul_2 = np.sqrt(it + 1)
     return X, duality_gaps
+
+
+def sketchy_cgal(obj_matrix, constraint_matrices, bias, trace_param, R=1, num_iter=100):
+    Omega, S = nystrom_sketch_init(obj_matrix.shape[0], R)
+    res = -bias
+    lag_mul_1 = np.zeros((len(constraint_matrices), 1))
+    z = np.zeros_like(lag_mul_1)
+    lag_mul_2 = 1
+    alpha_0 = 4 * np.sum([np.linalg.norm(A) for A in constraint_matrices]) * trace_param ** 2
+    duality_gaps = []
+    p = 0
+    for it in range(1, num_iter):
+        constraint_term = sum(
+            [A.T * (y_i + lag_mul_2 * r) for A, y_i, r in zip(constraint_matrices, lag_mul_1.flatten(), res.flatten())])
+        sdp_gradient = obj_matrix + constraint_term
+        min_eig_val, eig = scp.sparse.linalg.eigsh(2 * np.eye(sdp_gradient.shape[0]) - sdp_gradient, k=1, which='LM')
+        eta = np.divide(2, it + 1)
+        p = (1-eta)*p + eta*trace_param*(eig.T @ (obj_matrix @ eig)).item()
+        duality_gap = p + ((lag_mul_1 + lag_mul_2*res).T @ z).item() - trace_param * (2 - min_eig_val)
+        duality_gaps.append(duality_gap)
+        z = (1 - eta) * z + eta * trace_param * np.array([eig.T @ A.T @ eig for A in constraint_matrices]).reshape(-1, 1)
+        res = z - bias
+        S = nystrom_sketch_update(S, Omega, eig, eta, trace_param)
+        alpha = min(np.divide(alpha_0, np.power(it + 1, 3 / 2) * (res.T @ res)), 1)
+        lag_mul_1 = lag_mul_1 + alpha * res
+        lag_mul_2 = np.sqrt(it + 1)
+    U, Lambda = nystrom_sketch_reconstruct(S, Omega)
+    U = U[:, :R]
+    Lambda = Lambda + (trace_param - np.trace(Lambda)) * np.eye(R) / R
+    return U @ Lambda @ U.T, duality_gaps
 
 
 def power_method(matrix, num_iter=200):
@@ -46,7 +78,7 @@ def approx_min_evec(matrix, num_iter=1000):
         vs.append(v)
         w = v.T @ matrix @ v
         ws.append(w.item())
-        new_v = matrix @ v - w*v - rho*prev_v
+        new_v = matrix @ v - w * v - rho * prev_v
         prev_v = v
         rho = np.linalg.norm(new_v)
         rhos.append(rho.item())
@@ -61,5 +93,28 @@ def approx_min_evec(matrix, num_iter=1000):
     eig_vals, eig_vecs = np.linalg.eig(tridiagonal_matrix)
     min_idx = np.argmin(eig_vals)
     min_eig = eig_vecs[min_idx]
-    v = np.sum([u*v for u, v in zip(min_eig, vs)])
+    v = np.sum([u * v for u, v in zip(min_eig, vs)])
     return eig_vals[min_idx], v
+
+
+def nystrom_sketch_init(n, R):
+    Omega = np.random.randn(n, R)
+    S = np.zeros((n, R))
+    return Omega, S
+
+
+def nystrom_sketch_update(S, Omega, eig, eta, trace_param):
+    S = (1 - eta) * S + eta * trace_param * np.outer(eig, eig.T @ Omega)
+    return S
+
+
+def nystrom_sketch_reconstruct(Y, Omega, tol=2.2e-12):
+    sigma = tol * np.sqrt(Y.shape[0]) * np.linalg.norm(Y)
+    Y = Y + sigma * Omega
+    C = np.linalg.cholesky(Omega.T @ Y)
+    B = Y @ np.linalg.inv(C.T)
+    U, d, _ = np.linalg.svd(B)
+    Sigma = np.diag(d)
+    Lambda = np.maximum(0, Sigma**2 - sigma * np.eye(Sigma.shape[0]))
+    U = U[:, :len(Lambda)]
+    return U, Lambda
