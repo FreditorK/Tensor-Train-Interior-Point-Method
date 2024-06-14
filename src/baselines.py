@@ -67,36 +67,6 @@ def power_method(matrix, num_iter=200):
     return np.divide(v, np.linalg.norm(v)), (prev_v.T @ v).item()
 
 
-def approx_min_evec(matrix, num_iter=1000):
-    v = np.random.randn(matrix.shape[0], 1)
-    v = np.divide(v, np.linalg.norm(v))
-    prev_v = np.zeros_like(v)
-    rho = 0
-    rhos, ws, vs = [], [], []
-    num_iter = min(num_iter, matrix.shape[0])
-    for i in range(num_iter):
-        vs.append(v)
-        w = v.T @ matrix @ v
-        ws.append(w.item())
-        new_v = matrix @ v - w * v - rho * prev_v
-        prev_v = v
-        rho = np.linalg.norm(new_v)
-        rhos.append(rho.item())
-        if np.equal(rho, 0):
-            break
-        v = np.divide(new_v, rho)
-    vs.append(v)
-    tridiagonal_matrix = np.zeros((num_iter, num_iter))
-    np.fill_diagonal(tridiagonal_matrix, ws)
-    np.fill_diagonal(tridiagonal_matrix[0:-1, 1:], rhos[:-1])
-    np.fill_diagonal(tridiagonal_matrix[1:, 0:-1], rhos[:-1])
-    eig_vals, eig_vecs = np.linalg.eig(tridiagonal_matrix)
-    min_idx = np.argmin(eig_vals)
-    min_eig = eig_vecs[min_idx]
-    v = np.sum([u * v for u, v in zip(min_eig, vs)])
-    return eig_vals[min_idx], v
-
-
 def nystrom_sketch_init(n, R):
     Omega = np.random.randn(n, R)
     S = np.zeros((n, R))

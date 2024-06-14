@@ -36,7 +36,7 @@ test_X = [np.kron(np.expand_dims(c, 1), np.expand_dims(c, 2)) for c in test_X]
 test_X = tt_normalise(test_X)
 
 constraints, index_length = tt_linear_op_from_columns([A_sym_1, A_sym_2, A_sym_3, A_sym_4])
-bias = tt_rank_reduce(tt_eval_constraints(constraints, test_X))
+bias = tt_rank_reduce(tt_eval_constraints(constraints, test_X), tt_bound=1e-10)
 constraints = tt_rank_reduce(constraints)
 
 column = [np.abs(c*np.random.randn(*c.shape)) for c in tt_random_binary([np.random.randint(low=1, high=Config.tt_max_rank + 1) for _ in range(Config.tt_length - 1)])]

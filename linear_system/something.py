@@ -19,13 +19,10 @@ class Config:
 
 np.random.seed(389)
 
-linear_op = tt_random_gaussian_linear_op([5, 3])
-a = tt_random_gaussian_linear_op([5, 3])
-linear_op = tt_add(linear_op, a)
-linear_op = sum([break_core_bond(c) for c in linear_op], [])
-linear_op = tt_rl_orthogonalise(linear_op)
-print(tt_inner_prod(linear_op, linear_op))
-print(np.sqrt(np.trace(linear_op[0].reshape(linear_op[0].shape[0]*linear_op[0].shape[1], linear_op[0].shape[-1]).T @ linear_op[0].reshape(linear_op[0].shape[0]*linear_op[0].shape[1], linear_op[0].shape[-1]))))
+linear_op = tt_rl_orthogonalise(tt_random_gaussian_linear_op([2]))
+linear_op = tt_add(linear_op, tt_transpose(linear_op))
+print(np.round(linear_op[0], decimals=3))
+print(np.round(linear_op[1], decimals=3))
 
 # TODO: This below is equal to taking the inner product between two tensor matrices
 """

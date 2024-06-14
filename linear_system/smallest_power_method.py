@@ -7,9 +7,9 @@ import numpy as np
 sys.path.append(os.getcwd() + '/../')
 from src.tt_ops import *
 
-np.random.seed(11)
+np.random.seed(18)
 
-linear_op = tt_random_gaussian_linear_op([4, 5, 22, 5, 8, 6, 8])
+linear_op = tt_random_gaussian_linear_op([4, 5, 22, 5, 8, 9, 10, 2])
 linear_op = tt_rank_reduce(tt_add(linear_op, tt_transpose(linear_op)), tt_bound=1e-10)
 t0 = time.time()
 tt_eig, tt_eig_val = tt_randomised_min_eigentensor(linear_op, num_iter=1200, tol=1e-6)

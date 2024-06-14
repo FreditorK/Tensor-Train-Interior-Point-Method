@@ -1,6 +1,7 @@
 import numpy as np
 
 from src.ops import *
+from tqdm import tqdm
 
 PHI = np.array([[1, 1],
                 [1, -1]], dtype=float).reshape(1, 2, 2, 1)
@@ -100,7 +101,7 @@ def tt_rl_contraction(tt_train_1: List[np.array], tt_train_2: List[np.array]):
     return new_cores[::-1]
 
 
-def tt_rl_random_orthogonalise(tt_train: List[np.array], target_ranks: List[int]) -> List[np.array]:
+def tt_lr_random_orthogonalise(tt_train: List[np.array], target_ranks: List[int]) -> List[np.array]:
     if len(tt_train) > 1:
         target_ranks = [1] + target_ranks + [1]
         tt_gaussian = [
@@ -109,17 +110,22 @@ def tt_rl_random_orthogonalise(tt_train: List[np.array], target_ranks: List[int]
                                                                                            l_np1)
             for i, (l_n, l_np1) in enumerate(zip(target_ranks[:-1], target_ranks[1:]))
         ]
-        tt_gaussian_contractions = tt_rl_contraction(tt_train, tt_gaussian)
-        for i, core_w in enumerate(tt_gaussian_contractions):
-            shape_i1 = tt_train[i + 1].shape
-            core_z = tt_train[i].reshape(-1, shape_i1[0])  # R_i * 2 x R_{i+1}
-            core_y = core_z @ core_w  # R_i * 2 x target_r
-            Q_T, _ = np.linalg.qr(core_y)  # R_i * 2 x unknown
-            tt_train[i] = Q_T.reshape(*tt_train[i].shape[:-1], -1)  # R_i * 2 x unknown
-            core_m = Q_T.T @ core_z  # unknown x R_{i+1}
-            tt_train[i + 1] = (
-                core_m @ tt_train[i + 1].reshape(shape_i1[0], -1)
-            ).reshape(-1, *shape_i1[1:])  # unknown x 2 * R_{i+2}
+        return _tt_lr_random_orthogonalise(tt_train, tt_gaussian)
+    return tt_train
+
+
+def _tt_lr_random_orthogonalise(tt_train, tt_gaussian):
+    tt_gaussian_contractions = tt_rl_contraction(tt_train, tt_gaussian)
+    for i, core_w in enumerate(tt_gaussian_contractions):
+        shape_i1 = tt_train[i + 1].shape
+        core_z = tt_train[i].reshape(-1, shape_i1[0])  # R_i * 2 x R_{i+1}
+        core_y = core_z @ core_w  # R_i * 2 x target_r
+        Q_T, _ = np.linalg.qr(core_y)  # R_i * 2 x unknown
+        tt_train[i] = Q_T.reshape(*tt_train[i].shape[:-1], -1)  # R_i * 2 x unknown
+        core_m = Q_T.T @ core_z  # unknown x R_{i+1}
+        tt_train[i + 1] = (
+            core_m @ tt_train[i + 1].reshape(shape_i1[0], -1)
+        ).reshape(-1, *shape_i1[1:])  # unknown x 2 * R_{i+2}
     return tt_train
 
 
@@ -168,7 +174,8 @@ def tt_rank_retraction(tt_train: List[np.array], tt_upper_ranks: List[int]):
         V_T = V_T[non_sing_eig_idxs, :]
         tt_train[idx] = U.reshape(rank, *idx_shape[1:-1], next_rank)
         tt_train[idx + 1] = (np.diag(S) @ V_T @ tt_train[idx + 1].reshape(V_T.shape[-1], -1)).reshape(next_rank,
-                                                                                                      *next_idx_shape[1:-1],
+                                                                                                      *next_idx_shape[
+                                                                                                       1:-1],
                                                                                                       -1)
         rank = next_rank
     return tt_train
@@ -636,7 +643,7 @@ def tt_linear_op(linear_op, tt_train: List[np.array], bound=None) -> List[np.arr
 
 
 def tt_randomised_linear_op(linear_op, tt_train: List[np.array], ranks) -> List[np.array]:
-    return tt_rl_random_orthogonalise(_tt_linear_op(linear_op, tt_train), target_ranks=ranks)
+    return tt_lr_random_orthogonalise(_tt_linear_op(linear_op, tt_train), target_ranks=ranks)
 
 
 def _tt_op_op_collapse(linear_core_op_1, linear_core_op_2):
@@ -718,19 +725,22 @@ def tt_randomised_min_eigentensor(linear_op: List[np.array], num_iter=10, tol=1e
     identity = tt_indentity(n)
     identity = tt_scale(2, identity)
     linear_op = tt_rank_reduce(tt_add(identity, linear_op), tt_bound=tol)
-    eig_vec = tt_linear_op(linear_op, tt_normalise([np.random.randn(1, 2, 1) for _ in range(n)]))
-    eig_vec = tt_normalise(eig_vec)
-    ranks = tt_ranks(eig_vec)
+    eig_vec = tt_normalise([np.random.randn(1, 2, 1) for _ in range(n)])
+    ranks = [2**i for i in range(int(np.ceil((len(linear_op)+1)/ 2)))]
+    target_ranks = ranks + list(reversed(ranks[:len(eig_vec)+1-len(ranks)]))
+    tt_gaussian = [np.divide(1, l_n * 2 * l_np1) * np.random.randn(l_n, 2, l_np1)
+        for i, (l_n, l_np1) in enumerate(zip(target_ranks[:-1], target_ranks[1:]))
+    ]
     norm_2 = np.inf
     for i in range(num_iter):
         prev_norm_2 = norm_2
-        eig_vec = tt_randomised_linear_op(linear_op, eig_vec, ranks)
+        eig_vec = _tt_lr_random_orthogonalise(_tt_linear_op(linear_op, eig_vec), tt_gaussian)
         norm_2 = tt_inner_prod(eig_vec, eig_vec)
         eig_vec = tt_scale(np.divide(1, np.sqrt(norm_2)), eig_vec)
         if np.less_equal(np.abs(norm_2 - prev_norm_2), tol):
             break
     prev_eig_vec = eig_vec
-    eig_vec = tt_linear_op(linear_op, eig_vec, bound=tol)
+    eig_vec = _tt_lr_random_orthogonalise(_tt_linear_op(linear_op, eig_vec), tt_gaussian)
     eig_val = tt_inner_prod(prev_eig_vec, eig_vec)
     return tt_normalise(eig_vec), normalisation * (2 - eig_val)
 
@@ -752,8 +762,8 @@ def tt_constraint_contract(linear_op, lag_mul):
 
 
 def tt_outer_product(tt_train_1, tt_train_2):
-    return tt_rank_reduce(
-        [np.kron(np.expand_dims(c_1, 1), np.expand_dims(c_2, 2)) for c_1, c_2 in zip(tt_train_1, tt_train_2)])
+    outer = [np.kron(np.expand_dims(c_1, 1), np.expand_dims(c_2, 2)) for c_1, c_2 in zip(tt_train_1, tt_train_2)]
+    return outer
 
 
 def tt_binary_round(tt_train, num_iter=20, tol=1e-5):
@@ -800,28 +810,22 @@ def tt_op_to_matrix(linear_op):
 
 
 def _cg_oracle(X, lag_mul_1, lag_mul_2, obj_sdp, linear_op_sdp, res, trace_param_root_n, tol):
-    lag = tt_rank_reduce(tt_add(lag_mul_1, tt_scale(lag_mul_2, res)))
+    lag = tt_add(lag_mul_1, tt_scale(lag_mul_2, res))
     constraint_term = tt_constraint_contract(linear_op_sdp, lag)
-    sdp_gradient = tt_rank_reduce(tt_add(obj_sdp, constraint_term))
+    sdp_gradient = tt_add(obj_sdp, constraint_term)
     tt_eig, min_eig_val = tt_randomised_min_eigentensor(sdp_gradient, num_iter=1000, tol=tol)
+    duality_gap = tt_inner_prod(obj_sdp, X) + tt_inner_prod(constraint_term, X) - np.power(trace_param_root_n,
+                                                                                           len(X)) * min_eig_val
+    return tt_eig, duality_gap
+
+
+def _interpolate(gamma, X, tt_eig, trace_param_root_n):
     eig_sdp = tt_outer_product(tt_eig, tt_eig)
-    duality_gap = tt_inner_prod(obj_sdp, X) + tt_inner_prod(constraint_term, X) - np.power(trace_param_root_n, len(X))*min_eig_val
-    return eig_sdp, duality_gap
-
-
-def _interpolate(gamma, X, eig_sdp, trace_param_root_n):
-    eig_sdp = [trace_param_root_n*c for c in eig_sdp]
+    eig_sdp = [trace_param_root_n * c for c in eig_sdp]
     tt_update = tt_scale(gamma, eig_sdp)
     X = tt_scale(1 - gamma, X)
     X = tt_add(X, tt_update)
-    return tt_rank_reduce(X)
-
-
-def _tt_cg(lag_mul_1, lag_mul_2, obj_sdp, linear_op_sdp, _, res, X, it, trace_param_root_n, tol):
-    eig_sdp, duality_gap = _cg_oracle(X, lag_mul_1, lag_mul_2, obj_sdp, linear_op_sdp, res, trace_param_root_n, tol)
-    gamma = _trivial_step_size(it)
-    X = _interpolate(gamma, X, eig_sdp,  trace_param_root_n)
-    return X, duality_gap
+    return X
 
 
 def _tt_ops_core_collapse(linear_ops_core: np.array, core_2: np.array) -> np.array:
@@ -842,21 +846,46 @@ def tt_eval_constraints(linear_ops, X):
     return full_cores
 
 
-def tt_sdp_fw(obj_sdp: List[np.array], linear_ops: List[np.array], bias: List[np.array], trace_param_root_n=1, num_iter=100):
-    tol = np.divide(1, np.power(2, 2 * len(obj_sdp)+1))
+def tt_sdp_fw(
+    obj_sdp: List[np.array],
+    linear_ops: List[np.array],
+    bias: List[np.array],
+    trace_param_root_n=1,
+    dual_gap_tol=1e-6,
+    num_iter=100
+):
+    tol = np.divide(1, np.power(2, 2 * len(obj_sdp) + 1))
     X = [np.zeros((1, 2, 2, 1)) for _ in range(len(linear_ops))]
     neg_bias = tt_scale(-1, bias)
     res = neg_bias
     lag_mul_1 = [np.zeros((1, 2, 1)) for _ in range(len(bias))]
     lag_mul_2 = 1
-    alpha_0 = 4 * tt_inner_prod(linear_ops, linear_ops) * trace_param_root_n ** (2*len(X))
+    alpha_0 = 4 * tt_inner_prod(linear_ops, linear_ops) * trace_param_root_n ** (2 * len(X))
     duality_gaps = []
+    target_ranks = [1] + list(np.maximum(tt_ranks(obj_sdp), tt_ranks(linear_ops))) + [1]
+    tt_X_sketch = [
+        np.divide(1, l_n * np.prod(obj_sdp[i].shape[1:-1]) * l_np1) * np.random.randn(l_n, *obj_sdp[i].shape[1:-1], l_np1)
+        for i, (l_n, l_np1) in enumerate(zip(target_ranks[:-1], target_ranks[1:]))
+    ]
+    ranks = [2 ** i for i in range(int(np.ceil((len(lag_mul_1) + 1) / 2)))]
+    lag_target_ranks = ranks + list(reversed(ranks[:len(lag_mul_1) + 1 - len(ranks)]))
+    tt_lag_sketch = [
+        np.divide(1, l_n * np.prod(lag_mul_1[i].shape[1:-1]) * l_np1) * np.random.randn(l_n, *lag_mul_1[i].shape[1:-1],
+                                                                                      l_np1)
+        for i, (l_n, l_np1) in enumerate(zip(lag_target_ranks[:-1], lag_target_ranks[1:]))
+    ]
+    it=1
     for it in range(1, num_iter):
-        X, duality_gap = _tt_cg(lag_mul_1, lag_mul_2, obj_sdp, linear_ops, bias, res, X, it, trace_param_root_n, tol)
+        tt_eig, duality_gap = _cg_oracle(X, lag_mul_1, lag_mul_2, obj_sdp, linear_ops, res, trace_param_root_n, tol)
         duality_gaps.append(duality_gap)
-        res = tt_rank_reduce(tt_add(tt_eval_constraints(linear_ops, X), neg_bias))
-        alpha = min(np.divide(alpha_0, np.power(it + 1, 3/2) * tt_inner_prod(res, res)), 1)
-        #alpha = np.divide(1, 2*np.sqrt(it+1))
-        lag_mul_1 = tt_rank_retraction(tt_add(lag_mul_1, tt_scale(alpha, res)), tt_ranks(res))
+        if np.less_equal(np.abs(duality_gap), dual_gap_tol):
+            break
+        gamma = _trivial_step_size(it)
+        X = _interpolate(gamma, X, tt_eig, trace_param_root_n)
+        X = _tt_lr_random_orthogonalise(X, tt_X_sketch)
+        res = _tt_lr_random_orthogonalise((tt_add(tt_eval_constraints(linear_ops, X), neg_bias)), tt_lag_sketch)
+        alpha = min(np.divide(alpha_0, np.power(it + 1, 3 / 2) * tt_inner_prod(res, res)), 1)
+        lag_mul_1 = _tt_lr_random_orthogonalise(tt_add(lag_mul_1, tt_scale(alpha, res)), tt_lag_sketch)
         lag_mul_2 = np.sqrt(it + 1)
+    print(f"Finished after {it} iterations")
     return X, duality_gaps
