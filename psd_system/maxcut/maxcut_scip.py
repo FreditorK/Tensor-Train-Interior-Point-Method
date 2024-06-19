@@ -1,10 +1,10 @@
 import sys
 import os
-sys.path.append(os.getcwd() + '/../')
+sys.path.append(os.getcwd() + '/../../')
 import cvxpy as cp
 import time
 from src.tt_ops import *
-from graph_plotting import *
+from psd_system.graph_plotting import *
 from maxcut import Config
 
 

@@ -1,13 +1,12 @@
 # Import packages.
 import sys
 import os
-sys.path.append(os.getcwd() + '/../')
-import cvxpy as cp
+sys.path.append(os.getcwd() + '/../../')
 import time
 from src.tt_ops import *
-from graph_plotting import *
+from psd_system.graph_plotting import *
 from maxcut import Config
-from src.baselines import *
+from src.baselines import cgal
 
 
 if __name__ == "__main__":
@@ -21,7 +20,8 @@ if __name__ == "__main__":
     constraint_matrices = [np.outer(column, column) for column in np.eye(C.shape[0])]
     bias = np.ones((C.shape[0], 1))
     trace_param = np.sum(bias)
-    X, duality_gaps = sketchy_cgal(-C, constraint_matrices, bias, trace_param, R=2, num_iter=150)
+    X, duality_gaps = cgal(-C, constraint_matrices, bias, (trace_param, trace_param), num_iter=100)
+    print(np.round(X, decimals=2))
     t3 = time.time()
     print(f"Problem solved in {t3 - t2:.3f}s")
     print(f"Objective value: {np.trace(C.T @ X)}")

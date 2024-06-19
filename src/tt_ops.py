@@ -49,9 +49,9 @@ def tt_random_gaussian_linear_op(target_ranks: List[int]):
                          zip(target_ranks[:-1], target_ranks[1:])])
 
 
-def tt_one(dim):
+def tt_one(dim, shape=(2, )):
     """ Returns an all-one tensor of dimension 2**dim """
-    return [np.ones((1, 2, 1)) for _ in range(dim)]
+    return [np.ones((1, *shape, 1)) for _ in range(dim)]
 
 
 def tt_leading_one(dim):
@@ -716,6 +716,16 @@ def tt_min_eigentensor(linear_op: List[np.array], num_iter=10, tol=1e-3):
 
 
 def tt_randomised_min_eigentensor(linear_op: List[np.array], num_iter=10, tol=1e-3):
+    ranks = [2 ** i for i in range(int(np.ceil((len(linear_op) + 1) / 2)))]
+    target_ranks = ranks + list(reversed(ranks[:len(linear_op) + 1 - len(ranks)]))
+    tt_gaussian = [
+        np.divide(1, l_n * 2 * l_np1) * np.random.randn(l_n, 2, l_np1)
+        for i, (l_n, l_np1) in enumerate(zip(target_ranks[:-1], target_ranks[1:]))
+    ]
+    return _tt_randomised_min_eigentensor(linear_op, tt_gaussian, num_iter, tol)
+
+
+def _tt_randomised_min_eigentensor(linear_op: List[np.array], tt_gaussian, num_iter=10, tol=1e-3):
     """
     Only for symmetric matrices
     """
@@ -726,11 +736,6 @@ def tt_randomised_min_eigentensor(linear_op: List[np.array], num_iter=10, tol=1e
     identity = tt_scale(2, identity)
     linear_op = tt_rank_reduce(tt_add(identity, linear_op), tt_bound=tol)
     eig_vec = tt_normalise([np.random.randn(1, 2, 1) for _ in range(n)])
-    ranks = [2**i for i in range(int(np.ceil((len(linear_op)+1)/ 2)))]
-    target_ranks = ranks + list(reversed(ranks[:len(eig_vec)+1-len(ranks)]))
-    tt_gaussian = [np.divide(1, l_n * 2 * l_np1) * np.random.randn(l_n, 2, l_np1)
-        for i, (l_n, l_np1) in enumerate(zip(target_ranks[:-1], target_ranks[1:]))
-    ]
     norm_2 = np.inf
     for i in range(num_iter):
         prev_norm_2 = norm_2
@@ -766,7 +771,7 @@ def tt_outer_product(tt_train_1, tt_train_2):
     return outer
 
 
-def tt_binary_round(tt_train, num_iter=20, tol=1e-5):
+def tt_binary_round(tt_train, num_iter=25, tol=1e-5):
     for _ in range(num_iter):
         tt_train_p2 = tt_rank_reduce(tt_hadamard(tt_train, tt_train))
         boolean_poly = tt_walsh_op_inv(tt_train_p2)
@@ -809,14 +814,15 @@ def tt_op_to_matrix(linear_op):
     return matrix
 
 
-def _cg_oracle(X, lag_mul_1, lag_mul_2, obj_sdp, linear_op_sdp, res, trace_param_root_n, tol):
+def _cg_oracle(tt_eig_sketch, X, lag_mul_1, lag_mul_2, obj_sdp, linear_op_sdp, res, trace_param_root_n, tol):
     lag = tt_add(lag_mul_1, tt_scale(lag_mul_2, res))
     constraint_term = tt_constraint_contract(linear_op_sdp, lag)
     sdp_gradient = tt_add(obj_sdp, constraint_term)
-    tt_eig, min_eig_val = tt_randomised_min_eigentensor(sdp_gradient, num_iter=1000, tol=tol)
-    duality_gap = tt_inner_prod(obj_sdp, X) + tt_inner_prod(constraint_term, X) - np.power(trace_param_root_n,
+    tt_eig, min_eig_val = _tt_randomised_min_eigentensor(sdp_gradient, tt_eig_sketch, num_iter=1000, tol=tol)
+    current_trace_param = trace_param_root_n[0] if min_eig_val > 0 else trace_param_root_n[1]
+    duality_gap = tt_inner_prod(obj_sdp, X) + tt_inner_prod(constraint_term, X) - np.power(current_trace_param,
                                                                                            len(X)) * min_eig_val
-    return tt_eig, duality_gap
+    return tt_eig, current_trace_param, duality_gap
 
 
 def _interpolate(gamma, X, tt_eig, trace_param_root_n):
@@ -846,11 +852,26 @@ def tt_eval_constraints(linear_ops, X):
     return full_cores
 
 
+def tt_sketch_like(tt_train, target_ranks):
+    return [
+        np.divide(1, l_n * np.prod(tt_train[i].shape[1:-1]) * l_np1) * np.random.randn(l_n, *tt_train[i].shape[1:-1],
+                                                                                       l_np1)
+        for i, (l_n, l_np1) in enumerate(zip(target_ranks[:-1], target_ranks[1:]))
+    ]
+
+
+def tt_sketch(shape, target_ranks):
+    return [
+        np.divide(1, l_n * np.prod(shape) * l_np1) * np.random.randn(l_n, *shape, l_np1)
+        for i, (l_n, l_np1) in enumerate(zip(target_ranks[:-1], target_ranks[1:]))
+    ]
+
+
 def tt_sdp_fw(
     obj_sdp: List[np.array],
     linear_ops: List[np.array],
     bias: List[np.array],
-    trace_param_root_n=1,
+    trace_param_root_n,
     dual_gap_tol=1e-6,
     num_iter=100
 ):
@@ -858,30 +879,25 @@ def tt_sdp_fw(
     X = [np.zeros((1, 2, 2, 1)) for _ in range(len(linear_ops))]
     neg_bias = tt_scale(-1, bias)
     res = neg_bias
-    lag_mul_1 = [np.zeros((1, 2, 1)) for _ in range(len(bias))]
+    lag_mul_1 = [np.zeros((1, *b.shape[1:-1], 1)) for b in bias]
     lag_mul_2 = 1
-    alpha_0 = 4 * tt_inner_prod(linear_ops, linear_ops) * trace_param_root_n ** (2 * len(X))
+    alpha_0 = 4 * tt_inner_prod(linear_ops, linear_ops) * trace_param_root_n[1] ** (2 * len(X))
     duality_gaps = []
     target_ranks = [1] + list(np.maximum(tt_ranks(obj_sdp), tt_ranks(linear_ops))) + [1]
-    tt_X_sketch = [
-        np.divide(1, l_n * np.prod(obj_sdp[i].shape[1:-1]) * l_np1) * np.random.randn(l_n, *obj_sdp[i].shape[1:-1], l_np1)
-        for i, (l_n, l_np1) in enumerate(zip(target_ranks[:-1], target_ranks[1:]))
-    ]
+    tt_X_sketch = tt_sketch_like(obj_sdp, target_ranks)
     ranks = [2 ** i for i in range(int(np.ceil((len(lag_mul_1) + 1) / 2)))]
     lag_target_ranks = ranks + list(reversed(ranks[:len(lag_mul_1) + 1 - len(ranks)]))
-    tt_lag_sketch = [
-        np.divide(1, l_n * np.prod(lag_mul_1[i].shape[1:-1]) * l_np1) * np.random.randn(l_n, *lag_mul_1[i].shape[1:-1],
-                                                                                      l_np1)
-        for i, (l_n, l_np1) in enumerate(zip(lag_target_ranks[:-1], lag_target_ranks[1:]))
-    ]
-    it=1
+    tt_lag_sketch = tt_sketch_like(lag_mul_1, lag_target_ranks)
+    tt_eig_sketch = tt_sketch((2,), lag_target_ranks)
+    it = 1
     for it in range(1, num_iter):
-        tt_eig, duality_gap = _cg_oracle(X, lag_mul_1, lag_mul_2, obj_sdp, linear_ops, res, trace_param_root_n, tol)
+        tt_eig, current_trace_param, duality_gap = _cg_oracle(tt_eig_sketch, X, lag_mul_1, lag_mul_2, obj_sdp, linear_ops, res,
+                                         trace_param_root_n, tol)
         duality_gaps.append(duality_gap)
         if np.less_equal(np.abs(duality_gap), dual_gap_tol):
             break
         gamma = _trivial_step_size(it)
-        X = _interpolate(gamma, X, tt_eig, trace_param_root_n)
+        X = _interpolate(gamma, X, tt_eig, current_trace_param)
         X = _tt_lr_random_orthogonalise(X, tt_X_sketch)
         res = _tt_lr_random_orthogonalise((tt_add(tt_eval_constraints(linear_ops, X), neg_bias)), tt_lag_sketch)
         alpha = min(np.divide(alpha_0, np.power(it + 1, 3 / 2) * tt_inner_prod(res, res)), 1)
@@ -889,3 +905,13 @@ def tt_sdp_fw(
         lag_mul_2 = np.sqrt(it + 1)
     print(f"Finished after {it} iterations")
     return X, duality_gaps
+
+
+def _core_mask(core, i, j):
+    mask = np.zeros_like(core)
+    mask[:, i, j] += core[:, i, j]
+    return np.expand_dims(mask, 1)
+
+
+def tt_mask_to_linear_op(tt_train):
+    return tt_rank_reduce([np.concatenate([_core_mask(c, i, j) for (i, j) in product([0, 1], [0, 1])], axis=1) for c in tt_train])
