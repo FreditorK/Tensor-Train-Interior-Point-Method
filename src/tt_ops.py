@@ -771,7 +771,7 @@ def tt_outer_product(tt_train_1, tt_train_2):
     return outer
 
 
-def tt_binary_round(tt_train, num_iter=25, tol=1e-5):
+def tt_binary_round(tt_train, num_iter=30, tol=1e-10):
     for _ in range(num_iter):
         tt_train_p2 = tt_rank_reduce(tt_hadamard(tt_train, tt_train))
         boolean_poly = tt_walsh_op_inv(tt_train_p2)
@@ -818,7 +818,7 @@ def _cg_oracle(tt_eig_sketch, X, lag_mul_1, lag_mul_2, obj_sdp, linear_op_sdp, r
     lag = tt_add(lag_mul_1, tt_scale(lag_mul_2, res))
     constraint_term = tt_constraint_contract(linear_op_sdp, lag)
     sdp_gradient = tt_add(obj_sdp, constraint_term)
-    tt_eig, min_eig_val = _tt_randomised_min_eigentensor(sdp_gradient, tt_eig_sketch, num_iter=1000, tol=tol)
+    tt_eig, min_eig_val = _tt_randomised_min_eigentensor(sdp_gradient, tt_eig_sketch, num_iter=2000, tol=tol)
     current_trace_param = trace_param_root_n[0] if min_eig_val > 0 else trace_param_root_n[1]
     duality_gap = tt_inner_prod(obj_sdp, X) + tt_inner_prod(constraint_term, X) - np.power(current_trace_param,
                                                                                            len(X)) * min_eig_val
@@ -890,20 +890,24 @@ def tt_sdp_fw(
     tt_lag_sketch = tt_sketch_like(lag_mul_1, lag_target_ranks)
     tt_eig_sketch = tt_sketch((2,), lag_target_ranks)
     it = 1
+    trace = 0
     for it in range(1, num_iter):
-        tt_eig, current_trace_param, duality_gap = _cg_oracle(tt_eig_sketch, X, lag_mul_1, lag_mul_2, obj_sdp, linear_ops, res,
-                                         trace_param_root_n, tol)
+        tt_eig, current_trace_param, duality_gap = _cg_oracle(
+            tt_eig_sketch, X, lag_mul_1, lag_mul_2, obj_sdp, linear_ops, res, trace_param_root_n, tol)
         duality_gaps.append(duality_gap)
         if np.less_equal(np.abs(duality_gap), dual_gap_tol):
             break
         gamma = _trivial_step_size(it)
         X = _interpolate(gamma, X, tt_eig, current_trace_param)
         X = _tt_lr_random_orthogonalise(X, tt_X_sketch)
+        trace = (1-gamma)*trace + gamma*(current_trace_param**4)
         res = _tt_lr_random_orthogonalise((tt_add(tt_eval_constraints(linear_ops, X), neg_bias)), tt_lag_sketch)
         alpha = min(np.divide(alpha_0, np.power(it + 1, 3 / 2) * tt_inner_prod(res, res)), 1)
         lag_mul_1 = _tt_lr_random_orthogonalise(tt_add(lag_mul_1, tt_scale(alpha, res)), tt_lag_sketch)
         lag_mul_2 = np.sqrt(it + 1)
+        print(trace, current_trace_param)
     print(f"Finished after {it} iterations")
+    print(np.sqrt(tt_inner_prod(X, X)), tt_trace(X))
     return X, duality_gaps
 
 

@@ -11,6 +11,7 @@ def cgal(obj_matrix, constraint_matrices, bias, trace_params, num_iter=100):
     lag_mul_2 = 1
     alpha_0 = 4 * np.sum([np.linalg.norm(A) for A in constraint_matrices]) * trace_params[1] ** 2
     duality_gaps = []
+    trace = 0
     for it in range(1, num_iter):
         constraint_term = sum(
             [A.T * (y_i + lag_mul_2 * r) for A, y_i, r in zip(constraint_matrices, lag_mul_1.flatten(), res.flatten())])
@@ -21,6 +22,8 @@ def cgal(obj_matrix, constraint_matrices, bias, trace_params, num_iter=100):
         duality_gap = np.trace(obj_matrix @ X) + np.trace(constraint_term @ X) - current_trace_param * (2 - min_eig_val)
         duality_gaps.append(duality_gap)
         X = (1 - eta) * X + eta * current_trace_param * np.outer(eig, eig)
+        trace = (1-eta)*trace + eta*current_trace_param
+        print(trace)
         res = np.array([np.trace(A.T @ X) - b for A, b in zip(constraint_matrices, bias.flatten())]).reshape(-1, 1)
         alpha = min(np.divide(alpha_0, np.power(it + 1, 3 / 2) * (res.T @ res)), 1)
         lag_mul_1 = lag_mul_1 + alpha * res

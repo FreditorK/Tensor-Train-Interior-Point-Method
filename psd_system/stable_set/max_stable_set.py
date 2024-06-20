@@ -12,8 +12,8 @@ from psd_system.graph_plotting import *
 
 @dataclass
 class Config:
-    seed = 9
-    ranks = [5, 5]
+    seed = 99
+    ranks = [5]
 
 
 if __name__ == "__main__":
@@ -45,21 +45,21 @@ if __name__ == "__main__":
     #print(np.round(tt_op_to_matrix(G_mask), decimals=2))
     #print(np.round(tt_op_to_matrix([c.reshape(c.shape[0], 2, 2, c.shape[-1]) for c in k]), decimals=2))
 
-
     print("...Problem created!")
     print(f"Objective Ranks: {tt_ranks(C)}")
     print(f"Constraint Ranks: As {tt_ranks(As)}, bias {tt_ranks(bias)}")
     t0 = time.time()
-    X, duality_gaps = tt_sdp_fw(C, As, bias, trace_param_root_n=(2, 2.1), num_iter=200)
+    X, duality_gaps = tt_sdp_fw(C, As, bias, trace_param_root_n=(2, 2.4), num_iter=200)
     t1 = time.time()
     print(f"Problem solved in {t1 - t0:.3f}s")
     print(f"Objective value: {tt_inner_prod(C, X)}")
     evaled_constraints = tt_eval_constraints(As, X)
-    scaled_error = [c / 2 for c in tt_add(evaled_constraints, tt_scale(-1, bias))]
+    scaled_error = [c / np.sqrt(c.shape[1]) for c in tt_add(evaled_constraints, tt_scale(-1, bias))]
     avg_error = np.sqrt(tt_inner_prod(scaled_error, scaled_error))
     print(f"Avg constraint error: {avg_error}")
     print("Ranks of X: ", tt_ranks(X))
     solution = tt_op_to_matrix(X)
+    print(np.round(solution, decimals=1))
     #print(np.round(tt_op_to_matrix([c.reshape(c.shape[0], 2, 2, c.shape[-1]) for c in tt_rank_reduce(tt_add(I_wtho_lead, one_frame))]), decimals=2))
     #solution = solution[1:, 1:]/ solution[0,  0]
     #nodes_in_cut = [i for i, v in enumerate(solution[0]) if v > 0.01]
