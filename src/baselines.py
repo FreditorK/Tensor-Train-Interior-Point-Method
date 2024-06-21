@@ -17,13 +17,13 @@ def cgal(obj_matrix, constraint_matrices, bias, trace_params, num_iter=100):
             [A.T * (y_i + lag_mul_2 * r) for A, y_i, r in zip(constraint_matrices, lag_mul_1.flatten(), res.flatten())])
         sdp_gradient = obj_matrix + constraint_term
         min_eig_val, eig = scp.sparse.linalg.eigsh(2 * np.eye(sdp_gradient.shape[0]) - sdp_gradient, k=1, which='LM')
+        min_eig_val = 2 - min_eig_val
         eta = np.divide(2, it + 1)
         current_trace_param = trace_params[0] if min_eig_val > 0 else trace_params[1]
-        duality_gap = np.trace(obj_matrix @ X) + np.trace(constraint_term @ X) - current_trace_param * (2 - min_eig_val)
+        duality_gap = np.trace(obj_matrix @ X) + np.trace(constraint_term @ X) - current_trace_param * min_eig_val
         duality_gaps.append(duality_gap)
         X = (1 - eta) * X + eta * current_trace_param * np.outer(eig, eig)
         trace = (1-eta)*trace + eta*current_trace_param
-        print(trace)
         res = np.array([np.trace(A.T @ X) - b for A, b in zip(constraint_matrices, bias.flatten())]).reshape(-1, 1)
         alpha = min(np.divide(alpha_0, np.power(it + 1, 3 / 2) * (res.T @ res)), 1)
         lag_mul_1 = lag_mul_1 + alpha * res
@@ -46,11 +46,12 @@ def sketchy_cgal(obj_matrix, constraint_matrices, bias, trace_params, R=1, num_i
             [A.T * (y_i + lag_mul_2 * r) for A, y_i, r in zip(constraint_matrices, lag_mul_1.flatten(), res.flatten())])
         sdp_gradient = obj_matrix + constraint_term
         min_eig_val, eig = scp.sparse.linalg.eigsh(2 * np.eye(sdp_gradient.shape[0]) - sdp_gradient, k=1, which='LM')
+        min_eig_val = 2 - min_eig_val
         eta = np.divide(2, it + 1)
         current_trace_param = trace_params[0] if min_eig_val > 0 else trace_params[1]
         current_trace = (1- eta)*current_trace + eta*current_trace_param
         p = (1-eta)*p + eta*current_trace_param*(eig.T @ (obj_matrix @ eig)).item()
-        duality_gap = p + ((lag_mul_1 + lag_mul_2*res).T @ z).item() - current_trace_param * (2 - min_eig_val)
+        duality_gap = p + ((lag_mul_1 + lag_mul_2*res).T @ z).item() - current_trace_param * min_eig_val
         duality_gaps.append(duality_gap)
         z = (1 - eta) * z + eta * current_trace_param * np.array([eig.T @ A.T @ eig for A in constraint_matrices]).reshape(-1, 1)
         res = z - bias

@@ -16,3 +16,10 @@ def plot_maxcut(adj_matrix, nodes_in_cut, duality_gaps):
     axs[1].plot(duality_gaps)
     plt.show()
 
+
+def plot_duality_gaps(duality_gaps):
+    fig, ax = plt.subplots(1, 1, figsize=(10, 20))
+    ax.set_title("Duality Gap over iterations")
+    ax.plot(duality_gaps)
+    plt.show()
+

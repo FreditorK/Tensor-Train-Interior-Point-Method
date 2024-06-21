@@ -1,5 +1,5 @@
 import numpy as np
-
+import scipy as scp
 from src.ops import *
 from tqdm import tqdm
 
@@ -757,7 +757,7 @@ def _trivial_step_size(it):
 def _tt_op_vec_collapse(linear_core_op: np.array, core_2: np.array) -> np.array:
     return sum([
         np.kron(linear_core_op[:, i], core_2[:, i, None, None])
-        for i in [0, 1]
+        for i in range(core_2.shape[1])
     ])
 
 
@@ -817,8 +817,23 @@ def tt_op_to_matrix(linear_op):
 def _cg_oracle(tt_eig_sketch, X, lag_mul_1, lag_mul_2, obj_sdp, linear_op_sdp, res, trace_param_root_n, tol):
     lag = tt_add(lag_mul_1, tt_scale(lag_mul_2, res))
     constraint_term = tt_constraint_contract(linear_op_sdp, lag)
+    #constraint_term = tt_scale(0.5, tt_add(constraint_term, tt_transpose(constraint_term)))
     sdp_gradient = tt_add(obj_sdp, constraint_term)
     tt_eig, min_eig_val = _tt_randomised_min_eigentensor(sdp_gradient, tt_eig_sketch, num_iter=2000, tol=tol)
+    # FIXME: Get rid of these lines
+    #e = tt_to_tensor(tt_eig).flatten()
+    #M = tt_op_to_matrix(sdp_gradient)
+    #min_val, eig = scp.sparse.linalg.eigsh(2 * np.eye(M.shape[0]) - M, k=1, which='LM')
+    #min_eig_val = 2 - min_val
+    #eig = eig.reshape(2, 2)
+    #tt_eig = tt_svd(eig)
+    #print("-----")
+    #print(np.round(tt_op_to_matrix([c.reshape(c.shape[0], 2, 2, c.shape[-1]) for c in tt_eval_constraints(linear_op_sdp, X)]), decimals=2))
+    #print(np.round(M, decimals=2))
+    #print(np.round(tt_op_to_matrix([c.reshape(c.shape[0], 2, 2, c.shape[-1]) for c in lag]), decimals=1))
+    #print(min_eig_val, 2 - min_val)
+    #print(np.sum(np.abs(e - eig.flatten())), np.sum(np.abs(e + eig.flatten())))
+    # FIXME: Just for debugging
     current_trace_param = trace_param_root_n[0] if min_eig_val > 0 else trace_param_root_n[1]
     duality_gap = tt_inner_prod(obj_sdp, X) + tt_inner_prod(constraint_term, X) - np.power(current_trace_param,
                                                                                            len(X)) * min_eig_val
@@ -875,7 +890,7 @@ def tt_sdp_fw(
     dual_gap_tol=1e-6,
     num_iter=100
 ):
-    tol = np.divide(1, np.power(2, 2 * len(obj_sdp) + 1))
+    tol = np.divide(1, np.power(2, 2 * len(obj_sdp) + 2))
     X = [np.zeros((1, 2, 2, 1)) for _ in range(len(linear_ops))]
     neg_bias = tt_scale(-1, bias)
     res = neg_bias
@@ -890,7 +905,6 @@ def tt_sdp_fw(
     tt_lag_sketch = tt_sketch_like(lag_mul_1, lag_target_ranks)
     tt_eig_sketch = tt_sketch((2,), lag_target_ranks)
     it = 1
-    trace = 0
     for it in range(1, num_iter):
         tt_eig, current_trace_param, duality_gap = _cg_oracle(
             tt_eig_sketch, X, lag_mul_1, lag_mul_2, obj_sdp, linear_ops, res, trace_param_root_n, tol)
@@ -899,15 +913,12 @@ def tt_sdp_fw(
             break
         gamma = _trivial_step_size(it)
         X = _interpolate(gamma, X, tt_eig, current_trace_param)
-        X = _tt_lr_random_orthogonalise(X, tt_X_sketch)
-        trace = (1-gamma)*trace + gamma*(current_trace_param**4)
-        res = _tt_lr_random_orthogonalise((tt_add(tt_eval_constraints(linear_ops, X), neg_bias)), tt_lag_sketch)
+        X = tt_rank_reduce(X, tt_bound=1e-10)#_tt_lr_random_orthogonalise(X, tt_X_sketch)
+        res = tt_rank_reduce(tt_add(tt_eval_constraints(linear_ops, X), neg_bias), tt_bound=1e-10)#_tt_lr_random_orthogonalise(tt_add(tt_eval_constraints(linear_ops, X), neg_bias), tt_lag_sketch)
         alpha = min(np.divide(alpha_0, np.power(it + 1, 3 / 2) * tt_inner_prod(res, res)), 1)
-        lag_mul_1 = _tt_lr_random_orthogonalise(tt_add(lag_mul_1, tt_scale(alpha, res)), tt_lag_sketch)
+        lag_mul_1 = tt_rank_reduce(tt_add(lag_mul_1, tt_scale(alpha, res)), tt_bound=1e-10)#_tt_lr_random_orthogonalise(tt_add(lag_mul_1, tt_scale(alpha, res)), tt_lag_sketch)
         lag_mul_2 = np.sqrt(it + 1)
-        print(trace, current_trace_param)
     print(f"Finished after {it} iterations")
-    print(np.sqrt(tt_inner_prod(X, X)), tt_trace(X))
     return X, duality_gaps
 
 

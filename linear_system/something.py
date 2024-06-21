@@ -44,7 +44,33 @@ print([c.shape for c in X_mask])
 
 """
 
-print(np.round(tt_op_to_matrix([np.array([[1, 0], [0, 0]]).reshape(1, 2, 2, 1) for _ in range(2)]), decimals=2))
+A = np.array(
+    [[-1., -1., -1., -1., -1., -1., -1., -1.],
+     [-0.13, -1.,   -1.,   -1.,   -1.,   -1.,   -1.,   -1.],
+     [-1.,   -1.,   -1.,   -1.,   -1.,   -1.,  -1.,   -1.],
+     [-1.,   -1.,   -1.,   -1.,   -1.,   -1.,   -1.,   -1.],
+     [ 2.61, -1.,   -1.,   -1.,   -1.,   -1.,   -1.,   -1.],
+     [-1.,   -1.,   -1.,   -1.,   -1.,   -1.,   -1.,   -1.],
+     [ 0.47, -1.,   -1.,   -1.,   -1.,   -1.,  -1.,   -1.],
+     [-1.,   -1.,   -1.,   -1.,   -1.,   -1.,   -1.,   -1.]]
+)
+
+x = np.random.randn(A.shape[0], 1)
+
+for _ in range(500):
+    x = A @ x
+    x = x / np.linalg.norm(x)
+
+min_eig_val = x.T @ A @ x
+e = x
+min_val, eig = scp.sparse.linalg.eigsh(A, k=1, which='LM')
+print("-----")
+print(np.round(A, decimals=2))
+print(min_eig_val, min_val)
+print(np.sum(np.abs(e - eig.flatten())), np.sum(np.abs(e + eig.flatten())))
+print(np.round(np.linalg.eigvals(A), decimals=2))
+
+
 """
 print(tt_inner_prod(z_sym, y_sym))
 k = tt_linear_op(z_sym, y)
