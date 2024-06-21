@@ -820,23 +820,8 @@ def _cg_oracle(tt_eig_sketch, X, lag_mul_1, lag_mul_2, obj_sdp, linear_op_sdp, r
     #constraint_term = tt_scale(0.5, tt_add(constraint_term, tt_transpose(constraint_term)))
     sdp_gradient = tt_add(obj_sdp, constraint_term)
     tt_eig, min_eig_val = _tt_randomised_min_eigentensor(sdp_gradient, tt_eig_sketch, num_iter=2000, tol=tol)
-    # FIXME: Get rid of these lines
-    #e = tt_to_tensor(tt_eig).flatten()
-    #M = tt_op_to_matrix(sdp_gradient)
-    #min_val, eig = scp.sparse.linalg.eigsh(2 * np.eye(M.shape[0]) - M, k=1, which='LM')
-    #min_eig_val = 2 - min_val
-    #eig = eig.reshape(2, 2)
-    #tt_eig = tt_svd(eig)
-    #print("-----")
-    #print(np.round(tt_op_to_matrix([c.reshape(c.shape[0], 2, 2, c.shape[-1]) for c in tt_eval_constraints(linear_op_sdp, X)]), decimals=2))
-    #print(np.round(M, decimals=2))
-    #print(np.round(tt_op_to_matrix([c.reshape(c.shape[0], 2, 2, c.shape[-1]) for c in lag]), decimals=1))
-    #print(min_eig_val, 2 - min_val)
-    #print(np.sum(np.abs(e - eig.flatten())), np.sum(np.abs(e + eig.flatten())))
-    # FIXME: Just for debugging
     current_trace_param = trace_param_root_n[0] if min_eig_val > 0 else trace_param_root_n[1]
-    duality_gap = tt_inner_prod(obj_sdp, X) + tt_inner_prod(constraint_term, X) - np.power(current_trace_param,
-                                                                                           len(X)) * min_eig_val
+    duality_gap = tt_inner_prod(obj_sdp, X) + tt_inner_prod(constraint_term, X) - np.power(current_trace_param, len(X)) * min_eig_val
     return tt_eig, current_trace_param, duality_gap
 
 
