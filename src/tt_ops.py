@@ -649,7 +649,7 @@ def tt_randomised_linear_op(linear_op, tt_train: List[np.array], ranks) -> List[
 def _tt_op_op_collapse(linear_core_op_1, linear_core_op_2):
     return np.concatenate([
         np.expand_dims(_tt_op_core_collapse(linear_core_op_1, linear_core_op_2[:, :, i]), 1)
-        for i in [0, 1]
+        for i in range(linear_core_op_2.shape[2])
     ], axis=1)
 
 

@@ -19,7 +19,7 @@ class Config:
     tt_max_rank = 5
 
 
-np.random.seed(389)
+np.random.seed(333)
 
 """
 X = tt_rl_orthogonalise(tt_random_gaussian_linear_op([2]))
@@ -44,32 +44,15 @@ print([c.shape for c in X_mask])
 
 """
 
-A = np.array(
-    [[-1., -1., -1., -1., -1., -1., -1., -1.],
-     [-0.13, -1.,   -1.,   -1.,   -1.,   -1.,   -1.,   -1.],
-     [-1.,   -1.,   -1.,   -1.,   -1.,   -1.,  -1.,   -1.],
-     [-1.,   -1.,   -1.,   -1.,   -1.,   -1.,   -1.,   -1.],
-     [ 2.61, -1.,   -1.,   -1.,   -1.,   -1.,   -1.,   -1.],
-     [-1.,   -1.,   -1.,   -1.,   -1.,   -1.,   -1.,   -1.],
-     [ 0.47, -1.,   -1.,   -1.,   -1.,   -1.,  -1.,   -1.],
-     [-1.,   -1.,   -1.,   -1.,   -1.,   -1.,   -1.,   -1.]]
-)
-
-x = np.random.randn(A.shape[0], 1)
-
-for _ in range(500):
-    x = A @ x
-    x = x / np.linalg.norm(x)
-
-min_eig_val = x.T @ A @ x
-e = x
-min_val, eig = scp.sparse.linalg.eigsh(A, k=1, which='LM')
-print("-----")
-print(np.round(A, decimals=2))
-print(min_eig_val, min_val)
-print(np.sum(np.abs(e - eig.flatten())), np.sum(np.abs(e + eig.flatten())))
-print(np.round(np.linalg.eigvals(A), decimals=2))
-
+A = tt_random_gaussian_linear_op([2, 2])
+M_1 = tt_op_to_matrix(A)
+A = tt_linear_op_compose(A, tt_transpose(A))
+A = tt_rank_reduce(A, tt_bound=1e-4)
+M = tt_op_to_matrix(A)
+#M = M_1 @ M_1.T
+#print(tt_ranks(A))
+print(np.linalg.eigvals(A[1][:, 0, 0, :] @ A[1][:, 0, 0, :].T))
+print(np.linalg.eigvals(M))
 
 """
 print(tt_inner_prod(z_sym, y_sym))
