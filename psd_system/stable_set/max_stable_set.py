@@ -13,7 +13,7 @@ from psd_system.graph_plotting import *
 @dataclass
 class Config:
     seed = 99
-    ranks = [5, 5]
+    ranks = [5, 5, 5]
 
 
 if __name__ == "__main__":

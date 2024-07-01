@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 def plot_maxcut(adj_matrix, nodes_in_cut, duality_gaps):
     adj_matrix = np.round((adj_matrix + 1) / 2)
-    graph = nx.from_numpy_matrix(adj_matrix)
+    graph = nx.from_numpy_array(adj_matrix)
     fig, axs = plt.subplots(1, 2, figsize=(10, 20))
     axs[0].set_title("MaxCut")
     axs[1].set_title("Duality Gap over iterations")

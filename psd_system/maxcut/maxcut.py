@@ -12,7 +12,7 @@ from psd_system.graph_plotting import *
 @dataclass
 class Config:
     seed = 9
-    ranks = [5, 5, 5, 5]
+    ranks = [5, 5]
 
 
 if __name__ == "__main__":
@@ -27,7 +27,9 @@ if __name__ == "__main__":
     print(f"Objective Ranks: {tt_ranks(G)}")
     print(f"Constraint Ranks: As {tt_ranks(As)}, bias {tt_ranks(bias)}")
     t0 = time.time()
-    X, duality_gaps = tt_sdp_fw(G, As, bias, trace_param_root_n=(2, 2), num_iter=100)
+    X, duality_gaps = tt_sdp_fw(G, As, bias, trace_param_root_n=(2, 2), num_iter=9)  # TODO: from 9 to 10 something weird happens
+    # FIXME: This is because the tensor train only has capacity up to 2^3=8 vectors and then it gets janky
+    # TODO: Perfect opportunity to implement away steps
     t1 = time.time()
     print(f"Problem solved in {t1 - t0:.3f}s")
     print(f"Objective value: {-tt_inner_prod(G, X)}")
