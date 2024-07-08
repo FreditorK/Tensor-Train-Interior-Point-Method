@@ -14,7 +14,7 @@ I = np.array([[1, 0],
               [0, 1]]).reshape(1, 2, 2, 1)
 
 
-def tt_indentity(dim):
+def tt_identity(dim):
     return [I for _ in range(dim)]
 
 
@@ -39,8 +39,11 @@ def phi_inv(num_bonds):
 
 
 def tt_random_binary(target_ranks: List[int]):
+    """
+    Only has non-negative entries
+    """
     target_ranks = [1] + target_ranks + [1]
-    return tt_normalise([2 * (np.random.randint(low=0, high=2, size=(l_n, 2, l_np1)) - 0.5) for l_n, l_np1 in
+    return tt_normalise([np.random.randint(low=0, high=2, size=(l_n, 2, l_np1)) for l_n, l_np1 in
                          zip(target_ranks[:-1], target_ranks[1:])])
 
 
@@ -726,7 +729,7 @@ def tt_gram(linear_op):
 
 
 def tt_trace(linear_op):
-    I = tt_indentity(len(linear_op))
+    I = tt_identity(len(linear_op))
     return tt_inner_prod(linear_op, I)
 
 
@@ -737,7 +740,7 @@ def tt_min_eigentensor(linear_op: List[np.array], num_iter=10, tol=1e-3):
     n = len(linear_op)
     normalisation = np.sqrt(tt_inner_prod(linear_op, linear_op))
     linear_op = tt_scale(-np.divide(1, normalisation), linear_op)
-    identity = tt_indentity(n)
+    identity = tt_identity(n)
     identity = tt_scale(2, identity)
     linear_op = tt_add(identity, linear_op)
     linear_op = tt_rank_reduce(linear_op, tt_bound=0)
@@ -773,7 +776,7 @@ def _tt_randomised_min_eigentensor(linear_op: List[np.array], tt_gaussian, num_i
     n = len(linear_op)
     normalisation = np.sqrt(tt_inner_prod(linear_op, linear_op))
     linear_op = tt_scale(-np.divide(1, normalisation), linear_op)
-    identity = tt_indentity(n)
+    identity = tt_identity(n)
     identity = tt_scale(2, identity)
     linear_op = tt_rank_reduce(tt_add(identity, linear_op), tt_bound=tol)
     eig_vec = tt_normalise([np.random.randn(1, 2, 1) for _ in range(n)])
@@ -848,21 +851,74 @@ def tt_op_to_matrix(linear_op):
     return np.transpose(tensor, axes).reshape(np.prod(tensor.shape[:n // 2]), -1)
 
 
-def _cg_oracle(tt_eig_sketch, X, lag_mul_1, lag_mul_2, obj_sdp, linear_op_sdp, res, trace_param_root_n, tol):
+def _cg_oracle(tt_eig_sketch, lag_mul_1, lag_mul_2, obj_sdp, linear_op_sdp, res, trace_param_root_n, tol):
     lag = tt_add(lag_mul_1, tt_scale(lag_mul_2, res))
     constraint_term = tt_constraint_contract(linear_op_sdp, lag)
     sdp_gradient = tt_add(obj_sdp, constraint_term)
     tt_eig, min_eig_val = _tt_randomised_min_eigentensor(sdp_gradient, tt_eig_sketch, num_iter=2000, tol=tol)
     current_trace_param = trace_param_root_n[0] if min_eig_val > 0 else trace_param_root_n[1]
     tt_eig = [np.sqrt(current_trace_param) * c for c in tt_eig]
-    return tt_eig, lag, np.power(current_trace_param, len(X)) * min_eig_val
+    return sdp_gradient, tt_eig, lag, np.power(current_trace_param, len(tt_eig_sketch)) * min_eig_val
 
 
-def _interpolate(gamma, X, tt_eig, idx):
-    tt_eig = tt_scale(np.sqrt(gamma), tt_eig)
+def _tt_ops_ops_collapse(linear_core_op_1, linear_core_op_2):
+    return sum([
+        np.kron(linear_core_op_1[:, None, :, i, j], linear_core_op_2[:, :, None, i, j])
+        for (i, j) in product([0, 1], [0, 1])
+    ])
+
+
+def _tt_custom_collapse(core_1, core_2):
+    return sum([
+        _tt_train_kron(core_1, core_2)[:, i]
+        for i in [0, 1]
+    ])
+
+
+def _interpolate(obj_sdp, linear_ops, sdp_gradient, gamma, objective, z_constraints, X, tt_eig, idx):
+    tt_Eig = [np.concatenate((np.expand_dims(c, axis=2), np.expand_dims(c, axis=2)), axis=2) for c in tt_eig]
+    print(np.round(tt_op_to_matrix(tt_Eig), decimals=2))
+    print(np.round(tt_op_to_matrix(X), decimals=2))
+    d = tt_sub(tt_Eig, X)
+    print(np.round(tt_op_to_matrix(d), decimals=2))
+    # TODO: Need each column to be separated into an op, then take eval_constraints(d_op, sdp_gradient)
+    d_op = [np.concatenate((np.expand_dims(c, axis=3), np.expand_dims(np.zeros_like(c), axis=3)), axis=3) for c in d]
+    sdp_gradient_op = [np.concatenate((np.expand_dims(c, axis=3), np.expand_dims(np.zeros_like(c), axis=3)), axis=3) for
+                       c in sdp_gradient]
+    #print(np.round(tt_op_to_matrix([d_op[0][:, 1]] + [c[:, 0] for c in d_op[1:]]), decimals=2))
+    #print([c.shape for c in d_op])
+    #print(np.round(tt_to_tensor(tt_eval_constraints(d_op, tt_transpose([np.array([[1, 1], [0, 0]]).reshape(1, 2, 2, 1) for _ in range(len(d_op))]))), decimals=2))
+    #print("Eigs", np.linalg.eigvals(tt_op_to_matrix(tt_linear_op_compose(d, tt_transpose(d)))))
+    #print(tt_op_to_matrix(tt_linear_op_compose(d, tt_transpose(d))))
+    #print(np.round(tt_to_tensor(tt_eval_constraints(sdp_gradient_op, d)), decimals=2))
+    #print([c.shape for c in sdp_gradient_op])
+    #print([c.shape for c in d])
+    print(np.round(tt_op_to_matrix(sdp_gradient), decimals=2))
+    print(tt_op_to_matrix(d)[:, -4] @ tt_op_to_matrix(sdp_gradient) @ tt_op_to_matrix(d)[:, -4])
+    print(tt_op_to_matrix(d)[:, -3] @ tt_op_to_matrix(sdp_gradient) @ tt_op_to_matrix(d)[:, -3])
+    print(tt_op_to_matrix(d)[:, -2] @ tt_op_to_matrix(sdp_gradient) @ tt_op_to_matrix(d)[:, -2])
+    print(tt_op_to_matrix(d)[:, -1] @ tt_op_to_matrix(sdp_gradient) @ tt_op_to_matrix(d)[:, -1])
+    #print(np.round(tt_op_to_matrix([c[:, 1] for c in sdp_gradient_op]), decimals=2))
+    #sim_d = tt_eval_constraints(d_op, [c[:, 1] for c in sdp_gradient_op])
+    sim_d = [_tt_ops_ops_collapse(d_core, sdp_core) for d_core, sdp_core in zip(d_op, sdp_gradient_op)]
+    print(np.round(tt_op_to_matrix(sim_d), decimals=2))
+    print([c.shape for c in d])
+    print([c.shape for c in sim_d])
+    sim = [_tt_custom_collapse(c_1, c_2) for c_1, c_2 in zip(tt_transpose(d), sim_d)]
+    print([c.shape for c in sim])
+    print(np.round(tt_to_tensor(sim), decimals=2))
+    #max_index = tt_argmax(sim)
+
+    scaled_tt_eig = tt_scale(np.sqrt(gamma), tt_eig)
     X = tt_scale(np.sqrt(1 - gamma), X)
-    idx = idx % (2 ** len(tt_eig))
-    return tt_add_column(X, tt_eig, idx)
+    idx = idx % (2 ** len(scaled_tt_eig))
+    X = tt_add_column(X, scaled_tt_eig, idx)
+    X = tt_rank_reduce(X, tt_bound=1e-10)  # _tt_lr_random_orthogonalise(X, tt_X_sketch)
+    constraint_update = tt_linear_op(tt_linear_op(linear_ops, tt_eig), tt_eig)
+    z_constraints = tt_rank_reduce(tt_add(tt_scale(1 - gamma, z_constraints), tt_scale(gamma, constraint_update)),
+                                   tt_bound=1e-10)
+    objective = (1 - gamma) * objective + gamma * tt_inner_prod(tt_eig, tt_linear_op(obj_sdp, tt_eig))
+    return objective, z_constraints, X
 
 
 def _tt_ops_core_collapse(linear_ops_core: np.array, core_2: np.array) -> np.array:
@@ -924,31 +980,26 @@ def tt_sdp_fw(
     it = 1
     objective = 0
     for it in range(1, num_iter):
-        tt_eig, lag, eig_val = _cg_oracle(
-            tt_eig_sketch, X, lag_mul_1, lag_mul_2, obj_sdp, linear_ops, res, trace_param_root_n, tol)
+        sdp_gradient, tt_eig, lag, eig_val = _cg_oracle(
+            tt_eig_sketch, lag_mul_1, lag_mul_2, obj_sdp, linear_ops, res, trace_param_root_n, tol)
         duality_gap = objective + tt_inner_prod(lag, z_constraints) - eig_val
         duality_gaps.append(duality_gap)
         if np.less_equal(np.abs(duality_gap), dual_gap_tol):
             break
         gamma = _trivial_step_size(it)
-        X = _interpolate(gamma, X, tt_eig, it - 1)
-        X = tt_rank_reduce(X, tt_bound=1e-10)  #_tt_lr_random_orthogonalise(X, tt_X_sketch)
-        constraint_update = tt_linear_op(tt_linear_op(linear_ops, tt_eig), tt_eig)
-        z_constraints = tt_rank_reduce(tt_add(tt_scale(1 - gamma, z_constraints), tt_scale(gamma, constraint_update)),
-                                       tt_bound=1e-10)
-        objective = (1 - gamma) * objective + gamma * tt_inner_prod(tt_eig, tt_linear_op(obj_sdp, tt_eig))
+        objective, z_constraints, X = _interpolate(
+            obj_sdp, linear_ops, sdp_gradient, gamma, objective, z_constraints, X, tt_eig, it - 1
+        )
         res = tt_add(z_constraints,
                      neg_bias)  #_tt_lr_random_orthogonalise(tt_add(tt_eval_constraints(linear_ops, X), neg_bias), tt_lag_sketch)
+        print("Solution ranks: ", tt_ranks(X))
         print("Constraint error: ", tt_inner_prod(res, res), "Objective: ", objective)
         alpha = min(np.divide(alpha_0, np.power(it + 1, 3 / 2) * tt_inner_prod(res, res)), 1)
         lag_mul_1 = tt_rank_reduce(tt_add(lag_mul_1, tt_scale(alpha, res)),
                                    tt_bound=1e-10)  #_tt_lr_random_orthogonalise(tt_add(lag_mul_1, tt_scale(alpha, res)), tt_lag_sketch)
         lag_mul_2 = np.sqrt(it + 1)
     print(f"Finished after {it} iterations")
-    #print(tt_to_tensor(tt_linear_op(tt_transpose(X), tt_eval_constraints(linear_ops, X))))
-    #print(tt_to_tensor(z_constraints))
-    X = tt_linear_op_compose(tt_transpose(X), X)
-    #print(tt_to_tensor(tt_eval_constraints(linear_ops, X)))
+    X = tt_linear_op_compose(X, tt_transpose(X))
     return tt_rank_reduce(X), duality_gaps
 
 
@@ -964,5 +1015,32 @@ def tt_mask_to_linear_op(tt_train):
     )
 
 
-def tt_argmax(tensor_train):
-    pass
+def tt_argmax(tt_train, p=1):
+    orth_tt_train = tt_rl_orthogonalise(copy.copy(tt_train))
+    k = 2 * (len(orth_tt_train))
+    d = len(orth_tt_train)
+    p0 = p / d  # Scale factor (2^p0) for each TT-core
+
+    G = orth_tt_train[-1]
+    r1, n, r2 = G.shape
+
+    I = np.arange(n).reshape(-1, 1)
+    Q = G.reshape(r1, n)
+
+    Q *= 2 ** p0
+
+    for G in orth_tt_train[:-1][::-1]:
+        r1, n, r2 = G.shape
+        Q = np.einsum('qir,rk->qik', G, Q, optimize='optimal')
+        Q = Q.reshape(r1, -1)
+        I_l = np.kron(np.arange(n).reshape(-1, 1), np.ones((I.shape[0], 1)))
+        I_r = np.kron(np.ones((n, 1)), I)
+        I = np.hstack((I_l, I_r))
+        q_max = np.max(np.abs(Q))
+        norms = np.sum((Q / q_max) ** 2, axis=0)
+        ind = np.argsort(norms)[:-(k + 1):-1]
+        I = I[ind, :]
+        Q = Q[:, ind]
+        Q *= 2 ** p0
+
+    return I[0]

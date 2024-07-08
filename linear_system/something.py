@@ -8,7 +8,6 @@ import numpy as np
 sys.path.append(os.getcwd() + '/../')
 from dataclasses import dataclass
 from src.tt_ops import *
-from sklearn.utils.extmath import randomized_range_finder
 from src.tt_ops import *
 
 
@@ -21,28 +20,15 @@ class Config:
 
 np.random.seed(42)
 
+V = tt_random_binary([4, 3, 5])
+print(np.round(tt_to_tensor(V), decimals=3))
+idx = np.array(tt_argmax(V), dtype=int)
+print(idx)
+vs = [v[:, i] for i, v in zip(idx, V)]
+result = np.linalg.multi_dot(vs)
+print(result)
 
-def _tt_op_op_collapse(linear_core_op_1, linear_core_op_2):
-    return sum([
-        np.kron(linear_core_op_1[:, None, i], linear_core_op_2[:, :, None, i])
-        for i in range(linear_core_op_2.shape[2])
-    ])
 
-
-V = tt_random_gaussian([2, 3], (2, 2))
-V_matrix = tt_op_to_matrix(V)
-A = tt_random_gaussian([2, 3], (2, 2))
-A_matrix = tt_op_to_matrix(A)
-
-AV_sol_matrix = A_matrix @ V_matrix
-
-AV = tt_linear_op_compose(A, V)
-print([c.shape for c in AV])
-AV_matrix = tt_op_to_matrix(AV)
-
-print(np.round(AV_sol_matrix, decimals=2))
-
-print(np.round(AV_matrix, decimals=2))
 
 """
 
