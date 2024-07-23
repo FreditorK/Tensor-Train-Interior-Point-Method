@@ -20,6 +20,7 @@ class Config:
 
 np.random.seed(42)
 
+"""
 V = tt_random_binary([4, 3, 5])
 print(np.round(tt_to_tensor(V), decimals=3))
 idx = np.array(tt_argmax(V), dtype=int)
@@ -27,8 +28,55 @@ print(idx)
 vs = [v[:, i] for i, v in zip(idx, V)]
 result = np.linalg.multi_dot(vs)
 print(result)
+"""
 
+T = np.array([[1, 2], [3, 4]])
+X = np.array([[0.9, 0.8], [0.7, 0.6]])
+TX = scp.linalg.block_diag(*[T, X])
+TX_kron = np.kron(TX, TX)
+TXX_kron = scp.linalg.block_diag(*[np.kron(T, T), np.kron(X, T), np.kron(T, X), np.kron(X, X)])
+np.set_printoptions(linewidth=200)
+print(np.linalg.norm(TX_kron-TXX_kron))
+print(np.round(TX_kron, decimals=2))
+#print(np.round(TXX_kron, decimals=1))
 
+"""
+A = tt_random_gaussian([3], shape=(2, ))
+B = tt_random_gaussian([3], shape=(2, ))
+diff = tt_sub(B, A)
+print("Error: ", tt_inner_prod(diff, diff))
+B = tt_als(A)
+diff = tt_sub(B, A)
+print("Error: ", tt_inner_prod(diff, diff))
+"""
+"""
+
+import sympy as sp
+
+# Define the dimensions of the matrices
+m, n, p, q = sp.symbols('m n p q', integer=True)
+
+# Define the matrices
+A = sp.MatrixSymbol('A', (2*n)**2, (2*n)**2)
+X = sp.MatrixSymbol('X', n, n)
+C = sp.MatrixSymbol('C', n, n)
+Xconcat = sp.BlockDiagMatrix(C, X)
+# Define the matrix equation E(X) = ||AXB - C||_F^2
+X_kron = sp.kronecker_product(Xconcat, Xconcat)
+AX = A * X_kron
+E = sp.matrices.trace(AX)
+
+# Compute the derivative of E with respect to X
+dE_dX = sp.diff(E, X)
+
+# Simplify the derivative
+#dE_dX_simplified = sp.simplify(dE_dX)
+
+print("Matrix equation E(X) = ||AXB - C||_F^2:")
+print(E)
+print("\nDerivative of E with respect to X:")
+#print(dE_dX_simplified)
+"""
 
 """
 
