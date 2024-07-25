@@ -30,25 +30,13 @@ result = np.linalg.multi_dot(vs)
 print(result)
 """
 
-T = np.array([[1, 2], [3, 4]])
-X = np.array([[0.9, 0.8], [0.7, 0.6]])
-TX = scp.linalg.block_diag(*[T, X])
-TX_kron = np.kron(TX, TX)
-TXX_kron = scp.linalg.block_diag(*[np.kron(T, T), np.kron(X, T), np.kron(T, X), np.kron(X, X)])
-np.set_printoptions(linewidth=200)
-print(np.linalg.norm(TX_kron-TXX_kron))
-print(np.round(TX_kron, decimals=2))
-#print(np.round(TXX_kron, decimals=1))
-
-"""
-A = tt_random_gaussian([3], shape=(2, ))
-B = tt_random_gaussian([3], shape=(2, ))
+A = tt_random_gaussian([5], shape=(2, ))
+B = tt_random_gaussian(tt_ranks(A), shape=(2, ))
 diff = tt_sub(B, A)
 print("Error: ", tt_inner_prod(diff, diff))
 B = tt_als(A)
 diff = tt_sub(B, A)
 print("Error: ", tt_inner_prod(diff, diff))
-"""
 """
 
 import sympy as sp
@@ -57,25 +45,24 @@ import sympy as sp
 m, n, p, q = sp.symbols('m n p q', integer=True)
 
 # Define the matrices
-A = sp.MatrixSymbol('A', (2*n)**2, (2*n)**2)
+A = sp.MatrixSymbol('A', n*m, n*m)
 X = sp.MatrixSymbol('X', n, n)
-C = sp.MatrixSymbol('C', n, n)
-Xconcat = sp.BlockDiagMatrix(C, X)
+C = sp.MatrixSymbol('C', m, m)
 # Define the matrix equation E(X) = ||AXB - C||_F^2
-X_kron = sp.kronecker_product(Xconcat, Xconcat)
-AX = A * X_kron
+X_kron = sp.kronecker_product(C, X)
+AX = A*X_kron
 E = sp.matrices.trace(AX)
 
 # Compute the derivative of E with respect to X
 dE_dX = sp.diff(E, X)
 
 # Simplify the derivative
-#dE_dX_simplified = sp.simplify(dE_dX)
+dE_dX_simplified = sp.simplify(dE_dX)
 
-print("Matrix equation E(X) = ||AXB - C||_F^2:")
+print("Matrix equation:")
 print(E)
 print("\nDerivative of E with respect to X:")
-#print(dE_dX_simplified)
+print(dE_dX_simplified)
 """
 
 """

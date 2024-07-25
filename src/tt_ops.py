@@ -1059,92 +1059,142 @@ def func(tt_train, cores):
     diff = tt_add(tt_train, cores)
     return tt_inner_prod(diff, diff)
 
-def _tt_als_core_wise(tt_train, cores, idx, lr=0.1, num_iter=1, tol=1e-6):
+
+def commutation_matrix(m, n):
+    indices = np.arange(m * n).reshape((m, n))
+    transposed_indices = indices.T.flatten()
+    I = np.eye(m * n, dtype=int)
+    K = I[transposed_indices]
+    return K
+
+
+def _als_grad_22(A, C, X):
+    m, n = C.shape
+    p, q = X.shape
+    I_nq = np.eye(n * q)
+    I_n = np.eye(n)
+    I_q = np.eye(q)
+    I_p = np.eye(p)
+    K_qm = commutation_matrix(q, m)
+    G = np.kron(I_n, K_qm) @ np.kron(C.reshape(-1, 1), I_q)
+    return (I_nq.reshape(1, -1) @ np.kron(I_nq, A) @ np.kron(G, I_p)).reshape(*X.shape)
+
+
+def _als_grad_33(A, X, C):
+    m, n = C.shape
+    p, q = X.shape
+    I_nq = np.eye(n * q)
+    I_n = np.eye(n)
+    I_m = np.eye(m)
+    I_p = np.eye(p)
+    K_qm = commutation_matrix(q, m)
+    H = np.kron(K_qm, I_p) @ np.kron(I_m, C.reshape(-1, 1))
+    return (I_nq.reshape(1, -1) @ np.kron(I_nq, A) @ np.kron(I_n, H)).reshape(*X.shape)
+
+
+def _als_grad_44(A, X):
+    m, n = X.shape
+    I_nn = np.eye(n * n)
+    I_q = I_n = np.eye(n)
+    I_p = I_m = np.eye(m)
+    K_nm = commutation_matrix(n, m)
+    G = np.kron(I_n, K_nm) @ np.kron(I_m.reshape(-1, 1), I_q)
+    H = np.kron(K_nm, I_p) @ np.kron(I_m, I_n.reshape(-1, 1))
+    D = np.kron(H.T, I_p) @ np.kron(I_nn, A.T) @ np.kron(I_n, G)
+    return (D @ X.reshape(-1, 1) + D.T @ X.reshape(-1, 1)).reshape(*X.shape)
+
+
+def _tt_als_core_wise(tt_train, cores, idx, lr=0.1):
+    r_i, d, r_ip1 = tt_train[idx].shape
+    diff = tt_add(tt_train, cores)  # the order matters here
+    prev_error = tt_inner_prod(diff, diff)
     grad_func = grad(lambda cs: func(tt_train, cs))
     c0 = grad_func(cores)[0]
     c1 = grad_func(cores)[1]
-    print(c0[:, 0])
-    print(c0[:, 1])
-    for iteration in range(num_iter):
-        r_i, d, r_ip1 = tt_train[idx].shape
-        diff = tt_add(tt_train, cores)  # the order matters here
-        prev_error = tt_inner_prod(diff, diff)
-        if idx == 0:
-            outer_contraction = np.diag(
-                safe_multi_dot([_tt_core_collapse(core, core) for core in diff[idx + 1:]]).flatten())
-            X_0 = np.diag(cores[idx][:, 0].flatten()).reshape(-1, 1)
-            C_0 = np.diag(tt_train[idx][:, 0].flatten()).reshape(-1, 1)
-            X_1 = np.diag(cores[idx][:, 1].flatten()).reshape(-1, 1)
-            C_1 = np.diag(tt_train[idx][:, 1].flatten()).reshape(-1, 1)
-            print("11", prev_error)
-            K = np.diag((np.kron(diff[idx][:, 0], diff[idx][:, 0]) + np.kron(diff[idx][:, 1], diff[idx][:, 1])).flatten())#np.diag(_tt_core_collapse(diff[idx], diff[idx]).flatten())
-            print("22", np.trace(outer_contraction @ K))
-            s_1, s_2 = outer_contraction.shape[0] // 4, outer_contraction.shape[1] // 4
-            A_11 = outer_contraction[:s_1, :s_2].reshape(-1, 1)
-            A_22 = outer_contraction[s_1:2 * s_1, s_2:2 * s_2].reshape(-1, 1)
-            A_33 = outer_contraction[2 * s_1: 3 * s_1, 2 * s_2:3 * s_2].reshape(-1, 1)
-            A_44 = outer_contraction[3 * s_1:, 3 * s_2:].reshape(-1, 1)
-            K_11 = K[:s_1, :s_2].reshape(-1, 1)
-            K_22 = K[s_1:2 * s_1, s_2:2 * s_2].reshape(-1, 1)
-            K_33 = K[2 * s_1: 3 * s_1, 2 * s_2:3 * s_2].reshape(-1, 1)
-            K_44 = K[3 * s_1:, 3 * s_2:].reshape(-1, 1)
-            print("33", np.trace(A_11.T @ K_11 + A_22.T @ K_22 + A_33.T @ K_33 + A_44.T @ K_44))
-        elif idx == len(cores) - 1:
-            outer_contraction = np.diag(
-                safe_multi_dot([_tt_core_collapse(core, core) for core in diff[:idx]]).flatten())
-            X_0 = np.diag(cores[idx][:, 0].flatten()).reshape(-1, 1)
-            C_0 = np.diag(tt_train[idx][:, 0].flatten()).reshape(-1, 1)
-            X_1 = np.diag(cores[idx][:, 1].flatten()).reshape(-1, 1)
-            C_1 = np.diag(tt_train[idx][:, 1].flatten()).reshape(-1, 1)
-        else:
-            left_contraction = safe_multi_dot([_tt_core_collapse(core, core) for core in diff[:idx]]).flatten()
-            right_contraction = safe_multi_dot([_tt_core_collapse(core, core) for core in diff[idx + 1:]]).flatten()
-            outer_contraction = np.outer(right_contraction, left_contraction)
-            X_0 = cores[idx][:, 0].reshape(-1, 1)
-            C_0 = tt_train[idx][:, 0].reshape(-1, 1)
-            X_1 = cores[idx][:, 1].reshape(-1, 1)
-            C_1 = tt_train[idx][:, 1].reshape(-1, 1)
-        s_1, s_2 = outer_contraction.shape[0] // 4, outer_contraction.shape[1] // 4
-        A_22 = outer_contraction[s_1:2 * s_1, s_2:2 * s_2].reshape(-1, 1)
-        A_33 = outer_contraction[2 * s_1: 3 * s_1, 2 * s_2:3 * s_2].reshape(-1, 1)
-        A_44 = outer_contraction[3 * s_1:, 3 * s_2:].reshape(-1, 1)
-        vec_0 = A_44.T @ (np.kron(X_0, np.eye(len(X_0))) + np.kron(np.eye(len(X_0)), X_0)) + A_33.T @ np.kron(
-            np.eye(len(C_0)), C_0) + A_22.T @ np.kron(C_0, np.eye(len(C_0)))
-        vec_1 = A_44.T @ (np.kron(X_1, np.eye(len(X_1))) + np.kron(np.eye(len(X_1)), X_1)) + A_33.T @ np.kron(
-            np.eye(len(C_1)), C_1) + A_22.T @ np.kron(C_1, np.eye(len(C_1)))
-        if idx == 0:
-            cores[idx][:, 0, :] -= lr * c0[:, 0] #np.diagonal(vec_0.reshape(r_ip1, r_ip1)).reshape(r_i, r_ip1)
-            cores[idx][:, 1, :] -= lr * c0[:, 1] # np.diagonal(vec_1.reshape(r_ip1, r_ip1)).reshape(r_i, r_ip1)
-            print("Mine 0:", np.diagonal(vec_0.reshape(r_ip1, r_ip1)).reshape(r_i, r_ip1))
-            print("Mine 1:", np.diagonal(vec_1.reshape(r_ip1, r_ip1)).reshape(r_i, r_ip1))
-        elif idx == len(cores) - 1:
-            cores[idx][:, 0, :] -= lr * c1[:, 0] #* np.diagonal(vec_0.reshape(r_i, r_i)).reshape(r_i, r_ip1)
-            cores[idx][:, 1, :] -= lr * c1[:, 1] # np.diagonal(vec_1.reshape(r_i, r_i)).reshape(r_i, r_ip1)
-        else:
-            cores[idx][:, 0, :] -= lr * vec_0.reshape(r_i, r_ip1)
-            cores[idx][:, 1, :] -= lr * vec_1.reshape(r_i, r_ip1)
-        diff = tt_add(tt_train, cores)  # the order matters here
-        error = tt_inner_prod(diff, diff)
-        if np.less_equal(error, tol):
-            break
-        lr = min(0.99*(prev_error/error)*lr, 0.5)
-        print(f"Error: {error}, {lr}")
+    if idx == 0:
+        outer_contraction = np.diag(
+            safe_multi_dot([_tt_core_collapse(core, core) for core in diff[idx + 1:]]).flatten())
+        X_0 = np.diag(cores[idx][:, 0].flatten())
+        C_0 = np.diag(tt_train[idx][:, 0].flatten())
+        X_1 = np.diag(cores[idx][:, 1].flatten())
+        C_1 = np.diag(tt_train[idx][:, 1].flatten())
+    elif idx == len(cores) - 1:
+        outer_contraction = np.diag(
+            safe_multi_dot([_tt_core_collapse(core, core) for core in diff[:idx]]).flatten())
+        X_0 = np.diag(cores[idx][:, 0].flatten())
+        C_0 = np.diag(tt_train[idx][:, 0].flatten())
+        X_1 = np.diag(cores[idx][:, 1].flatten())
+        C_1 = np.diag(tt_train[idx][:, 1].flatten())
+    else:
+        left_contraction = safe_multi_dot([_tt_core_collapse(core, core) for core in diff[:idx]]).flatten()
+        right_contraction = safe_multi_dot([_tt_core_collapse(core, core) for core in diff[idx + 1:]]).flatten()
+        outer_contraction = np.outer(right_contraction, left_contraction)
+        X_0 = cores[idx][:, 0]
+        C_0 = tt_train[idx][:, 0]
+        X_1 = cores[idx][:, 1]
+        C_1 = tt_train[idx][:, 1]
+    s_1 = np.array([[i + X_0.shape[0] * j for i in range(X_0.shape[0])] for j in [0, 2]]).flatten()
+    s_2 = np.array([[i + X_0.shape[1] * j for i in range(X_0.shape[1])] for j in [0, 2]]).flatten()
+    A_11 = outer_contraction[np.ix_(s_1, s_2)]
+    A_22 = outer_contraction[np.ix_(s_1 + X_0.shape[0], s_2 + X_0.shape[1])]
+    A_33 = outer_contraction[np.ix_(s_1 + 4 * X_0.shape[0], s_2 + 4 * X_0.shape[1])]
+    A_44 = outer_contraction[np.ix_(s_1 + 5 * X_0.shape[0], s_2 + 5 * X_0.shape[1])]
+    #X_0 = X_0.reshape(-1, 1)
+    #C_0 = C_0.reshape(-1, 1)
+    #X_1 = X_1.reshape(-1, 1)
+    #C_1 = C_1.reshape(-1, 1)
+    print(np.trace(outer_contraction @ np.diag(_tt_core_collapse(diff[idx], diff[idx]).flatten())))
+    vec_0_res = (A_44 @ np.kron(X_0, X_0)
+                 + A_33 @ np.kron(X_0, C_0)
+                 + A_22 @ np.kron(C_0, X_0)
+                 + A_11 @ np.kron(C_0, C_0))
+    vec_1_res = (A_44 @ np.kron(X_1, X_1)
+                 + A_33 @ np.kron(X_1, C_1)
+                 + A_22 @ np.kron(C_1, X_1)
+                 + A_11 @ np.kron(C_1, C_1))
+    print("My error", np.trace(vec_0_res + vec_1_res), "Error: ", tt_inner_prod(diff, diff))
+    if idx == 0:
+        cores[idx][:, 0, :] -= lr * c0[:, 0]  #np.diagonal(vec_0.reshape(r_ip1, r_ip1)).reshape(r_i, r_ip1)
+        cores[idx][:, 1, :] -= lr * c0[:, 1]  # np.diagonal(vec_1.reshape(r_ip1, r_ip1)).reshape(r_i, r_ip1)
+        print("real---")
+        print(np.trace(A_44 @ np.kron(X_0, X_0)), A_44.reshape(1, -1) @ np.kron(X_0, X_0).reshape(-1, 1))
+        print(c0[:, 0])
+        print(c0[:, 1])
+        print("mine check---")
+        grad_func_2 = grad(lambda x: np.trace(A_44 @ np.kron(x, x)))
+        print(grad_func_2(X_0))
+        print("mine---")
+        #a = _als_grad_22(A_22, C_0, X_0)
+        #b = _als_grad_33(A_33, X_0, C_0)
+        c = _als_grad_44(A_44, X_0)
+        print(c)
+        #print(np.diagonal(vec_0.reshape(r_ip1, r_ip1)))
+        #print(np.diagonal(vec_1.reshape(r_ip1, r_ip1)))
+    elif idx == len(cores) - 1:
+        cores[idx][:, 0, :] -= lr * c1[:, 0]  # * np.diagonal(vec_0.reshape(r_i, r_i)).reshape(r_i, r_ip1)
+        cores[idx][:, 1, :] -= lr * c1[:, 1]  # np.diagonal(vec_1.reshape(r_i, r_i)).reshape(r_i, r_ip1)
+    #else:
+    #    cores[idx][:, 0, :] -= lr * vec_0.reshape(r_i, r_ip1)
+    #    cores[idx][:, 1, :] -= lr * vec_1.reshape(r_i, r_ip1)
+    diff = tt_add(tt_train, cores)  # the order matters here
+    error = tt_inner_prod(diff, diff)
+    lr = min(0.99 * (prev_error / error) * lr, 0.5)
+    #print(f"Error: {error}, {lr}")
     return cores, lr
 
 
-def tt_als(tt_train, max_iter=10):
-    print(tt_ranks(tt_train))
+def tt_als(tt_train, max_iter=2):
     tt_train = tt_rank_reduce([-1 * tt_train[0]] + tt_train[1:])
     cores = [np.divide(1, np.prod(c.shape)) * np.random.randn(*c.shape) for c in tt_train]
     indices = list(range(len(cores))) + list(reversed(range(len(cores))))
-    lr = 0.5*np.ones(len(cores))
+    lr = 0.5 * np.ones(len(cores))
     for iteration in range(max_iter):
         for k in indices:
             print(f"Core number {k}")
-            if k ==0:
-                cores = tt_lr_orthogonalise(cores)
-            else:
-                cores = tt_rl_orthogonalise(cores)
+            #if k == 0:
+            #    cores = tt_lr_orthogonalise(cores)
+            #else:
+            #    cores = tt_rl_orthogonalise(cores)
             cores, l = _tt_als_core_wise(tt_train, cores, k, lr=lr[k])
             lr[k] = l
 
