@@ -30,7 +30,7 @@ result = np.linalg.multi_dot(vs)
 print(result)
 """
 
-A = tt_random_gaussian([3, 3], shape=(2, ))
+A = tt_random_gaussian([3, 4, 2], shape=(2, ))
 B = tt_random_gaussian(tt_ranks(A), shape=(2, ))
 diff = tt_sub(B, A)
 print("Error: ", tt_inner_prod(diff, diff))
