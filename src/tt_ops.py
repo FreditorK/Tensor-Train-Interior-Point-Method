@@ -50,8 +50,9 @@ def tt_random_binary(target_ranks: List[int]):
 
 def tt_random_gaussian(target_ranks: List[int], shape=(2,)):
     target_ranks = [1] + target_ranks + [1]
-    return tt_normalise([1 / (l_n * np.prod(shape) * l_np1) * np.random.randn(l_n, *shape, l_np1) for l_n, l_np1 in
-                         zip(target_ranks[:-1], target_ranks[1:])])
+    return tt_normalise(
+        [np.divide(1, l_n * np.prod(shape) * l_np1) * np.random.randn(l_n, *shape, l_np1) for l_n, l_np1 in
+         zip(target_ranks[:-1], target_ranks[1:])])
 
 
 def tt_one(dim, shape=(2,)):
@@ -1047,24 +1048,14 @@ def tt_argmax(tt_train, p=1):
     return I[0]
 
 
-def safe_outer(x, y):
-    if len(x) > 0:
-        if len(y) > 0:
-            return x @ y
-        return x
-    return y
-
-
-def func(tt_train, cores):
-    diff = tt_add(tt_train, cores)
-    return tt_inner_prod(diff, diff)
-
 def commutation_matrix(m, n):
     w = np.arange(m * n).reshape((m, n), order="F").T.ravel(order="F")
     return np.eye(m * n)[w, :]
 
+
 def vec(Y):
     return Y.reshape(-1, 1, order='F')
+
 
 def mat(y, shape):
     return y.reshape(*shape, order='F')
@@ -1080,12 +1071,6 @@ def _als_grad_22(A, C, X):
     K_qm = commutation_matrix(q, m)
     H = np.kron(I_n, K_qm) @ np.kron(vec(C), I_q)
     L = np.kron(I_nq, A) @ np.kron(H, I_p)
-    #print("---")
-    #print("True", np.kron(C, X))
-    #print("Mine", mat(np.kron(H, I_p) @ vec(X), np.kron(C, X).shape))
-    #print("---")
-    #print("Other trace: ", np.round(mat(100 * (np.kron(I_nq, A) @ vec(np.kron(C, X))), (int(np.sqrt(L.shape[0])), int(np.sqrt(L.shape[0])))), decimals=2))
-    #print("Other trace: ", np.trace(mat(L @ vec(X), (int(np.sqrt(L.shape[0])), int(np.sqrt(L.shape[0]))))))
     return mat(vec(I_nq).T @ L, X.shape)
 
 
@@ -1098,7 +1083,8 @@ def _als_grad_33(A, X, C):
     I_p = np.eye(p)
     K_qm = commutation_matrix(q, m)
     G = np.kron(K_qm, I_p) @ np.kron(I_m, vec(C))
-    return mat(vec(I_nq).T @ np.kron(I_nq, A) @ np.kron(I_n, G), X.shape)
+    L = np.kron(I_nq, A) @ np.kron(I_n, G)
+    return mat(vec(I_nq).T @ L, X.shape)
 
 
 def _als_grad_44(A, X):
@@ -1110,7 +1096,6 @@ def _als_grad_44(A, X):
     H = np.kron(I_n, K_nn) @ np.kron(vec(I_n), I_n)
     G = np.kron(K_mm, I_m) @ np.kron(I_m, vec(I_m))
     D = np.kron(H.T, I_m) @ np.kron(np.kron(I_n, A), I_m) @ np.kron(I_n, G)
-    #print("Mine", vec(X).T @ np.kron(H_k.T, I_m) @ np.kron(np.kron(I_n, A), I_m) @ np.kron(I_n, G_k) @ vec(X))
     return mat(D @ vec(X) + D.T @ vec(X), X.shape)
 
 
@@ -1136,41 +1121,21 @@ def _tt_als_core_wise(tt_train, cores, idx, lr=0.1):
         left_contraction = safe_multi_dot([_tt_core_collapse(core, core) for core in diff[:idx]]).reshape(1, -1)
         right_contraction = safe_multi_dot([_tt_core_collapse(core, core) for core in diff[idx + 1:]]).reshape(-1, 1)
         outer_contraction = right_contraction @ left_contraction
-        print("Outer", outer_contraction.shape)
         X_0 = cores[idx][:, 0]
         C_0 = tt_train[idx][:, 0]
         X_1 = cores[idx][:, 1]
         C_1 = tt_train[idx][:, 1]
-    #TODO: [0, 2] is wrong
-    s_2 = np.array([[i + X_0.shape[0] * j for i in range(X_0.shape[0])] for j in np.arange(0, 2*X_0.shape[0], 2)]).flatten()
-    s_1 = np.array([[i + X_0.shape[1] * j for i in range(X_0.shape[1])] for j in np.arange(0, 2*X_0.shape[1], 2)]).flatten()
-    np.set_printoptions(threshold=np.inf, linewidth=800)
+    s_1 = np.array(
+        [[i + X_0.shape[1] * j for i in range(X_0.shape[1])] for j in np.arange(0, 2 * X_0.shape[1], 2)]).flatten()
+    s_2 = np.array(
+        [[i + X_0.shape[0] * j for i in range(X_0.shape[0])] for j in np.arange(0, 2 * X_0.shape[0], 2)]).flatten()
     block_diag_1 = outer_contraction[:outer_contraction.shape[0] // 2, :outer_contraction.shape[1] // 2]
     block_diag_2 = outer_contraction[outer_contraction.shape[0] // 2:, outer_contraction.shape[1] // 2:]
-    #A_11 = block_diag_1[np.ix_(s_1, s_2)]
     A_22 = block_diag_1[np.ix_(s_1 + X_0.shape[1], s_2 + X_0.shape[0])]
     A_33 = block_diag_2[np.ix_(s_1, s_2)]
     A_44 = block_diag_2[np.ix_(s_1 + X_0.shape[1], s_2 + X_0.shape[0])]
     vec_0 = _als_grad_22(A_22, C_0, X_0) + _als_grad_33(A_33, X_0, C_0) + _als_grad_44(A_44, X_0)
     vec_1 = _als_grad_22(A_22, C_1, X_1) + _als_grad_33(A_33, X_1, C_1) + _als_grad_44(A_44, X_1)
-    #print("Truth---")
-    #grad_func_2 = grad(lambda x: func(tt_train, x))
-    #print(grad_func_2(cores)[idx][:, 0])
-    #print(func(tt_train, cores))
-    #print("mine---")
-    #print(vec_0)
-    #diff_0 = scp.linalg.block_diag(C_0, X_0)
-    #diff_1 = scp.linalg.block_diag(C_1, X_1)
-    #print(
-    #    np.trace(block_diag_1 @ (np.kron(diff_0, diff_0) + np.kron(diff_1, diff_1))[:outer_contraction.shape[1] // 2, :outer_contraction.shape[0] // 2])
-    #    + np.trace(block_diag_2 @ (np.kron(diff_0, diff_0) + np.kron(diff_1, diff_1))[outer_contraction.shape[1] // 2:, outer_contraction.shape[0] // 2:])
-    #)
-    #f = np.trace(A_11 @ (np.kron(C_0, C_0) + np.kron(C_1, C_1))) + np.trace(A_22 @ (np.kron(C_0,  X_0) + np.kron(C_1,  X_1))) + np.trace(A_33 @ (np.kron(X_0, C_0) + np.kron(X_1, C_1))) + np.trace(A_44 @ (np.kron(X_0, X_0) + np.kron(X_1, X_1)))
-    #print(f)
-    #print(np.round(np.kron(diff_0, diff_0), decimals=2))
-    #print(np.round(np.kron(C_0, C_0), decimals=2))
-    #print(np.round(100 * outer_contraction, decimals=1))
-    #print(np.round(10*np.kron(diff_0, diff_0), decimals=1))
     if idx == 0:
         cores[idx][:, 0, :] -= lr * np.expand_dims(np.diagonal(vec_0.reshape(r_ip1, r_ip1)), axis=0)
         cores[idx][:, 1, :] -= lr * np.expand_dims(np.diagonal(vec_1.reshape(r_ip1, r_ip1)), axis=0)
@@ -1187,23 +1152,54 @@ def _tt_als_core_wise(tt_train, cores, idx, lr=0.1):
     return cores, lr
 
 
-def tt_als(tt_train, max_iter=5):
+def tt_als(tt_train, max_iter=100):
     tt_train = tt_rank_reduce([-1 * tt_train[0]] + tt_train[1:])
-    cores = [np.divide(1, np.prod(c.shape)) * np.random.randn(*c.shape) for c in tt_train]
+    ranks = [1, 2, 4, 2, 1]
+    cores = [np.divide(1, r_i * 2 * r_ip1) * np.random.randn(r_i, 2, r_ip1) for r_i, r_ip1 in
+             zip(ranks[:-1], ranks[1:])]
     indices = list(range(len(cores))) + list(reversed(range(len(cores))))
     lr = 0.5 * np.ones(len(cores))
     for iteration in range(max_iter):
         for k in indices:
             print(f"Core number {k}")
-            #if k == 0:
-            #    cores = tt_lr_orthogonalise(cores)
-            #else:
-            #    cores = tt_rl_orthogonalise(cores)
             cores, l = _tt_als_core_wise(tt_train, cores, k, lr=lr[k])
             lr[k] = l
 
-        # Check convergence criterion (e.g., change in objective function)
-        #if convergence_criterion_met(T, cores, tol):
-        #   break
+    return cores
+
+
+def func(tt_train, cores):
+    burer_mont = [
+        _tt_op_op_collapse(core_op_1, core_op_2) for core_op_1, core_op_2 in zip(cores, tt_transpose(cores))
+    ]
+    diff = tt_add(burer_mont, tt_train)
+    return tt_inner_prod(diff, diff)
+
+
+def _tt_bm_core_wise(tt_train, cores, idx, lr=0.1):
+    prev_error = func(tt_train, cores)
+    grad_func = grad(lambda x: func(tt_train, x))
+    gradient = grad_func(cores)[idx]
+    cores[idx] -= lr * gradient
+    error = func(tt_train, cores)
+    lr = min(0.999 * (prev_error / error) * lr, 0.5)
+    print(f"Error: {error}, {lr}")
+    return cores, lr
+
+
+def tt_burer_monteiro_factorisation(tt_train, max_iter=100):
+    tt_train = tt_rank_reduce([-1 * tt_train[0]] + tt_train[1:])
+    ranks = [1] + [r for r in tt_ranks(tt_train)] + [1]
+    cores = [np.divide(1, r_i * 4 * r_ip1) * np.random.randn(r_i, 2, 2, r_ip1) for r_i, r_ip1 in
+             zip(ranks[:-1], ranks[1:])]
+    cores_sketch = tt_sketch_like(cores, tt_ranks(cores))
+    indices = list(range(len(cores))) + list(reversed(range(len(cores))))
+    lr = 0.5 * np.ones(len(cores))
+    for iteration in range(max_iter):
+        for k in indices:
+            print(f"Core number {k}")
+            #cores = tt_rl_orthogonalise(cores)
+            cores, l = _tt_bm_core_wise(tt_train, cores, k, lr=lr[k])
+            lr[k] = l
 
     return cores
