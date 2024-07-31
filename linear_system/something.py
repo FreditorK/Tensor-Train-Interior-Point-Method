@@ -30,8 +30,8 @@ result = np.linalg.multi_dot(vs)
 print(result)
 """
 
-"""
-A = tt_random_gaussian([4, 4, 4], shape=(2, ))
+
+A = tt_random_gaussian([4, 3, 4], shape=(2, ))
 B = tt_random_gaussian(tt_ranks(A), shape=(2, ))
 diff = tt_sub(B, A)
 print("Error: ", tt_inner_prod(diff, diff))
@@ -39,12 +39,13 @@ B = tt_als(A)
 diff = tt_sub(B, A)
 print("Error: ", tt_inner_prod(diff, diff))
 """
-A = tt_random_gaussian([2, 2], shape=(2, 2))
+A = tt_random_gaussian([2, 2, 2], shape=(2, 2))
 A_psd = tt_linear_op_compose(A, tt_transpose(A))
 B = tt_random_gaussian(tt_ranks(A_psd), shape=(2, 2))
 B_psd = tt_burer_monteiro_factorisation(A_psd)
 diff = tt_sub(A_psd, tt_linear_op_compose(B_psd, tt_transpose(B_psd)))
 print("Final Error: ", tt_inner_prod(diff, diff))
+"""
 """
 
 import sympy as sp

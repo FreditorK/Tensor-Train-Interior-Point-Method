@@ -84,6 +84,16 @@ def tt_rl_orthogonalise(tt_train: List[np.array]):
     return tt_train
 
 
+def tt_rl_orthogonalise_idx(tt_train: List[np.array], idx):
+    if idx == 0:
+        return tt_rl_orthogonalise(tt_train)
+    if idx == len(tt_train) - 1:
+        return tt_lr_orthogonalise(tt_train)
+    tt_train_fidx = tt_lr_orthogonalise(tt_train[:idx+1])
+    tt_train_uidx = tt_rl_orthogonalise([tt_train_fidx[-1]] + tt_train[idx+1:])
+    return tt_train_fidx[:-1] + tt_train_uidx
+
+
 def tt_lr_orthogonalise(tt_train: List[np.array]):
     tt_train = tt_swap_all(tt_train)
     tt_train = tt_rl_orthogonalise(tt_train)
@@ -1062,6 +1072,9 @@ def mat(y, shape):
 
 
 def _als_grad_22(A, C, X):
+    """
+    gradient for A(C kron X)
+    """
     m, n = C.shape
     p, q = X.shape
     I_nq = np.eye(n * q)
@@ -1074,9 +1087,35 @@ def _als_grad_22(A, C, X):
     return mat(vec(I_nq).T @ L, X.shape)
 
 
-def _als_grad_33(A, X, C):
+def _als_grad_22_sq(A, C, V):
+    """
+    gradient for A(C kron V kron V)
+    """
     m, n = C.shape
-    p, q = X.shape
+    orig_p, orig_q = V.shape
+    p = orig_p**2
+    q = orig_q**2
+    I_nq = np.eye(n * q)
+    I_n = np.eye(n)
+    I_q = np.eye(q)
+    I_p = np.eye(p)
+    K_qm = commutation_matrix(q, m)
+    H = np.kron(I_n, K_qm) @ np.kron(vec(C), I_q)
+    L = np.kron(I_nq, A) @ np.kron(H, I_p)
+
+    I_orig_p = I_p[:orig_p, :orig_p]
+    I_orig_q = I_q[:orig_q, :orig_q]
+    K_orig_qp = commutation_matrix(orig_q, orig_p)
+    H_V = np.kron(I_orig_q, K_orig_qp) @ np.kron(vec(V), I_orig_q)
+    G_V = np.kron(K_orig_qp, I_orig_p) @ np.kron(I_orig_p, vec(V))
+    L_1 = L @ np.kron(H_V, I_orig_p)
+    L_2 = L @ np.kron(I_orig_q, G_V)
+    return mat(vec(I_nq).T @ (L_1 + L_2), V.shape)
+
+
+def _als_grad_33(A, X, C):
+    p, q = C.shape
+    m, n = X.shape
     I_nq = np.eye(n * q)
     I_n = np.eye(n)
     I_m = np.eye(m)
@@ -1085,6 +1124,29 @@ def _als_grad_33(A, X, C):
     G = np.kron(K_qm, I_p) @ np.kron(I_m, vec(C))
     L = np.kron(I_nq, A) @ np.kron(I_n, G)
     return mat(vec(I_nq).T @ L, X.shape)
+
+
+def _als_grad_33_sq(A, V, C):
+    p, q = C.shape
+    orig_m, orig_n = V.shape
+    m = orig_m ** 2
+    n = orig_n ** 2
+    I_nq = np.eye(n * q)
+    I_n = np.eye(n)
+    I_m = np.eye(m)
+    I_p = np.eye(p)
+    K_qm = commutation_matrix(q, m)
+    G = np.kron(K_qm, I_p) @ np.kron(I_m, vec(C))
+    L = np.kron(I_nq, A) @ np.kron(I_n, G)
+
+    I_orig_m = I_m[:orig_m, :orig_m]
+    I_orig_n = I_n[:orig_n, :orig_n]
+    K_orig_nm = commutation_matrix(orig_n, orig_m)
+    H_V = np.kron(I_orig_n, K_orig_nm) @ np.kron(vec(V), I_orig_n)
+    G_V = np.kron(K_orig_nm, I_orig_m) @ np.kron(I_orig_m, vec(V))
+    L_1 = L @ np.kron(H_V, I_orig_m)
+    L_2 = L @ np.kron(I_orig_n, G_V)
+    return mat(vec(I_nq).T @ (L_1 + L_2), V.shape)
 
 
 def _als_grad_44(A, X):
@@ -1097,6 +1159,32 @@ def _als_grad_44(A, X):
     G = np.kron(K_mm, I_m) @ np.kron(I_m, vec(I_m))
     D = np.kron(H.T, I_m) @ np.kron(np.kron(I_n, A), I_m) @ np.kron(I_n, G)
     return mat(D @ vec(X) + D.T @ vec(X), X.shape)
+
+
+def _als_grad_44_sq(A, V):
+    orig_m, orig_n = V.shape
+    m = orig_m**2
+    n = orig_n**2
+    I_n = np.eye(n)
+    I_m = np.eye(m)
+    K_nn = commutation_matrix(n, n)
+    K_mm = commutation_matrix(m, m)
+    H = np.kron(I_n, K_nn) @ np.kron(vec(I_n), I_n)
+    G = np.kron(K_mm, I_m) @ np.kron(I_m, vec(I_m))
+    D = np.kron(H.T, I_m) @ np.kron(np.kron(I_n, A), I_m) @ np.kron(I_n, G)
+
+    I_orig_m = I_m[:orig_m, :orig_m]
+    I_orig_n = I_n[:orig_n, :orig_n]
+    K_orig_nm = commutation_matrix(orig_n, orig_m)
+    H_V = np.kron(I_orig_n, K_orig_nm) @ np.kron(vec(V), I_orig_n)
+    G_V = np.kron(K_orig_nm, I_orig_m) @ np.kron(I_orig_m, vec(V))
+    D_1 = D @ np.kron(H_V, I_orig_m)
+    D_2 = D @ np.kron(I_orig_n, G_V)
+    D_3 = np.kron(H_V.T, I_orig_m) @ D
+    D_4 = np.kron(I_orig_n, G_V.T) @ D
+    L_1 = vec(np.kron(V, V)).T @ (D_1 + D_2)
+    L_2 = (D_3 + D_4) @ vec(np.kron(V, V))
+    return mat(L_1 + L_2.T, V.shape)
 
 
 def _tt_als_core_wise(tt_train, cores, idx, lr=0.1):
@@ -1154,7 +1242,7 @@ def _tt_als_core_wise(tt_train, cores, idx, lr=0.1):
 
 def tt_als(tt_train, max_iter=100):
     tt_train = tt_rank_reduce([-1 * tt_train[0]] + tt_train[1:])
-    ranks = [1, 2, 4, 2, 1]
+    ranks = [1] + tt_ranks(tt_train) + [1]
     cores = [np.divide(1, r_i * 2 * r_ip1) * np.random.randn(r_i, 2, r_ip1) for r_i, r_ip1 in
              zip(ranks[:-1], ranks[1:])]
     indices = list(range(len(cores))) + list(reversed(range(len(cores))))
@@ -1188,17 +1276,14 @@ def _tt_bm_core_wise(tt_train, cores, idx, lr=0.1):
 
 
 def tt_burer_monteiro_factorisation(tt_train, max_iter=100):
-    tt_train = tt_rank_reduce([-1 * tt_train[0]] + tt_train[1:])
-    ranks = [1] + [r for r in tt_ranks(tt_train)] + [1]
-    cores = [np.divide(1, r_i * 4 * r_ip1) * np.random.randn(r_i, 2, 2, r_ip1) for r_i, r_ip1 in
-             zip(ranks[:-1], ranks[1:])]
-    cores_sketch = tt_sketch_like(cores, tt_ranks(cores))
+    tt_train = tt_normalise(tt_rank_reduce([-1 * tt_train[0]] + tt_train[1:]))
+    cores = tt_random_gaussian(tt_ranks(tt_train), shape=(2, 2))
     indices = list(range(len(cores))) + list(reversed(range(len(cores))))
     lr = 0.5 * np.ones(len(cores))
     for iteration in range(max_iter):
         for k in indices:
             print(f"Core number {k}")
-            #cores = tt_rl_orthogonalise(cores)
+            cores = tt_rl_orthogonalise_idx(cores, k)
             cores, l = _tt_bm_core_wise(tt_train, cores, k, lr=lr[k])
             lr[k] = l
 
