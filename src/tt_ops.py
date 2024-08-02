@@ -1309,10 +1309,12 @@ def _tt_bm_core_wise(tt_train, cores, idx, lr=0.1):
 
     print(outer_contraction.shape, (m, n), (p, q))
     print((cc_x.shape, cc_y.shape), (cv_x.shape, cv_y.shape), (vc_x.shape, vc_y.shape), (vv_x.shape, vv_y.shape))
-    A_11 = outer_contraction[np.ix_(cc_x, cc_y)]
-    A_22 = outer_contraction[np.ix_(cv_x + n, cv_y + m)]
-    A_33 = outer_contraction[np.ix_(vc_x, vc_y)]
-    A_44 = outer_contraction[np.ix_(vv_x + n, vv_y + m)]  # TODO: m, n likely false
+    A_block_1 = outer_contraction[:n * (n + q), :m * (m + p)]
+    A_block_2 = outer_contraction[n * (n + q):, m * (m + p):]
+    A_11 = A_block_1[np.ix_(cc_x, cc_y)]
+    A_22 = A_block_1[np.ix_(cv_x + n, cv_y + m)]
+    A_33 = A_block_2[np.ix_(vc_x, vc_y)]
+    A_44 = A_block_2[np.ix_(vv_x + n, vv_y + m)]  # TODO: m, n likely false
     vec_00 = _als_grad_22_sq(A_22, C_00, V_00) + _als_grad_33_sq(A_33, V_00, C_00) + _als_grad_44_sq(A_44, V_00)
     vec_01 = _als_grad_22_sq(A_22, C_01, V_01) + _als_grad_33_sq(A_33, V_01, C_01) + _als_grad_44_sq(A_44, V_01)
     vec_10 = _als_grad_22_sq(A_22, C_10, V_10) + _als_grad_33_sq(A_33, V_10, C_10) + _als_grad_44_sq(A_44, V_10)
@@ -1323,27 +1325,23 @@ def _tt_bm_core_wise(tt_train, cores, idx, lr=0.1):
     pair_10 = np.kron(V_00, V_01) + np.kron(V_10, V_11)
     pair_11 = np.kron(V_01, V_01) + np.kron(V_11, V_11)
 
+
     diff_00 = scp.linalg.block_diag(C_00, pair_00)
     diff_01 = scp.linalg.block_diag(C_01, pair_01)
     diff_10 = scp.linalg.block_diag(C_10, pair_10)
     diff_11 = scp.linalg.block_diag(C_11, pair_11)
 
     diff_sum = np.kron(diff_00, diff_00) + np.kron(diff_01, diff_01) + np.kron(diff_10, diff_10) + np.kron(diff_11, diff_11)
-    diff_sum[np.ix_(cc_y, cc_x)] = 0
-    diff_sum[np.ix_(cv_y + m, cv_x + n)] = 0
-    diff_sum[np.ix_(vc_y, vc_x)] = 0
-    diff_sum[np.ix_(vv_y + m, vv_x + n)] = 0
-    print("sum", np.sum(diff_sum))
-    X_11 = diff_sum[np.ix_(cc_y, cc_x)]
-    X_22 = diff_sum[np.ix_(cv_y + m, cv_x + n)]
-    X_33 = diff_sum[np.ix_(vc_y, vc_x)]
-    X_44 = diff_sum[np.ix_(vv_y + m, vv_x + n)]  # TODO: m, n likely false
-    with open("output.txt", 'w') as file:
-        matrix_string = np.array2string((diff_sum > 0).astype(np.int32), threshold=np.inf, max_line_width=np.inf)
-        # Write the string to the file
-        file.write(matrix_string)
-    #check = np.trace(A_11 @ X_11) + np.trace(A_22 @ X_22) + np.trace(A_33 @ X_33) + np.trace(A_44 @ X_44)
-    check = np.trace(outer_contraction @ diff_sum)
+    block_1 = diff_sum[:m*(m+p), :n*(n+q)]
+    block_2 = diff_sum[m*(m+p):, n*(n+q):]
+    print(diff_sum.shape, (m*(m+p), n*(n+q)), (p*(m+p), q*(n+q)))
+    X_11 = block_1[np.ix_(cc_y, cc_x)]
+    X_22 = block_1[np.ix_(cv_y + m, cv_x + n)]
+    X_33 = block_2[np.ix_(vc_y, vc_x)]
+    X_44 = block_2[np.ix_(vv_y + m, vv_x + n)]  # TODO: m, n likely false
+
+    check = np.trace(A_11 @ X_11) + np.trace(A_22 @ X_22) + np.trace(A_33 @ X_33) + np.trace(A_44 @ X_44)
+    #check = np.trace(outer_contraction @ diff_sum)
 
     #check = (
     #    np.trace(block_diag_1 @ (np.kron(diff_00, diff_00) + np.kron(diff_01, diff_01) + np.kron(diff_10, diff_10) + np.kron(diff_11, diff_11))[:m*(m+p), :n*(n+q)])
