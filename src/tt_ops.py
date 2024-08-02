@@ -1256,32 +1256,135 @@ def tt_als(tt_train, max_iter=100):
     return cores
 
 
-def func(tt_train, cores):
-    burer_mont = [
-        _tt_op_op_collapse(core_op_1, core_op_2) for core_op_1, core_op_2 in zip(cores, tt_transpose(cores))
-    ]
-    diff = tt_add(burer_mont, tt_train)
-    return tt_inner_prod(diff, diff)
-
-
 def _tt_bm_core_wise(tt_train, cores, idx, lr=0.1):
-    prev_error = func(tt_train, cores)
-    grad_func = grad(lambda x: func(tt_train, x))
-    gradient = grad_func(cores)[idx]
-    cores[idx] -= lr * gradient
-    error = func(tt_train, cores)
+    xr_i, _, _, xr_ip1 = cores[idx].shape
+    comp = tt_linear_op_compose(cores, tt_transpose(cores))
+    diff = tt_add(tt_train, comp)
+    prev_error = tt_inner_prod(diff, diff)
+    if 0 < idx < len(cores) - 1:
+        left_contraction = safe_multi_dot([_tt_core_collapse(core, core) for core in diff[:idx]]).reshape(1, -1)
+        right_contraction = safe_multi_dot([_tt_core_collapse(core, core) for core in diff[idx + 1:]]).reshape(-1, 1)
+        outer_contraction = right_contraction @ left_contraction
+        V_00 = cores[idx][:, 0, 0]
+        C_00 = tt_train[idx][:, 0, 0]
+        V_01 = cores[idx][:, 0, 1]
+        C_01 = tt_train[idx][:, 0, 1]
+        V_10 = cores[idx][:, 1, 0]
+        C_10 = tt_train[idx][:, 1, 0]
+        V_11 = cores[idx][:, 1, 1]
+        C_11 = tt_train[idx][:, 1, 1]
+
+    else:
+        if idx == 0:
+            outer_contraction = np.diag(
+                safe_multi_dot([_tt_core_collapse(core, core) for core in diff[idx + 1:]]).flatten())
+        else:
+            outer_contraction = np.diag(
+                safe_multi_dot([_tt_core_collapse(core, core) for core in diff[:idx]]).flatten())
+        V_00 = np.diag(cores[idx][:, 0, 0].flatten())
+        C_00 = np.diag(tt_train[idx][:, 0, 0].flatten())
+        V_10 = np.diag(cores[idx][:, 1, 0].flatten())
+        C_10 = np.diag(tt_train[idx][:, 1, 0].flatten())
+        V_01 = np.diag(cores[idx][:, 0, 1].flatten())
+        C_01 = np.diag(tt_train[idx][:, 0, 1].flatten())
+        V_11 = np.diag(cores[idx][:, 1, 1].flatten())
+        C_11 = np.diag(tt_train[idx][:, 1, 1].flatten())
+
+    m, n = C_00.shape
+    p, q = V_00.shape
+    p *= p
+    q *= q
+
+    cc_y = np.array([[i + (m + p) * j for i in range(m)] for j in range(m)]).flatten()
+    cc_x = np.array([[i + (n + q) * j for i in range(n)] for j in range(n)]).flatten()
+
+    cv_y = np.array([[i + (m + p) * j for i in range(p)] for j in range(m)]).flatten()
+    cv_x = np.array([[i + (n + q) * j for i in range(q)] for j in range(n)]).flatten()
+
+    vc_y = np.array([[i + (m + p) * j for i in range(m)] for j in range(p)]).flatten()
+    vc_x = np.array([[i + (n + q) * j for i in range(n)] for j in range(q)]).flatten()
+
+    vv_y = np.array([[i + (m + p) * j for i in range(p)] for j in range(p)]).flatten()
+    vv_x = np.array([[i + (n + q) * j for i in range(q)] for j in range(q)]).flatten()
+
+    print(outer_contraction.shape, (m, n), (p, q))
+    print((cc_x.shape, cc_y.shape), (cv_x.shape, cv_y.shape), (vc_x.shape, vc_y.shape), (vv_x.shape, vv_y.shape))
+    A_11 = outer_contraction[np.ix_(cc_x, cc_y)]
+    A_22 = outer_contraction[np.ix_(cv_x + n, cv_y + m)]
+    A_33 = outer_contraction[np.ix_(vc_x, vc_y)]
+    A_44 = outer_contraction[np.ix_(vv_x + n, vv_y + m)]  # TODO: m, n likely false
+    vec_00 = _als_grad_22_sq(A_22, C_00, V_00) + _als_grad_33_sq(A_33, V_00, C_00) + _als_grad_44_sq(A_44, V_00)
+    vec_01 = _als_grad_22_sq(A_22, C_01, V_01) + _als_grad_33_sq(A_33, V_01, C_01) + _als_grad_44_sq(A_44, V_01)
+    vec_10 = _als_grad_22_sq(A_22, C_10, V_10) + _als_grad_33_sq(A_33, V_10, C_10) + _als_grad_44_sq(A_44, V_10)
+    vec_11 = _als_grad_22_sq(A_22, C_11, V_11) + _als_grad_33_sq(A_33, V_11, C_11) + _als_grad_44_sq(A_44, V_11)
+
+    pair_00 = np.kron(V_00, V_00) + np.kron(V_10, V_10)
+    pair_01 = np.kron(V_01, V_00) + np.kron(V_11, V_10)
+    pair_10 = np.kron(V_00, V_01) + np.kron(V_10, V_11)
+    pair_11 = np.kron(V_01, V_01) + np.kron(V_11, V_11)
+
+    diff_00 = scp.linalg.block_diag(C_00, pair_00)
+    diff_01 = scp.linalg.block_diag(C_01, pair_01)
+    diff_10 = scp.linalg.block_diag(C_10, pair_10)
+    diff_11 = scp.linalg.block_diag(C_11, pair_11)
+
+    diff_sum = np.kron(diff_00, diff_00) + np.kron(diff_01, diff_01) + np.kron(diff_10, diff_10) + np.kron(diff_11, diff_11)
+    diff_sum[np.ix_(cc_y, cc_x)] = 0
+    diff_sum[np.ix_(cv_y + m, cv_x + n)] = 0
+    diff_sum[np.ix_(vc_y, vc_x)] = 0
+    diff_sum[np.ix_(vv_y + m, vv_x + n)] = 0
+    print("sum", np.sum(diff_sum))
+    X_11 = diff_sum[np.ix_(cc_y, cc_x)]
+    X_22 = diff_sum[np.ix_(cv_y + m, cv_x + n)]
+    X_33 = diff_sum[np.ix_(vc_y, vc_x)]
+    X_44 = diff_sum[np.ix_(vv_y + m, vv_x + n)]  # TODO: m, n likely false
+    with open("output.txt", 'w') as file:
+        matrix_string = np.array2string((diff_sum > 0).astype(np.int32), threshold=np.inf, max_line_width=np.inf)
+        # Write the string to the file
+        file.write(matrix_string)
+    #check = np.trace(A_11 @ X_11) + np.trace(A_22 @ X_22) + np.trace(A_33 @ X_33) + np.trace(A_44 @ X_44)
+    check = np.trace(outer_contraction @ diff_sum)
+
+    #check = (
+    #    np.trace(block_diag_1 @ (np.kron(diff_00, diff_00) + np.kron(diff_01, diff_01) + np.kron(diff_10, diff_10) + np.kron(diff_11, diff_11))[:m*(m+p), :n*(n+q)])
+    #    + np.trace(block_diag_2 @ (np.kron(diff_00, diff_00) + np.kron(diff_01, diff_01) + np.kron(diff_10, diff_10) + np.kron(diff_11, diff_11))[m*(m+p):, n*(n+q):])
+    #)
+
+    #check = (
+    #    np.trace(A_11 @ (np.kron(C_00, C_00) + np.kron(C_01, C_01) + np.kron(C_10, C_10) + np.kron(C_11, C_11)))
+    #    + np.trace(A_22 @ (np.kron(C_00, pair_00) + np.kron(C_01, pair_01) + np.kron(C_10, pair_10) + np.kron(C_11, pair_11)))
+    #    + np.trace(A_33 @ (np.kron(pair_00, C_00) + np.kron(pair_01, C_01) + np.kron(pair_10, C_10) + np.kron(pair_11, C_11)))
+    #    + np.trace(A_44 @ (np.kron(pair_00, pair_00) + np.kron(pair_01, pair_01) + np.kron(pair_10, pair_10) + np.kron(pair_11, pair_11)))
+    #)
+
+    print("Actual: ", prev_error, "Mine: ", check)
+    if 0 < idx < len(cores) - 1:
+        cores[idx][:, 0, 0, :] -= lr * vec_00.reshape(xr_i, xr_ip1)
+        cores[idx][:, 0, 1, :] -= lr * vec_01.reshape(xr_i, xr_ip1)
+        cores[idx][:, 1, 0, :] -= lr * vec_10.reshape(xr_i, xr_ip1)
+        cores[idx][:, 1, 1, :] -= lr * vec_11.reshape(xr_i, xr_ip1)
+    else:
+        r = xr_ip1 if idx == 0 else xr_i
+        a = 0 if idx == 0 else -1
+        cores[idx][:, 0, 0, :] -= lr * np.expand_dims(np.diagonal(vec_00.reshape(r, r)), axis=a)
+        cores[idx][:, 0, 1, :] -= lr * np.expand_dims(np.diagonal(vec_01.reshape(r, r)), axis=a)
+        cores[idx][:, 1, 0, :] -= lr * np.expand_dims(np.diagonal(vec_10.reshape(r, r)), axis=a)
+        cores[idx][:, 1, 1, :] -= lr * np.expand_dims(np.diagonal(vec_11.reshape(r, r)), axis=a)
+
+    diff = tt_add(tt_train, tt_linear_op_compose(cores, tt_transpose(cores)))
+    error = tt_inner_prod(diff, diff)
     lr = min(0.999 * (prev_error / error) * lr, 0.5)
     print(f"Error: {error}, {lr}")
     return cores, lr
 
 
-def tt_burer_monteiro_factorisation(tt_train, max_iter=100):
+def tt_burer_monteiro_factorisation(tt_train, max_iter=1):
     tt_train = tt_normalise(tt_rank_reduce([-1 * tt_train[0]] + tt_train[1:]))
     cores = tt_random_gaussian(tt_ranks(tt_train), shape=(2, 2))
     indices = list(range(len(cores))) + list(reversed(range(len(cores))))
     lr = 0.5 * np.ones(len(cores))
     for iteration in range(max_iter):
-        for k in indices:
+        for k in [0, 1]: #indices:
             print(f"Core number {k}")
             cores = tt_rl_orthogonalise_idx(cores, k)
             cores, l = _tt_bm_core_wise(tt_train, cores, k, lr=lr[k])
