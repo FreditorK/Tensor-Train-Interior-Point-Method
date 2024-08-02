@@ -21,16 +21,6 @@ class Config:
 np.random.seed(42)
 
 """
-V = tt_random_binary([4, 3, 5])
-print(np.round(tt_to_tensor(V), decimals=3))
-idx = np.array(tt_argmax(V), dtype=int)
-print(idx)
-vs = [v[:, i] for i, v in zip(idx, V)]
-result = np.linalg.multi_dot(vs)
-print(result)
-"""
-
-
 A = tt_random_gaussian([4, 3, 4], shape=(2, ))
 B = tt_random_gaussian(tt_ranks(A), shape=(2, ))
 diff = tt_sub(B, A)
@@ -39,13 +29,13 @@ B = tt_als(A)
 diff = tt_sub(B, A)
 print("Error: ", tt_inner_prod(diff, diff))
 """
-A = tt_random_gaussian([2, 2, 2], shape=(2, 2))
+
+A = tt_random_gaussian([2, 3], shape=(2, 2))
 A_psd = tt_linear_op_compose(A, tt_transpose(A))
-B = tt_random_gaussian(tt_ranks(A_psd), shape=(2, 2))
 B_psd = tt_burer_monteiro_factorisation(A_psd)
 diff = tt_sub(A_psd, tt_linear_op_compose(B_psd, tt_transpose(B_psd)))
 print("Final Error: ", tt_inner_prod(diff, diff))
-"""
+
 """
 
 import sympy as sp
@@ -72,27 +62,6 @@ print("Matrix equation:")
 print(E)
 print("\nDerivative of E with respect to X:")
 print(dE_dX_simplified)
-"""
-
-"""
-
-V = tt_random_gaussian([2, 3, 9, 8, 5], (2, 2))
-V = tt_add(V, tt_transpose(V))
-V = tt_rank_reduce(V)
-print(tt_ranks(V))
-M = tt_op_to_matrix(V)
-eigenvalues, eigenvectors = np.linalg.eig(M)
-print(len(eigenvectors))
-ran = [np.zeros((1, 2, 2, 1)) for _ in range(len(V))]
-for i, vec in enumerate(eigenvectors[:-2]):
-    tt_eigenvector = tt_svd(vec.reshape(2, 2, 2, 2, 2, 2))
-    ran = tt_add_column(ran, tt_eigenvector, i)
-ran = tt_rank_reduce(ran)
-ran = tt_linear_op_compose(ran, tt_transpose(ran))
-ran = tt_rank_reduce(ran)
-print(tt_ranks(ran))
-print(np.round(tt_op_to_matrix(ran)))
-print(eigenvectors[-1])
 """
 
 """
