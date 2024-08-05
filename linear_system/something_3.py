@@ -81,10 +81,11 @@ check_1 = np.trace(A_11 @ (np.kron(C_00, C_00) + np.kron(C_01, C_01) + np.kron(C
 def check_2(V_00, V_10, V_01, V_11):
     pair_00 = np.kron(V_00, V_00) + np.kron(V_10, V_10)
     pair_01 = np.kron(V_01, V_00) + np.kron(V_11, V_10)
-    #pair_10 = np.kron(V_00, V_01) + np.kron(V_10, V_11)
-    #pair_11 = np.kron(V_01, V_01) + np.kron(V_11, V_11)
+    pair_10 = np.kron(V_00, V_01) + np.kron(V_10, V_11)
+    pair_11 = np.kron(V_01, V_01) + np.kron(V_11, V_11)
     return np.trace(
-        A_22 @ (np.kron(C_00, pair_00) + np.kron(C_01, pair_01))) # + np.kron(C_10, pair_10) + np.kron(C_11, pair_11)))
+        A_22 @ (np.kron(C_00, pair_00) + np.kron(C_01, pair_01)))  # + np.kron(C_11, pair_11))) + np.kron(C_10, pair_10)
+
 
 check_2_grad = grad(lambda v: check_2(v, V_10, V_01, V_11))
 
@@ -97,7 +98,9 @@ def check_3(V_00, V_10, V_01, V_11):
     return np.trace(
         A_33 @ (np.kron(pair_00, C_00) + np.kron(pair_01, C_01) + np.kron(pair_10, C_10) + np.kron(pair_11, C_11)))
 
+
 check_3_grad = grad(lambda v: check_3(v, V_10, V_01, V_11))
+
 
 def check_4(V_00, V_10, V_01, V_11):
     pair_00 = np.kron(V_00, V_00) + np.kron(V_10, V_10)
@@ -105,14 +108,15 @@ def check_4(V_00, V_10, V_01, V_11):
     pair_10 = np.kron(V_00, V_01) + np.kron(V_10, V_11)
     pair_11 = np.kron(V_01, V_01) + np.kron(V_11, V_11)
     return np.trace(A_44 @ (
-            np.kron(pair_00, pair_00) + np.kron(pair_01, pair_01) + np.kron(pair_10, pair_10) + np.kron(pair_11,
-                                                                                                        pair_11)))
+        np.kron(pair_00, pair_00) + np.kron(pair_01, pair_01) + np.kron(pair_10, pair_10) + np.kron(pair_11,
+                                                                                                    pair_11)))
+
 
 check_4_grad = grad(lambda v: check_4(v, V_10, V_01, V_11))
 
 true_vec_00 = check_2_grad(V_00)
 
-vec_00 = _als_grad_22_sq(A_22, C_00, C_01, V_00, V_01) #+ _als_grad_33(A_22, V_00, np.kron(V_01, C_10))
+vec_00 = _als_grad_22_sq(A_22, C_00, C_01, C_10, V_00, V_01)  #+ _als_grad_33(A_22, V_00, np.kron(V_01, C_10))
 
 print(true_vec_00)
 

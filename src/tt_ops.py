@@ -1087,13 +1087,14 @@ def _als_grad_22(A, C, X):
     return mat(vec(I_nq).T @ L, X.shape)
 
 
-def _als_grad_22_sq(A, C_1, C_2, V_1, V_2):
+def _als_grad_22_sq(A, C_00, C_01, C_10, V_00, V_01):
     """
+    C_00, C_01, V_00, V_01
     gradient for A(C kron V kron V)
     A = nq x mp
     """
-    m, n = C_1.shape
-    orig_p, orig_q = V_1.shape
+    m, n = C_00.shape
+    orig_p, orig_q = V_00.shape
     p = orig_p**2
     q = orig_q**2
     I_n = np.eye(n)
@@ -1101,21 +1102,22 @@ def _als_grad_22_sq(A, C_1, C_2, V_1, V_2):
     I_p = np.eye(p)
     K_qm = commutation_matrix(q, m)
     # nqm x q = nqm x nqm @ nqm x q
-    HC_1 = np.kron(I_n, K_qm) @ np.kron(vec(C_1), I_q)
-    HC_2 = np.kron(I_n, K_qm) @ np.kron(vec(C_2), I_q)
+    HC_00 = np.kron(I_n, K_qm) @ np.kron(vec(C_00), I_q)
+    HC_01 = np.kron(I_n, K_qm) @ np.kron(vec(C_01), I_q)
     # 1 x pq = p x nqm @ nqm x q
-    LC_1 = vec(A.T.reshape(p, m*n*q, order="F") @ HC_1).T
-    LC_2 = vec(A.T.reshape(p, m * n * q, order="F") @ HC_2).T
+    LC_00 = vec(A.T.reshape(p, m*n*q, order="F") @ HC_00).T
+    LC_01 = vec(A.T.reshape(p, m * n * q, order="F") @ HC_01).T
 
     I_orig_p = I_p[:orig_p, :orig_p]
     I_orig_q = I_q[:orig_q, :orig_q]
     K_orig_qp = commutation_matrix(orig_q, orig_p)
     # q orig_p x orig_q = q orig_p x q orig_p @ orig_p q x orig_q
-    H_V_1 = np.kron(I_orig_q, K_orig_qp) @ (np.kron(vec(V_1), I_orig_q))
-    H_V_2 = np.kron(I_orig_q, K_orig_qp) @ (np.kron(vec(V_2), I_orig_q))
+    H_V_00 = np.kron(I_orig_q, K_orig_qp) @ (np.kron(vec(V_00), I_orig_q))
+    H_V_01 = np.kron(I_orig_q, K_orig_qp) @ (np.kron(vec(V_01), I_orig_q))
     # p orig_q x orig_p = p orig_q x p orig_q @ orig_q p x orig_p
-    G_V_1 = np.kron(K_orig_qp, I_orig_p) @ (np.kron(I_orig_p, vec(V_1)))
-    return mat(LC_1 @ (np.kron(I_orig_q, G_V_1) + np.kron(H_V_1, I_orig_p)) + LC_2 @ np.kron(H_V_2, I_orig_p), (orig_p, orig_q))
+    G_V_1 = np.kron(K_orig_qp, I_orig_p) @ (np.kron(I_orig_p, vec(V_00)))
+
+    return mat(LC_00 @ (np.kron(I_orig_q, G_V_1) + np.kron(H_V_00, I_orig_p)) + LC_01 @ np.kron(H_V_01, I_orig_p), (orig_p, orig_q))
 
 
 def _als_grad_33(A, X, C):
