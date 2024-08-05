@@ -113,17 +113,34 @@ def check_4(V_00, V_10, V_01, V_11):
                                                                                                     pair_11)))
 
 
-mem_2, vec_00 = memory_usage((_als_grad_22_sq, (A_22, C_00, C_01, C_10, V_00, V_01)), retval=True, interval=0.1, timeout=1)
-
 check_4_grad = grad(lambda v: check_4(v, V_10, V_01, V_11))
 
-mem_1, true_vec_00 = memory_usage((check_2_grad, (V_00, )), retval=True, interval=0.1, timeout=1)
+"""
+mem_2, vec_00 = memory_usage((_als_grad_22_sq, (A_22, C_00, C_01, C_10, V_00, V_01)), retval=True, interval=0.1,
+                             timeout=1)
+
+mem_1, true_vec_00 = memory_usage((check_2_grad, (V_00,)), retval=True, interval=0.1, timeout=1)
+
+print("---A_22---")
+print(vec_00)
+print(f"My Mem usage: {max(mem_2)} MiB")
 
 print(true_vec_00)
-print(f"Mem usage: {max(mem_1)} MiB")
+print(f"Autograd Mem usage: {max(mem_1)} MiB")
+"""
 
+mem_2, vec_00 = memory_usage((_als_grad_33_sq, (A_33, C_00, C_01, C_10, V_00, V_01)), retval=True, interval=0.1,
+                             timeout=1)
+
+mem_1, true_vec_00 = memory_usage((check_3_grad, (V_00,)), retval=True, interval=0.1, timeout=1)
+
+print("---A_33---")
 print(vec_00)
-print(f"Mem usage: {max(mem_2)} MiB")
+print(f"My Mem usage: {max(mem_2)} MiB")
+
+print(true_vec_00)
+print(f"Autograd Mem usage: {max(mem_1)} MiB")
+
 """
 V_00 = v_core[:, 0, 0, :]
 C = np.random.randn(2, 2)

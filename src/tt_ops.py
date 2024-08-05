@@ -1137,25 +1137,44 @@ def _als_grad_33(A, X, C):
     return mat(vec(I_nq).T @ L, X.shape)
 
 
-def _als_grad_33_sq(A, V, C):
-    p, q = C.shape
-    orig_m, orig_n = V.shape
-    m = orig_m ** 2
-    n = orig_n ** 2
+def _als_grad_33_sq(A, C_00, C_01, C_10, V_00, V_01):
+    """
+    C_00, C_01, V_00, V_01
+    gradient for A(V kron V kron C)
+    A = nq x mp
+    """
+    m, n = C_00.shape
+    orig_p, orig_q = V_00.shape
+    p = orig_p ** 2
+    q = orig_q ** 2
+    I = np.eye(n*p)
     I_nq = np.eye(n * q)
-    I_n = np.eye(n)
-    I_m = np.eye(m)
-    I_p = np.eye(p)
-    K_qm = commutation_matrix(q, m)
-    G = np.kron(K_qm, I_p) @ np.kron(I_m, vec(C))
-    L = np.kron(I_nq, A) @ np.kron(I_n, G)
+    I_n = I[:n, :n]
+    I_m = I[:m, :m]
+    I_q = I[:q, :q]
+    I_p = I[:p, :p]
+    # commutation matrix (q, m)
+    K_np = I[np.arange(n * p).reshape((n, p), order="F").T.ravel(order="F"), :n * p]
+    # 1 x pq = n^2 q^2 @ n^2 q^2 x qmnp @ qmnp x pq
+    S = np.kron(K_np.T, I_m) @ A.T.reshape(m * n * p, q, order="F")
+    LC_00 = np.kron(I_p, vec(C_00).T) @ S
+    LC_01 = np.kron(I_p, vec(C_01).T) @ S
+    LC_10 = np.kron(I_p, vec(C_10).T) @ S
+    # commutation matrix (orig_q, orig_p)
+    K_orig_qp = I[np.arange(orig_q * orig_p).reshape((orig_q, orig_p), order="F").T.ravel(order="F"), :orig_q * orig_p]
+    # q orig_p x orig_q = q orig_p x q orig_p @ orig_p q x orig_q
+    H_V_00 = np.kron(I[:orig_q, :orig_q], K_orig_qp) @ np.kron(vec(V_00), I[:orig_q, :orig_q])
+    H_V_01 = np.kron(I[:orig_q, :orig_q], K_orig_qp) @ np.kron(vec(V_01), I[:orig_q, :orig_q])
+    # p orig_q x orig_p = p orig_q x p orig_q @ orig_q p x orig_p
+    G_V_00 = np.kron(K_orig_qp, I[:orig_p, :orig_p]) @ np.kron(I[:orig_p, :orig_p], vec(V_00))
+    G_V_01 = np.kron(K_orig_qp, I[:orig_p, :orig_p]) @ np.kron(I[:orig_p, :orig_p], vec(V_01))
 
-    I_orig_m = I_m[:orig_m, :orig_m]
-    I_orig_n = I_n[:orig_n, :orig_n]
-    K_orig_nm = commutation_matrix(orig_n, orig_m)
-    H_V = np.kron(I_orig_n, K_orig_nm) @ np.kron(vec(V), I_orig_n)
-    G_V = np.kron(K_orig_nm, I_orig_m) @ np.kron(I_orig_m, vec(V))
-    return mat(vec(I_nq).T @ L @ (np.kron(H_V, I_orig_m) + np.kron(I_orig_n, G_V)), V.shape)
+    return (
+        G_V_00.T @ LC_00.reshape(-1, orig_q, order="F")
+        + LC_00.reshape(orig_p, -1, order="F") @ H_V_00
+        + LC_01.reshape(orig_p, -1, order="F") @ H_V_01
+        + G_V_01.T @ LC_10.reshape(-1, orig_q, order="F")
+    )
 
 
 def _als_grad_44(A, X):
