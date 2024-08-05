@@ -89,8 +89,8 @@ def tt_rl_orthogonalise_idx(tt_train: List[np.array], idx):
         return tt_rl_orthogonalise(tt_train)
     if idx == len(tt_train) - 1:
         return tt_lr_orthogonalise(tt_train)
-    tt_train_fidx = tt_lr_orthogonalise(tt_train[:idx+1])
-    tt_train_uidx = tt_rl_orthogonalise([tt_train_fidx[-1]] + tt_train[idx+1:])
+    tt_train_fidx = tt_lr_orthogonalise(tt_train[:idx + 1])
+    tt_train_uidx = tt_rl_orthogonalise([tt_train_fidx[-1]] + tt_train[idx + 1:])
     return tt_train_fidx[:-1] + tt_train_uidx
 
 
@@ -1059,8 +1059,7 @@ def tt_argmax(tt_train, p=1):
 
 
 def commutation_matrix(m, n):
-    w = np.arange(m * n).reshape((m, n), order="F").T.ravel(order="F")
-    return np.eye(m * n)[w, :]
+    return np.eye(m * n)[np.arange(m * n).reshape((m, n), order="F").T.ravel(order="F"), :]
 
 
 def vec(Y):
@@ -1095,29 +1094,34 @@ def _als_grad_22_sq(A, C_00, C_01, C_10, V_00, V_01):
     """
     m, n = C_00.shape
     orig_p, orig_q = V_00.shape
-    p = orig_p**2
-    q = orig_q**2
-    I_n = np.eye(n)
-    I_q = np.eye(q)
-    I_p = np.eye(p)
-    K_qm = commutation_matrix(q, m)
-    # nqm x q = nqm x nqm @ nqm x q
-    HC_00 = np.kron(I_n, K_qm) @ np.kron(vec(C_00), I_q)
-    HC_01 = np.kron(I_n, K_qm) @ np.kron(vec(C_01), I_q)
+    p = orig_p ** 2
+    q = orig_q ** 2
+    I = np.eye(np.max([n, q*m]))
+    I_n = I[:n, :n]
+    I_q = I[:q, :q]
+    # commutation matrix (q, m)
+    K_qm = I[np.arange(q * m).reshape((q, m), order="F").T.ravel(order="F"), :q*m]
+    # p x nqm = p x nqm @ nqm x nqm
+    S = A.T.reshape(p, m * n * q, order="F") @ np.kron(I_n, K_qm)
     # 1 x pq = p x nqm @ nqm x q
-    LC_00 = vec(A.T.reshape(p, m*n*q, order="F") @ HC_00).T
-    LC_01 = vec(A.T.reshape(p, m * n * q, order="F") @ HC_01).T
-
-    I_orig_p = I_p[:orig_p, :orig_p]
-    I_orig_q = I_q[:orig_q, :orig_q]
-    K_orig_qp = commutation_matrix(orig_q, orig_p)
+    LC_00 = S @ np.kron(vec(C_00), I_q)
+    LC_01 = S @ np.kron(vec(C_01), I_q)
+    LC_10 = S @ np.kron(vec(C_10), I_q)
+    # commutation matrix (orig_q, orig_p)
+    K_orig_qp = I[np.arange(orig_q * orig_p).reshape((orig_q, orig_p), order="F").T.ravel(order="F"), :orig_q*orig_p]
     # q orig_p x orig_q = q orig_p x q orig_p @ orig_p q x orig_q
-    H_V_00 = np.kron(I_orig_q, K_orig_qp) @ (np.kron(vec(V_00), I_orig_q))
-    H_V_01 = np.kron(I_orig_q, K_orig_qp) @ (np.kron(vec(V_01), I_orig_q))
+    H_V_00 = np.kron(I[:orig_q, :orig_q], K_orig_qp) @ np.kron(vec(V_00), I[:orig_q, :orig_q])
+    H_V_01 = np.kron(I[:orig_q, :orig_q], K_orig_qp) @ np.kron(vec(V_01), I[:orig_q, :orig_q])
     # p orig_q x orig_p = p orig_q x p orig_q @ orig_q p x orig_p
-    G_V_1 = np.kron(K_orig_qp, I_orig_p) @ (np.kron(I_orig_p, vec(V_00)))
+    G_V_00 = np.kron(K_orig_qp, I[:orig_p, :orig_p]) @ np.kron(I[:orig_p, :orig_p], vec(V_00))
+    G_V_01 = np.kron(K_orig_qp, I[:orig_p, :orig_p]) @ np.kron(I[:orig_p, :orig_p], vec(V_01))
 
-    return mat(LC_00 @ (np.kron(I_orig_q, G_V_1) + np.kron(H_V_00, I_orig_p)) + LC_01 @ np.kron(H_V_01, I_orig_p), (orig_p, orig_q))
+    return (
+        G_V_00.T @ LC_00.reshape(-1, orig_q, order="F")
+        + LC_00.reshape(orig_p, -1, order="F") @ H_V_00
+        + LC_01.reshape(orig_p, -1, order="F") @ H_V_01
+        + G_V_01.T @ LC_10.reshape(-1, orig_q, order="F")
+    )
 
 
 def _als_grad_33(A, X, C):
@@ -1168,8 +1172,8 @@ def _als_grad_44(A, X):
 
 def _als_grad_44_sq(A, V):
     orig_m, orig_n = V.shape
-    m = orig_m**2
-    n = orig_n**2
+    m = orig_m ** 2
+    n = orig_n ** 2
     I_n = np.eye(n)
     I_m = np.eye(m)
     K_nn = commutation_matrix(n, n)
@@ -1308,7 +1312,7 @@ def _tt_bm_core_wise(tt_train, cores, idx, lr=0.1):
 
     A_11 = outer_contraction[np.ix_(cc_x, cc_y)]
     A_22 = outer_contraction[np.ix_(cv_x + n, cv_y + m)]
-    A_33 = outer_contraction[np.ix_(n * (n + q) + vc_x, m * (m + p) +vc_y)]
+    A_33 = outer_contraction[np.ix_(n * (n + q) + vc_x, m * (m + p) + vc_y)]
     A_44 = outer_contraction[np.ix_(vv_x + n + n * (n + q), vv_y + m + m * (m + p))]
     vec_00 = _als_grad_22_sq(A_22, C_00, V_00) + _als_grad_33_sq(A_33, V_00, C_00) + _als_grad_44_sq(A_44, V_00)
     vec_01 = _als_grad_22_sq(A_22, C_01, V_01) + _als_grad_33_sq(A_33, V_01, C_01) + _als_grad_44_sq(A_44, V_01)
@@ -1322,9 +1326,13 @@ def _tt_bm_core_wise(tt_train, cores, idx, lr=0.1):
 
     check = (
         np.trace(A_11 @ (np.kron(C_00, C_00) + np.kron(C_01, C_01) + np.kron(C_10, C_10) + np.kron(C_11, C_11)))
-        + np.trace(A_22 @ (np.kron(C_00, pair_00) + np.kron(C_01, pair_01) + np.kron(C_10, pair_10) + np.kron(C_11, pair_11)))
-        + np.trace(A_33 @ (np.kron(pair_00, C_00) + np.kron(pair_01, C_01) + np.kron(pair_10, C_10) + np.kron(pair_11, C_11)))
-        + np.trace(A_44 @ (np.kron(pair_00, pair_00) + np.kron(pair_01, pair_01) + np.kron(pair_10, pair_10) + np.kron(pair_11, pair_11)))
+        + np.trace(
+        A_22 @ (np.kron(C_00, pair_00) + np.kron(C_01, pair_01) + np.kron(C_10, pair_10) + np.kron(C_11, pair_11)))
+        + np.trace(
+        A_33 @ (np.kron(pair_00, C_00) + np.kron(pair_01, C_01) + np.kron(pair_10, C_10) + np.kron(pair_11, C_11)))
+        + np.trace(A_44 @ (
+        np.kron(pair_00, pair_00) + np.kron(pair_01, pair_01) + np.kron(pair_10, pair_10) + np.kron(pair_11,
+                                                                                                    pair_11)))
     )
 
     print("Actual: ", prev_error, "Mine: ", check)

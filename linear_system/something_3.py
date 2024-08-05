@@ -9,6 +9,7 @@ sys.path.append(os.getcwd() + '/../')
 from dataclasses import dataclass
 from src.tt_ops import *
 from src.tt_ops import *
+from memory_profiler import profile, memory_usage
 
 
 @dataclass
@@ -84,7 +85,7 @@ def check_2(V_00, V_10, V_01, V_11):
     pair_10 = np.kron(V_00, V_01) + np.kron(V_10, V_11)
     pair_11 = np.kron(V_01, V_01) + np.kron(V_11, V_11)
     return np.trace(
-        A_22 @ (np.kron(C_00, pair_00) + np.kron(C_01, pair_01)))  # + np.kron(C_11, pair_11))) + np.kron(C_10, pair_10)
+        A_22 @ (np.kron(C_00, pair_00) + np.kron(C_01, pair_01) + np.kron(C_10, pair_10) + np.kron(C_11, pair_11)))
 
 
 check_2_grad = grad(lambda v: check_2(v, V_10, V_01, V_11))
@@ -112,15 +113,17 @@ def check_4(V_00, V_10, V_01, V_11):
                                                                                                     pair_11)))
 
 
+mem_2, vec_00 = memory_usage((_als_grad_22_sq, (A_22, C_00, C_01, C_10, V_00, V_01)), retval=True, interval=0.1, timeout=1)
+
 check_4_grad = grad(lambda v: check_4(v, V_10, V_01, V_11))
 
-true_vec_00 = check_2_grad(V_00)
-
-vec_00 = _als_grad_22_sq(A_22, C_00, C_01, C_10, V_00, V_01)  #+ _als_grad_33(A_22, V_00, np.kron(V_01, C_10))
+mem_1, true_vec_00 = memory_usage((check_2_grad, (V_00, )), retval=True, interval=0.1, timeout=1)
 
 print(true_vec_00)
+print(f"Mem usage: {max(mem_1)} MiB")
 
 print(vec_00)
+print(f"Mem usage: {max(mem_2)} MiB")
 """
 V_00 = v_core[:, 0, 0, :]
 C = np.random.randn(2, 2)
