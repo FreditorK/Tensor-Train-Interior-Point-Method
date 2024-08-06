@@ -139,16 +139,17 @@ print(true_vec_00)
 print(f"Autograd Mem usage: {max(mem_1)} MiB")
 """
 
+t0 = time.time()
 mem_2, vec_00 = memory_usage((_als_grad_44_sq, (A_44, V_00, V_01, V_10, V_11)), retval=True, interval=0.1, timeout=1)
-
+t1 = time.time()
 mem_1, true_vec_00 = memory_usage((check_4_grad, (V_00,)), retval=True, interval=0.1, timeout=1)
-
+t2 = time.time()
 print("---A_44---")
 print(vec_00)
-print(f"My Mem usage: {max(mem_2)} MiB")
+print(f"My Mem usage: {max(mem_2)} MiB, Time: {t1-t0}s")
 
 print(true_vec_00)
-print(f"Autograd Mem usage: {max(mem_1)} MiB")
+print(f"Autograd Mem usage: {max(mem_1)} MiB, Time: {t2-t1}s")
 
 """
 V_00 = v_core[:, 0, 0, :]

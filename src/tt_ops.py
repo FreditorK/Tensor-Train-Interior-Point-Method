@@ -1200,7 +1200,15 @@ def _als_grad_44_sq(A, V_00, V_01, V_10, V_11):
     # p^3 x p = p^3 x p^3 @ p^3 x p
     G = np.kron(K_pp, I_p) @ np.kron(I_p, vec(I_p))
     # qp x qp = qp x q^3 p @ q^3p x qp^3 @ qp^3 x qp
-    D = np.kron(H.T, I_p) @ np.kron(np.kron(I_q, A), I_p) @ np.kron(I_q, G)
+    S = np.kron(I_q, G)
+    S_T = np.kron(H, I_p)
+    pair_1 = np.kron(V_00, V_00) + np.kron(V_10, V_10)
+    pair_2 = np.kron(V_01, V_00) + np.kron(V_11, V_10)
+    pair_3 = np.kron(V_00, V_01) + np.kron(V_10, V_11)
+    #vec(p x p^2 q) @ qp^3 x qp + vec(q^2 p x q)
+    D_1 = vec(pair_1 @ H.T @ np.kron(I_q, A)).T @ S + vec(np.kron(A, I_p) @ G @ pair_1).T @ S_T
+    D_2 = vec(pair_2 @ H.T @ np.kron(I_q, A)).T @ S + vec(np.kron(A, I_p) @ G @ pair_2).T @ S_T
+    D_3 = vec(pair_3 @ H.T @ np.kron(I_q, A)).T @ S + vec(np.kron(A, I_p) @ G @ pair_3).T @ S_T
 
     I_orig_p = I_p[:orig_p, :orig_p]
     I_orig_q = I_q[:orig_q, :orig_q]
@@ -1209,9 +1217,9 @@ def _als_grad_44_sq(A, V_00, V_01, V_10, V_11):
     G_V_00 = np.kron(K_orig_qp, I_orig_p) @ np.kron(I_orig_p, vec(V_00))
     H_V_01 = np.kron(I_orig_q, K_orig_qp) @ np.kron(vec(V_01), I_orig_q)
     G_V_01 = np.kron(K_orig_qp, I_orig_p) @ np.kron(I_orig_p, vec(V_01))
-    L_1 = (vec(np.kron(V_00, V_00)).T + vec(np.kron(V_10, V_10)).T) @ (D + D.T) @ (np.kron(H_V_00, I_orig_p) + np.kron(I_orig_q, G_V_00))
-    L_2 = (vec(np.kron(V_01, V_00)).T + vec(np.kron(V_11, V_10)).T) @ (D + D.T) @ np.kron(H_V_01, I_orig_p)
-    L_3 = (vec(np.kron(V_00, V_01)).T + vec(np.kron(V_10, V_11)).T) @ (D + D.T) @ np.kron(I_orig_q, G_V_01)
+    L_1 = D_1 @ (np.kron(H_V_00, I_orig_p) + np.kron(I_orig_q, G_V_00))
+    L_2 = D_2 @ np.kron(H_V_01, I_orig_p)
+    L_3 = D_3 @ np.kron(I_orig_q, G_V_01)
     return mat(L_1 + L_2 + L_3, V_00.shape)
 
 
