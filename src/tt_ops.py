@@ -1187,7 +1187,7 @@ def _als_grad_44(A, X):
     return mat(D @ vec(X) + D.T @ vec(X), X.shape)
 
 
-def _als_grad_44_sq(A, V_00, V_10):
+def _als_grad_44_sq(A, V_00, V_01, V_10, V_11):
     orig_p, orig_q = V_00.shape
     p = orig_p ** 2
     q = orig_q ** 2
@@ -1205,11 +1205,14 @@ def _als_grad_44_sq(A, V_00, V_10):
     I_orig_p = I_p[:orig_p, :orig_p]
     I_orig_q = I_q[:orig_q, :orig_q]
     K_orig_qp = commutation_matrix(orig_q, orig_p)
-    H_V = np.kron(I_orig_q, K_orig_qp) @ np.kron(vec(V_00), I_orig_q)
-    G_V = np.kron(K_orig_qp, I_orig_p) @ np.kron(I_orig_p, vec(V_00))
-    L_1 = vec(np.kron(V_00, V_00)).T @ (D + D.T) @ (np.kron(H_V, I_orig_p) + np.kron(I_orig_q, G_V))
-    L_2 = vec(np.kron(V_10, V_10)).T @ (D + D.T) @ (np.kron(H_V, I_orig_p) + np.kron(I_orig_q, G_V))
-    return mat(L_1 + L_2, V_00.shape)
+    H_V_00 = np.kron(I_orig_q, K_orig_qp) @ np.kron(vec(V_00), I_orig_q)
+    G_V_00 = np.kron(K_orig_qp, I_orig_p) @ np.kron(I_orig_p, vec(V_00))
+    H_V_01 = np.kron(I_orig_q, K_orig_qp) @ np.kron(vec(V_01), I_orig_q)
+    G_V_01 = np.kron(K_orig_qp, I_orig_p) @ np.kron(I_orig_p, vec(V_01))
+    L_1 = (vec(np.kron(V_00, V_00)).T + vec(np.kron(V_10, V_10)).T) @ (D + D.T) @ (np.kron(H_V_00, I_orig_p) + np.kron(I_orig_q, G_V_00))
+    L_2 = (vec(np.kron(V_01, V_00)).T + vec(np.kron(V_11, V_10)).T) @ (D + D.T) @ np.kron(H_V_01, I_orig_p)
+    L_3 = (vec(np.kron(V_00, V_01)).T + vec(np.kron(V_10, V_11)).T) @ (D + D.T) @ np.kron(I_orig_q, G_V_01)
+    return mat(L_1 + L_2 + L_3, V_00.shape)
 
 
 def _tt_als_core_wise(tt_train, cores, idx, lr=0.1):
