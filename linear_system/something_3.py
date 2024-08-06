@@ -105,12 +105,10 @@ check_3_grad = grad(lambda v: check_3(v, V_10, V_01, V_11))
 
 def check_4(V_00, V_10, V_01, V_11):
     pair_00 = np.kron(V_00, V_00) + np.kron(V_10, V_10)
-    pair_01 = np.kron(V_01, V_00) + np.kron(V_11, V_10)
-    pair_10 = np.kron(V_00, V_01) + np.kron(V_10, V_11)
-    pair_11 = np.kron(V_01, V_01) + np.kron(V_11, V_11)
-    return np.trace(A_44 @ (
-        np.kron(pair_00, pair_00) + np.kron(pair_01, pair_01) + np.kron(pair_10, pair_10) + np.kron(pair_11,
-                                                                                                    pair_11)))
+    #pair_01 = np.kron(V_01, V_00) + np.kron(V_11, V_10)
+    #pair_10 = np.kron(V_00, V_01) + np.kron(V_10, V_11)
+    #pair_11 = np.kron(V_01, V_01) + np.kron(V_11, V_11)
+    return np.trace(A_44 @ (np.kron(pair_00, pair_00))) # + np.kron(pair_01, pair_01) + np.kron(pair_10, pair_10) + np.kron(pair_11, pair_11)))
 
 
 check_4_grad = grad(lambda v: check_4(v, V_10, V_01, V_11))
@@ -127,7 +125,6 @@ print(f"My Mem usage: {max(mem_2)} MiB")
 
 print(true_vec_00)
 print(f"Autograd Mem usage: {max(mem_1)} MiB")
-"""
 
 mem_2, vec_00 = memory_usage((_als_grad_33_sq, (A_33, C_00, C_01, C_10, V_00, V_01)), retval=True, interval=0.1,
                              timeout=1)
@@ -135,6 +132,18 @@ mem_2, vec_00 = memory_usage((_als_grad_33_sq, (A_33, C_00, C_01, C_10, V_00, V_
 mem_1, true_vec_00 = memory_usage((check_3_grad, (V_00,)), retval=True, interval=0.1, timeout=1)
 
 print("---A_33---")
+print(vec_00)
+print(f"My Mem usage: {max(mem_2)} MiB")
+
+print(true_vec_00)
+print(f"Autograd Mem usage: {max(mem_1)} MiB")
+"""
+
+mem_2, vec_00 = memory_usage((_als_grad_44_sq, (A_44, V_00, V_10)), retval=True, interval=0.1, timeout=1)
+
+mem_1, true_vec_00 = memory_usage((check_4_grad, (V_00,)), retval=True, interval=0.1, timeout=1)
+
+print("---A_44---")
 print(vec_00)
 print(f"My Mem usage: {max(mem_2)} MiB")
 
