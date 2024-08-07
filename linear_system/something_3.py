@@ -105,14 +105,14 @@ def check_4(V_00, V_10, V_01, V_11):
                                                                                                         pair_11)))
 
 
-full_grad_V00 = grad(
-    lambda v: check_2(v, V_10, V_01, V_11) + check_3(v, V_10, V_01, V_11) + check_4(v, V_10, V_01, V_11))
+full_grad_V10 = grad(
+    lambda v: check_2(V_00, v, V_01, V_11) + check_3(V_00, v, V_01, V_11) + check_4(V_00, v, V_01, V_11))
 
 t0 = time.time()
-mem_2, vec_00 = memory_usage((_tt_burer_monteiro_grad, (A_22, A_33, A_44, C_00, C_01, C_10, V_00, V_01, V_10, V_11)),
+mem_2, vec_00 = memory_usage((_tt_burer_monteiro_grad, (A_22, A_33, A_44, C_00, C_01, C_10, C_11, V_10, V_11, V_00, V_01)),
                              retval=True, interval=0.1, timeout=1)
 t1 = time.time()
-mem_1, true_vec_00 = memory_usage((full_grad_V00, (V_00,)), retval=True, interval=0.1, timeout=1)
+mem_1, true_vec_00 = memory_usage((full_grad_V10, (V_10,)), retval=True, interval=0.1, timeout=1)
 t2 = time.time()
 
 print("---A_44---")
