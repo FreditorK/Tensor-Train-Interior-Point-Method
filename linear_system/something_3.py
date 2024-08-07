@@ -22,7 +22,7 @@ class Config:
 np.random.seed(42)
 
 import numpy as np
-from src.tt_ops import _tt_op_op_collapse, _als_grad_22_sq, _als_grad_33_sq, _als_grad_44_sq, _als_grad_22, _als_grad_33
+from src.tt_ops import _tt_op_op_collapse, _tt_burer_monteiro_grad
 
 v_core = np.random.randn(3, 2, 2, 2)
 V_00 = v_core[:, 0, 0]
@@ -76,8 +76,6 @@ A_22 = outer_contraction[np.ix_(cv_x + n, cv_y + m)]
 A_33 = outer_contraction[np.ix_(n * (n + q) + vc_x, m * (m + p) + vc_y)]
 A_44 = outer_contraction[np.ix_(vv_x + n + n * (n + q), vv_y + m + m * (m + p))]
 
-check_1 = np.trace(A_11 @ (np.kron(C_00, C_00) + np.kron(C_01, C_01) + np.kron(C_10, C_10) + np.kron(C_11, C_11)))
-
 
 def check_2(V_00, V_10, V_01, V_11):
     pair_00 = np.kron(V_00, V_00) + np.kron(V_10, V_10)
@@ -86,9 +84,6 @@ def check_2(V_00, V_10, V_01, V_11):
     pair_11 = np.kron(V_01, V_01) + np.kron(V_11, V_11)
     return np.trace(
         A_22 @ (np.kron(C_00, pair_00) + np.kron(C_01, pair_01) + np.kron(C_10, pair_10) + np.kron(C_11, pair_11)))
-
-
-check_2_grad = grad(lambda v: check_2(v, V_10, V_01, V_11))
 
 
 def check_3(V_00, V_10, V_01, V_11):
@@ -100,76 +95,29 @@ def check_3(V_00, V_10, V_01, V_11):
         A_33 @ (np.kron(pair_00, C_00) + np.kron(pair_01, C_01) + np.kron(pair_10, C_10) + np.kron(pair_11, C_11)))
 
 
-check_3_grad = grad(lambda v: check_3(v, V_10, V_01, V_11))
-
-
 def check_4(V_00, V_10, V_01, V_11):
     pair_00 = np.kron(V_00, V_00) + np.kron(V_10, V_10)
     pair_01 = np.kron(V_01, V_00) + np.kron(V_11, V_10)
-    pair_10 = np.kron(V_00, V_01) + np.kron(V_10, V_11)
-    pair_11 = np.kron(V_01, V_01) + np.kron(V_11, V_11)
-    return np.trace(A_44 @ (np.kron(pair_00, pair_00) + np.kron(pair_01, pair_01) + np.kron(pair_10, pair_10) + np.kron(pair_11, pair_11)))
+    pair_10 = np.kron(V_10, V_11) + np.kron(V_00, V_01)
+    pair_11 = np.kron(V_11, V_11) + np.kron(V_01, V_01)
+    return np.trace(A_44 @ (
+            np.kron(pair_00, pair_00) + np.kron(pair_01, pair_01) + np.kron(pair_10, pair_10) + np.kron(pair_11,
+                                                                                                        pair_11)))
 
 
-check_4_grad = grad(lambda v: check_4(v, V_10, V_01, V_11))
-
-"""
-mem_2, vec_00 = memory_usage((_als_grad_22_sq, (A_22, C_00, C_01, C_10, V_00, V_01)), retval=True, interval=0.1,
-                             timeout=1)
-
-mem_1, true_vec_00 = memory_usage((check_2_grad, (V_00,)), retval=True, interval=0.1, timeout=1)
-
-print("---A_22---")
-print(vec_00)
-print(f"My Mem usage: {max(mem_2)} MiB")
-
-print(true_vec_00)
-print(f"Autograd Mem usage: {max(mem_1)} MiB")
-
-mem_2, vec_00 = memory_usage((_als_grad_33_sq, (A_33, C_00, C_01, C_10, V_00, V_01)), retval=True, interval=0.1,
-                             timeout=1)
-
-mem_1, true_vec_00 = memory_usage((check_3_grad, (V_00,)), retval=True, interval=0.1, timeout=1)
-
-print("---A_33---")
-print(vec_00)
-print(f"My Mem usage: {max(mem_2)} MiB")
-
-print(true_vec_00)
-print(f"Autograd Mem usage: {max(mem_1)} MiB")
-"""
+full_grad_V00 = grad(
+    lambda v: check_2(v, V_10, V_01, V_11) + check_3(v, V_10, V_01, V_11) + check_4(v, V_10, V_01, V_11))
 
 t0 = time.time()
-mem_2, vec_00 = memory_usage((_als_grad_44_sq, (A_44, V_00, V_01, V_10, V_11)), retval=True, interval=0.1, timeout=1)
+mem_2, vec_00 = memory_usage((_tt_burer_monteiro_grad, (A_22, A_33, A_44, C_00, C_01, C_10, V_00, V_01, V_10, V_11)),
+                             retval=True, interval=0.1, timeout=1)
 t1 = time.time()
-mem_1, true_vec_00 = memory_usage((check_4_grad, (V_00,)), retval=True, interval=0.1, timeout=1)
+mem_1, true_vec_00 = memory_usage((full_grad_V00, (V_00,)), retval=True, interval=0.1, timeout=1)
 t2 = time.time()
+
 print("---A_44---")
 print(vec_00)
-print(f"My Mem usage: {max(mem_2)} MiB, Time: {t1-t0}s")
+print(f"My Mem usage: {max(mem_2)} MiB, Time: {t1 - t0}s")
 
 print(true_vec_00)
-print(f"Autograd Mem usage: {max(mem_1)} MiB, Time: {t2-t1}s")
-
-"""
-V_00 = v_core[:, 0, 0, :]
-C = np.random.randn(2, 2)
-m, n = C.shape
-p, q = V_00.shape
-A = np.random.randn(n*q**2, m*p**2)
-func = lambda v: np.trace(A @ np.kron(C, np.kron(v, v)))
-grad_func_22 = grad(func)
-func = lambda v: np.trace(A @ np.kron(np.kron(v, v), C))
-grad_func_33 = grad(func)
-func = lambda v: np.trace(A @ np.kron(np.kron(v, v), np.kron(v, v)))
-grad_func_44 = grad(func)
-print(A.shape, C.shape, V_00.shape)
-print("22-Ground truth: \n", grad_func_22(V_00))
-print("Mine: \n", _als_grad_22_sq(A, C, V_00))
-
-print("33-Ground truth: \n", grad_func_33(V_00))
-print("Mine: \n", _als_grad_33_sq(A, V_00, C))
-
-print("44-Ground truth: \n", grad_func_44(V_00))
-print("Mine: \n", _als_grad_44_sq(A, V_00))
-"""
+print(f"Autograd Mem usage: {max(mem_1)} MiB, Time: {t2 - t1}s")
