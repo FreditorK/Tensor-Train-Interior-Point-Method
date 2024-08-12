@@ -30,7 +30,7 @@ diff = tt_sub(B, A)
 print("Error: ", tt_inner_prod(diff, diff))
 """
 
-A = tt_random_gaussian([2, 3], shape=(2, 2))
+A = tt_random_gaussian([4, 5], shape=(2, 2))
 A_psd = tt_rank_reduce(tt_linear_op_compose(A, tt_transpose(A)))
 B_psd = tt_burer_monteiro_factorisation(A_psd)
 diff = tt_sub(A_psd, tt_linear_op_compose(B_psd, tt_transpose(B_psd)))

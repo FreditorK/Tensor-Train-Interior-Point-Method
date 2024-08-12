@@ -1238,12 +1238,16 @@ def func(tt_train, cores):
     return tt_inner_prod(diff, diff)
 
 
-def _tt_bm_core_wise(tt_train, cores, idx, lr=0.1):
+def _tt_bm_core_wise(tt_train, cores, idx, prev_error, lr=0.1, tol=1e-3):
     xr_i, _, _, xr_ip1 = cores[idx].shape
     comp = tt_linear_op_compose(cores, tt_transpose(cores))
     diff = tt_add(tt_train, comp)
-    prev_error = tt_inner_prod(diff, diff)
-    if 0 < idx < len(cores) - 1:
+    error = tt_inner_prod(diff, diff)
+    lr = min(0.999 * (prev_error / error) * lr, 0.5)
+    print(f"Error: {error}, {lr}")
+    if np.less_equal(error, tol):
+        return cores
+    elif 0 < idx < len(cores) - 1:
         left_contraction = safe_multi_dot([_tt_core_collapse(core, core) for core in diff[:idx]]).reshape(1, -1)
         right_contraction = safe_multi_dot([_tt_core_collapse(core, core) for core in diff[idx + 1:]]).reshape(-1, 1)
         outer_contraction = right_contraction @ left_contraction
@@ -1298,7 +1302,6 @@ def _tt_bm_core_wise(tt_train, cores, idx, lr=0.1):
         cores[idx][:, 0, 1, :] -= lr * vec_01.reshape(xr_i, xr_ip1)
         cores[idx][:, 1, 0, :] -= lr * vec_10.reshape(xr_i, xr_ip1)
         cores[idx][:, 1, 1, :] -= lr * vec_11.reshape(xr_i, xr_ip1)
-
     else:
         r = xr_ip1 if idx == 0 else xr_i
         a = 0 if idx == 0 else -1
@@ -1307,22 +1310,57 @@ def _tt_bm_core_wise(tt_train, cores, idx, lr=0.1):
         cores[idx][:, 1, 0, :] -= lr * np.expand_dims(np.diagonal(vec_10.reshape(r, r)), axis=a)
         cores[idx][:, 1, 1, :] -= lr * np.expand_dims(np.diagonal(vec_11.reshape(r, r)), axis=a)
 
-    diff = tt_add(tt_train, tt_linear_op_compose(cores, tt_transpose(cores)))
-    error = tt_inner_prod(diff, diff)
-    lr = min(0.999 * (prev_error / error) * lr, 0.5)
-    print(f"Error: {error}, {lr}")
-    return cores, lr
+    return cores, lr, error
 
 
-def tt_burer_monteiro_factorisation(psd_tt, max_iter=3):
+def tt_to_ring(tt_train):
+    first_core_top_row = np.hstack((np.diag(tt_train[0][:, 0, 0].flatten()), np.diag(tt_train[0][:, 0, 1].flatten())))
+    first_core_bottom_row = np.hstack(
+        (np.diag(tt_train[0][:, 1, 0].flatten()), np.diag(tt_train[0][:, 1, 1].flatten())))
+    first_core = np.vstack((first_core_top_row, first_core_bottom_row))
+    tt_train[0] = first_core
+
+    last_core_top_row = np.hstack((np.diag(tt_train[-1][:, 0, 0].flatten()), np.diag(tt_train[-1][:, 0, 1].flatten())))
+    last_core_bottom_row = np.hstack(
+        (np.diag(tt_train[-1][:, 1, 0].flatten()), np.diag(tt_train[-1][:, 1, 1].flatten())))
+    last_core = np.vstack((last_core_top_row, last_core_bottom_row))
+    tt_train[-1] = last_core
+
+    return tt_train
+
+
+def tt_burer_monteiro_factorisation(psd_tt, max_iter=10):
     tt_train = tt_scale(-1, psd_tt)
-    cores = tt_random_gaussian(tt_ranks(tt_train), shape=(2, 2))
+    cores = tt_random_gaussian([int(np.ceil(np.sqrt(r))) for r in tt_ranks(tt_train)], shape=(2, 2))
     indices = list(range(len(cores))) + list(reversed(range(len(cores))))
     lr = 0.5 * np.ones(len(cores))
+    err = np.inf
     for iteration in range(max_iter):
         for k in indices:
             print(f"Core number {k}")
             cores = tt_rl_orthogonalise_idx(cores, k)
-            cores, l = _tt_bm_core_wise(tt_train, cores, k, lr=lr[k])
+            cores, l, err = _tt_bm_core_wise(tt_train, cores, k, err, lr=lr[k])
             lr[k] = l
     return cores
+
+
+def tt_adjoint(linear_op_tt):
+    pass
+
+
+def tt_infeasible_newton_system(obj_tt, linear_op_tt, bias_tt, X_tt, Y_tt, Z_tt, mu):
+    upper_rhs = tt_sub(tt_sub(_tt_linear_op(tt_adjoint(linear_op_tt), Y_tt), Z_tt), obj_tt)
+    middle_rhs = tt_sub(_tt_linear_op(linear_op_tt, X_tt), bias_tt)
+    lower_rhs = tt_sub(tt_scale(mu, tt_identity(len(X_tt))), tt_linear_op_compose(Z_tt, X_tt))
+
+
+def _core_mask_exp(core, j):
+    mask = np.zeros_like(core)
+    mask[:, :, j] = core[:, :, j]
+    return np.expand_dims(mask, 1)
+
+
+def tt_compose_to_op(tt_train):
+    return tt_rank_reduce(
+        [np.concatenate([_core_mask_exp(c, j) for j in [0, 1, 0, 1]], axis=1) for c in tt_train]
+    )
