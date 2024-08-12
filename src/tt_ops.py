@@ -1354,13 +1354,35 @@ def tt_infeasible_newton_system(obj_tt, linear_op_tt, bias_tt, X_tt, Y_tt, Z_tt,
     lower_rhs = tt_sub(tt_scale(mu, tt_identity(len(X_tt))), tt_linear_op_compose(Z_tt, X_tt))
 
 
-def _core_mask_exp(core, j):
-    mask = np.zeros_like(core)
-    mask[:, :, j] = core[:, :, j]
-    return np.expand_dims(mask, 1)
+def _core_mask_exp(core):
+    mask_1 = np.zeros_like(core)
+    mask_1[:, 0, 0] = core[:, 0, 0]
+    mask_1[:, 1, 0] = core[:, 1, 0]
+    mask_2 = np.zeros_like(core)
+    mask_2[:, 0, 0] = core[:, 0, 1]
+    mask_2[:, 1, 0] = core[:, 1, 1]
+    mask_3 = np.zeros_like(core)
+    mask_3[:, 0, 1] = core[:, 0, 0]
+    mask_3[:, 1, 1] = core[:, 1, 0]
+    mask_4 = np.zeros_like(core)
+    mask_4[:, 0, 1] = core[:, 0, 1]
+    mask_4[:, 1, 1] = core[:, 1, 1]
+    mask_1 = np.expand_dims(mask_1, axis=1)
+    mask_2 = np.expand_dims(mask_2, axis=1)
+    mask_3 = np.expand_dims(mask_3, axis=1)
+    mask_4 = np.expand_dims(mask_4, axis=1)
+    res_core = np.concatenate((
+        mask_1, mask_2,
+        mask_3, mask_4
+    ), axis=1)
+    return res_core
 
 
+isidx = {
+    0: [0, 1, 0, 1],
+    1: [0, 1, 0, 1]
+}
 def tt_compose_to_op(tt_train):
     return tt_rank_reduce(
-        [np.concatenate([_core_mask_exp(c, j) for j in [0, 1, 0, 1]], axis=1) for c in tt_train]
+        [_core_mask_exp(c) for core_idx, c in enumerate(tt_train)]
     )
