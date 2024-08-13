@@ -1344,28 +1344,24 @@ def tt_burer_monteiro_factorisation(psd_tt, max_iter=10):
     return cores
 
 
-def tt_adjoint(linear_op_tt):
-    pass
-
-
 def tt_infeasible_newton_system(obj_tt, linear_op_tt, bias_tt, X_tt, Y_tt, Z_tt, mu):
     upper_rhs = tt_sub(tt_sub(_tt_linear_op(tt_adjoint(linear_op_tt), Y_tt), Z_tt), obj_tt)
     middle_rhs = tt_sub(_tt_linear_op(linear_op_tt, X_tt), bias_tt)
     lower_rhs = tt_sub(tt_scale(mu, tt_identity(len(X_tt))), tt_linear_op_compose(Z_tt, X_tt))
 
 
-def _core_mask_exp(core):
+def _core_op_from_matrix(core):
     mask_1 = np.zeros_like(core)
-    mask_1[:, 0, 0] = core[:, 0, 0]
-    mask_1[:, 1, 0] = core[:, 1, 0]
     mask_2 = np.zeros_like(core)
-    mask_2[:, 0, 0] = core[:, 0, 1]
-    mask_2[:, 1, 0] = core[:, 1, 1]
     mask_3 = np.zeros_like(core)
-    mask_3[:, 0, 1] = core[:, 0, 0]
-    mask_3[:, 1, 1] = core[:, 1, 0]
     mask_4 = np.zeros_like(core)
-    mask_4[:, 0, 1] = core[:, 0, 1]
+    mask_1[:, 0, 0] = core[:, 0, 0]
+    mask_1[:, 0, 1] = core[:, 1, 0]
+    mask_2[:, 0, 0] = core[:, 0, 1]
+    mask_2[:, 0, 1] = core[:, 1, 1]
+    mask_3[:, 1, 0] = core[:, 0, 0]
+    mask_3[:, 1, 1] = core[:, 1, 0]
+    mask_4[:, 1, 0] = core[:, 0, 1]
     mask_4[:, 1, 1] = core[:, 1, 1]
     mask_1 = np.expand_dims(mask_1, axis=1)
     mask_2 = np.expand_dims(mask_2, axis=1)
@@ -1378,11 +1374,9 @@ def _core_mask_exp(core):
     return res_core
 
 
-isidx = {
-    0: [0, 1, 0, 1],
-    1: [0, 1, 0, 1]
-}
-def tt_compose_to_op(tt_train):
-    return tt_rank_reduce(
-        [_core_mask_exp(c) for core_idx, c in enumerate(tt_train)]
-    )
+def tt_op_from_tt_matrix(tt_train):
+    return [_core_op_from_matrix(c) for c in tt_train]
+
+
+def tt_adjoint(linear_op_tt):
+    return [np.swapaxes(c, axis1=2, axis2=3) for c in linear_op_tt]
