@@ -17,7 +17,7 @@ class Config:
 np.random.seed(929)
 
 linear_op = tt_random_gaussian([4, 5, 22, 5, 8, 6, 8], shape=(2, 2))
-linear_op = tt_scale(9, tt_rank_reduce(tt_add(linear_op, tt_transpose(linear_op)), tt_bound=1e-10))
+linear_op = tt_scale(9, tt_rank_reduce(tt_add(linear_op, tt_transpose(linear_op)), err_bound=1e-10))
 t0 = time.time()
 tt_eig, tt_eig_val = tt_max_eigentensor(linear_op, num_iter=1000, tol=1e-7)
 t1 = time.time()

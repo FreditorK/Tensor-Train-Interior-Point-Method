@@ -36,7 +36,7 @@ test_X = [np.kron(np.expand_dims(c, 1), np.expand_dims(c, 2)) for c in test_X]
 test_X = tt_normalise(test_X)
 
 constraints, index_length = tt_linear_op_from_columns([A_sym_1, A_sym_2, A_sym_3, A_sym_4])
-bias = tt_rank_reduce(tt_eval_constraints(constraints, test_X), tt_bound=1e-10)
+bias = tt_rank_reduce(tt_linear_op(constraints, test_X), err_bound=1e-10)
 constraints = tt_rank_reduce(constraints)
 
 column = [np.abs(c*np.random.randn(*c.shape)) for c in tt_random_binary([np.random.randint(low=1, high=Config.tt_max_rank + 1) for _ in range(Config.tt_length - 1)])]
@@ -51,7 +51,7 @@ X, duality_gaps = tt_sdp_fw(Obj_sym, constraints, bias, num_iter=100)
 t1 = time.time()
 print(f"Problem solved in {t1-t0}s")
 print(f"Objective value: {tt_inner_prod(Obj_sym, X)}")
-print(f"Avg Constraint error: {np.sum(np.abs(tt_to_tensor(tt_eval_constraints(constraints, X)) - tt_to_tensor(bias)))}")
+print(f"Avg Constraint error: {np.sum(np.abs(tt_to_tensor(tt_linear_op(constraints, X)) - tt_to_tensor(bias)))}")
 print("Ranks of X: ", tt_ranks(X))
 plt.plot(duality_gaps)
 plt.show()

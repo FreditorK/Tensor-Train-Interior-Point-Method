@@ -22,7 +22,7 @@ class Config:
 np.random.seed(42)
 
 import numpy as np
-from src.tt_ops import _tt_op_op_collapse, _tt_burer_monteiro_grad
+from src.tt_ops import _tt_mat_mat_collapse, _tt_burer_monteiro_grad
 
 v_core = np.random.randn(3, 2, 2, 2)
 V_00 = v_core[:, 0, 0]
@@ -36,7 +36,7 @@ C_01 = v_core[:, 0, 1]
 C_10 = v_core[:, 1, 0]
 C_11 = v_core[:, 1, 1]
 
-truth = _tt_op_op_collapse(v_core, np.swapaxes(np.copy(v_core), axis1=1, axis2=2))
+truth = _tt_mat_mat_collapse(v_core, np.swapaxes(np.copy(v_core), axis1=1, axis2=2))
 truth_00 = truth[:, 0, 0]
 truth_01 = truth[:, 0, 1]
 truth_10 = truth[:, 1, 0]

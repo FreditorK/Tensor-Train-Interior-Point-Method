@@ -10,7 +10,7 @@ from src.tt_ops import *
 np.random.seed(190)
 
 linear_op = tt_random_gaussian_linear_op([4, 5, 15, 5, 8, 9, 10, 6, 4])
-linear_op = tt_rank_reduce(tt_add(linear_op, tt_transpose(linear_op)), tt_bound=1e-10)
+linear_op = tt_rank_reduce(tt_add(linear_op, tt_transpose(linear_op)), err_bound=1e-10)
 t0 = time.time()
 tt_eig, tt_eig_val = tt_randomised_min_eigentensor(linear_op, num_iter=1500, tol=1e-8)
 t1 = time.time()

@@ -33,7 +33,7 @@ if __name__ == "__main__":
     t1 = time.time()
     print(f"Problem solved in {t1 - t0:.3f}s")
     print(f"Objective value: {-tt_inner_prod(G, X)}")
-    evaled_constraints = tt_eval_constraints(As, X)
+    evaled_constraints = tt_linear_op(As, X)
     scaled_error = [c / np.sqrt(c.shape[1]) for c in tt_add(evaled_constraints, tt_scale(-1, bias))]
     avg_error = np.sqrt(tt_inner_prod(scaled_error, scaled_error))
     print(f"Avg constraint error: {avg_error}")

@@ -11,11 +11,11 @@ np.random.seed(29)
 
 A_1 = tt_random_gaussian([2], shape=(2, 2))
 A_2 = tt_random_gaussian([2], shape=(2, 2))
-A_1A_2_comp = tt_linear_op_compose(A_1, A_2)
+A_1A_2_comp = tt_mat_mat_mul(A_1, A_2)
 A_1A_2_comp = [c.reshape(c.shape[0], 4, *c.shape[3:]) for c in A_1A_2_comp]
 A_1_op = tt_op_from_tt_matrix(A_1)
 print([c.shape for c in A_1_op])
-A_1A_2_comp_by_op = tt_eval_constraints(A_1_op, A_2)
+A_1A_2_comp_by_op = tt_linear_op(A_1_op, A_2)
 
 diff = tt_sub(A_1A_2_comp, A_1A_2_comp_by_op)
 print(tt_inner_prod(diff, diff))
