@@ -15,7 +15,7 @@ if __name__ == "__main__":
     np.random.seed(Config.seed)
     t0 = time.time()
     G = tt_random_graph(Config.ranks)
-    adj_matrix = np.round(tt_op_to_matrix(G), decimals=1)
+    adj_matrix = np.round(tt_matrix_to_matrix(G), decimals=1)
     adj_matrix = 0.5*(adj_matrix + 1)
 
     #print(np.round(adj_matrix_comp, decimals=2))

@@ -1,6 +1,8 @@
 import sys
 import os
 
+from scipy.constants import micro
+
 sys.path.append(os.getcwd() + '/../')
 
 import numpy as np
@@ -14,12 +16,12 @@ from scikit_tt.solvers.sle import als as sota_als
 from src.tt_ops import tt_rank_reduce
 
 
-def als(operator, initial_guess, right_hand_side, tol=1e-2):
+def als(lhs, initial_guess, rhs, tol=1e-5):
     # define solution tensor
     solution = copy.copy(initial_guess)
     solution_ranks = [1] + tt_ranks(solution) + [1]
     solution_shape = [c.shape[1:-1] for c in solution]
-    op_order = len(operator)
+    op_order = len(lhs)
 
     # define stacks
     stack_left_op = [None] * op_order
@@ -28,33 +30,37 @@ def als(operator, initial_guess, right_hand_side, tol=1e-2):
     stack_right_rhs = [None] * op_order
 
     for i in range(op_order - 1, -1, -1):
-        __construct_stack_right_op(i, stack_right_op, operator, solution)
-        __construct_stack_right_rhs(i, stack_right_rhs, right_hand_side, solution)
+        __construct_stack_right_op(i, stack_right_op, lhs, solution)
+        __construct_stack_right_rhs(i, stack_right_rhs, rhs, solution)
 
-    res = tt_sub(tt_matrix_vec_mul(L, solution), B)
+    res = tt_sub(tt_matrix_vec_mul(lhs, solution), rhs)
     err = tt_inner_prod(res, res)
+    print("Error 0: ", err)
+    it = 0
 
-    while np.less_equal(tol, err):
+    while np.less_equal(tol, err) and it < 10:
 
         for i in range(op_order):
-            __construct_stack_left_op(i, stack_left_op, operator, solution)
-            __construct_stack_left_rhs(i, stack_left_rhs, right_hand_side, solution)
+            __construct_stack_left_op(i, stack_left_op, lhs, solution)
+            __construct_stack_left_rhs(i, stack_left_rhs, rhs, solution)
 
             if i < op_order - 1:
-                micro_op = __construct_micro_matrix_als(i, stack_left_op, stack_right_op, operator, solution_ranks)
-                micro_rhs = __construct_micro_rhs_als(i, stack_left_rhs, stack_right_rhs, right_hand_side,
+                micro_op = __construct_micro_matrix_als(i, stack_left_op, stack_right_op, lhs, solution_ranks)
+                micro_rhs = __construct_micro_rhs_als(i, stack_left_rhs, stack_right_rhs, rhs,
                                                       solution_ranks)
                 __update_core_als(i, micro_op, micro_rhs, solution, 'forward', solution_ranks, solution_shape)
 
         for i in range(op_order - 1, -1, -1):
-            __construct_stack_right_op(i, stack_right_op, operator, solution)
-            __construct_stack_right_rhs(i, stack_right_rhs, right_hand_side, solution)
-            micro_op = __construct_micro_matrix_als(i, stack_left_op, stack_right_op, operator, solution_ranks)
-            micro_rhs = __construct_micro_rhs_als(i, stack_left_rhs, stack_right_rhs, right_hand_side, solution_ranks)
+            __construct_stack_right_op(i, stack_right_op, lhs, solution)
+            __construct_stack_right_rhs(i, stack_right_rhs, rhs, solution)
+            micro_op = __construct_micro_matrix_als(i, stack_left_op, stack_right_op, lhs, solution_ranks)
+            micro_rhs = __construct_micro_rhs_als(i, stack_left_rhs, stack_right_rhs, rhs, solution_ranks)
             __update_core_als(i, micro_op, micro_rhs, solution, 'backward', solution_ranks, solution_shape)
 
-        res = tt_sub(tt_matrix_vec_mul(L, solution), B)
+        res = tt_sub(tt_matrix_vec_mul(lhs, solution), rhs)
         err = tt_inner_prod(res, res)
+        it += 1
+        print(f"Error {it}: ", err)
 
     return solution
 
@@ -122,7 +128,7 @@ def __construct_micro_rhs_als(i: int,
 def __update_core_als(i: int,
                       micro_op: np.ndarray, micro_rhs: np.ndarray,
                       solution, direction: str, solution_ranks, solution_shape):
-    solution[i] = np.linalg.solve(micro_op, micro_rhs)
+    solution[i], _, _, _ = np.linalg.lstsq(micro_op, micro_rhs, rcond=None)
     if direction == 'forward':
         [q, _] = lin.qr(
             solution[i].reshape(solution_ranks[i] * solution_shape[i][0], solution_ranks[i + 1]),
@@ -142,33 +148,29 @@ def __update_core_als(i: int,
 
 
 def tt_infeasible_newton_system_rhs(obj_tt, linear_op_tt, bias_tt, X_tt, Y_tt, Z_tt, mu):
-    idx_0 = [np.array([[1, 0], [0, 0]]).reshape(1, 4, 1)]
-    idx_1 = [np.array([[0, 1], [0, 0]]).reshape(1, 4, 1)]
-    idx_2 = [np.array([[0, 0], [1, 0]]).reshape(1, 4, 1)]
-    upper_rhs = idx_0 + tt_sub(tt_sub(tt_matrix_vec_mul(tt_adjoint(linear_op_tt), Y_tt), Z_tt), obj_tt)
-    middle_rhs = idx_1 + tt_sub(tt_matrix_vec_mul(linear_op_tt, X_tt), bias_tt)
+    idx_0 = [np.array([[1, 0], [0, 0]]).reshape(1, 2, 2, 1)]
+    idx_1 = [np.array([[0, 1], [0, 0]]).reshape(1, 2, 2, 1)]
+    idx_2 = [np.array([[0, 0], [1, 0]]).reshape(1, 2, 2, 1)]
+    upper_rhs = idx_0 + tt_sub(tt_sub(tt_mat(tt_linear_op(tt_adjoint(linear_op_tt), Y_tt), shape=(2, 2)), Z_tt), obj_tt)
+    middle_rhs = idx_1 + tt_sub(tt_mat(tt_linear_op(linear_op_tt, X_tt), shape=(2, 2)), bias_tt)
     lower_rhs = idx_2 + tt_sub(tt_scale(mu, tt_identity(len(X_tt))), tt_mat_mat_mul(Z_tt, X_tt))
     newton_rhs = tt_add(upper_rhs, middle_rhs)
     newton_rhs = tt_add(newton_rhs, lower_rhs)
-    return tt_rank_reduce(newton_rhs)
+    return tt_rank_reduce(tt_vec(newton_rhs))
 
 
 def tt_infeasible_newton_system_lhs(linear_op_tt, X_tt, Z_tt):
-    idx_01 = [np.einsum("i, j -> ij", np.array([[1, 0], [1, 0]]).reshape(1, 4, 1),
-                        np.array([[1, 0], [0, 1]]).reshape(1, 4, 1))]
-    idx_10 = [np.einsum("i, j -> ij", np.array([[1, 0], [1, 0]]).reshape(1, 4, 1),
-                        np.array([[0, 1], [1, 0]]).reshape(1, 4, 1))]
-    idx_02 = [np.einsum("i, j -> ij", np.array([[1, 0], [0, 1]]).reshape(1, 4, 1),
-                        np.array([[1, 0], [1, 0]]).reshape(1, 4, 1))]
-    idx_20 = [np.einsum("i, j -> ij", np.array([[0, 1], [1, 0]]).reshape(1, 4, 1),
-                        np.array([[1, 0], [1, 0]]).reshape(1, 4, 1))]
-    idx_22 = [np.einsum("i, j -> ij", np.array([[0, 1], [0, 1]]).reshape(1, 4, 1),
-                        np.array([[1, 0], [1, 0]]).reshape(1, 4, 1))]
+    idx_01 = [np.einsum("i, j -> ij", np.array([1, 0, 1, 0]), np.array([1, 0, 0, 1])).reshape(1, 4, 4, 1)]
+    idx_10 = [np.einsum("i, j -> ij", np.array([1, 0, 1, 0]), np.array([0, 1, 1, 0])).reshape(1, 4, 4, 1)]
+    idx_02 = [np.einsum("i, j -> ij", np.array([1, 0, 0, 1]), np.array([1, 0, 1, 0])).reshape(1, 4, 4, 1)]
+    idx_20 = [np.einsum("i, j -> ij", np.array([0, 1, 1, 0]), np.array([1, 0, 1, 0])).reshape(1, 4, 4, 1)]
+    idx_22 = [np.einsum("i, j -> ij", np.array([0, 1, 0, 1]), np.array([1, 0, 1, 0])).reshape(1, 4, 4, 1)]
     linear_op_tt = tt_scale(-1, linear_op_tt)
-    I_op_tt = idx_02 + tt_op_from_tt_matrix(tt_identity(len(X_tt)))
-    Z_op_tt = idx_20 + tt_op_from_tt_matrix(Z_tt)
-    X_op_tt = idx_22 + tt_op_from_tt_matrix(X_tt)
-    linear_op_tt_adjoint = idx_01 + tt_adjoint(linear_op_tt)
+    linear_op_tt_adjoint = idx_01 + tt_op_to_mat(tt_adjoint(linear_op_tt))
+    linear_op_tt = tt_op_to_mat(linear_op_tt)
+    I_op_tt = idx_02 + tt_op_to_mat(tt_op_from_tt_matrix(tt_identity(len(X_tt))))
+    Z_op_tt = idx_20 + tt_op_to_mat(tt_op_from_tt_matrix(Z_tt))
+    X_op_tt = idx_22 + tt_op_to_mat(tt_op_from_tt_matrix(X_tt))
     newton_system = tt_add(idx_10 + linear_op_tt, linear_op_tt_adjoint)
     newton_system = tt_add(newton_system, I_op_tt)
     newton_system = tt_add(newton_system, Z_op_tt)
@@ -180,21 +182,22 @@ def tt_infeasible_newton_system_lhs(linear_op_tt, X_tt, Z_tt):
 def _tt_get_block(i, j, block_matrix_tt):
     first_core = block_matrix_tt[0][:, i, j, :]
     first_core = np.einsum("ab, bcde -> acde", first_core, block_matrix_tt[1])
-    return first_core + block_matrix_tt[2:]
+    return [first_core] + block_matrix_tt[2:]
 
 
 def _tt_ipm_newton_step(obj_tt, linear_op_tt, bias_tt, XZ_tt, Y_tt):
     X_tt = _tt_get_block(0, 0, XZ_tt)
     Z_tt = _tt_get_block(0, 1, XZ_tt)
-    lhs_operator_tt = tt_infeasible_newton_system_lhs(linear_op_tt, X_tt, Z_tt)
+    lhs_matrix_tt = tt_infeasible_newton_system_lhs(linear_op_tt, X_tt, Z_tt)
     mu = tt_inner_prod(Z_tt, [0.5 * c for c in X_tt])
-    rhs_tt = tt_infeasible_newton_system_rhs(obj_tt, linear_op_tt, bias_tt, X_tt, Y_tt, Z_tt, mu)
+    rhs_vec_tt = tt_infeasible_newton_system_rhs(obj_tt, linear_op_tt, bias_tt, X_tt, Y_tt, Z_tt, mu)
+    np.set_printoptions(threshold=np.inf, linewidth=200)
+    K = np.round(tt_matrix_to_matrix(lhs_matrix_tt), decimals=2)
+    K_inv = np.linalg.pinv(K)
     # ----
-    lhs_operator_tt = tt_op_to_mat(lhs_operator_tt)
-    rhs_tt = tt_vec(rhs_tt)
-    initial_guess = tt_random_gaussian(tt_ranks(rhs_tt), shape=(4,))
-    Delta_tt = als(lhs_operator_tt, initial_guess, rhs_tt)
-    return Delta_tt
+    initial_guess = tt_random_gaussian(tt_ranks(rhs_vec_tt), shape=(4,))
+    Delta_tt = als(lhs_matrix_tt, initial_guess, rhs_vec_tt)
+    #return Delta_tt
 
 
 def _tt_homotopy_step(XZ_tt, Delta_XZ_tt):
@@ -221,43 +224,20 @@ def tt_ipm(obj_tt, linear_op_tt, bias_tt):
     for _ in range(1):
         XZ_tt = tt_rank_reduce(tt_mat_mat_mul(V_tt, tt_transpose(V_tt)))
         Delta_tt = _tt_ipm_newton_step(obj_tt, linear_op_tt, bias_tt, XZ_tt, Y_tt)
-        Delta_tt = _symmetrisation(Delta_tt)
-        Delta_Y_tt = _tt_get_block(1, 0, Delta_tt)
-        Delta_XZ_tt = _get_xz_block(Delta_tt)
-        V_tt = _tt_homotopy_step(XZ_tt, Delta_XZ_tt)
-        # TODO: get step size that minimises dual residual
-        Y_tt = tt_rank_reduce(tt_add(Y_tt, Delta_Y_tt))
+        #Delta_tt = _symmetrisation(Delta_tt)
+        #Delta_Y_tt = _tt_get_block(1, 0, Delta_tt)
+        #Delta_XZ_tt = _get_xz_block(Delta_tt)
+        #V_tt = _tt_homotopy_step(XZ_tt, Delta_XZ_tt)
+        ## TODO: get step size that minimises dual residual
+        #Y_tt = tt_rank_reduce(tt_add(Y_tt, Delta_Y_tt))
     return V_tt, Y_tt
 
 
 if __name__ == "__main__":
     np.random.seed(1644)
-    L = tt_rank_reduce(tt_random_gaussian([3, 3, 3, 6, 5, 3, 3, 4], shape=(4, 4)))
-    initial_guess = tt_random_gaussian([4, 4, 4, 2, 7, 3, 2, 3], shape=(4,))
-    B = tt_matrix_vec_mul(L, initial_guess)
-    #B = [c.reshape(c.shape[0], c.shape[1], 1, c.shape[-1]) for c in B]
-    initial_guess = tt_random_gaussian(tt_ranks(initial_guess), shape=(4,))
-    #L = scitt.TT(L)
-    #B = scitt.TT(B)
-    #initial_guess = scitt.TT(initial_guess)
-    #solution = sota_als(L, initial_guess, B, repeats=50)
-    t0 = time.time()
-    #solution = [c.reshape(c.shape[0], c.shape[1], c.shape[-1]) for c in solution.cores]
-    #B = [c.reshape(c.shape[0], c.shape[1], c.shape[-1]) for c in B.cores]
-    solution = als(L, initial_guess, B)
-    print(tt_ranks(solution))
-    t1 = time.time()
-    res = tt_sub(tt_matrix_vec_mul(L, solution), B)
-    print(f"Time taken: {t1 - t0}s")
-    print("Error: ", tt_inner_prod(res, res))
-    a = tt_random_gaussian([3, 3, 3, 6], shape=(4,))
-    b = tt_random_gaussian([3, 3, 3, 6], shape=(4,))
-    a_expand = [c.reshape(c.shape[0], c.shape[1], 1, c.shape[-1]) for c in a]
-    b_expand = [c.reshape(c.shape[0], c.shape[1], 1, c.shape[-1]) for c in b]
-    a_expand = scitt.TT(a_expand)
-    b_expand = scitt.TT(b_expand)
-    res = tt_sub(a, b)
-    res_expand = a_expand - b_expand
-    res_other = [c.reshape(c.shape[0], c.shape[1], c.shape[-1]) for c in res_expand.cores]
-    print(np.sqrt(tt_inner_prod(res, res)))
-    print(res_expand.norm(2))
+    linear_op_tt = tt_rank_reduce(tt_random_gaussian([2], shape=(4, 2, 2)))
+    initial_guess = tt_random_gaussian([2], shape=(2, 2))
+    bias_tt = tt_mat(tt_linear_op(linear_op_tt, initial_guess), shape=(2, 2))
+    obj_tt = tt_identity(len(bias_tt))
+    _ = tt_ipm(obj_tt, linear_op_tt, bias_tt)
+

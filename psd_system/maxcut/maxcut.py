@@ -41,8 +41,8 @@ if __name__ == "__main__":
     #tt_eig, eig_val = tt_randomised_max_eigentensor(X, num_iter=100)
     #tt_eig = tt_binary_round(tt_eig)
     #sol_vec = tt_to_tensor(tt_eig).flatten()
-    solution = tt_op_to_matrix(X)
+    solution = tt_matrix_to_matrix(X)
     chol = robust_cholesky(solution, epsilon=0.01)
     nodes_in_cut = [i for i, v in enumerate(chol.T @ np.random.randn(chol.shape[0], 1)) if v > 0]
-    adj_matrix = -tt_op_to_matrix(G)
+    adj_matrix = -tt_matrix_to_matrix(G)
     plot_maxcut(adj_matrix, nodes_in_cut, duality_gaps)

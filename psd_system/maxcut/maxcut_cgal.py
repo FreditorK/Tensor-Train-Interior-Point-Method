@@ -15,7 +15,7 @@ if __name__ == "__main__":
     G = tt_random_graph(Config.ranks)
     t1 = time.time()
     print(f"Random graph produced in {t1 - t0:.3f}s")
-    C = np.round(tt_op_to_matrix(G))
+    C = np.round(tt_matrix_to_matrix(G))
     t2 = time.time()
     constraint_matrices = [np.outer(column, column) for column in np.eye(C.shape[0])]
     bias = np.ones((C.shape[0], 1))

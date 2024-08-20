@@ -20,7 +20,7 @@ def tt_identity(dim):
 
 
 def tt_zeros(dim, shape=(2,)):
-    return [np.zeros(1, *shape, 1) for _ in range(dim)]
+    return [np.zeros((1, *shape, 1)) for _ in range(dim)]
 
 
 def phi(num_bonds):
@@ -584,11 +584,15 @@ def tt_random_graph(target_ranks):
                           err_bound=0)
 
 
-def tt_op_to_matrix(linear_op):
-    tensor = tt_to_tensor(linear_op)
+def tt_matrix_to_matrix(matrix_tt):
+    tensor = tt_to_tensor(matrix_tt)
     n = len(tensor.shape)
-    axes = [i for i in range(1, n, 2)] + [i for i in range(0, n - 1, 2)]
+    axes = [i for i in range(0, n - 1, 2)] + [i for i in range(1, n, 2)]
     return np.transpose(tensor, axes).reshape(np.prod(tensor.shape[:n // 2]), -1)
+
+def tt_vec_to_vec(vec_tt):
+    tensor = tt_to_tensor(vec_tt)
+    return tensor.reshape(-1, 1)
 
 
 def _tt_op_core_collapse(op_core: np.array, core: np.array) -> np.array:

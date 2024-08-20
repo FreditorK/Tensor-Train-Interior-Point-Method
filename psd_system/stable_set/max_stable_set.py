@@ -23,7 +23,7 @@ if __name__ == "__main__":
     graph = tt_random_graph(Config.ranks)
     G = tt_scale(0.5, tt_add(graph, tt_one(len(Config.ranks) + 1, shape=(2, 2))))
     G = tt_rank_reduce(G)
-    print(np.round(tt_op_to_matrix(G), decimals=2))
+    print(np.round(tt_matrix_to_matrix(G), decimals=2))
 
     As = tt_mask_to_linear_op(G)
     bias = [np.zeros((1, 4, 1)) for _ in range(len(G))]
@@ -47,6 +47,6 @@ if __name__ == "__main__":
     avg_error = np.sqrt(tt_inner_prod(scaled_error, scaled_error))
     print(f"Avg constraint error: {avg_error}")
     print("Ranks of X: ", tt_ranks(X))
-    solution = tt_op_to_matrix(X)
+    solution = tt_matrix_to_matrix(X)
     print(np.round(solution, decimals=2))
     plot_duality_gaps(duality_gaps)
