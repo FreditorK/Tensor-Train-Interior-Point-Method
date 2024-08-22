@@ -13,12 +13,12 @@ from typing import List
 from src.tt_ops import *
 import scikit_tt as scitt
 from scikit_tt.solvers.sle import als as sota_als
-from src.tt_ops import tt_rank_reduce
+from src.tt_ops import tt_rank_reduce, _tt_mat_core_collapse, _block_diag_tensor
 
 
-def als(lhs, initial_guess, rhs, tol=1e-5):
+def tt_amen(lhs, initial_guess, rhs, tol=1e-5):
     # define solution tensor
-    solution = copy.copy(initial_guess)
+    solution = tt_rl_orthogonalise(copy.copy(initial_guess))
     solution_ranks = [1] + tt_ranks(solution) + [1]
     solution_shape = [c.shape[1:-1] for c in solution]
     op_order = len(lhs)
@@ -28,6 +28,8 @@ def als(lhs, initial_guess, rhs, tol=1e-5):
     stack_left_rhs = [None] * op_order
     stack_right_op = [None] * op_order
     stack_right_rhs = [None] * op_order
+    # TODO: We can use random projection here, we can also define a compression rank by compressing it to desired rank
+    #stack_res = tt_rl_orthogonalise(tt_add(rhs, tt_matrix_vec_mul(lhs, initial_guess)))
 
     for i in range(op_order - 1, -1, -1):
         __construct_stack_right_op(i, stack_right_op, lhs, solution)
@@ -46,16 +48,30 @@ def als(lhs, initial_guess, rhs, tol=1e-5):
 
             if i < op_order - 1:
                 micro_op = __construct_micro_matrix_als(i, stack_left_op, stack_right_op, lhs, solution_ranks)
-                micro_rhs = __construct_micro_rhs_als(i, stack_left_rhs, stack_right_rhs, rhs,
-                                                      solution_ranks)
-                __update_core_als(i, micro_op, micro_rhs, solution, 'forward', solution_ranks, solution_shape)
-
+                micro_rhs = __construct_micro_rhs_als(i, stack_left_rhs, stack_right_rhs, rhs, solution_ranks)
+                __update_core_amen(
+                    i,
+                    micro_op,
+                    micro_rhs,
+                    solution,
+                    solution_ranks,
+                    solution_shape
+                )
+                __forward_orthogonalise(i, solution, solution_ranks, solution_shape)
         for i in range(op_order - 1, -1, -1):
             __construct_stack_right_op(i, stack_right_op, lhs, solution)
             __construct_stack_right_rhs(i, stack_right_rhs, rhs, solution)
             micro_op = __construct_micro_matrix_als(i, stack_left_op, stack_right_op, lhs, solution_ranks)
             micro_rhs = __construct_micro_rhs_als(i, stack_left_rhs, stack_right_rhs, rhs, solution_ranks)
-            __update_core_als(i, micro_op, micro_rhs, solution, 'backward', solution_ranks, solution_shape)
+            __update_core_amen(
+                i,
+                micro_op,
+                micro_rhs,
+                solution,
+                solution_ranks,
+                solution_shape
+            )
+            __backward_orthogonalise(i, solution, solution_ranks, solution_shape)
 
         res = tt_sub(tt_matrix_vec_mul(lhs, solution), rhs)
         err = tt_inner_prod(res, res)
@@ -125,26 +141,60 @@ def __construct_micro_rhs_als(i: int,
     return micro_rhs
 
 
-def __update_core_als(i: int,
-                      micro_op: np.ndarray, micro_rhs: np.ndarray,
-                      solution, direction: str, solution_ranks, solution_shape):
+def __update_core_amen(i: int,
+                       micro_op: np.ndarray, micro_rhs: np.ndarray,
+                       solution, solution_ranks, solution_shape):
     solution[i], _, _, _ = np.linalg.lstsq(micro_op, micro_rhs, rcond=None)
-    if direction == 'forward':
-        [q, _] = lin.qr(
-            solution[i].reshape(solution_ranks[i] * solution_shape[i][0], solution_ranks[i + 1]),
-            overwrite_a=True, mode='economic', check_finite=False)
-        solution_ranks[i + 1] = q.shape[1]
-        solution[i] = q.reshape(solution_ranks[i], solution_shape[i][0], solution_ranks[i + 1])
-    if direction == 'backward':
-        if i > 0:
-            [_, q] = lin.rq(
-                solution[i].reshape(solution_ranks[i], solution_shape[i][0] * solution_ranks[i + 1]),
-                overwrite_a=True, mode='economic', check_finite=False)
-            solution_ranks[i] = q.shape[0]
-            solution[i] = q.reshape(solution_ranks[i], solution_shape[i][0], solution_ranks[i + 1])
+    solution[i] = solution[i].reshape(solution_ranks[i], *solution_shape[i], solution_ranks[i + 1])
 
+
+def __correction_step_forward(i, rhs, lhs, res_stack, solution, err_bound=1e-3):
+    r_i = solution[i].shape[0]
+    r_ip1 = solution[i].shape[-1]
+    if i < len(solution) - 1:
+        z_i = res_stack[i]
+        if i == 0:
+            z_i = np.concatenate((rhs[i], -z_i), axis=-1)
+            solution[i] = np.concatenate((solution[i], z_i), axis=-1)
+            solution[i + 1] = _block_diag_tensor(solution[i + 1], np.zeros_like(z_i))
         else:
-            solution[i] = solution[i].reshape(solution_ranks[i], solution_shape[i][0], solution_ranks[i + 1])
+            z_i = _block_diag_tensor(rhs[i], z_i)
+            solution[i] = _block_diag_tensor(solution[i], z_i)
+            if i == len(solution) - 1:
+                pass
+
+        i_shape = solution[i].shape
+        next_idx_shape = solution[i + 1].shape
+        k = len(i_shape) - 1
+        U, S, V_T = np.linalg.svd(solution[i].reshape(i_shape[0] * np.prod(i_shape[1:k], dtype=int), -1),
+                                  full_matrices=False)
+        S = S[:r_ip1]
+        U = U[:, :r_ip1]
+        V_T = V_T[:r_ip1, :]
+        solution[i] = U.reshape(i_shape[0], *i_shape[1:-1], r_ip1)
+        solution[i + 1] = (
+            np.diag(S) @ V_T @ solution[i + 1].reshape(V_T.shape[-1], -1)
+        ).reshape(r_ip1, *next_idx_shape[1:-1], -1)
+
+
+def __forward_orthogonalise(i, solution, solution_ranks, solution_shape):
+    [q, _] = lin.qr(
+        solution[i].reshape(solution_ranks[i] * np.prod(solution_shape[i]), solution_ranks[i + 1]),
+        overwrite_a=True, mode='economic', check_finite=False)
+    solution_ranks[i + 1] = q.shape[1]
+    solution[i] = q.reshape(solution_ranks[i], *solution_shape[i], solution_ranks[i + 1])
+
+
+def __backward_orthogonalise(i, solution, solution_ranks, solution_shape):
+    if i > 0:
+        [_, q] = lin.rq(
+            solution[i].reshape(solution_ranks[i], np.prod(solution_shape[i]) * solution_ranks[i + 1]),
+            overwrite_a=True, mode='economic', check_finite=False)
+        solution_ranks[i] = q.shape[0]
+        solution[i] = q.reshape(solution_ranks[i], *solution_shape[i], solution_ranks[i + 1])
+
+    else:
+        solution[i] = solution[i].reshape(solution_ranks[i], *solution_shape[i], solution_ranks[i + 1])
 
 
 def tt_infeasible_newton_system_rhs(obj_tt, linear_op_tt, bias_tt, X_tt, Y_tt, Z_tt, mu):
@@ -196,7 +246,7 @@ def _tt_ipm_newton_step(obj_tt, linear_op_tt, bias_tt, XZ_tt, Y_tt):
     K_inv = np.linalg.pinv(K)
     # ----
     initial_guess = tt_random_gaussian(tt_ranks(rhs_vec_tt), shape=(4,))
-    Delta_tt = als(lhs_matrix_tt, initial_guess, rhs_vec_tt)
+    Delta_tt = tt_amen(lhs_matrix_tt, initial_guess, rhs_vec_tt)
     #return Delta_tt
 
 
@@ -240,4 +290,3 @@ if __name__ == "__main__":
     bias_tt = tt_mat(tt_linear_op(linear_op_tt, initial_guess), shape=(2, 2))
     obj_tt = tt_identity(len(bias_tt))
     _ = tt_ipm(obj_tt, linear_op_tt, bias_tt)
-

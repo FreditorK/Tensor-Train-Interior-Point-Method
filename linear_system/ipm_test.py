@@ -8,7 +8,7 @@ import scikit_tt as scitt
 from scikit_tt.solvers.sle import als as sota_als
 from scikit_tt.solvers.sle import mals as sota_mals
 from src.tt_ops import *
-from tt_als import als
+from tt_als import tt_amen
 
 
 # TODO: You have to take gram matrix because the system may often be rank deficient
@@ -21,7 +21,7 @@ B = tt_rank_reduce(tt_matrix_vec_mul(tt_transpose(L), B))
 #L = tt_add(L, [(1e-6)*np.eye(4).reshape(1, 4, 4, 1) for _ in range(len(L))])
 initial_guess = tt_random_binary([r for r in tt_ranks(initial_guess)], shape=(4,))
 t0 = time.time()
-solution = als(L, initial_guess, B)
+solution = tt_amen(L, initial_guess, B)
 t1 = time.time()
 res = tt_sub(tt_matrix_vec_mul(L, solution), B)
 print(f"Time taken: {t1 - t0}s")
