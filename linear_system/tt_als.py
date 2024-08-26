@@ -29,7 +29,9 @@ def tt_amen(lhs, initial_guess, rhs, tol=1e-5):
     stack_right_op = [None] * op_order
     stack_right_rhs = [None] * op_order
     # TODO: We can use random projection here, we can also define a compression rank by compressing it to desired rank
-    #stack_res = tt_rl_orthogonalise(tt_add(rhs, tt_matrix_vec_mul(lhs, initial_guess)))
+    stack_res = tt_rl_orthogonalise(tt_add(rhs, tt_matrix_vec_mul(lhs, initial_guess)))
+    res_ranks = [1] + tt_ranks(stack_res) + [1]
+    res_shape = [c.shape[1:-1] for c in stack_res]
 
     for i in range(op_order - 1, -1, -1):
         __construct_stack_right_op(i, stack_right_op, lhs, solution)
@@ -40,7 +42,7 @@ def tt_amen(lhs, initial_guess, rhs, tol=1e-5):
     print("Error 0: ", err)
     it = 0
 
-    while np.less_equal(tol, err) and it < 10:
+    while np.less_equal(tol, err) and it < 3:
 
         for i in range(op_order):
             __construct_stack_left_op(i, stack_left_op, lhs, solution)
@@ -61,6 +63,7 @@ def tt_amen(lhs, initial_guess, rhs, tol=1e-5):
         for i in range(op_order - 1, -1, -1):
             __construct_stack_right_op(i, stack_right_op, lhs, solution)
             __construct_stack_right_rhs(i, stack_right_rhs, rhs, solution)
+            """
             micro_op = __construct_micro_matrix_als(i, stack_left_op, stack_right_op, lhs, solution_ranks)
             micro_rhs = __construct_micro_rhs_als(i, stack_left_rhs, stack_right_rhs, rhs, solution_ranks)
             __update_core_amen(
@@ -71,6 +74,7 @@ def tt_amen(lhs, initial_guess, rhs, tol=1e-5):
                 solution_ranks,
                 solution_shape
             )
+            """
             __backward_orthogonalise(i, solution, solution_ranks, solution_shape)
 
         res = tt_sub(tt_matrix_vec_mul(lhs, solution), rhs)
@@ -121,11 +125,14 @@ def __construct_micro_matrix_als(i: int,
                                  stack_left_op: List[np.ndarray],
                                  stack_right_op: List[np.ndarray],
                                  operator, solution_ranks) -> np.ndarray:
+    print("1", stack_left_op[i].shape, operator[i].shape)
     micro_op = np.tensordot(stack_left_op[i], operator[i], axes=(1, 0))
+    print("2", micro_op.shape, stack_right_op[i].shape)
     micro_op = np.tensordot(micro_op, stack_right_op[i], axes=(4, 1))
     micro_op = micro_op.transpose([1, 2, 5, 0, 3, 4]).reshape(
         solution_ranks[i] * operator[i].shape[1] * solution_ranks[i + 1],
         solution_ranks[i] * operator[i].shape[2] * solution_ranks[i + 1])
+    print("3", micro_op.shape)
 
     return micro_op
 
@@ -137,6 +144,7 @@ def __construct_micro_rhs_als(i: int,
     micro_rhs = np.tensordot(stack_left_rhs[i], right_hand_side[i], axes=(0, 0))
     micro_rhs = np.tensordot(micro_rhs, stack_right_rhs[i], axes=(2, 0))
     micro_rhs = micro_rhs.reshape(solution_ranks[i] * right_hand_side[i].shape[1] * solution_ranks[i + 1], 1)
+    # TODO: You have to compute the interface matricees for the residual like in this function
 
     return micro_rhs
 
@@ -144,37 +152,14 @@ def __construct_micro_rhs_als(i: int,
 def __update_core_amen(i: int,
                        micro_op: np.ndarray, micro_rhs: np.ndarray,
                        solution, solution_ranks, solution_shape):
-    solution[i], _, _, _ = np.linalg.lstsq(micro_op, micro_rhs, rcond=None)
-    solution[i] = solution[i].reshape(solution_ranks[i], *solution_shape[i], solution_ranks[i + 1])
+    sol, _, _, _ = np.linalg.lstsq(micro_op, micro_rhs, rcond=None)
+    solution[i] = sol.reshape(solution_ranks[i], *solution_shape[i], solution_ranks[i + 1])
 
 
-def __correction_step_forward(i, rhs, lhs, res_stack, solution, err_bound=1e-3):
-    r_i = solution[i].shape[0]
-    r_ip1 = solution[i].shape[-1]
-    if i < len(solution) - 1:
-        z_i = res_stack[i]
-        if i == 0:
-            z_i = np.concatenate((rhs[i], -z_i), axis=-1)
-            solution[i] = np.concatenate((solution[i], z_i), axis=-1)
-            solution[i + 1] = _block_diag_tensor(solution[i + 1], np.zeros_like(z_i))
-        else:
-            z_i = _block_diag_tensor(rhs[i], z_i)
-            solution[i] = _block_diag_tensor(solution[i], z_i)
-            if i == len(solution) - 1:
-                pass
-
-        i_shape = solution[i].shape
-        next_idx_shape = solution[i + 1].shape
-        k = len(i_shape) - 1
-        U, S, V_T = np.linalg.svd(solution[i].reshape(i_shape[0] * np.prod(i_shape[1:k], dtype=int), -1),
-                                  full_matrices=False)
-        S = S[:r_ip1]
-        U = U[:, :r_ip1]
-        V_T = V_T[:r_ip1, :]
-        solution[i] = U.reshape(i_shape[0], *i_shape[1:-1], r_ip1)
-        solution[i + 1] = (
-            np.diag(S) @ V_T @ solution[i + 1].reshape(V_T.shape[-1], -1)
-        ).reshape(r_ip1, *next_idx_shape[1:-1], -1)
+def __correction_step_forward(i, rhs, lhs, stack_res, solution, err_bound=1e-3):
+    z_i = stack_res[i]
+    solution[i] = np.concatenate((solution[i], z_i), axis=-1)
+    solution[i + 1] = np.concatenate((solution[i + 1], np.zeros_like(z_i)), axis=0)
 
 
 def __forward_orthogonalise(i, solution, solution_ranks, solution_shape):
@@ -241,9 +226,9 @@ def _tt_ipm_newton_step(obj_tt, linear_op_tt, bias_tt, XZ_tt, Y_tt):
     lhs_matrix_tt = tt_infeasible_newton_system_lhs(linear_op_tt, X_tt, Z_tt)
     mu = tt_inner_prod(Z_tt, [0.5 * c for c in X_tt])
     rhs_vec_tt = tt_infeasible_newton_system_rhs(obj_tt, linear_op_tt, bias_tt, X_tt, Y_tt, Z_tt, mu)
-    np.set_printoptions(threshold=np.inf, linewidth=200)
-    K = np.round(tt_matrix_to_matrix(lhs_matrix_tt), decimals=2)
-    K_inv = np.linalg.pinv(K)
+    #np.set_printoptions(threshold=np.inf, linewidth=200)
+    #K = np.round(tt_matrix_to_matrix(lhs_matrix_tt), decimals=2)
+    #K_inv = np.linalg.pinv(K)
     # ----
     initial_guess = tt_random_gaussian(tt_ranks(rhs_vec_tt), shape=(4,))
     Delta_tt = tt_amen(lhs_matrix_tt, initial_guess, rhs_vec_tt)
