@@ -1,9 +1,12 @@
 import sys
 import os
 
+from sympy.stats.sampling.sample_scipy import scipy
+
 sys.path.append(os.getcwd() + '/../')
 
 import numpy as np
+import scipy as scip
 import time
 import datetime
 from src.tt_ops import *
@@ -42,12 +45,12 @@ def rank_chop(s, eps):
     return R
 
 
-def tt_amen(A, b, nswp=22, x0=None, eps=1e-10, kickrank=4, kick2=0, trunc_norm='res', local_iterations=40, resets=2, verbose=False, preconditioner=None, band_diagonal=-1):
+def tt_amen(A, b, nswp=22, x0=None, eps=1e-10, kickrank=4, kick2=0, trunc_norm='res', verbose=False, band_diagonal=-1):
 
-    return _amen_solve_python(A, b, nswp, x0, eps, kickrank, kick2, trunc_norm, local_iterations, resets, verbose, preconditioner, band_diagonal)
+    return _amen_solve_python(A, b, nswp, x0, eps, kickrank, kick2, trunc_norm, verbose, band_diagonal)
 
 
-def _amen_solve_python(A, b, nswp=22, x0=None, eps=1e-10, kickrank=4, kick2=0, trunc_norm='res', local_iterations=40, resets=2, verbose=False, preconditioner=None, band_diagonal=-1):
+def _amen_solve_python(A, b, nswp=22, x0=None, eps=1e-10, kickrank=4, kick2=0, trunc_norm='res', verbose=False, band_diagonal=-1):
     if verbose:
         time_total = datetime.datetime.now()
 
@@ -82,8 +85,7 @@ def _amen_solve_python(A, b, nswp=22, x0=None, eps=1e-10, kickrank=4, kick2=0, t
     nrmsc = 1.0
 
     if verbose:
-        print('Starting AMEn solve with:\n\tepsilon: %g\n\tsweeps: %d\n\tlocal iterations: %d\n\tresets: %d\n\tpreconditioner: %s' % (
-            eps, nswp, local_iterations, resets, str(preconditioner)))
+        print('Starting AMEn solve with:\n\tepsilon: %g\n\tsweeps: %d' % (eps, nswp))
         print()
 
     for swp in range(nswp):
@@ -134,14 +136,12 @@ def _amen_solve_python(A, b, nswp=22, x0=None, eps=1e-10, kickrank=4, kick2=0, t
                 current_norm = 1.0
             normx[k-1] = normx[k-1]*current_norm
 
-            x_cores[k] = np.reshape(Qmat.T, [rx[k], N[k], rx[k+1]])
+            x_cores[k] = np.reshape(Qmat.T, (rx[k], N[k], rx[k+1]))
             x_cores[k-1] = core_prev[:]
 
             # update phis (einsum)
-            Phis[k] = _compute_phi_bck_A(
-                Phis[k+1], x_cores[k], A[k], x_cores[k])
-            Phis_b[k] = _compute_phi_bck_rhs(
-                Phis_b[k+1], b[k], x_cores[k])
+            Phis[k] = _compute_phi_bck_A(Phis[k+1], x_cores[k], A[k], x_cores[k])
+            Phis_b[k] = _compute_phi_bck_rhs(Phis_b[k+1], b[k], x_cores[k])
 
             # ... and norms
             norm = np.linalg.norm(Phis[k])
@@ -158,10 +158,8 @@ def _amen_solve_python(A, b, nswp=22, x0=None, eps=1e-10, kickrank=4, kick2=0, t
 
             # compute phis_z
             if not last:
-                Phiz[k] = _compute_phi_bck_A(
-                    Phiz[k+1], z_cores[k], A[k], x_cores[k]) / normA[k-1]
-                Phiz_b[k] = _compute_phi_bck_rhs(
-                    Phiz_b[k+1], b[k], z_cores[k]) / normb[k-1]
+                Phiz[k] = _compute_phi_bck_A(Phiz[k+1], z_cores[k], A[k], x_cores[k]) / normA[k-1]
+                Phiz_b[k] = _compute_phi_bck_rhs(Phiz_b[k+1], b[k], z_cores[k]) / normb[k-1]
 
         # start loop
         max_res = 0
@@ -173,8 +171,7 @@ def _amen_solve_python(A, b, nswp=22, x0=None, eps=1e-10, kickrank=4, kick2=0, t
             previous_solution = np.reshape(x_cores[k], [-1, 1])
 
             # assemble rhs
-            rhs = np.einsum('br,bmB,BR->rmR',
-                            Phis_b[k], b[k] * nrmsc, Phis_b[k+1])
+            rhs = np.einsum('br,bmB,BR->rmR',Phis_b[k], b[k] * nrmsc, Phis_b[k+1])
             rhs = np.reshape(rhs, [-1, 1])
             norm_rhs = np.linalg.norm(rhs)
 
@@ -187,7 +184,7 @@ def _amen_solve_python(A, b, nswp=22, x0=None, eps=1e-10, kickrank=4, kick2=0, t
             B = np.einsum('lsr,smnRL->lmLrnR', Phis[k], Bp)
             B = np.reshape(B, [rx[k]*N[k]*rx[k+1], rx[k]*N[k]*rx[k+1]])
 
-            solution_now = np.linalg.solve(B, rhs)
+            solution_now = scip.linalg.solve(B, rhs)
 
             res_old = np.linalg.norm(B @ previous_solution-rhs)/norm_rhs
             res_new = np.linalg.norm(B @ solution_now-rhs)/norm_rhs
@@ -201,13 +198,11 @@ def _amen_solve_python(A, b, nswp=22, x0=None, eps=1e-10, kickrank=4, kick2=0, t
             max_dx = max(dx, max_dx)
             max_res = max(max_res, res_old)
 
-            solution_now = np.reshape(solution_now, [rx[k]*N[k], rx[k+1]])
+            solution_now = np.reshape(solution_now, (rx[k]*N[k], rx[k+1]))
             # truncation
             if k < d-1:
                 u, s, v = np.linalg.svd(solution_now, full_matrices=False)
-                if trunc_norm == 'fro':
-                    pass
-                else:
+                if trunc_norm != 'fro':
                     # search for a rank such that offers small enough residuum
                     r = 0
                     for r in range(u.shape[1]-1, 0, -1):
@@ -217,8 +212,7 @@ def _amen_solve_python(A, b, nswp=22, x0=None, eps=1e-10, kickrank=4, kick2=0, t
 
                         if res > max(real_tol*damp, res_new):
                             break
-                    r += 1
-                    r = min([r, np.prod(s.shape)])
+                    r = min(r+1, np.prod(s.shape))
             else:
                 u, v = np.linalg.qr(solution_now)
                 r = u.shape[1]
@@ -229,13 +223,19 @@ def _amen_solve_python(A, b, nswp=22, x0=None, eps=1e-10, kickrank=4, kick2=0, t
             v = v.T
 
             if not last:
-                czA = _local_product(Phiz[k+1], Phiz[k], A[k], np.reshape(
-                    u @ v.T, [rx[k], N[k], rx[k+1]]), [rx[k], N[k], rx[k+1]], band_diagonal)  # shape rzp x N x rz
+                czA = _local_product(
+                    Phiz[k+1],
+                    Phiz[k],
+                    A[k],
+                    np.reshape(u @ v.T, [rx[k], N[k], rx[k+1]]),
+                    (rx[k], N[k], rx[k+1]),
+                    band_diagonal
+                )  # shape rzp x N x rz
 
                 # shape is rzp x N x rz
                 czy = np.einsum('br,bnB,BR->rnR',Phiz_b[k], b[k]*nrmsc, Phiz_b[k+1])
                 cz_new = czy - czA
-                uz, _, _ = np.linalg.svd(np.reshape(cz_new, (rz[k]*N[k], -1)))
+                uz, _, _ = np.linalg.svd(np.reshape(cz_new, (rz[k]*N[k], -1)), full_matrices=False)
                 # truncate to kickrank
                 cz_new = uz[:, :min(kickrank, uz.shape[1])]
                 if k < d-1:  # extend cz_new with random elements
@@ -274,10 +274,8 @@ def _amen_solve_python(A, b, nswp=22, x0=None, eps=1e-10, kickrank=4, kick2=0, t
                 rx[k+1] = r
 
                 # next phis with norm correction
-                Phis[k+1] = _compute_phi_fwd_A(Phis[k],
-                                               x_cores[k], A[k], x_cores[k])
-                Phis_b[k +
-                       1] = _compute_phi_fwd_rhs(Phis_b[k], b[k], x_cores[k])
+                Phis[k+1] = _compute_phi_fwd_A(Phis[k], x_cores[k], A[k], x_cores[k])
+                Phis_b[k+1] = _compute_phi_fwd_rhs(Phis_b[k], b[k], x_cores[k])
 
                 # ... and norms
                 norm = np.linalg.norm(Phis[k+1])
@@ -299,7 +297,7 @@ def _amen_solve_python(A, b, nswp=22, x0=None, eps=1e-10, kickrank=4, kick2=0, t
                     Phiz_b[k+1] = _compute_phi_fwd_rhs(
                         Phiz_b[k], b[k], z_cores[k]) / normb[k]
             else:
-                x_cores[k] = np.reshape(u @ np.diag(s[:r]) @ v[:r, :].T, [rx[k], N[k], rx[k+1]])
+                x_cores[k] = np.reshape(u @ np.diag(s[:r]) @ v[:r, :].T, (rx[k], N[k], rx[k+1]))
 
         if verbose:
             print('Solution rank is', rx)
@@ -318,10 +316,10 @@ def _amen_solve_python(A, b, nswp=22, x0=None, eps=1e-10, kickrank=4, kick2=0, t
         print()
         print('Finished after', swp+1, ' sweeps and ', time_total)
         print()
+
     normx = np.exp(np.sum(np.log(normx))/d)
 
-    for k in range(d):
-        x_cores[k] = x_cores[k] * normx
+    x_cores = [x_cores[k] * normx for k in range(d)]
 
     return x_cores
 
@@ -347,15 +345,15 @@ def _compute_phi_fwd_rhs(Phi_now, core_rhs, core):
 
 
 if __name__ == "__main__":
-    np.random.seed(1258)
+    np.random.seed(158)
     L = tt_rank_reduce(tt_random_binary([3, 4], shape=(4, 4)))
     initial_guess = tt_scale(5, tt_random_gaussian([4, 2], shape=(4,)))
     B = tt_rank_reduce(tt_matrix_vec_mul(L, initial_guess))
-    L = tt_gram(L)
-    B = tt_rank_reduce(tt_matrix_vec_mul(tt_transpose(L), B))
+    res = tt_sub(tt_matrix_vec_mul(L, tt_one(len(L), shape=(4, ))), B)
+    print("Start Error: ", tt_inner_prod(res, res))
     # L = tt_add(L, [(1e-6)*np.eye(4).reshape(1, 4, 4, 1) for _ in range(len(L))])
     t0 = time.time()
-    solution = tt_amen(L, B)
+    solution = tt_amen(L, B, verbose=True)
     t1 = time.time()
     res = tt_sub(tt_matrix_vec_mul(L, solution), B)
     print(f"Time taken: {t1 - t0}s")

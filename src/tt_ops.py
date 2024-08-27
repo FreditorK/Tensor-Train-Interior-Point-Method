@@ -92,6 +92,28 @@ def tt_lr_orthogonalise(train_tt: List[np.array]):
     return train_tt
 
 
+def core_forward_orthogonalise(i, train_tt):
+    shape_i = train_tt[i].shape
+    shape_ip1 = train_tt[i+1].shape
+    [q_T, r] = scp.linalg.qr(train_tt[i].reshape(-1, shape_i[-1]), overwrite_a=True, mode='economic', check_finite=False)
+    train_tt[i] = q_T.reshape(shape_i[0], *shape_i[1:-1], -1)
+    r_ip1 = train_tt[i].shape[-1]
+    train_tt[i+1] = (r @ train_tt[i + 1].reshape(r.shape[-1], -1)).reshape(r_ip1, *shape_ip1[1:-1], -1)
+    return train_tt
+
+
+def core_backward_orthogonalise(i, train_tt):
+    shape_i = train_tt[i].shape
+    shape_im1 = train_tt[i - 1].shape
+    [q_T, r] = scp.linalg.qr(train_tt[i].reshape(train_tt[i].shape[0], -1).T, overwrite_a=True, mode='economic', check_finite=False)
+    train_tt[i] = q_T.T.reshape(-1, *shape_i[1:-1], shape_i[-1])
+    r_im1 = train_tt[i].shape[0]
+    train_tt[i - 1] = (
+        train_tt[i - 1].reshape(-1, r.shape[-1]) @ r.T
+    ).reshape(-1, *shape_im1[1:-1], r_im1)
+    return train_tt
+
+
 def tt_bond_at(train_tt, idx):
     if idx != -1:
         train_tt = train_tt[:idx] + [core_bond(train_tt[idx], train_tt[idx + 1])] + train_tt[idx + 2:]
@@ -447,8 +469,8 @@ def tt_transpose(matrix_tt):
 
 def tt_gram(matrix_tt):
     """ Constructs the gram tensor for a linear op"""
-    tt_linear_op_t = tt_transpose(matrix_tt)
-    gram = tt_mat_mat_mul(matrix_tt, tt_linear_op_t)
+    matrix_tt_t = tt_transpose(matrix_tt)
+    gram = tt_mat_mat_mul(matrix_tt_t, matrix_tt)
     gram = tt_rank_reduce(gram)
     return gram
 
@@ -589,6 +611,7 @@ def tt_matrix_to_matrix(matrix_tt):
     n = len(tensor.shape)
     axes = [i for i in range(0, n - 1, 2)] + [i for i in range(1, n, 2)]
     return np.transpose(tensor, axes).reshape(np.prod(tensor.shape[:n // 2]), -1)
+
 
 def tt_vec_to_vec(vec_tt):
     tensor = tt_to_tensor(vec_tt)
@@ -741,7 +764,7 @@ def _tt_burer_monteiro_grad(A_22, A_33, A_44, C_00, C_01, C_10, _, V_00, V_01, V
     )
 
 
-def _tt_bm_core_wise(matrix_tt, factor_tt, idx, prev_error, lr=0.1, tol=1e-3):
+def _tt_bm_core_wise(matrix_tt, factor_tt, idx, prev_error, lr=0.5, tol=1e-3):
     xr_i, _, _, xr_ip1 = factor_tt[idx].shape
     comp = tt_mat_mat_mul(factor_tt, tt_transpose(factor_tt))
     diff = tt_add(matrix_tt, comp)
@@ -832,20 +855,22 @@ def tt_to_ring(train_tt):
     return train_tt
 
 
-def tt_burer_monteiro_factorisation(psd_tt, max_iter=10):
+def tt_burer_monteiro_factorisation(psd_tt, max_iter=15):
     tt_train = tt_scale(-1, psd_tt)
     cores = tt_random_gaussian([int(np.ceil(np.sqrt(r))) for r in tt_ranks(tt_train)], shape=(2, 2))
-    indices = list(range(len(cores))) + list(reversed(range(len(cores))))
-    lr = 0.5 * np.ones(len(cores))
+    cores = tt_rl_orthogonalise(cores)
+    lr = 0.5
     err = np.inf
     for iteration in range(max_iter):
-        for k in indices:
+        for k in range(len(cores)-1):
             print(f"Core number {k}")
-            # TODO: We do not have to orthogonalise the whole thing every time
-            # TODO: We just have to shift it one further
-            cores = tt_rl_orthogonalise_idx(cores, k)
-            cores, l, err = _tt_bm_core_wise(tt_train, cores, k, err, lr=lr[k])
-            lr[k] = l
+            cores = core_forward_orthogonalise(k, cores)
+            cores, lr, err = _tt_bm_core_wise(tt_train, cores, k+1, err, lr=lr)
+        for k in range(len(cores)-1, 0, -1):
+            print(f"Core number {k}")
+            cores = core_backward_orthogonalise(k, cores)
+            cores, lr, err = _tt_bm_core_wise(tt_train, cores, k-1, err, lr=lr)
+
     return cores
 
 
