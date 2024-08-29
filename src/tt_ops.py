@@ -764,15 +764,19 @@ def _tt_burer_monteiro_grad(A_22, A_33, A_44, C_00, C_01, C_10, _, V_00, V_01, V
     )
 
 
-def _tt_bm_core_wise(matrix_tt, factor_tt, idx, prev_error, is_block=False, lr=0.5, num_swps=5, tol=1e-3):
+def _tt_bm_core_wise(matrix_tt, factor_tt, idx, prev_error, is_block=False, lr=0.5, num_swps=20, gamma=0.9, tol=1e-3):
     xr_i, _, _, xr_ip1 = factor_tt[idx].shape
     comp = tt_mat_mat_mul(factor_tt, tt_transpose(factor_tt))
     diff = tt_add(matrix_tt, comp)
     error = tt_inner_prod(diff, diff)
-    lr = min(0.999 * (prev_error / error) * lr, 0.1)
+    lr = min(0.99 * (prev_error / error) * lr, 0.1)
     local_lr = lr
     print(f"Error: {error}, {lr}")
     swp = 0
+    v_00_grad = 0
+    v_01_grad = 0
+    v_10_grad = 0
+    v_11_grad = 0
     while np.greater_equal(error, tol) and swp < num_swps:
         if 0 < idx < len(factor_tt) - 1:
             left_contraction = safe_multi_dot([_tt_core_collapse(core, core) for core in diff[:idx]]).reshape(1, -1)
@@ -819,27 +823,37 @@ def _tt_bm_core_wise(matrix_tt, factor_tt, idx, prev_error, is_block=False, lr=0
         A_22 = outer_contraction[np.ix_(cv_x + n, cv_y + m)]
         A_33 = outer_contraction[np.ix_(n * (n + q) + vc_x, m * (m + p) + vc_y)]
         A_44 = outer_contraction[np.ix_(vv_x + n + n * (n + q), vv_y + m + m * (m + p))]
-        vec_00 = _tt_burer_monteiro_grad(A_22, A_33, A_44, C_00, C_01, C_10, C_11, V_00, V_01, V_10, V_11)
-        vec_11 = _tt_burer_monteiro_grad(A_22, A_33, A_44, C_11, C_10, C_01, C_00, V_11, V_10, V_01, V_00)
+        V_00_nest = V_00 - gamma * v_00_grad
+        V_01_nest = V_01 - gamma * v_01_grad
+        V_10_nest = V_10 - gamma * v_10_grad
+        V_11_nest = V_11 - gamma * v_11_grad
+        vec_00 = _tt_burer_monteiro_grad(A_22, A_33, A_44, C_00, C_01, C_10, C_11, V_00_nest, V_01_nest, V_10_nest, V_11_nest)
+        vec_11 = _tt_burer_monteiro_grad(A_22, A_33, A_44, C_11, C_10, C_01, C_00, V_11_nest, V_10_nest, V_01_nest, V_00_nest)
         if idx == 0 and is_block:
             vec_01 = np.zeros(xr_ip1**2)
             vec_10 = np.zeros(xr_ip1**2)
         else:
-            vec_01 = _tt_burer_monteiro_grad(A_22, A_33, A_44, C_11, C_10, C_01, C_00, V_01, V_00, V_11, V_10)
-            vec_10 = _tt_burer_monteiro_grad(A_22, A_33, A_44, C_00, C_01, C_10, C_11, V_10, V_11, V_00, V_01)
+            vec_01 = _tt_burer_monteiro_grad(A_22, A_33, A_44, C_11, C_10, C_01, C_00, V_01_nest, V_00_nest, V_11_nest, V_10_nest)
+            vec_10 = _tt_burer_monteiro_grad(A_22, A_33, A_44, C_00, C_01, C_10, C_11, V_10_nest, V_11_nest, V_00_nest, V_01_nest)
 
         if 0 < idx < len(factor_tt) - 1:
-            factor_tt[idx][:, 0, 0, :] -= local_lr * vec_00.reshape(xr_i, xr_ip1)
-            factor_tt[idx][:, 0, 1, :] -= local_lr * vec_01.reshape(xr_i, xr_ip1)
-            factor_tt[idx][:, 1, 0, :] -= local_lr * vec_10.reshape(xr_i, xr_ip1)
-            factor_tt[idx][:, 1, 1, :] -= local_lr * vec_11.reshape(xr_i, xr_ip1)
+            v_00_grad = gamma*v_00_grad + local_lr * vec_00.reshape(xr_i, xr_ip1)
+            v_01_grad = gamma*v_01_grad + local_lr * vec_01.reshape(xr_i, xr_ip1)
+            v_10_grad = gamma*v_10_grad + local_lr * vec_10.reshape(xr_i, xr_ip1)
+            v_11_grad = gamma*v_11_grad + local_lr * vec_11.reshape(xr_i, xr_ip1)
         else:
             r = xr_ip1 if idx == 0 else xr_i
             a = 0 if idx == 0 else -1
-            factor_tt[idx][:, 0, 0, :] -= local_lr * np.expand_dims(np.diagonal(vec_00.reshape(r, r)), axis=a)
-            factor_tt[idx][:, 1, 1, :] -= local_lr * np.expand_dims(np.diagonal(vec_11.reshape(r, r)), axis=a)
-            factor_tt[idx][:, 0, 1, :] -= local_lr * np.expand_dims(np.diagonal(vec_01.reshape(r, r)), axis=a)
-            factor_tt[idx][:, 1, 0, :] -= local_lr * np.expand_dims(np.diagonal(vec_10.reshape(r, r)), axis=a)
+            v_00_grad = gamma*v_00_grad + local_lr * np.expand_dims(np.diagonal(vec_00.reshape(r, r)), axis=a)
+            v_01_grad = gamma*v_01_grad + local_lr * np.expand_dims(np.diagonal(vec_01.reshape(r, r)), axis=a)
+            v_10_grad = gamma*v_10_grad + local_lr * np.expand_dims(np.diagonal(vec_10.reshape(r, r)), axis=a)
+            v_11_grad = gamma*v_11_grad + local_lr * np.expand_dims(np.diagonal(vec_11.reshape(r, r)), axis=a)
+
+        factor_tt[idx][:, 0, 0, :] -= v_00_grad
+        factor_tt[idx][:, 0, 1, :] -= v_01_grad
+        factor_tt[idx][:, 1, 0, :] -= v_10_grad
+        factor_tt[idx][:, 1, 1, :] -= v_11_grad
+
         local_lr *= 0.9
         swp += 1
 
@@ -870,7 +884,7 @@ def _core_tril(core):
     return core
 
 
-def tt_burer_monteiro_factorisation(psd_tt, cores=None, is_block=False, num_swps=5, max_iter=20):
+def tt_burer_monteiro_factorisation(psd_tt, cores=None, is_block=False, num_swps=20, max_iter=22, tol=1e-5):
     tt_train = tt_scale(-1, psd_tt)
     if cores is None:
         cores = tt_random_gaussian([int(np.ceil(np.sqrt(r)))+1 for r in tt_ranks(tt_train)], shape=(2, 2))
@@ -884,16 +898,19 @@ def tt_burer_monteiro_factorisation(psd_tt, cores=None, is_block=False, num_swps
         for k in range(len(cores)-1):
             print(f"Core number {k}")
             cores = core_forward_orthogonalise(k, cores)
-            cores, lr, err = _tt_bm_core_wise(tt_train, cores, k+1, err, is_block=is_block, lr=lr, num_swps=num_swps)
+            cores, lr, err = _tt_bm_core_wise(tt_train, cores, k+1, err, is_block=is_block, lr=lr, num_swps=num_swps, tol=0.1*tol)
         for k in range(len(cores)-1, 0, -1):
             print(f"Core number {k}")
             cores = core_backward_orthogonalise(k, cores)
-            cores, lr, err = _tt_bm_core_wise(tt_train, cores, k-1, err, is_block=is_block, lr=lr, num_swps=num_swps)
+            cores, lr, err = _tt_bm_core_wise(tt_train, cores, k-1, err, is_block=is_block, lr=lr, num_swps=num_swps, tol=0.1*tol)
+        if np.less_equal(err, tol):
+            break
 
     comp = tt_mat_mat_mul(cores, tt_transpose(cores))
     diff = tt_add(tt_train, comp)
     error = tt_inner_prod(diff, diff)
     print(f"Final error: {error}")
+
     return cores
 
 
