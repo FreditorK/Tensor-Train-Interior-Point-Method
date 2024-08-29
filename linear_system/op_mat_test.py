@@ -10,13 +10,10 @@ from dataclasses import dataclass
 from src.tt_ops import *
 from src.tt_ops import *
 
-A = tt_random_gaussian([3], shape=(4, 2, 2))
-x = tt_random_gaussian([2], shape=(2, 2))
-Ax = tt_linear_op(A, x)
+x = tt_random_gaussian([5, 6, 4], shape=(2, 2))
+np.set_printoptions(threshold=np.inf, linewidth=300)
+print(np.round(tt_matrix_to_matrix(x), decimals=3))
+x[0][:, 0, 1] = 0
+x[0][:, 1, 0] = 0
+print(np.round(tt_matrix_to_matrix(x), decimals=3))
 
-A = tt_op_to_mat(A)
-x = tt_vec(x)
-Ax_2 = tt_matrix_vec_mul(A, x)
-
-res = tt_sub(Ax, Ax_2)
-print(tt_inner_prod(res, res))

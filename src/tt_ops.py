@@ -75,7 +75,7 @@ def tt_rl_orthogonalise(train_tt: List[np.array]):
     return train_tt
 
 
-def tt_rl_orthogonalise_idx(train_tt: List[np.array], idx):
+def tt_orthogonalise_idx(train_tt: List[np.array], idx):
     if idx == 0:
         return tt_rl_orthogonalise(train_tt)
     if idx == len(train_tt) - 1:
@@ -764,77 +764,84 @@ def _tt_burer_monteiro_grad(A_22, A_33, A_44, C_00, C_01, C_10, _, V_00, V_01, V
     )
 
 
-def _tt_bm_core_wise(matrix_tt, factor_tt, idx, prev_error, lr=0.5, tol=1e-3):
+def _tt_bm_core_wise(matrix_tt, factor_tt, idx, prev_error, is_block=False, lr=0.5, num_swps=5, tol=1e-3):
     xr_i, _, _, xr_ip1 = factor_tt[idx].shape
     comp = tt_mat_mat_mul(factor_tt, tt_transpose(factor_tt))
     diff = tt_add(matrix_tt, comp)
     error = tt_inner_prod(diff, diff)
-    lr = min(0.999 * (prev_error / error) * lr, 0.5)
+    lr = min(0.999 * (prev_error / error) * lr, 0.1)
+    local_lr = lr
     print(f"Error: {error}, {lr}")
-    if np.less_equal(error, tol):
-        return factor_tt
-    elif 0 < idx < len(factor_tt) - 1:
-        left_contraction = safe_multi_dot([_tt_core_collapse(core, core) for core in diff[:idx]]).reshape(1, -1)
-        right_contraction = safe_multi_dot([_tt_core_collapse(core, core) for core in diff[idx + 1:]]).reshape(-1, 1)
-        outer_contraction = right_contraction @ left_contraction
-        V_00 = factor_tt[idx][:, 0, 0]
-        C_00 = matrix_tt[idx][:, 0, 0]
-        V_01 = factor_tt[idx][:, 0, 1]
-        C_01 = matrix_tt[idx][:, 0, 1]
-        V_10 = factor_tt[idx][:, 1, 0]
-        C_10 = matrix_tt[idx][:, 1, 0]
-        V_11 = factor_tt[idx][:, 1, 1]
-        C_11 = matrix_tt[idx][:, 1, 1]
-    else:
-        if idx == 0:
-            outer_contraction = np.diag(
-                safe_multi_dot([_tt_core_collapse(core, core) for core in diff[idx + 1:]]).flatten())
+    swp = 0
+    while np.greater_equal(error, tol) and swp < num_swps:
+        if 0 < idx < len(factor_tt) - 1:
+            left_contraction = safe_multi_dot([_tt_core_collapse(core, core) for core in diff[:idx]]).reshape(1, -1)
+            right_contraction = safe_multi_dot([_tt_core_collapse(core, core) for core in diff[idx + 1:]]).reshape(-1, 1)
+            outer_contraction = right_contraction @ left_contraction
+            V_00 = factor_tt[idx][:, 0, 0]
+            C_00 = matrix_tt[idx][:, 0, 0]
+            V_01 = factor_tt[idx][:, 0, 1]
+            C_01 = matrix_tt[idx][:, 0, 1]
+            V_10 = factor_tt[idx][:, 1, 0]
+            C_10 = matrix_tt[idx][:, 1, 0]
+            V_11 = factor_tt[idx][:, 1, 1]
+            C_11 = matrix_tt[idx][:, 1, 1]
         else:
-            outer_contraction = np.diag(
-                safe_multi_dot([_tt_core_collapse(core, core) for core in diff[:idx]]).flatten())
-        V_00 = np.diag(factor_tt[idx][:, 0, 0].flatten())
-        C_00 = np.diag(matrix_tt[idx][:, 0, 0].flatten())
-        V_10 = np.diag(factor_tt[idx][:, 1, 0].flatten())
-        C_10 = np.diag(matrix_tt[idx][:, 1, 0].flatten())
-        V_01 = np.diag(factor_tt[idx][:, 0, 1].flatten())
-        C_01 = np.diag(matrix_tt[idx][:, 0, 1].flatten())
-        V_11 = np.diag(factor_tt[idx][:, 1, 1].flatten())
-        C_11 = np.diag(matrix_tt[idx][:, 1, 1].flatten())
+            if idx == 0:
+                outer_contraction = np.diag(
+                    safe_multi_dot([_tt_core_collapse(core, core) for core in diff[idx + 1:]]).flatten())
+            else:
+                outer_contraction = np.diag(
+                    safe_multi_dot([_tt_core_collapse(core, core) for core in diff[:idx]]).flatten())
+            V_00 = np.diag(factor_tt[idx][:, 0, 0].flatten())
+            C_00 = np.diag(matrix_tt[idx][:, 0, 0].flatten())
+            V_10 = np.diag(factor_tt[idx][:, 1, 0].flatten())
+            C_10 = np.diag(matrix_tt[idx][:, 1, 0].flatten())
+            V_01 = np.diag(factor_tt[idx][:, 0, 1].flatten())
+            C_01 = np.diag(matrix_tt[idx][:, 0, 1].flatten())
+            V_11 = np.diag(factor_tt[idx][:, 1, 1].flatten())
+            C_11 = np.diag(matrix_tt[idx][:, 1, 1].flatten())
 
-    m, n = C_00.shape
-    p, q = V_00.shape
-    p *= p
-    q *= q
+        m, n = C_00.shape
+        p, q = V_00.shape
+        p *= p
+        q *= q
 
-    cv_y = np.array([[i + (m + p) * j for i in range(p)] for j in range(m)]).flatten()
-    cv_x = np.array([[i + (n + q) * j for i in range(q)] for j in range(n)]).flatten()
+        cv_y = np.array([[i + (m + p) * j for i in range(p)] for j in range(m)]).flatten()
+        cv_x = np.array([[i + (n + q) * j for i in range(q)] for j in range(n)]).flatten()
 
-    vc_y = np.array([[i + (m + p) * j for i in range(m)] for j in range(p)]).flatten()
-    vc_x = np.array([[i + (n + q) * j for i in range(n)] for j in range(q)]).flatten()
+        vc_y = np.array([[i + (m + p) * j for i in range(m)] for j in range(p)]).flatten()
+        vc_x = np.array([[i + (n + q) * j for i in range(n)] for j in range(q)]).flatten()
 
-    vv_y = np.array([[i + (m + p) * j for i in range(p)] for j in range(p)]).flatten()
-    vv_x = np.array([[i + (n + q) * j for i in range(q)] for j in range(q)]).flatten()
+        vv_y = np.array([[i + (m + p) * j for i in range(p)] for j in range(p)]).flatten()
+        vv_x = np.array([[i + (n + q) * j for i in range(q)] for j in range(q)]).flatten()
 
-    A_22 = outer_contraction[np.ix_(cv_x + n, cv_y + m)]
-    A_33 = outer_contraction[np.ix_(n * (n + q) + vc_x, m * (m + p) + vc_y)]
-    A_44 = outer_contraction[np.ix_(vv_x + n + n * (n + q), vv_y + m + m * (m + p))]
-    vec_00 = _tt_burer_monteiro_grad(A_22, A_33, A_44, C_00, C_01, C_10, C_11, V_00, V_01, V_10, V_11)
-    vec_01 = _tt_burer_monteiro_grad(A_22, A_33, A_44, C_11, C_10, C_01, C_00, V_01, V_00, V_11, V_10)
-    vec_10 = _tt_burer_monteiro_grad(A_22, A_33, A_44, C_00, C_01, C_10, C_11, V_10, V_11, V_00, V_01)
-    vec_11 = _tt_burer_monteiro_grad(A_22, A_33, A_44, C_11, C_10, C_01, C_00, V_11, V_10, V_01, V_00)
+        A_22 = outer_contraction[np.ix_(cv_x + n, cv_y + m)]
+        A_33 = outer_contraction[np.ix_(n * (n + q) + vc_x, m * (m + p) + vc_y)]
+        A_44 = outer_contraction[np.ix_(vv_x + n + n * (n + q), vv_y + m + m * (m + p))]
+        vec_00 = _tt_burer_monteiro_grad(A_22, A_33, A_44, C_00, C_01, C_10, C_11, V_00, V_01, V_10, V_11)
+        vec_11 = _tt_burer_monteiro_grad(A_22, A_33, A_44, C_11, C_10, C_01, C_00, V_11, V_10, V_01, V_00)
+        if idx == 0 and is_block:
+            vec_01 = np.zeros(xr_ip1**2)
+            vec_10 = np.zeros(xr_ip1**2)
+        else:
+            vec_01 = _tt_burer_monteiro_grad(A_22, A_33, A_44, C_11, C_10, C_01, C_00, V_01, V_00, V_11, V_10)
+            vec_10 = _tt_burer_monteiro_grad(A_22, A_33, A_44, C_00, C_01, C_10, C_11, V_10, V_11, V_00, V_01)
 
-    if 0 < idx < len(factor_tt) - 1:
-        factor_tt[idx][:, 0, 0, :] -= lr * vec_00.reshape(xr_i, xr_ip1)
-        factor_tt[idx][:, 0, 1, :] -= lr * vec_01.reshape(xr_i, xr_ip1)
-        factor_tt[idx][:, 1, 0, :] -= lr * vec_10.reshape(xr_i, xr_ip1)
-        factor_tt[idx][:, 1, 1, :] -= lr * vec_11.reshape(xr_i, xr_ip1)
-    else:
-        r = xr_ip1 if idx == 0 else xr_i
-        a = 0 if idx == 0 else -1
-        factor_tt[idx][:, 0, 0, :] -= lr * np.expand_dims(np.diagonal(vec_00.reshape(r, r)), axis=a)
-        factor_tt[idx][:, 0, 1, :] -= lr * np.expand_dims(np.diagonal(vec_01.reshape(r, r)), axis=a)
-        factor_tt[idx][:, 1, 0, :] -= lr * np.expand_dims(np.diagonal(vec_10.reshape(r, r)), axis=a)
-        factor_tt[idx][:, 1, 1, :] -= lr * np.expand_dims(np.diagonal(vec_11.reshape(r, r)), axis=a)
+        if 0 < idx < len(factor_tt) - 1:
+            factor_tt[idx][:, 0, 0, :] -= local_lr * vec_00.reshape(xr_i, xr_ip1)
+            factor_tt[idx][:, 0, 1, :] -= local_lr * vec_01.reshape(xr_i, xr_ip1)
+            factor_tt[idx][:, 1, 0, :] -= local_lr * vec_10.reshape(xr_i, xr_ip1)
+            factor_tt[idx][:, 1, 1, :] -= local_lr * vec_11.reshape(xr_i, xr_ip1)
+        else:
+            r = xr_ip1 if idx == 0 else xr_i
+            a = 0 if idx == 0 else -1
+            factor_tt[idx][:, 0, 0, :] -= local_lr * np.expand_dims(np.diagonal(vec_00.reshape(r, r)), axis=a)
+            factor_tt[idx][:, 1, 1, :] -= local_lr * np.expand_dims(np.diagonal(vec_11.reshape(r, r)), axis=a)
+            factor_tt[idx][:, 0, 1, :] -= local_lr * np.expand_dims(np.diagonal(vec_01.reshape(r, r)), axis=a)
+            factor_tt[idx][:, 1, 0, :] -= local_lr * np.expand_dims(np.diagonal(vec_10.reshape(r, r)), axis=a)
+        local_lr *= 0.9
+        swp += 1
 
     return factor_tt, lr, error
 
@@ -855,22 +862,38 @@ def tt_to_ring(train_tt):
     return train_tt
 
 
-def tt_burer_monteiro_factorisation(psd_tt, max_iter=15):
+def _core_tril(core):
+    core[:, 0, 0, :] = np.tril(core[:, 0, 0, :])
+    core[:, 0, 1, :] = np.tril(core[:, 0, 1, :])
+    core[:, 1, 0, :] = np.tril(core[:, 1, 0, :])
+    core[:, 1, 1, :] = np.tril(core[:, 1, 1, :])
+    return core
+
+
+def tt_burer_monteiro_factorisation(psd_tt, cores=None, is_block=False, num_swps=5, max_iter=20):
     tt_train = tt_scale(-1, psd_tt)
-    cores = tt_random_gaussian([int(np.ceil(np.sqrt(r))) for r in tt_ranks(tt_train)], shape=(2, 2))
+    if cores is None:
+        cores = tt_random_gaussian([int(np.ceil(np.sqrt(r)))+1 for r in tt_ranks(tt_train)], shape=(2, 2))
     cores = tt_rl_orthogonalise(cores)
+    if is_block:
+        cores[0][:, 0, 1] = 0
+        cores[0][:, 1, 0] = 0
     lr = 0.5
     err = np.inf
     for iteration in range(max_iter):
         for k in range(len(cores)-1):
             print(f"Core number {k}")
             cores = core_forward_orthogonalise(k, cores)
-            cores, lr, err = _tt_bm_core_wise(tt_train, cores, k+1, err, lr=lr)
+            cores, lr, err = _tt_bm_core_wise(tt_train, cores, k+1, err, is_block=is_block, lr=lr, num_swps=num_swps)
         for k in range(len(cores)-1, 0, -1):
             print(f"Core number {k}")
             cores = core_backward_orthogonalise(k, cores)
-            cores, lr, err = _tt_bm_core_wise(tt_train, cores, k-1, err, lr=lr)
+            cores, lr, err = _tt_bm_core_wise(tt_train, cores, k-1, err, is_block=is_block, lr=lr, num_swps=num_swps)
 
+    comp = tt_mat_mat_mul(cores, tt_transpose(cores))
+    diff = tt_add(tt_train, comp)
+    error = tt_inner_prod(diff, diff)
+    print(f"Final error: {error}")
     return cores
 
 
