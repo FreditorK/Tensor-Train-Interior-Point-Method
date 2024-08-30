@@ -884,10 +884,14 @@ def _core_tril(core):
     return core
 
 
-def tt_burer_monteiro_factorisation(psd_tt, cores=None, is_block=False, num_swps=20, max_iter=22, tol=1e-5):
+def tt_burer_monteiro_factorisation(psd_tt, cores=None, is_block=False, num_swps=10, max_iter=5, tol=1e-5):
     tt_train = tt_scale(-1, psd_tt)
+    target_ranks = [int(np.ceil(np.sqrt(r)))+1 for r in tt_ranks(tt_train)],
     if cores is None:
-        cores = tt_random_gaussian([int(np.ceil(np.sqrt(r)))+1 for r in tt_ranks(tt_train)], shape=(2, 2))
+        cores = tt_random_gaussian(target_ranks, shape=(2, 2))
+    else:
+        add_on_ranks = [int(max(np.ceil(np.sqrt(r) - c_r), 0)) + 1 for c_r, r in zip(tt_ranks(cores), tt_ranks(tt_train))]
+        cores = tt_add(cores, tt_random_gaussian(add_on_ranks, shape=(2, 2)))
     cores = tt_rl_orthogonalise(cores)
     if is_block:
         cores[0][:, 0, 1] = 0
@@ -904,14 +908,10 @@ def tt_burer_monteiro_factorisation(psd_tt, cores=None, is_block=False, num_swps
             cores = core_backward_orthogonalise(k, cores)
             cores, lr, err = _tt_bm_core_wise(tt_train, cores, k-1, err, is_block=is_block, lr=lr, num_swps=num_swps, tol=0.1*tol)
         if np.less_equal(err, tol):
+            print(f"Converged in {iteration} iterations")
             break
 
-    comp = tt_mat_mat_mul(cores, tt_transpose(cores))
-    diff = tt_add(tt_train, comp)
-    error = tt_inner_prod(diff, diff)
-    print(f"Final error: {error}")
-
-    return cores
+    return cores, err
 
 
 def _core_op_from_matrix(core):

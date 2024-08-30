@@ -118,13 +118,22 @@ def _tt_ipm_newton_step(obj_tt, linear_op_tt, bias_tt, XZ_tt, Y_tt, beta=5e-4):
     return tt_mat(Delta_tt, shape=(2, 2))
 
 
-def _tt_psd_projection(XZ_tt, Delta_XZ_tt, prev_V_tt):
+def _tt_psd_homotopy_step(XZ_tt, Delta_XZ_tt, prev_V_tt, tol=1e-5):
     #XZ_tt = tt_add(XZ_tt, tt_scale(0.0, Delta_XZ_tt))
     # Projection to PSD-cone
     #print(np.round(tt_matrix_to_matrix(Delta_XZ_tt), decimals=2))
-    XZ_tt = tt_rank_reduce(tt_add(XZ_tt, tt_scale(0.4, Delta_XZ_tt)))
-    V_tt = tt_burer_monteiro_factorisation(XZ_tt, is_block=True)
-    print(tt_inner_prod(V_tt, V_tt))
+    step_size = 0.05
+    V_tt = prev_V_tt
+    for _ in range(10):
+        new_XZ_tt = tt_rank_reduce(tt_add(XZ_tt, tt_scale(step_size, Delta_XZ_tt)))
+        print(tt_ranks(new_XZ_tt))
+        prev_V_tt, err = tt_burer_monteiro_factorisation(new_XZ_tt, cores=prev_V_tt, is_block=True, tol=tol)
+        if np.less_equal(err, tol):
+            V_tt = prev_V_tt
+            step_size += 0.05
+        else:
+            break
+    print(f"Final step size: {step_size}")
     return V_tt
 
 
@@ -152,7 +161,7 @@ def tt_ipm(obj_tt, linear_op_tt, bias_tt):
         Delta_XZ_tt = _get_xz_block(Delta_tt)
         #D = np.round(tt_matrix_to_matrix(Delta_XZ_tt), decimals=2)
         Delta_XZ_tt = _symmetrisation(Delta_XZ_tt)
-        V_tt = _tt_psd_projection(XZ_tt, Delta_XZ_tt, V_tt)
+        V_tt = _tt_psd_homotopy_step(XZ_tt, Delta_XZ_tt, V_tt)
         # TODO: get step size that minimises dual residual
         #Y_tt = tt_rank_reduce(tt_add(Y_tt, Delta_Y_tt))
     return V_tt, Y_tt
