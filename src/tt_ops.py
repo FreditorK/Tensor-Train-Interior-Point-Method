@@ -721,24 +721,32 @@ def _tt_burer_monteiro_grad(A_22, A_33, A_44, C_00, C_01, C_10, _, V_00, V_01, V
     K_np = I[np.arange(n * p).reshape((n, p), order="F").T.ravel(order="F"), :n * p]
     K_qm = I[np.arange(q * m).reshape((q, m), order="F").T.ravel(order="F"), :q * m]
     K_orig_qp = I[np.arange(orig_q * orig_p).reshape((orig_q, orig_p), order="F").T.ravel(order="F"), :orig_q * orig_p]
+    # q orig_p x q orig_p = q orig_p x q orig_p @ q orig_p x q orig_p
     H_V_00 = np.kron(I[:orig_q, :orig_q], K_orig_qp) @ np.kron(vec(V_00), I[:orig_q, :orig_q])
     H_V_01 = np.kron(I[:orig_q, :orig_q], K_orig_qp) @ np.kron(vec(V_01), I[:orig_q, :orig_q])
+    # orig_q p x orig_q p = orig_q p x orig_q p @ orig_q p x orig_q p
     G_V_00 = np.kron(K_orig_qp, I[:orig_p, :orig_p]) @ np.kron(I[:orig_p, :orig_p], vec(V_00))
     G_V_01 = np.kron(K_orig_qp, I[:orig_p, :orig_p]) @ np.kron(I[:orig_p, :orig_p], vec(V_01))
+    # p x m n q = p x m n q @ m n q x m n q
     S_22 = A_22.T.reshape(p, m * n * q, order="F") @ np.kron(I[:n, :n], K_qm)
+    # m n p x q = m n p x m n p @ m n p x q
     S_33 = np.kron(K_np.T, I[:m, :m]) @ A_33.T.reshape(m * n * p, q, order="F")
-    L_22C_00 = S_22 @ np.kron(vec(C_00), I[:q, :q])
-    L_22C_01 = S_22 @ np.kron(vec(C_01), I[:q, :q])
-    L_22C_10 = S_22 @ np.kron(vec(C_10), I[:q, :q])
-    L_33C_00 = np.kron(I[:p, :p], vec(C_00).T) @ S_33
-    L_33C_01 = np.kron(I[:p, :p], vec(C_01).T) @ S_33
-    L_33C_10 = np.kron(I[:p, :p], vec(C_10).T) @ S_33
+    # p x q = p x m n q @ m n q x q
+    L_22C_00 = (S_22.reshape(p*q, -1, order="F") @ vec(C_00)).reshape(p, q, order="F")
+    L_22C_01 = (S_22.reshape(p*q, -1, order="F") @ vec(C_01)).reshape(p, q, order="F")
+    L_22C_10 = (S_22.reshape(p*q, -1, order="F") @ vec(C_10)).reshape(p, q, order="F")
+    # p x q = p x m n p x m n p @ m n p x q
+    L_33C_00 = (vec(C_00).T @ S_33.reshape(-1, p*q, order="F")).reshape(p, q, order="F")
+    L_33C_01 = (vec(C_01).T @ S_33.reshape(-1, p*q, order="F")).reshape(p, q, order="F")
+    L_33C_10 = (vec(C_10).T @ S_33.reshape(-1, p*q, order="F")).reshape(p, q, order="F")
 
     H_44 = I[:q ** 2, :q ** 2].reshape(q ** 3, q, order="F")
     G_44 = I[:p ** 2, :p ** 2].reshape(p ** 3, p, order="F")
 
-    S_44_1 = H_44.T @ np.kron(I[:q, :q], A_44)
-    S_44_2 = np.kron(A_44, I[:p, :p]) @ G_44
+    # q x q p^2 = q x q^3 @ q^3 x q p^2
+    S_44_1 = A_44.reshape(q, q*p**2)
+    # p q^2 x p = p q^2 x p^3 @ p^3 x p
+    S_44_2 = A_44.reshape(p*q**2, p)
 
     pair_1 = np.kron(V_00, V_00) + np.kron(V_10, V_10)
     pair_2 = np.kron(V_01, V_00) + np.kron(V_11, V_10)
@@ -756,12 +764,14 @@ def _tt_burer_monteiro_grad(A_22, A_33, A_44, C_00, C_01, C_10, _, V_00, V_01, V
 
     L = mat(L_1 + L_2 + L_3, V_00.shape)
 
-    return L + (
+    B = (
         G_V_00.T @ (L_22C_00 + L_33C_00).reshape(-1, orig_q, order="F")
         + (L_22C_00 + L_33C_00).reshape(orig_p, -1, order="F") @ H_V_00
         + (L_22C_01 + L_33C_01).reshape(orig_p, -1, order="F") @ H_V_01
         + G_V_01.T @ (L_22C_10 + L_33C_10).reshape(-1, orig_q, order="F")
     )
+
+    return L + B
 
 
 def _tt_bm_core_wise(matrix_tt, factor_tt, idx, prev_error, is_block=False, lr=0.5, num_swps=20, gamma=0.9, tol=1e-3):
@@ -777,7 +787,9 @@ def _tt_bm_core_wise(matrix_tt, factor_tt, idx, prev_error, is_block=False, lr=0
     v_01_grad = 0
     v_10_grad = 0
     v_11_grad = 0
-    while np.greater_equal(error, tol) and swp < num_swps:
+    # TODO: Better memory usage and complexity if we used stacks for diff or even rather left_contraction and right_contraction
+    local_err = error
+    while np.greater_equal(local_err, tol) and swp < num_swps:
         if 0 < idx < len(factor_tt) - 1:
             left_contraction = safe_multi_dot([_tt_core_collapse(core, core) for core in diff[:idx]]).reshape(1, -1)
             right_contraction = safe_multi_dot([_tt_core_collapse(core, core) for core in diff[idx + 1:]]).reshape(-1, 1)
@@ -853,6 +865,7 @@ def _tt_bm_core_wise(matrix_tt, factor_tt, idx, prev_error, is_block=False, lr=0
         factor_tt[idx][:, 0, 1, :] -= v_01_grad
         factor_tt[idx][:, 1, 0, :] -= v_10_grad
         factor_tt[idx][:, 1, 1, :] -= v_11_grad
+        local_err = (np.linalg.norm(v_00_grad)+np.linalg.norm(v_01_grad)+np.linalg.norm(v_10_grad)+np.linalg.norm(v_11_grad))/4
 
         local_lr *= 0.9
         swp += 1
@@ -886,11 +899,11 @@ def _core_tril(core):
 
 def tt_burer_monteiro_factorisation(psd_tt, cores=None, is_block=False, num_swps=10, max_iter=5, tol=1e-5):
     tt_train = tt_scale(-1, psd_tt)
-    target_ranks = [int(np.ceil(np.sqrt(r)))+1 for r in tt_ranks(tt_train)],
+    target_ranks = [int(np.ceil(np.sqrt(r)))+1 for r in tt_ranks(tt_train)]
     if cores is None:
         cores = tt_random_gaussian(target_ranks, shape=(2, 2))
     else:
-        add_on_ranks = [int(max(np.ceil(np.sqrt(r) - c_r), 0)) + 1 for c_r, r in zip(tt_ranks(cores), tt_ranks(tt_train))]
+        add_on_ranks = [max(r - c_r, 0) for c_r, r in zip(tt_ranks(cores), target_ranks)]
         cores = tt_add(cores, tt_random_gaussian(add_on_ranks, shape=(2, 2)))
     cores = tt_rl_orthogonalise(cores)
     if is_block:
