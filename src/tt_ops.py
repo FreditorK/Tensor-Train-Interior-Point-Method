@@ -749,21 +749,14 @@ def _tt_burer_monteiro_grad(A_22, A_33, A_44, C_00, C_01, C_10, _, V_00, V_01, V
     D_3 = vec(G_44.T @ (pair_3 @ A_44.reshape(q, q*p**2)).reshape(p ** 3, q, order="F")
               + (A_44.reshape(p*q**2, p) @ pair_3).reshape(p, q ** 3, order="F") @ H_44).T
 
-    L_1 = D_1 @ (np.kron(H_V_00, I[:orig_p, :orig_p]) + np.kron(I[:orig_q, :orig_q], G_V_00))
-    L_2 = D_2 @ np.kron(H_V_01, I[:orig_p, :orig_p])
-    # q p @ q p x orig_q orig_p
-    L_3 = D_3 @ np.kron(I[:orig_q, :orig_q], G_V_01)
-
-    L = mat(L_1 + L_2 + L_3, V_00.shape)
-
-    B = (
-        G_V_00.T @ L_C_00.reshape(orig_q*p, orig_q, order="F")
-        + L_C_00.reshape(orig_p, orig_p*q, order="F") @ H_V_00
-        + L_C_01.reshape(orig_p, orig_p*q, order="F") @ H_V_01
-        + G_V_01.T @ L_C_10.reshape(orig_q*p, orig_q, order="F")
+    grad = (
+        G_V_00.T @ (L_C_00.reshape(orig_q*p, orig_q, order="F") + D_1.reshape(orig_q * p, orig_q, order="F"))
+        + (L_C_00.reshape(orig_p, orig_p*q, order="F") + D_1.reshape(orig_p, q*orig_p, order="F")) @ H_V_00
+        + (L_C_01.reshape(orig_p, orig_p*q, order="F") + D_2.reshape(orig_p, q*orig_p, order="F")) @ H_V_01
+        + G_V_01.T @ (L_C_10.reshape(orig_q*p, orig_q, order="F") + D_3.reshape(orig_q * p, orig_q, order="F"))
     )
 
-    return L + B
+    return grad
 
 
 def _tt_bm_core_wise(matrix_tt, factor_tt, idx, prev_error, is_block=False, lr=0.5, num_swps=20, gamma=0.9, tol=1e-3):
