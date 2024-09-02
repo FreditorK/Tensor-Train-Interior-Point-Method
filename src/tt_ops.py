@@ -717,43 +717,48 @@ def _tt_burer_monteiro_grad(A_22, A_33, A_44, C_00, C_01, C_10, _, V_00, V_01, V
     orig_p, orig_q = V_00.shape
     p = orig_p ** 2
     q = orig_q ** 2
-    I = np.eye(max(q ** 2, p ** 2))
+    I = np.eye(max(q*m, n*p))
     K_np = I[np.arange(n * p).reshape((n, p), order="F").ravel(), :n * p]
     K_qm = I[np.arange(q * m).reshape((q, m), order="F").ravel(), :q * m]
     K_orig_qp = I[np.arange(orig_q * orig_p).reshape((orig_q, orig_p), order="F").ravel(), :orig_q * orig_p]
-    # q orig_p x orig_q = q orig_p x q orig_p @ q orig_p x orig_q
-    H_V_00 = np.kron(I[:orig_q, :orig_q], K_orig_qp) @ np.kron(vec(V_00), I[:orig_q, :orig_q])
-    H_V_01 = np.kron(I[:orig_q, :orig_q], K_orig_qp) @ np.kron(vec(V_01), I[:orig_q, :orig_q])
+    # q orig_p x orig_q = q orig_p x q orig_p @ q orig_p x orig_q   # ikjl = orig_qp x orig_q x orig_qp x orig_q
+    H_V_00 = np.einsum('ijt, jl->ilt', K_orig_qp.reshape(orig_q*orig_p, orig_p, orig_q), V_00).reshape(orig_p * q, orig_q, order="F")
+    H_V_01 = np.einsum('ijt, jl->ilt', K_orig_qp.reshape(orig_q*orig_p, orig_p, orig_q), V_01).reshape(orig_p * q, orig_q, order="F")
     # orig_q p x orig_p = orig_q p x orig_q p @ orig_q p x orig_p
-    G_V_00 = np.kron(K_orig_qp, I[:orig_p, :orig_p]) @ np.kron(I[:orig_p, :orig_p], vec(V_00))
-    G_V_01 = np.kron(K_orig_qp, I[:orig_p, :orig_p]) @ np.kron(I[:orig_p, :orig_p], vec(V_01))
+    G_V_00 = np.einsum('ijt, lj->ilt', K_orig_qp.reshape(orig_q*orig_p, orig_q, orig_p, order="F"), V_00).reshape(orig_q * p, orig_p)
+    G_V_01 = np.einsum('ijt, lj->ilt', K_orig_qp.reshape(orig_q*orig_p, orig_q, orig_p, order="F"), V_01).reshape(orig_q * p, orig_p)
     # p x m n q = p x m n q @ m n q x m n q
-    S = ((A_22.T.reshape(p, m * n * q, order="F") @ np.kron(I[:n, :n], K_qm)).reshape(p*q, m*n, order="F")
-            + (np.kron(K_np.T, I[:m, :m]) @ A_33.T.reshape(m * n * p, q, order="F")).reshape(m*n, p*q, order="F").T)
+    S = (
+        np.einsum('ijt, lj->ilt', A_22.T.reshape(p, m * q, n, order="F"), K_qm.T).reshape(p * q, m * n, order="F")
+        + np.einsum('ijt, jl->ilt', A_33.T.reshape(m, n*p, q, order="F"), K_np).reshape(m*n, p*q, order="F").T
+    )
     # p x q = p x m n q @ m n q x q
-    L_C_00 = S @ vec(C_00)
-    L_C_01 = S @ vec(C_01)
-    L_C_10 = S @ vec(C_10)
-
-    H_44 = I[:q ** 2, :q ** 2].reshape(q ** 3, q, order="F")
-    G_44 = I[:p ** 2, :p ** 2].reshape(p ** 3, p, order="F")
+    L_C_00 = S @ C_00.reshape(m*n, 1, order="F")
+    L_C_01 = S @ C_01.reshape(m*n, 1, order="F")
+    L_C_10 = S @ C_10.reshape(m*n, 1, order="F")
 
     pair_1 = np.kron(V_00, V_00) + np.kron(V_10, V_10)
     pair_2 = np.kron(V_01, V_00) + np.kron(V_11, V_10)
     pair_3 = np.kron(V_00, V_01) + np.kron(V_10, V_11)
 
-    D_1 = vec(G_44.T @ (pair_1 @ A_44.reshape(q, q*p**2)).reshape(p ** 3, q, order="F")
-              + (A_44.reshape(p*q**2, p) @ pair_1).reshape(p, q ** 3, order="F") @ H_44).T
-    D_2 = vec(G_44.T @ (pair_2 @ A_44.reshape(q, q*p**2)).reshape(p ** 3, q, order="F")
-              + (A_44.reshape(p*q**2, p) @ pair_2).reshape(p, q ** 3, order="F") @ H_44).T
-    D_3 = vec(G_44.T @ (pair_3 @ A_44.reshape(q, q*p**2)).reshape(p ** 3, q, order="F")
-              + (A_44.reshape(p*q**2, p) @ pair_3).reshape(p, q ** 3, order="F") @ H_44).T
+    D_1 = (
+        np.trace((pair_1 @ A_44.reshape(q, q*p**2)).reshape(p, p, p, q, order="F"), axis1=0, axis2=2)
+        + np.trace((A_44.reshape(p*q**2, p) @ pair_1).reshape(p, q, q, q, order="F"), axis1=1, axis2=3)
+    ).reshape(p*q, 1, order="F")
+    D_2 = (
+        np.trace((pair_2 @ A_44.reshape(q, q*p**2)).reshape(p, p, p, q, order="F"), axis1=0, axis2=2)
+        + np.trace((A_44.reshape(p*q**2, p) @ pair_2).reshape(p, q, q, q, order="F"), axis1=1, axis2=3)
+    ).reshape(p*q, 1, order="F")
+    D_3 = (
+        np.trace((pair_3 @ A_44.reshape(q, q*p**2)).reshape(p, p, p, q, order="F"), axis1=0, axis2=2)
+        + np.trace((A_44.reshape(p*q**2, p) @ pair_3).reshape(p, q, q, q, order="F"), axis1=1, axis2=3)
+    ).reshape(p*q, 1, order="F")
 
     grad = (
-        G_V_00.T @ (L_C_00.reshape(orig_q*p, orig_q, order="F") + D_1.reshape(orig_q * p, orig_q, order="F"))
-        + (L_C_00.reshape(orig_p, orig_p*q, order="F") + D_1.reshape(orig_p, q*orig_p, order="F")) @ H_V_00
-        + (L_C_01.reshape(orig_p, orig_p*q, order="F") + D_2.reshape(orig_p, q*orig_p, order="F")) @ H_V_01
-        + G_V_01.T @ (L_C_10.reshape(orig_q*p, orig_q, order="F") + D_3.reshape(orig_q * p, orig_q, order="F"))
+        G_V_00.T @ (L_C_00 + D_1).reshape(orig_q * p, orig_q, order="F")
+        + (L_C_00 + D_1).reshape(orig_p, q*orig_p, order="F") @ H_V_00
+        + (L_C_01 + D_2).reshape(orig_p, q*orig_p, order="F") @ H_V_01
+        + G_V_01.T @ (L_C_10 + D_3).reshape(orig_q * p, orig_q, order="F")
     )
 
     return grad
