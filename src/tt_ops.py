@@ -753,7 +753,7 @@ def _tt_burer_monteiro_grad(A_22, A_33, A_44, C_00, C_01, C_10, _, V_00, V_01, V
     return G_0 + H_0 + H_1 + G_1
 
 
-def _tt_bm_core_wise(matrix_tt, factor_tt, outer_contraction, index_set, idx, is_block=False, lr=0.5, num_swps=20, gamma=0.9, tol=1e-5):
+def _tt_bm_core_wise(matrix_tt, factor_tt, A_22, A_33, A_44, idx, is_block=False, lr=0.5, num_swps=20, gamma=0.9, tol=1e-5):
     xr_i, _, _, xr_ip1 = factor_tt[idx].shape
     r = xr_ip1 if idx == 0 else xr_i
     ax = 0 if idx == 0 else -1
@@ -762,9 +762,6 @@ def _tt_bm_core_wise(matrix_tt, factor_tt, outer_contraction, index_set, idx, is
     v_01_grad = 0
     v_10_grad = 0
     v_11_grad = 0
-    A_22 = outer_contraction[index_set[0]]
-    A_33 = outer_contraction[index_set[1]]
-    A_44 = outer_contraction[index_set[2]]
     if 0 < idx < len(factor_tt) - 1:
         C_00 = matrix_tt[idx][:, 0, 0]
         C_01 = matrix_tt[idx][:, 0, 1]
@@ -855,15 +852,15 @@ def tt_burer_monteiro_factorisation(psd_tt, solution_tt=None, is_block=False, nu
     solution_shapes = [(solution_tt[0].shape[-1]**2, solution_tt[0].shape[-1]**2)] + [(c.shape[0]**2, c.shape[-1]**2) for c in solution_tt[1:-1]] + [(solution_tt[-1].shape[0]**2, solution_tt[-1].shape[0]**2)]
     index_set = [
         (
-            np.ix_(
+            (
                 np.array([[i + (n + q) * j for i in range(q)] for j in range(n)]).flatten() + n,
                 np.array([[i + (m + p) * j for i in range(p)] for j in range(m)]).flatten() + m
             ),
-            np.ix_(
+            (
                 np.array([[i + (n + q) * j for i in range(n)] for j in range(q)]).flatten() + n * (n + q),
                 np.array([[i + (m + p) * j for i in range(m)] for j in range(p)]).flatten() + m * (m + p)
             ),
-            np.ix_(
+            (
                 np.array([[i + (n + q) * j for i in range(q)] for j in range(q)]).flatten() + n * (n + q + 1),
                 np.array([[i + (m + p) * j for i in range(p)] for j in range(p)]).flatten() + m * (m + p + 1)
             )
@@ -879,10 +876,15 @@ def tt_burer_monteiro_factorisation(psd_tt, solution_tt=None, is_block=False, nu
             if k+1 != terminal_idx:
                 left_contraction = np.dot(left_contraction, diff[k])
                 right_contraction = safe_multi_dot(diff[k + 2:])
-                outer_contraction = right_contraction.reshape(-1, 1) @ left_contraction.reshape(1, -1)
+                A_22 = right_contraction.reshape(-1, 1)[index_set[k+1][0][0]] @ left_contraction.reshape(1, -1)[:, index_set[k+1][0][1]]
+                A_33 = right_contraction.reshape(-1, 1)[index_set[k+1][1][0]] @ left_contraction.reshape(1, -1)[:, index_set[k+1][1][1]]
+                A_44 = right_contraction.reshape(-1, 1)[index_set[k+1][2][0]] @ left_contraction.reshape(1, -1)[:, index_set[k+1][2][1]]
             else:
-                outer_contraction = np.diag(np.dot(left_contraction, diff[k]).flatten())
-            solution_tt, lr = _tt_bm_core_wise(train_tt, solution_tt, outer_contraction, index_set[k+1], k + 1, is_block=is_block, lr=lr, num_swps=num_swps, tol=0.1 * tol)
+                left_contraction = np.dot(left_contraction, diff[k])
+                A_22 = np.diag(left_contraction.reshape(1, -1)[:, index_set[k + 1][0][1]].flatten())
+                A_33 = np.diag(left_contraction.reshape(1, -1)[:,index_set[k + 1][1][1]].flatten())
+                A_44 = np.diag(left_contraction.reshape(1, -1)[:, index_set[k + 1][2][1]].flatten())
+            solution_tt, lr = _tt_bm_core_wise(train_tt, solution_tt, A_22, A_33, A_44, k + 1, is_block=is_block, lr=lr, num_swps=num_swps, tol=0.1 * tol)
         right_contraction = 1
         for k in range(terminal_idx, 0, -1):
             solution_tt = core_backward_orthogonalise(k, solution_tt)
@@ -890,10 +892,15 @@ def tt_burer_monteiro_factorisation(psd_tt, solution_tt=None, is_block=False, nu
             if k-1 != 0:
                 left_contraction = safe_multi_dot(diff[:k - 1]).reshape(1, -1)
                 right_contraction = np.dot(diff[k], right_contraction)
-                outer_contraction = right_contraction @ left_contraction
+                A_22 = right_contraction.reshape(-1, 1)[index_set[k - 1][0][0]] @ left_contraction.reshape(1, -1)[:, index_set[k - 1][0][1]]
+                A_33 = right_contraction.reshape(-1, 1)[index_set[k - 1][1][0]] @ left_contraction.reshape(1, -1)[:, index_set[k - 1][1][1]]
+                A_44 = right_contraction.reshape(-1, 1)[index_set[k - 1][2][0]] @ left_contraction.reshape(1, -1)[:, index_set[k - 1][2][1]]
             else:
-                outer_contraction = np.diag(np.dot(diff[k], right_contraction).flatten())
-            solution_tt, lr = _tt_bm_core_wise(train_tt, solution_tt, outer_contraction, index_set[k-1], k - 1, is_block=is_block, lr=lr, num_swps=num_swps, tol=0.1 * tol)
+                right_contraction = np.dot(diff[k], right_contraction)
+                A_22 = np.diag(right_contraction.reshape(1, -1)[:, index_set[k - 1][0][1]].flatten())
+                A_33 = np.diag(right_contraction.reshape(1, -1)[:, index_set[k - 1][1][1]].flatten())
+                A_44 = np.diag(right_contraction.reshape(1, -1)[:, index_set[k - 1][2][1]].flatten())
+            solution_tt, lr = _tt_bm_core_wise(train_tt, solution_tt, A_22, A_33, A_44, k - 1, is_block=is_block, lr=lr, num_swps=num_swps, tol=0.1 * tol)
 
         diff[0] = _adjust_diff(train_tt, solution_tt, 0)
         err = safe_multi_dot(diff).item()
@@ -903,6 +910,7 @@ def tt_burer_monteiro_factorisation(psd_tt, solution_tt=None, is_block=False, nu
         if np.less_equal(err, tol):
             print(f"Converged in {iteration} iterations")
             break
+
     return solution_tt, prev_err
 
 
