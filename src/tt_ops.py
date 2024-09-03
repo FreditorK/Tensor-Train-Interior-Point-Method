@@ -753,7 +753,7 @@ def _tt_burer_monteiro_grad(A_22, A_33, A_44, C_00, C_01, C_10, _, V_00, V_01, V
     return G_0 + H_0 + H_1 + G_1
 
 
-def _tt_bm_core_wise(matrix_tt, factor_tt, diff, index_set, idx, is_block=False, lr=0.5, num_swps=20, gamma=0.9, tol=1e-5):
+def _tt_bm_core_wise(matrix_tt, factor_tt, outer_contraction, index_set, idx, is_block=False, lr=0.5, num_swps=20, gamma=0.9, tol=1e-5):
     xr_i, _, _, xr_ip1 = factor_tt[idx].shape
     r = xr_ip1 if idx == 0 else xr_i
     ax = 0 if idx == 0 else -1
@@ -762,32 +762,19 @@ def _tt_bm_core_wise(matrix_tt, factor_tt, diff, index_set, idx, is_block=False,
     v_01_grad = 0
     v_10_grad = 0
     v_11_grad = 0
-    # TODO: Better memory usage and complexity if we used stacks for diff or even rather left_contraction and right_contraction
+    A_22 = outer_contraction[index_set[0]]
+    A_33 = outer_contraction[index_set[1]]
+    A_44 = outer_contraction[index_set[2]]
     if 0 < idx < len(factor_tt) - 1:
-        left_contraction = safe_multi_dot(diff[:idx]).reshape(1, -1)
-        right_contraction = safe_multi_dot(diff[idx + 1:]).reshape(-1, 1)
-        outer_contraction = right_contraction @ left_contraction
         C_00 = matrix_tt[idx][:, 0, 0]
         C_01 = matrix_tt[idx][:, 0, 1]
         C_10 = matrix_tt[idx][:, 1, 0]
         C_11 = matrix_tt[idx][:, 1, 1]
     else:
-        if idx == 0:
-            outer_contraction = np.diag(
-                safe_multi_dot(diff[idx + 1:]).flatten()
-            )
-        else:
-            outer_contraction = np.diag(
-                safe_multi_dot(diff[:idx]).flatten()
-            )
         C_00 = np.diag(matrix_tt[idx][:, 0, 0].flatten())
         C_10 = np.diag(matrix_tt[idx][:, 1, 0].flatten())
         C_01 = np.diag(matrix_tt[idx][:, 0, 1].flatten())
         C_11 = np.diag(matrix_tt[idx][:, 1, 1].flatten())
-
-    A_22 = outer_contraction[index_set[0]]
-    A_33 = outer_contraction[index_set[1]]
-    A_44 = outer_contraction[index_set[2]]
 
     for swp in range(num_swps):
         if 0 < idx < len(factor_tt) - 1:
@@ -883,22 +870,36 @@ def tt_burer_monteiro_factorisation(psd_tt, solution_tt=None, is_block=False, nu
         )
         for (m, n), (p, q) in zip(train_shapes, solution_shapes)
     ]
-
+    terminal_idx = len(solution_tt) - 1
     for iteration in range(max_iter):
+        left_contraction = 1
         for k in range(len(solution_tt) - 1):
             solution_tt = core_forward_orthogonalise(k, solution_tt)
             diff[k] = _adjust_diff(train_tt, solution_tt, k)
-            solution_tt, lr = _tt_bm_core_wise(train_tt, solution_tt, diff, index_set[k+1], k + 1, is_block=is_block, lr=lr, num_swps=num_swps, tol=0.1 * tol)
-        for k in range(len(solution_tt) - 1, 0, -1):
+            if k+1 != terminal_idx:
+                left_contraction = np.dot(left_contraction, diff[k])
+                right_contraction = safe_multi_dot(diff[k + 2:])
+                outer_contraction = right_contraction.reshape(-1, 1) @ left_contraction.reshape(1, -1)
+            else:
+                outer_contraction = np.diag(np.dot(left_contraction, diff[k]).flatten())
+            solution_tt, lr = _tt_bm_core_wise(train_tt, solution_tt, outer_contraction, index_set[k+1], k + 1, is_block=is_block, lr=lr, num_swps=num_swps, tol=0.1 * tol)
+        right_contraction = 1
+        for k in range(terminal_idx, 0, -1):
             solution_tt = core_backward_orthogonalise(k, solution_tt)
             diff[k] = _adjust_diff(train_tt, solution_tt, k)
-            solution_tt, lr = _tt_bm_core_wise(train_tt, solution_tt, diff, index_set[k-1], k - 1, is_block=is_block, lr=lr, num_swps=num_swps, tol=0.1 * tol)
+            if k-1 != 0:
+                left_contraction = safe_multi_dot(diff[:k - 1]).reshape(1, -1)
+                right_contraction = np.dot(diff[k], right_contraction)
+                outer_contraction = right_contraction @ left_contraction
+            else:
+                outer_contraction = np.diag(np.dot(diff[k], right_contraction).flatten())
+            solution_tt, lr = _tt_bm_core_wise(train_tt, solution_tt, outer_contraction, index_set[k-1], k - 1, is_block=is_block, lr=lr, num_swps=num_swps, tol=0.1 * tol)
 
-        comp_tt = tt_mat_mat_mul(solution_tt, tt_transpose(solution_tt))
-        diff = [_tt_core_collapse(c, c) for c in tt_add(train_tt, comp_tt)]
+        diff[0] = _adjust_diff(train_tt, solution_tt, 0)
         err = safe_multi_dot(diff).item()
         lr = min(0.99 * (prev_err / err) * lr, 0.2)
         prev_err = err
+        print(f"Error: {err}, {lr}")
         if np.less_equal(err, tol):
             print(f"Converged in {iteration} iterations")
             break
