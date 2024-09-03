@@ -761,53 +761,56 @@ def _tt_bm_core_wise(matrix_tt, factor_tt, diff_tt, idx, is_block=False, lr=0.5,
     v_10_grad = 0
     v_11_grad = 0
     # TODO: Better memory usage and complexity if we used stacks for diff or even rather left_contraction and right_contraction
+    if 0 < idx < len(factor_tt) - 1:
+        left_contraction = safe_multi_dot([_tt_core_collapse(core, core) for core in diff_tt[:idx]]).reshape(1, -1)
+        right_contraction = safe_multi_dot([_tt_core_collapse(core, core) for core in diff_tt[idx + 1:]]).reshape(-1, 1)
+        outer_contraction = right_contraction @ left_contraction
+        C_00 = matrix_tt[idx][:, 0, 0]
+        C_01 = matrix_tt[idx][:, 0, 1]
+        C_10 = matrix_tt[idx][:, 1, 0]
+        C_11 = matrix_tt[idx][:, 1, 1]
+        p, q = factor_tt[idx][:, 1, 1].shape
+    else:
+        if idx == 0:
+            outer_contraction = np.diag(
+                safe_multi_dot([_tt_core_collapse(core, core) for core in diff_tt[idx + 1:]]).flatten())
+        else:
+            outer_contraction = np.diag(
+                safe_multi_dot([_tt_core_collapse(core, core) for core in diff_tt[:idx]]).flatten())
+        C_00 = np.diag(matrix_tt[idx][:, 0, 0].flatten())
+        C_10 = np.diag(matrix_tt[idx][:, 1, 0].flatten())
+        C_01 = np.diag(matrix_tt[idx][:, 0, 1].flatten())
+        C_11 = np.diag(matrix_tt[idx][:, 1, 1].flatten())
+        p, q = np.diag(factor_tt[idx][:, 1, 1].flatten()).shape
+
+    m, n = C_00.shape
+    p *= p
+    q *= q
+
+    cv_y = np.array([[i + (m + p) * j for i in range(p)] for j in range(m)]).flatten()
+    cv_x = np.array([[i + (n + q) * j for i in range(q)] for j in range(n)]).flatten()
+    vc_y = np.array([[i + (m + p) * j for i in range(m)] for j in range(p)]).flatten()
+    vc_x = np.array([[i + (n + q) * j for i in range(n)] for j in range(q)]).flatten()
+    vv_y = np.array([[i + (m + p) * j for i in range(p)] for j in range(p)]).flatten()
+    vv_x = np.array([[i + (n + q) * j for i in range(q)] for j in range(q)]).flatten()
+
+    A_22 = outer_contraction[np.ix_(cv_x + n, cv_y + m)]
+    A_33 = outer_contraction[np.ix_(n * (n + q) + vc_x, m * (m + p) + vc_y)]
+    A_44 = outer_contraction[np.ix_(vv_x + n + n * (n + q), vv_y + m + m * (m + p))]
+
     for swp in range(num_swps):
         if 0 < idx < len(factor_tt) - 1:
-            left_contraction = safe_multi_dot([_tt_core_collapse(core, core) for core in diff_tt[:idx]]).reshape(1, -1)
-            right_contraction = safe_multi_dot([_tt_core_collapse(core, core) for core in diff_tt[idx + 1:]]).reshape(-1, 1)
-            outer_contraction = right_contraction @ left_contraction
             # TODO: The Cs do not change during iterations
             V_00 = factor_tt[idx][:, 0, 0]
-            C_00 = matrix_tt[idx][:, 0, 0]
             V_01 = factor_tt[idx][:, 0, 1]
-            C_01 = matrix_tt[idx][:, 0, 1]
             V_10 = factor_tt[idx][:, 1, 0]
-            C_10 = matrix_tt[idx][:, 1, 0]
             V_11 = factor_tt[idx][:, 1, 1]
-            C_11 = matrix_tt[idx][:, 1, 1]
         else:
-            if idx == 0:
-                outer_contraction = np.diag(
-                    safe_multi_dot([_tt_core_collapse(core, core) for core in diff_tt[idx + 1:]]).flatten())
-            else:
-                outer_contraction = np.diag(
-                    safe_multi_dot([_tt_core_collapse(core, core) for core in diff_tt[:idx]]).flatten())
             V_00 = np.diag(factor_tt[idx][:, 0, 0].flatten())
-            C_00 = np.diag(matrix_tt[idx][:, 0, 0].flatten())
             V_10 = np.diag(factor_tt[idx][:, 1, 0].flatten())
-            C_10 = np.diag(matrix_tt[idx][:, 1, 0].flatten())
             V_01 = np.diag(factor_tt[idx][:, 0, 1].flatten())
-            C_01 = np.diag(matrix_tt[idx][:, 0, 1].flatten())
             V_11 = np.diag(factor_tt[idx][:, 1, 1].flatten())
-            C_11 = np.diag(matrix_tt[idx][:, 1, 1].flatten())
 
-        m, n = C_00.shape
-        p, q = V_00.shape
-        p *= p
-        q *= q
-
-        cv_y = np.array([[i + (m + p) * j for i in range(p)] for j in range(m)]).flatten()
-        cv_x = np.array([[i + (n + q) * j for i in range(q)] for j in range(n)]).flatten()
-
-        vc_y = np.array([[i + (m + p) * j for i in range(m)] for j in range(p)]).flatten()
-        vc_x = np.array([[i + (n + q) * j for i in range(n)] for j in range(q)]).flatten()
-
-        vv_y = np.array([[i + (m + p) * j for i in range(p)] for j in range(p)]).flatten()
-        vv_x = np.array([[i + (n + q) * j for i in range(q)] for j in range(q)]).flatten()
-
-        A_22 = outer_contraction[np.ix_(cv_x + n, cv_y + m)]
-        A_33 = outer_contraction[np.ix_(n * (n + q) + vc_x, m * (m + p) + vc_y)]
-        A_44 = outer_contraction[np.ix_(vv_x + n + n * (n + q), vv_y + m + m * (m + p))]
         V_00_nest = V_00 - gamma * v_00_grad
         V_01_nest = V_01 - gamma * v_01_grad
         V_10_nest = V_10 - gamma * v_10_grad
@@ -870,7 +873,7 @@ def tt_burer_monteiro_factorisation(psd_tt, solution_tt=None, is_block=False, nu
     if is_block:
         solution_tt[0][:, 0, 1] = 0
         solution_tt[0][:, 1, 0] = 0
-    lr = 0.1
+    lr = 0.2
     prev_err = 100
     comp_tt = tt_mat_mat_mul(solution_tt, tt_transpose(solution_tt))
     diff_tt = tt_add(train_tt, comp_tt)
@@ -888,7 +891,7 @@ def tt_burer_monteiro_factorisation(psd_tt, solution_tt=None, is_block=False, nu
         comp_tt = tt_mat_mat_mul(solution_tt, tt_transpose(solution_tt))
         diff_tt = tt_add(train_tt, comp_tt)
         err = tt_inner_prod(diff_tt, diff_tt)
-        lr = min(0.99 * (prev_err / err) * lr, 0.1)
+        lr = min(0.99 * (prev_err / err) * lr, 0.2)
         prev_err = err
         print(f"Error: {err}, {lr}")
         if np.less_equal(err, tol):
