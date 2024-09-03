@@ -127,7 +127,7 @@ def _tt_psd_homotopy_step(XZ_tt, Delta_XZ_tt, prev_V_tt, tol=1e-5):
     for _ in range(10):
         new_XZ_tt = tt_rank_reduce(tt_add(XZ_tt, tt_scale(step_size, Delta_XZ_tt)))
         print(tt_ranks(new_XZ_tt))
-        prev_V_tt, err = tt_burer_monteiro_factorisation(new_XZ_tt, cores=prev_V_tt, is_block=True, tol=tol)
+        prev_V_tt, err = tt_burer_monteiro_factorisation(new_XZ_tt, solution_tt=prev_V_tt, is_block=True, tol=tol)
         if np.less_equal(err, tol):
             V_tt = prev_V_tt
             step_size += 0.05

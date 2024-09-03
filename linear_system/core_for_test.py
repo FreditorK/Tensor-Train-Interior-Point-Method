@@ -20,9 +20,7 @@ class Config:
 np.random.seed(482)
 
 A = tt_random_gaussian([4, 5, 3], shape=(2, 2))
-A_psd = tt_rank_reduce(tt_mat_mat_mul(A, tt_transpose(A)))
-t0 = time.time()
-B_psd, err = tt_burer_monteiro_factorisation(A_psd)
-t1 = time.time()
-diff = tt_sub(A_psd, tt_mat_mat_mul(B_psd, tt_transpose(B_psd)))
-print("Final Error: ", tt_inner_prod(diff, diff), f"Time: {t1-t0}s")
+A_copy = copy.copy(A)
+print(tt_inner_prod(A, A_copy))
+A_copy = core_forward_orthogonalise(1, A_copy)
+print(tt_inner_prod(A, A_copy))

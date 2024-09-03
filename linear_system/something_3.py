@@ -19,18 +19,18 @@ class Config:
     tt_max_rank = 5
 
 
-np.random.seed(42)
+np.random.seed(472)
 
 import numpy as np
 from src.tt_ops import _tt_mat_mat_collapse, _tt_burer_monteiro_grad
 
-v_core = np.random.randn(3, 2, 2, 2)
+v_core = np.random.randn(2, 2, 2, 3)
 V_00 = v_core[:, 0, 0]
 V_01 = v_core[:, 0, 1]
 V_10 = v_core[:, 1, 0]
 V_11 = v_core[:, 1, 1]
 
-c_core = np.random.randn(3, 2, 2, 2)
+c_core = np.random.randn(2, 2, 2, 3)
 C_00 = v_core[:, 0, 0]
 C_01 = v_core[:, 0, 1]
 C_10 = v_core[:, 1, 0]
@@ -108,16 +108,21 @@ def check_4(V_00, V_10, V_01, V_11):
 full_grad_V10 = grad(
     lambda v: check_2(V_00, v, V_01, V_11) + check_3(V_00, v, V_01, V_11) + check_4(V_00, v, V_01, V_11))
 
-t0 = time.time()
 mem_2, vec_00 = memory_usage((_tt_burer_monteiro_grad, (A_22, A_33, A_44, C_00, C_01, C_10, C_11, V_10, V_11, V_00, V_01)),
-                             retval=True, interval=0.1, timeout=1)
+                             retval=True, interval=0.2, timeout=1)
+
+t0 = time.time()
+_ = _tt_burer_monteiro_grad(A_22, A_33, A_44, C_00, C_01, C_10, C_11, V_10, V_11, V_00, V_01)
 t1 = time.time()
 mem_1, true_vec_00 = memory_usage((full_grad_V10, (V_10,)), retval=True, interval=0.1, timeout=1)
+
 t2 = time.time()
+_ = full_grad_V10(V_10)
+t3 = time.time()
 
 print("---A_44---")
 print(vec_00)
 print(f"My Mem usage: {max(mem_2)} MiB, Time: {t1 - t0}s")
 
 print(true_vec_00)
-print(f"Autograd Mem usage: {max(mem_1)} MiB, Time: {t2 - t1}s")
+print(f"Autograd Mem usage: {max(mem_1)} MiB, Time: {t3 - t2}s")
