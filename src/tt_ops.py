@@ -753,8 +753,10 @@ def _tt_burer_monteiro_grad(A_22, A_33, A_44, C_00, C_01, C_10, _, V_00, V_01, V
     return G_0 + H_0 + H_1 + G_1
 
 
-def _tt_bm_core_wise(matrix_tt, factor_tt, diff_tt, idx, is_block=False, lr=0.5, num_swps=20, gamma=0.9, tol=1e-5):
+def _tt_bm_core_wise(matrix_tt, factor_tt, diff, index_set, idx, is_block=False, lr=0.5, num_swps=20, gamma=0.9, tol=1e-5):
     xr_i, _, _, xr_ip1 = factor_tt[idx].shape
+    r = xr_ip1 if idx == 0 else xr_i
+    ax = 0 if idx == 0 else -1
     local_lr = lr
     v_00_grad = 0
     v_01_grad = 0
@@ -762,45 +764,33 @@ def _tt_bm_core_wise(matrix_tt, factor_tt, diff_tt, idx, is_block=False, lr=0.5,
     v_11_grad = 0
     # TODO: Better memory usage and complexity if we used stacks for diff or even rather left_contraction and right_contraction
     if 0 < idx < len(factor_tt) - 1:
-        left_contraction = safe_multi_dot([_tt_core_collapse(core, core) for core in diff_tt[:idx]]).reshape(1, -1)
-        right_contraction = safe_multi_dot([_tt_core_collapse(core, core) for core in diff_tt[idx + 1:]]).reshape(-1, 1)
+        left_contraction = safe_multi_dot(diff[:idx]).reshape(1, -1)
+        right_contraction = safe_multi_dot(diff[idx + 1:]).reshape(-1, 1)
         outer_contraction = right_contraction @ left_contraction
         C_00 = matrix_tt[idx][:, 0, 0]
         C_01 = matrix_tt[idx][:, 0, 1]
         C_10 = matrix_tt[idx][:, 1, 0]
         C_11 = matrix_tt[idx][:, 1, 1]
-        p, q = factor_tt[idx][:, 1, 1].shape
     else:
         if idx == 0:
             outer_contraction = np.diag(
-                safe_multi_dot([_tt_core_collapse(core, core) for core in diff_tt[idx + 1:]]).flatten())
+                safe_multi_dot(diff[idx + 1:]).flatten()
+            )
         else:
             outer_contraction = np.diag(
-                safe_multi_dot([_tt_core_collapse(core, core) for core in diff_tt[:idx]]).flatten())
+                safe_multi_dot(diff[:idx]).flatten()
+            )
         C_00 = np.diag(matrix_tt[idx][:, 0, 0].flatten())
         C_10 = np.diag(matrix_tt[idx][:, 1, 0].flatten())
         C_01 = np.diag(matrix_tt[idx][:, 0, 1].flatten())
         C_11 = np.diag(matrix_tt[idx][:, 1, 1].flatten())
-        p, q = np.diag(factor_tt[idx][:, 1, 1].flatten()).shape
 
-    m, n = C_00.shape
-    p *= p
-    q *= q
-
-    cv_y = np.array([[i + (m + p) * j for i in range(p)] for j in range(m)]).flatten()
-    cv_x = np.array([[i + (n + q) * j for i in range(q)] for j in range(n)]).flatten()
-    vc_y = np.array([[i + (m + p) * j for i in range(m)] for j in range(p)]).flatten()
-    vc_x = np.array([[i + (n + q) * j for i in range(n)] for j in range(q)]).flatten()
-    vv_y = np.array([[i + (m + p) * j for i in range(p)] for j in range(p)]).flatten()
-    vv_x = np.array([[i + (n + q) * j for i in range(q)] for j in range(q)]).flatten()
-
-    A_22 = outer_contraction[np.ix_(cv_x + n, cv_y + m)]
-    A_33 = outer_contraction[np.ix_(n * (n + q) + vc_x, m * (m + p) + vc_y)]
-    A_44 = outer_contraction[np.ix_(vv_x + n + n * (n + q), vv_y + m + m * (m + p))]
+    A_22 = outer_contraction[index_set[0]]
+    A_33 = outer_contraction[index_set[1]]
+    A_44 = outer_contraction[index_set[2]]
 
     for swp in range(num_swps):
         if 0 < idx < len(factor_tt) - 1:
-            # TODO: The Cs do not change during iterations
             V_00 = factor_tt[idx][:, 0, 0]
             V_01 = factor_tt[idx][:, 0, 1]
             V_10 = factor_tt[idx][:, 1, 0]
@@ -830,19 +820,16 @@ def _tt_bm_core_wise(matrix_tt, factor_tt, diff_tt, idx, is_block=False, lr=0.5,
             v_10_grad = gamma*v_10_grad + local_lr * vec_10.reshape(xr_i, xr_ip1)
             v_11_grad = gamma*v_11_grad + local_lr * vec_11.reshape(xr_i, xr_ip1)
         else:
-            r = xr_ip1 if idx == 0 else xr_i
-            a = 0 if idx == 0 else -1
-            v_00_grad = gamma*v_00_grad + local_lr * np.expand_dims(np.diagonal(vec_00.reshape(r, r)), axis=a)
-            v_01_grad = gamma*v_01_grad + local_lr * np.expand_dims(np.diagonal(vec_01.reshape(r, r)), axis=a)
-            v_10_grad = gamma*v_10_grad + local_lr * np.expand_dims(np.diagonal(vec_10.reshape(r, r)), axis=a)
-            v_11_grad = gamma*v_11_grad + local_lr * np.expand_dims(np.diagonal(vec_11.reshape(r, r)), axis=a)
+            v_00_grad = gamma*v_00_grad + local_lr * np.expand_dims(np.diagonal(vec_00.reshape(r, r)), axis=ax)
+            v_01_grad = gamma*v_01_grad + local_lr * np.expand_dims(np.diagonal(vec_01.reshape(r, r)), axis=ax)
+            v_10_grad = gamma*v_10_grad + local_lr * np.expand_dims(np.diagonal(vec_10.reshape(r, r)), axis=ax)
+            v_11_grad = gamma*v_11_grad + local_lr * np.expand_dims(np.diagonal(vec_11.reshape(r, r)), axis=ax)
 
         factor_tt[idx][:, 0, 0, :] -= v_00_grad
         factor_tt[idx][:, 0, 1, :] -= v_01_grad
         factor_tt[idx][:, 1, 0, :] -= v_10_grad
         factor_tt[idx][:, 1, 1, :] -= v_11_grad
         local_err = (np.linalg.norm(v_00_grad)+np.linalg.norm(v_01_grad)+np.linalg.norm(v_10_grad)+np.linalg.norm(v_11_grad))/4
-
         local_lr *= 0.9
         if np.greater_equal(local_err, tol):
             break
@@ -858,7 +845,7 @@ def _adjust_diff(matrix_tt, factor_tt, idx):
         diff_core_idx = np.concatenate((matrix_tt[idx], comp_tt_idx), axis=-1)
     else:
         diff_core_idx = np.concatenate((matrix_tt[idx], comp_tt_idx), axis=0)
-    return diff_core_idx
+    return _tt_core_collapse(diff_core_idx, diff_core_idx)
 
 
 def tt_burer_monteiro_factorisation(psd_tt, solution_tt=None, is_block=False, num_swps=20, max_iter=20, tol=1e-5):
@@ -876,24 +863,42 @@ def tt_burer_monteiro_factorisation(psd_tt, solution_tt=None, is_block=False, nu
     lr = 0.2
     prev_err = 100
     comp_tt = tt_mat_mat_mul(solution_tt, tt_transpose(solution_tt))
-    diff_tt = tt_add(train_tt, comp_tt)
+    diff = [_tt_core_collapse(c, c) for c in tt_add(train_tt, comp_tt)]
+    train_shapes = [(train_tt[0].shape[-1], train_tt[0].shape[-1])] + [(c.shape[0], c.shape[-1]) for c in train_tt[1:-1]] + [(train_tt[-1].shape[0], train_tt[-1].shape[0])]
+    solution_shapes = [(solution_tt[0].shape[-1]**2, solution_tt[0].shape[-1]**2)] + [(c.shape[0]**2, c.shape[-1]**2) for c in solution_tt[1:-1]] + [(solution_tt[-1].shape[0]**2, solution_tt[-1].shape[0]**2)]
+    index_set = [
+        (
+            np.ix_(
+                np.array([[i + (n + q) * j for i in range(q)] for j in range(n)]).flatten() + n,
+                np.array([[i + (m + p) * j for i in range(p)] for j in range(m)]).flatten() + m
+            ),
+            np.ix_(
+                np.array([[i + (n + q) * j for i in range(n)] for j in range(q)]).flatten() + n * (n + q),
+                np.array([[i + (m + p) * j for i in range(m)] for j in range(p)]).flatten() + m * (m + p)
+            ),
+            np.ix_(
+                np.array([[i + (n + q) * j for i in range(q)] for j in range(q)]).flatten() + n * (n + q + 1),
+                np.array([[i + (m + p) * j for i in range(p)] for j in range(p)]).flatten() + m * (m + p + 1)
+            )
+        )
+        for (m, n), (p, q) in zip(train_shapes, solution_shapes)
+    ]
+
     for iteration in range(max_iter):
         for k in range(len(solution_tt) - 1):
-            print(f"Core number {k}")
             solution_tt = core_forward_orthogonalise(k, solution_tt)
-            diff_tt[k] = _adjust_diff(train_tt, solution_tt, k)
-            solution_tt, lr = _tt_bm_core_wise(train_tt, solution_tt, diff_tt, k + 1, is_block=is_block, lr=lr, num_swps=num_swps, tol=0.1 * tol)
+            diff[k] = _adjust_diff(train_tt, solution_tt, k)
+            solution_tt, lr = _tt_bm_core_wise(train_tt, solution_tt, diff, index_set[k+1], k + 1, is_block=is_block, lr=lr, num_swps=num_swps, tol=0.1 * tol)
         for k in range(len(solution_tt) - 1, 0, -1):
-            print(f"Core number {k}")
             solution_tt = core_backward_orthogonalise(k, solution_tt)
-            diff_tt[k] = _adjust_diff(train_tt, solution_tt, k)
-            solution_tt, lr = _tt_bm_core_wise(train_tt, solution_tt, diff_tt, k - 1, is_block=is_block, lr=lr, num_swps=num_swps, tol=0.1 * tol)
+            diff[k] = _adjust_diff(train_tt, solution_tt, k)
+            solution_tt, lr = _tt_bm_core_wise(train_tt, solution_tt, diff, index_set[k-1], k - 1, is_block=is_block, lr=lr, num_swps=num_swps, tol=0.1 * tol)
+
         comp_tt = tt_mat_mat_mul(solution_tt, tt_transpose(solution_tt))
-        diff_tt = tt_add(train_tt, comp_tt)
-        err = tt_inner_prod(diff_tt, diff_tt)
+        diff = [_tt_core_collapse(c, c) for c in tt_add(train_tt, comp_tt)]
+        err = safe_multi_dot(diff).item()
         lr = min(0.99 * (prev_err / err) * lr, 0.2)
         prev_err = err
-        print(f"Error: {err}, {lr}")
         if np.less_equal(err, tol):
             print(f"Converged in {iteration} iterations")
             break
