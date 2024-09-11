@@ -5,21 +5,7 @@ from tqdm import tqdm
 import copy
 
 
-def _tt_burer_monteiro_grad(A_22, A_33, A_44, C_00, C_01, C_10, _, V_00, V_01, V_10, V_11):
-    m, n = C_00.shape
-    orig_p, orig_q = V_00.shape
-    p = orig_p ** 2
-    q = orig_q ** 2
-    max_s = max(q * m, n * p)
-    I = np.eye(max_s)
-    indices = np.arange(max_s)
-    K_np = I[indices[:n * p].reshape((n, p), order="F").ravel(), :n * p]
-    K_qm = I[indices[:q * m].reshape((q, m), order="F").ravel(), :q * m]
-    K_orig_qp = I[indices[:orig_q * orig_p].reshape((orig_q, orig_p), order="F").ravel(), :orig_q * orig_p]
-    S = (
-        np.einsum('ijt, jl->ilt', A_22.T.reshape(p, m * q, n, order="F"), K_qm).reshape(p * q, m * n, order="F")
-        + np.einsum('ijt, jl->ilt', A_33.T.reshape(m, n * p, q, order="F"), K_np).reshape(m * n, p * q, order="F").T
-    )
+def _tt_burer_monteiro_grad(S, K_orig_qp, A_44, S_1, S_2, S_3, V_00, V_01, V_10, V_11, orig_p, orig_q, p, q, m, n):
     pair_1 = np.kron(V_00, V_00) + np.kron(V_10, V_10)
     pair_2 = np.kron(V_01, V_00) + np.kron(V_11, V_10)
     pair_3 = np.kron(V_00, V_01) + np.kron(V_10, V_11)
@@ -27,15 +13,15 @@ def _tt_burer_monteiro_grad(A_22, A_33, A_44, C_00, C_01, C_10, _, V_00, V_01, V
     D_1 = (
               np.trace((pair_1 @ A_44.reshape(q, q * p ** 2)).reshape(p, p, p, q, order="F"), axis1=0, axis2=2)
               + np.trace((A_44.reshape(p * q ** 2, p) @ pair_1).reshape(p, q, q, q, order="F"), axis1=1, axis2=3)
-          ).reshape(p * q, 1, order="F") + S @ C_00.reshape(m * n, 1, order="F")
+          ).reshape(p * q, 1, order="F") + S_1
     D_2 = (
               np.trace((pair_2 @ A_44.reshape(q, q * p ** 2)).reshape(p, p, p, q, order="F"), axis1=0, axis2=2)
               + np.trace((A_44.reshape(p * q ** 2, p) @ pair_2).reshape(p, q, q, q, order="F"), axis1=1, axis2=3)
-          ).reshape(p * q, 1, order="F") + S @ C_01.reshape(m * n, 1, order="F")
+          ).reshape(p * q, 1, order="F") + S_2
     D_3 = (
               np.trace((pair_3 @ A_44.reshape(q, q * p ** 2)).reshape(p, p, p, q, order="F"), axis1=0, axis2=2)
               + np.trace((A_44.reshape(p * q ** 2, p) @ pair_3).reshape(p, q, q, q, order="F"), axis1=1, axis2=3)
-          ).reshape(p * q, 1, order="F") + S @ C_10.reshape(m * n, 1, order="F")
+          ).reshape(p * q, 1, order="F") + S_3
 
     H_0 = D_1.reshape(orig_p, q * orig_p, order="F") @ np.einsum('ijt, jl->ilt',
                                                                  K_orig_qp.reshape(orig_q * orig_p, orig_p, orig_q),
@@ -48,7 +34,7 @@ def _tt_burer_monteiro_grad(A_22, A_33, A_44, C_00, C_01, C_10, _, V_00, V_01, V
     G_1 = np.einsum('ijt, lj->ilt', K_orig_qp.reshape(orig_q * orig_p, orig_q, orig_p, order="F"), V_01).reshape(
         orig_q * p, orig_p).T @ D_3.reshape(orig_q * p, orig_q, order="F")
 
-    return G_0 + H_0 + H_1 + G_1
+    return G_0 + H_0 + H_1 + G_1 + S_1
 
 
 def _tt_bm_core_wise(matrix_tt, factor_tt, A_22, A_33, A_44, idx, is_block=False, lr=0.5, num_swps=20, gamma=0.9,
@@ -77,6 +63,25 @@ def _tt_bm_core_wise(matrix_tt, factor_tt, A_22, A_33, A_44, idx, is_block=False
         V_01 = np.diag(V_01.flatten())
         V_11 = np.diag(V_11.flatten())
 
+    m, n = C_00.shape
+    orig_p, orig_q = V_00.shape
+    p = orig_p ** 2
+    q = orig_q ** 2
+    max_s = max(q * m, n * p)
+    I = np.eye(max_s)
+    indices = np.arange(max_s)
+    K_np = I[indices[:n * p].reshape((n, p), order="F").ravel(), :n * p]
+    K_qm = I[indices[:q * m].reshape((q, m), order="F").ravel(), :q * m]
+    K_orig_qp = I[indices[:orig_q * orig_p].reshape((orig_q, orig_p), order="F").ravel(), :orig_q * orig_p]
+    S = (
+        np.einsum('ijt, jl->ilt', A_22.T.reshape(p, m * q, n, order="F"), K_qm).reshape(p * q, m * n, order="F")
+        + np.einsum('ijt, jl->ilt', A_33.T.reshape(m, n * p, q, order="F"), K_np).reshape(m * n, p * q, order="F").T
+    )
+    S_1 = S @ C_00.reshape(m * n, 1, order="F")
+    S_2 = S @ C_01.reshape(m * n, 1, order="F")
+    S_3 = S @ C_10.reshape(m * n, 1, order="F")
+    S_4 = S @ C_11.reshape(m * n, 1, order="F")
+
     v_00_grad = 0
     v_01_grad = 0
     v_10_grad = 0
@@ -90,16 +95,16 @@ def _tt_bm_core_wise(matrix_tt, factor_tt, A_22, A_33, A_44, idx, is_block=False
         V_01_nest = V_01 - gamma * v_01_grad
         V_10_nest = V_10 - gamma * v_10_grad
         V_11_nest = V_11 - gamma * v_11_grad
-        vec_00 = _tt_burer_monteiro_grad(A_22, A_33, A_44, C_00, C_01, C_10, C_11, V_00_nest, V_01_nest, V_10_nest,
-                                         V_11_nest)
-        vec_11 = _tt_burer_monteiro_grad(A_22, A_33, A_44, C_11, C_10, C_01, C_00, V_11_nest, V_10_nest, V_01_nest,
-                                         V_00_nest)
+        vec_00 = _tt_burer_monteiro_grad(S, K_orig_qp, A_44, S_1, S_2, S_3, V_00_nest, V_01_nest, V_10_nest,
+                                         V_11_nest, orig_p, orig_q, p, q, m, n)
+        vec_11 = _tt_burer_monteiro_grad(S, K_orig_qp, A_44, S_4, S_3, S_2, V_11_nest, V_10_nest, V_01_nest,
+                                         V_00_nest, orig_p, orig_q, p, q, m, n)
 
         if idx != 0 or not is_block:
-            vec_01 = _tt_burer_monteiro_grad(A_22, A_33, A_44, C_11, C_10, C_01, C_00, V_01_nest, V_00_nest, V_11_nest,
-                                             V_10_nest)
-            vec_10 = _tt_burer_monteiro_grad(A_22, A_33, A_44, C_00, C_01, C_10, C_11, V_10_nest, V_11_nest, V_00_nest,
-                                             V_01_nest)
+            vec_01 = _tt_burer_monteiro_grad(S, K_orig_qp, A_44, S_4, S_3, S_2, V_01_nest, V_00_nest, V_11_nest,
+                                             V_10_nest, orig_p, orig_q, p, q, m, n)
+            vec_10 = _tt_burer_monteiro_grad(S, K_orig_qp, A_44, S_1, S_2, S_3, V_10_nest, V_11_nest, V_00_nest,
+                                             V_01_nest, orig_p, orig_q, p, q, m, n)
 
         v_00_grad = gamma * v_00_grad + local_lr * vec_00.reshape(xr_i, xr_ip1)
         v_01_grad = gamma * v_01_grad + local_lr * vec_01.reshape(xr_i, xr_ip1)

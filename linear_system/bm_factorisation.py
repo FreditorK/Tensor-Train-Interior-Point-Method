@@ -5,7 +5,7 @@ import time
 sys.path.append(os.getcwd() + '/../')
 from dataclasses import dataclass
 from src.tt_ops import *
-from src.tt_factorisation_cy import tt_burer_monteiro_factorisation
+from src.tt_factorisation import tt_burer_monteiro_factorisation
 
 
 @dataclass

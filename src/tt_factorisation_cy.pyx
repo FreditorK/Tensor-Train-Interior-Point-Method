@@ -1,11 +1,26 @@
 import numpy as np
+cimport numpy as np
 from src.ops import safe_multi_dot
 from src.tt_ops import _tt_core_collapse, _block_diag_tensor, _tt_mat_mat_collapse, tt_scale, tt_mat_mat_mul, tt_ranks, tt_random_gaussian, tt_add, tt_transpose, tt_rl_orthogonalise, core_backward_orthogonalise, safe_multi_dot, core_forward_orthogonalise
 
 
-def _tt_burer_monteiro_grad(A_22, A_33, A_44, C_00, C_01, C_10, _, V_00, V_01, V_10, V_11):
-    m, n = C_00.shape
-    orig_p, orig_q = V_00.shape
+def _tt_burer_monteiro_grad(
+    np.ndarray[float, ndim=2] A_22, 
+    np.ndarray[float, ndim=2] A_33, 
+    np.ndarray[float, ndim=2] A_44, 
+    np.ndarray[float, ndim=2] C_00, 
+    np.ndarray[float, ndim=2] C_01, 
+    np.ndarray[float, ndim=2] C_10, 
+    np.ndarray[float, ndim=2] C_11, 
+    np.ndarray[float, ndim=2] V_00, 
+    np.ndarray[float, ndim=2] V_01, 
+    np.ndarray[float, ndim=2] V_10, 
+    np.ndarray[float, ndim=2] V_11
+    ):
+    cdef int m = C_00.shape[0]
+    cdef int n = C_00.shape[1]
+    cdef int orig_p = V_00.shape[0]
+    cdef int orig_q = V_00.shape[1]
     p = orig_p ** 2
     q = orig_q ** 2
     max_s = max(q * m, n * p)
