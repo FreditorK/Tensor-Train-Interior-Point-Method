@@ -94,18 +94,20 @@ def tt_lr_orthogonalise(train_tt: List[np.array]):
 
 def core_forward_orthogonalise(i, train_tt):
     shape_i = train_tt[i].shape
-    shape_ip1 = train_tt[i+1].shape
-    [q_T, r] = scp.linalg.qr(train_tt[i].reshape(-1, shape_i[-1]), overwrite_a=True, mode='economic', check_finite=False)
+    shape_ip1 = train_tt[i + 1].shape
+    [q_T, r] = scp.linalg.qr(train_tt[i].reshape(-1, shape_i[-1]), overwrite_a=True, mode='economic',
+                             check_finite=False)
     train_tt[i] = q_T.reshape(shape_i[0], *shape_i[1:-1], -1)
     r_ip1 = train_tt[i].shape[-1]
-    train_tt[i+1] = (r @ train_tt[i + 1].reshape(r.shape[-1], -1)).reshape(r_ip1, *shape_ip1[1:-1], -1)
+    train_tt[i + 1] = (r @ train_tt[i + 1].reshape(r.shape[-1], -1)).reshape(r_ip1, *shape_ip1[1:-1], -1)
     return train_tt
 
 
 def core_backward_orthogonalise(i, train_tt):
     shape_i = train_tt[i].shape
     shape_im1 = train_tt[i - 1].shape
-    [q_T, r] = scp.linalg.qr(train_tt[i].reshape(train_tt[i].shape[0], -1).T, overwrite_a=True, mode='economic', check_finite=False)
+    [q_T, r] = scp.linalg.qr(train_tt[i].reshape(train_tt[i].shape[0], -1).T, overwrite_a=True, mode='economic',
+                             check_finite=False)
     train_tt[i] = q_T.T.reshape(-1, *shape_i[1:-1], shape_i[-1])
     r_im1 = train_tt[i].shape[0]
     train_tt[i - 1] = (
@@ -711,49 +713,55 @@ def vec(Y):
 def mat(y, shape):
     return y.reshape(*shape, order='F')
 
-import time
 
 def _tt_burer_monteiro_grad(A_22, A_33, A_44, C_00, C_01, C_10, _, V_00, V_01, V_10, V_11):
     m, n = C_00.shape
     orig_p, orig_q = V_00.shape
     p = orig_p ** 2
     q = orig_q ** 2
-    max_s = max(q*m, n*p)
+    max_s = max(q * m, n * p)
     I = np.eye(max_s)
     indices = np.arange(max_s)
-    K_np = I[indices[:n*p].reshape((n, p), order="F").ravel(), :n * p]
-    K_qm = I[indices[:q*m].reshape((q, m), order="F").ravel(), :q * m]
+    K_np = I[indices[:n * p].reshape((n, p), order="F").ravel(), :n * p]
+    K_qm = I[indices[:q * m].reshape((q, m), order="F").ravel(), :q * m]
     K_orig_qp = I[indices[:orig_q * orig_p].reshape((orig_q, orig_p), order="F").ravel(), :orig_q * orig_p]
     S = (
         np.einsum('ijt, jl->ilt', A_22.T.reshape(p, m * q, n, order="F"), K_qm).reshape(p * q, m * n, order="F")
-        + np.einsum('ijt, jl->ilt', A_33.T.reshape(m, n*p, q, order="F"), K_np).reshape(m*n, p*q, order="F").T
+        + np.einsum('ijt, jl->ilt', A_33.T.reshape(m, n * p, q, order="F"), K_np).reshape(m * n, p * q, order="F").T
     )
     pair_1 = np.kron(V_00, V_00) + np.kron(V_10, V_10)
     pair_2 = np.kron(V_01, V_00) + np.kron(V_11, V_10)
     pair_3 = np.kron(V_00, V_01) + np.kron(V_10, V_11)
 
     D_1 = (
-        np.trace((pair_1 @ A_44.reshape(q, q*p**2)).reshape(p, p, p, q, order="F"), axis1=0, axis2=2)
-        + np.trace((A_44.reshape(p*q**2, p) @ pair_1).reshape(p, q, q, q, order="F"), axis1=1, axis2=3)
-    ).reshape(p*q, 1, order="F") + S @ C_00.reshape(m*n, 1, order="F")
+              np.trace((pair_1 @ A_44.reshape(q, q * p ** 2)).reshape(p, p, p, q, order="F"), axis1=0, axis2=2)
+              + np.trace((A_44.reshape(p * q ** 2, p) @ pair_1).reshape(p, q, q, q, order="F"), axis1=1, axis2=3)
+          ).reshape(p * q, 1, order="F") + S @ C_00.reshape(m * n, 1, order="F")
     D_2 = (
-        np.trace((pair_2 @ A_44.reshape(q, q*p**2)).reshape(p, p, p, q, order="F"), axis1=0, axis2=2)
-        + np.trace((A_44.reshape(p*q**2, p) @ pair_2).reshape(p, q, q, q, order="F"), axis1=1, axis2=3)
-    ).reshape(p*q, 1, order="F") + S @ C_01.reshape(m*n, 1, order="F")
+              np.trace((pair_2 @ A_44.reshape(q, q * p ** 2)).reshape(p, p, p, q, order="F"), axis1=0, axis2=2)
+              + np.trace((A_44.reshape(p * q ** 2, p) @ pair_2).reshape(p, q, q, q, order="F"), axis1=1, axis2=3)
+          ).reshape(p * q, 1, order="F") + S @ C_01.reshape(m * n, 1, order="F")
     D_3 = (
-        np.trace((pair_3 @ A_44.reshape(q, q*p**2)).reshape(p, p, p, q, order="F"), axis1=0, axis2=2)
-        + np.trace((A_44.reshape(p*q**2, p) @ pair_3).reshape(p, q, q, q, order="F"), axis1=1, axis2=3)
-    ).reshape(p*q, 1, order="F") + S @ C_10.reshape(m*n, 1, order="F")
+              np.trace((pair_3 @ A_44.reshape(q, q * p ** 2)).reshape(p, p, p, q, order="F"), axis1=0, axis2=2)
+              + np.trace((A_44.reshape(p * q ** 2, p) @ pair_3).reshape(p, q, q, q, order="F"), axis1=1, axis2=3)
+          ).reshape(p * q, 1, order="F") + S @ C_10.reshape(m * n, 1, order="F")
 
-    H_0 = D_1.reshape(orig_p, q*orig_p, order="F") @ np.einsum('ijt, jl->ilt', K_orig_qp.reshape(orig_q*orig_p, orig_p, orig_q), V_00).reshape(orig_p * q, orig_q, order="F")
-    H_1 = D_2.reshape(orig_p, q*orig_p, order="F") @ np.einsum('ijt, jl->ilt', K_orig_qp.reshape(orig_q*orig_p, orig_p, orig_q), V_01).reshape(orig_p * q, orig_q, order="F")
-    G_0 = np.einsum('ijt, lj->ilt', K_orig_qp.reshape(orig_q*orig_p, orig_q, orig_p, order="F"), V_00).reshape(orig_q * p, orig_p).T @ D_1.reshape(orig_q * p, orig_q, order="F")
-    G_1 = np.einsum('ijt, lj->ilt', K_orig_qp.reshape(orig_q*orig_p, orig_q, orig_p, order="F"), V_01).reshape(orig_q * p, orig_p).T @ D_3.reshape(orig_q * p, orig_q, order="F")
+    H_0 = D_1.reshape(orig_p, q * orig_p, order="F") @ np.einsum('ijt, jl->ilt',
+                                                                 K_orig_qp.reshape(orig_q * orig_p, orig_p, orig_q),
+                                                                 V_00).reshape(orig_p * q, orig_q, order="F")
+    H_1 = D_2.reshape(orig_p, q * orig_p, order="F") @ np.einsum('ijt, jl->ilt',
+                                                                 K_orig_qp.reshape(orig_q * orig_p, orig_p, orig_q),
+                                                                 V_01).reshape(orig_p * q, orig_q, order="F")
+    G_0 = np.einsum('ijt, lj->ilt', K_orig_qp.reshape(orig_q * orig_p, orig_q, orig_p, order="F"), V_00).reshape(
+        orig_q * p, orig_p).T @ D_1.reshape(orig_q * p, orig_q, order="F")
+    G_1 = np.einsum('ijt, lj->ilt', K_orig_qp.reshape(orig_q * orig_p, orig_q, orig_p, order="F"), V_01).reshape(
+        orig_q * p, orig_p).T @ D_3.reshape(orig_q * p, orig_q, order="F")
 
     return G_0 + H_0 + H_1 + G_1
 
 
-def _tt_bm_core_wise(matrix_tt, factor_tt, A_22, A_33, A_44, idx, is_block=False, lr=0.5, num_swps=20, gamma=0.9, tol=1e-5):
+def _tt_bm_core_wise(matrix_tt, factor_tt, A_22, A_33, A_44, idx, is_block=False, lr=0.5, num_swps=20, gamma=0.9,
+                     tol=1e-5):
     xr_i, _, _, xr_ip1 = factor_tt[idx].shape
     local_lr = lr
 
@@ -791,23 +799,28 @@ def _tt_bm_core_wise(matrix_tt, factor_tt, A_22, A_33, A_44, idx, is_block=False
         V_01_nest = V_01 - gamma * v_01_grad
         V_10_nest = V_10 - gamma * v_10_grad
         V_11_nest = V_11 - gamma * v_11_grad
-        vec_00 = _tt_burer_monteiro_grad(A_22, A_33, A_44, C_00, C_01, C_10, C_11, V_00_nest, V_01_nest, V_10_nest, V_11_nest)
-        vec_11 = _tt_burer_monteiro_grad(A_22, A_33, A_44, C_11, C_10, C_01, C_00, V_11_nest, V_10_nest, V_01_nest, V_00_nest)
+        vec_00 = _tt_burer_monteiro_grad(A_22, A_33, A_44, C_00, C_01, C_10, C_11, V_00_nest, V_01_nest, V_10_nest,
+                                         V_11_nest)
+        vec_11 = _tt_burer_monteiro_grad(A_22, A_33, A_44, C_11, C_10, C_01, C_00, V_11_nest, V_10_nest, V_01_nest,
+                                         V_00_nest)
 
         if idx != 0 or not is_block:
-            vec_01 = _tt_burer_monteiro_grad(A_22, A_33, A_44, C_11, C_10, C_01, C_00, V_01_nest, V_00_nest, V_11_nest, V_10_nest)
-            vec_10 = _tt_burer_monteiro_grad(A_22, A_33, A_44, C_00, C_01, C_10, C_11, V_10_nest, V_11_nest, V_00_nest, V_01_nest)
+            vec_01 = _tt_burer_monteiro_grad(A_22, A_33, A_44, C_11, C_10, C_01, C_00, V_01_nest, V_00_nest, V_11_nest,
+                                             V_10_nest)
+            vec_10 = _tt_burer_monteiro_grad(A_22, A_33, A_44, C_00, C_01, C_10, C_11, V_10_nest, V_11_nest, V_00_nest,
+                                             V_01_nest)
 
-        v_00_grad = gamma*v_00_grad + local_lr * vec_00.reshape(xr_i, xr_ip1)
-        v_01_grad = gamma*v_01_grad + local_lr * vec_01.reshape(xr_i, xr_ip1)
-        v_10_grad = gamma*v_10_grad + local_lr * vec_10.reshape(xr_i, xr_ip1)
-        v_11_grad = gamma*v_11_grad + local_lr * vec_11.reshape(xr_i, xr_ip1)
+        v_00_grad = gamma * v_00_grad + local_lr * vec_00.reshape(xr_i, xr_ip1)
+        v_01_grad = gamma * v_01_grad + local_lr * vec_01.reshape(xr_i, xr_ip1)
+        v_10_grad = gamma * v_10_grad + local_lr * vec_10.reshape(xr_i, xr_ip1)
+        v_11_grad = gamma * v_11_grad + local_lr * vec_11.reshape(xr_i, xr_ip1)
         V_00 -= v_00_grad
         V_01 -= v_01_grad
         V_10 -= v_10_grad
         V_11 -= v_11_grad
 
-        local_err = (np.linalg.norm(v_00_grad)+np.linalg.norm(v_01_grad)+np.linalg.norm(v_10_grad)+np.linalg.norm(v_11_grad))/4
+        local_err = (np.linalg.norm(v_00_grad) + np.linalg.norm(v_01_grad) + np.linalg.norm(v_10_grad) + np.linalg.norm(
+            v_11_grad)) / 4
         local_lr *= 0.99
         if np.less_equal(local_err, tol):
             break
@@ -840,7 +853,7 @@ def _adjust_diff(matrix_tt, factor_tt, idx):
 
 def tt_burer_monteiro_factorisation(psd_tt, solution_tt=None, is_block=False, num_swps=20, max_iter=20, tol=1e-5):
     train_tt = tt_scale(-1, psd_tt)
-    target_ranks = [int(np.ceil(np.sqrt(r)))+1 for r in tt_ranks(train_tt)]
+    target_ranks = [int(np.ceil(np.sqrt(r))) + 1 for r in tt_ranks(train_tt)]
     if solution_tt is None:
         solution_tt = tt_random_gaussian(target_ranks, shape=(2, 2))
     else:
@@ -854,8 +867,12 @@ def tt_burer_monteiro_factorisation(psd_tt, solution_tt=None, is_block=False, nu
     prev_err = 100
     comp_tt = tt_mat_mat_mul(solution_tt, tt_transpose(solution_tt))
     diff = [_tt_core_collapse(c, c) for c in tt_add(train_tt, comp_tt)]
-    train_shapes = [(train_tt[0].shape[-1], train_tt[0].shape[-1])] + [(c.shape[0], c.shape[-1]) for c in train_tt[1:-1]] + [(train_tt[-1].shape[0], train_tt[-1].shape[0])]
-    solution_shapes = [(solution_tt[0].shape[-1]**2, solution_tt[0].shape[-1]**2)] + [(c.shape[0]**2, c.shape[-1]**2) for c in solution_tt[1:-1]] + [(solution_tt[-1].shape[0]**2, solution_tt[-1].shape[0]**2)]
+    train_shapes = [(train_tt[0].shape[-1], train_tt[0].shape[-1])] + [(c.shape[0], c.shape[-1]) for c in
+                                                                       train_tt[1:-1]] + [
+                       (train_tt[-1].shape[0], train_tt[-1].shape[0])]
+    solution_shapes = [(solution_tt[0].shape[-1] ** 2, solution_tt[0].shape[-1] ** 2)] + [
+        (c.shape[0] ** 2, c.shape[-1] ** 2) for c in solution_tt[1:-1]] + [
+                          (solution_tt[-1].shape[0] ** 2, solution_tt[-1].shape[0] ** 2)]
     index_set = [
         (
             (
@@ -880,31 +897,39 @@ def tt_burer_monteiro_factorisation(psd_tt, solution_tt=None, is_block=False, nu
             solution_tt = core_forward_orthogonalise(k, solution_tt)
             diff[k] = _adjust_diff(train_tt, solution_tt, k)
             left_contraction = np.dot(left_contraction, diff[k])
-            if k+1 != terminal_idx:
+            if k + 1 != terminal_idx:
                 right_contraction = safe_multi_dot(diff[k + 2:])
-                A_22 = right_contraction.reshape(-1, 1)[index_set[k+1][0][0]] @ left_contraction.reshape(1, -1)[:, index_set[k+1][0][1]]
-                A_33 = right_contraction.reshape(-1, 1)[index_set[k+1][1][0]] @ left_contraction.reshape(1, -1)[:, index_set[k+1][1][1]]
-                A_44 = right_contraction.reshape(-1, 1)[index_set[k+1][2][0]] @ left_contraction.reshape(1, -1)[:, index_set[k+1][2][1]]
+                A_22 = right_contraction.reshape(-1, 1)[index_set[k + 1][0][0]] @ left_contraction.reshape(1, -1)[:,
+                                                                                  index_set[k + 1][0][1]]
+                A_33 = right_contraction.reshape(-1, 1)[index_set[k + 1][1][0]] @ left_contraction.reshape(1, -1)[:,
+                                                                                  index_set[k + 1][1][1]]
+                A_44 = right_contraction.reshape(-1, 1)[index_set[k + 1][2][0]] @ left_contraction.reshape(1, -1)[:,
+                                                                                  index_set[k + 1][2][1]]
             else:
                 A_22 = np.diag(left_contraction.flatten()[index_set[k + 1][0][1]])
                 A_33 = np.diag(left_contraction.flatten()[index_set[k + 1][1][1]])
                 A_44 = np.diag(left_contraction.flatten()[index_set[k + 1][2][1]])
-            solution_tt, lr = _tt_bm_core_wise(train_tt, solution_tt, A_22, A_33, A_44, k + 1, is_block=is_block, lr=lr, num_swps=num_swps, tol=0.1 * tol)
+            solution_tt, lr = _tt_bm_core_wise(train_tt, solution_tt, A_22, A_33, A_44, k + 1, is_block=is_block, lr=lr,
+                                               num_swps=num_swps, tol=0.1 * tol)
         right_contraction = 1
         for k in range(terminal_idx, 0, -1):
             solution_tt = core_backward_orthogonalise(k, solution_tt)
             diff[k] = _adjust_diff(train_tt, solution_tt, k)
             right_contraction = np.dot(diff[k], right_contraction)
-            if k-1 != 0:
+            if k - 1 != 0:
                 left_contraction = safe_multi_dot(diff[:k - 1]).reshape(1, -1)
-                A_22 = right_contraction.reshape(-1, 1)[index_set[k - 1][0][0]] @ left_contraction.reshape(1, -1)[:, index_set[k - 1][0][1]]
-                A_33 = right_contraction.reshape(-1, 1)[index_set[k - 1][1][0]] @ left_contraction.reshape(1, -1)[:, index_set[k - 1][1][1]]
-                A_44 = right_contraction.reshape(-1, 1)[index_set[k - 1][2][0]] @ left_contraction.reshape(1, -1)[:, index_set[k - 1][2][1]]
+                A_22 = right_contraction.reshape(-1, 1)[index_set[k - 1][0][0]] @ left_contraction.reshape(1, -1)[:,
+                                                                                  index_set[k - 1][0][1]]
+                A_33 = right_contraction.reshape(-1, 1)[index_set[k - 1][1][0]] @ left_contraction.reshape(1, -1)[:,
+                                                                                  index_set[k - 1][1][1]]
+                A_44 = right_contraction.reshape(-1, 1)[index_set[k - 1][2][0]] @ left_contraction.reshape(1, -1)[:,
+                                                                                  index_set[k - 1][2][1]]
             else:
                 A_22 = np.diag(right_contraction.flatten()[index_set[k - 1][0][1]])
                 A_33 = np.diag(right_contraction.flatten()[index_set[k - 1][1][1]])
                 A_44 = np.diag(right_contraction.flatten()[index_set[k - 1][2][1]])
-            solution_tt, lr = _tt_bm_core_wise(train_tt, solution_tt, A_22, A_33, A_44, k - 1, is_block=is_block, lr=lr, num_swps=num_swps, tol=0.1 * tol)
+            solution_tt, lr = _tt_bm_core_wise(train_tt, solution_tt, A_22, A_33, A_44, k - 1, is_block=is_block, lr=lr,
+                                               num_swps=num_swps, tol=0.1 * tol)
 
         diff[0] = _adjust_diff(train_tt, solution_tt, 0)
         err = (diff[0] @ right_contraction).item()
