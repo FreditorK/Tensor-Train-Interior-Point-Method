@@ -10,6 +10,7 @@ from typing import List
 from src.tt_ops import *
 from src.tt_ops import tt_rank_reduce, _tt_mat_core_collapse, _block_diag_tensor, tt_mask_to_linear_op
 from src.tt_amen import tt_amen
+from src.tt_factorisation import tt_burer_monteiro_factorisation
 
 IDX_01 = [
     np.array([[0, 1, 0, 0],
@@ -124,16 +125,19 @@ def _tt_psd_homotopy_step(XZ_tt, Delta_XZ_tt, prev_V_tt, tol=1e-5):
     #print(np.round(tt_matrix_to_matrix(Delta_XZ_tt), decimals=2))
     step_size = 0.05
     V_tt = prev_V_tt
-    for _ in range(10):
+    # TODO: More iterations
+    for _ in range(2):
         new_XZ_tt = tt_rank_reduce(tt_add(XZ_tt, tt_scale(step_size, Delta_XZ_tt)))
-        print(tt_ranks(new_XZ_tt))
+        M = np.round(tt_matrix_to_matrix(new_XZ_tt), decimals=2)
+        print(M)
+        print(np.linalg.eigvals(M))
         prev_V_tt, err = tt_burer_monteiro_factorisation(new_XZ_tt, solution_tt=prev_V_tt, is_block=True, tol=tol)
         if np.less_equal(err, tol):
             V_tt = prev_V_tt
             step_size += 0.05
         else:
             break
-    print(f"Final step size: {step_size}")
+    print(f"Final step size: {step_size-0.05}")
     return V_tt
 
 

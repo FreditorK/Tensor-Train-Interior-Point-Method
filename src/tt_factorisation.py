@@ -34,7 +34,7 @@ def _tt_burer_monteiro_grad(S, K_orig_qp, A_44, S_1, S_2, S_3, V_00, V_01, V_10,
     G_1 = np.einsum('ijt, lj->ilt', K_orig_qp.reshape(orig_q * orig_p, orig_q, orig_p, order="F"), V_01).reshape(
         orig_q * p, orig_p).T @ D_3.reshape(orig_q * p, orig_q, order="F")
 
-    return G_0 + H_0 + H_1 + G_1 + S_1
+    return G_0 + H_0 + H_1 + G_1
 
 
 def _tt_bm_core_wise(matrix_tt, factor_tt, A_22, A_33, A_44, idx, is_block=False, lr=0.5, num_swps=20, gamma=0.9,
@@ -159,7 +159,8 @@ def tt_burer_monteiro_factorisation(psd_tt, solution_tt=None, is_block=False, nu
     if is_block:
         solution_tt[0][:, 0, 1] = 0
         solution_tt[0][:, 1, 0] = 0
-    lr = 0.2
+    # TODO: Initial lr likely causes instabilities
+    lr = 0.1
     prev_err = 100
     comp_tt = tt_mat_mat_mul(solution_tt, tt_transpose(solution_tt))
     diff = [_tt_core_collapse(c, c) for c in tt_add(train_tt, comp_tt)]
@@ -205,6 +206,7 @@ def tt_burer_monteiro_factorisation(psd_tt, solution_tt=None, is_block=False, nu
                 A_22 = np.diag(left_contraction.flatten()[index_set[k + 1][0][1]])
                 A_33 = np.diag(left_contraction.flatten()[index_set[k + 1][1][1]])
                 A_44 = np.diag(left_contraction.flatten()[index_set[k + 1][2][1]])
+            print(k, np.round(A_44, decimals=3))
             solution_tt, lr = _tt_bm_core_wise(train_tt, solution_tt, A_22, A_33, A_44, k + 1, is_block=is_block, lr=lr,
                                                num_swps=num_swps, tol=0.1 * tol)
         right_contraction = 1
@@ -229,7 +231,7 @@ def tt_burer_monteiro_factorisation(psd_tt, solution_tt=None, is_block=False, nu
 
         diff[0] = _adjust_diff(train_tt, solution_tt, 0)
         err = (diff[0] @ right_contraction).item()
-        lr = min(0.99 * (prev_err / err) * lr, 0.2)
+        lr = min(0.99 * (prev_err / err) * lr, 0.1)
         prev_err = err
         print(f"Error: {err}, {lr}")
         if np.less_equal(err, tol):
