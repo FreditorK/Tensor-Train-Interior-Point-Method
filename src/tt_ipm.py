@@ -128,9 +128,9 @@ def _tt_psd_homotopy_step(XZ_tt, Delta_XZ_tt, prev_V_tt, tol=1e-5):
     # TODO: More iterations
     for _ in range(2):
         new_XZ_tt = tt_rank_reduce(tt_add(XZ_tt, tt_scale(step_size, Delta_XZ_tt)))
-        M = np.round(tt_matrix_to_matrix(new_XZ_tt), decimals=2)
-        print(M)
-        print(np.linalg.eigvals(M))
+        #M = np.round(tt_matrix_to_matrix(new_XZ_tt), decimals=2)
+        #print(M)
+        #print(np.linalg.eigvals(M))
         prev_V_tt, err = tt_burer_monteiro_factorisation(new_XZ_tt, solution_tt=prev_V_tt, is_block=True, tol=tol)
         if np.less_equal(err, tol):
             V_tt = prev_V_tt

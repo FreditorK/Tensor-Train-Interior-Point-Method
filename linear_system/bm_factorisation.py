@@ -17,10 +17,10 @@ class Config:
 
 np.random.seed(482)
 
-A = tt_random_gaussian([4, 5, 3], shape=(2, 2))
+A = tt_random_gaussian([4, 4, 4], shape=(2, 2))
 A_psd = tt_rank_reduce(tt_mat_mat_mul(A, tt_transpose(A)))
 t0 = time.time()
-B_psd, err = tt_burer_monteiro_factorisation(A_psd, num_swps=10, max_iter=20)
+B_psd, err = tt_burer_monteiro_factorisation(A_psd, num_swps=15, max_iter=20)
 t1 = time.time()
 diff = tt_sub(A_psd, tt_mat_mat_mul(B_psd, tt_transpose(B_psd)))
 print("Final Error: ", tt_inner_prod(diff, diff), f"Time: {t1-t0}s")

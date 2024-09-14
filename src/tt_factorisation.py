@@ -147,13 +147,13 @@ def _adjust_diff(matrix_tt, factor_tt, idx):
     return _tt_core_collapse(diff_core_idx, diff_core_idx)
 
 
-def tt_burer_monteiro_factorisation(psd_tt, solution_tt=None, is_block=False, num_swps=20, max_iter=20, tol=1e-5):
+def tt_burer_monteiro_factorisation(psd_tt, solution_tt=None, is_block=False, num_swps=20, max_iter=25, tol=1e-5):
     train_tt = tt_scale(-1, psd_tt)
-    target_ranks = [int(np.ceil(np.sqrt(r))) + 1 for r in tt_ranks(train_tt)]
+    target_ranks = [int(np.ceil(np.sqrt(r)))+1 for r in tt_ranks(train_tt)]
     if solution_tt is None:
         solution_tt = tt_random_gaussian(target_ranks, shape=(2, 2))
     else:
-        add_on_ranks = [max(r - c_r, 0) for c_r, r in zip(tt_ranks(solution_tt), target_ranks)]
+        add_on_ranks = [max(r - c_r, 1) for c_r, r in zip(tt_ranks(solution_tt), target_ranks)]
         solution_tt = tt_add(solution_tt, tt_random_gaussian(add_on_ranks, shape=(2, 2)))
     solution_tt = tt_rl_orthogonalise(solution_tt)
     if is_block:
@@ -206,7 +206,6 @@ def tt_burer_monteiro_factorisation(psd_tt, solution_tt=None, is_block=False, nu
                 A_22 = np.diag(left_contraction.flatten()[index_set[k + 1][0][1]])
                 A_33 = np.diag(left_contraction.flatten()[index_set[k + 1][1][1]])
                 A_44 = np.diag(left_contraction.flatten()[index_set[k + 1][2][1]])
-            print(k, np.round(A_44, decimals=3))
             solution_tt, lr = _tt_bm_core_wise(train_tt, solution_tt, A_22, A_33, A_44, k + 1, is_block=is_block, lr=lr,
                                                num_swps=num_swps, tol=0.1 * tol)
         right_contraction = 1
