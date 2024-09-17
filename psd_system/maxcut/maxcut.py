@@ -7,7 +7,7 @@ sys.path.append(os.getcwd() + '/../../')
 from dataclasses import dataclass
 from src.tt_ops import *
 from psd_system.graph_plotting import *
-from src.tt_ipm import tt_ipm
+from src.tt_ipm import tt_ipm, _tt_get_block
 
 
 
@@ -31,7 +31,11 @@ if __name__ == "__main__":
     t0 = time.time()
     V_tt, Y_tt = tt_ipm(G, As, bias)
     t1 = time.time()
-    XZ_tt = tt_mat_mat_mul(V_tt, tt_transpose(V_tt))
+    VX_tt = tt_rank_reduce(_tt_get_block(0, 0, V_tt))
+    print("V_tt-rank: ", tt_ranks(V_tt), tt_ranks(VX_tt))
+    XZ_tt = tt_rank_reduce(tt_mat_mat_mul(V_tt, tt_transpose(V_tt)))
+    X_tt = tt_rank_reduce(_tt_get_block(0, 0, XZ_tt))
+    print("XZ_tt-rank: ", tt_ranks(XZ_tt), tt_ranks(X_tt))
     print(np.round(tt_matrix_to_matrix(XZ_tt), decimals=2))
     """
     print(f"Problem solved in {t1 - t0:.3f}s")

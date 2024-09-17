@@ -119,26 +119,24 @@ def _tt_ipm_newton_step(obj_tt, linear_op_tt, bias_tt, XZ_tt, Y_tt, beta=5e-4):
     return tt_mat(Delta_tt, shape=(2, 2))
 
 
-def _tt_psd_homotopy_step(XZ_tt, Delta_XZ_tt, prev_V_tt, tol=1e-5):
-    #XZ_tt = tt_add(XZ_tt, tt_scale(0.0, Delta_XZ_tt))
+def _tt_psd_homotopy_step(XZ_tt, Delta_XZ_tt, prev_V_tt, max_iter=5, tol=1e-5):
     # Projection to PSD-cone
-    #print(np.round(tt_matrix_to_matrix(Delta_XZ_tt), decimals=2))
-    step_size = 0.05
+    step_size = 0
     V_tt = prev_V_tt
     # TODO: More iterations
-    for _ in range(2):
+    for iter in range(max_iter):
+        step_size += 0.05
         new_XZ_tt = tt_rank_reduce(tt_add(XZ_tt, tt_scale(step_size, Delta_XZ_tt)))
-        #M = np.round(tt_matrix_to_matrix(new_XZ_tt), decimals=2)
+        M = np.round(tt_matrix_to_matrix(new_XZ_tt), decimals=2)
         #print(M)
-        #print(np.linalg.eigvals(M))
+        print("Eigenvalues: ", np.linalg.eigvals(M))
         prev_V_tt, err = tt_burer_monteiro_factorisation(new_XZ_tt, solution_tt=prev_V_tt, is_block=True, tol=tol)
-        if np.less_equal(err, tol):
-            V_tt = prev_V_tt
-            step_size += 0.05
-        else:
+        if np.greater(err, tol):
+            step_size -= 0.05
             break
-    print(f"Final step size: {step_size-0.05}")
-    return V_tt
+        V_tt = prev_V_tt
+    print(f"Final step size: {step_size}")
+    return V_tt, step_size
 
 
 def _symmetrisation(Delta_XZ_tt):
@@ -157,17 +155,23 @@ def tt_ipm(obj_tt, linear_op_tt, bias_tt):
     dim = len(obj_tt)
     V_tt = [np.eye(2).reshape(1, 2, 2, 1)] + tt_identity(dim)  # [X, 0, 0, Z]^T
     Y_tt = tt_zeros(dim, shape=(2, 2))
-    for _ in range(1):
+    for _ in range(3):
         XZ_tt = tt_rank_reduce(tt_mat_mat_mul(V_tt, tt_transpose(V_tt)))
         Delta_tt = _tt_ipm_newton_step(obj_tt, linear_op_tt, bias_tt, XZ_tt, Y_tt)
-        #A = np.round(tt_matrix_to_matrix(XZ_tt), decimals=2)
-        #Delta_Y_tt = _tt_get_block(1, 0, Delta_tt)
+        A = np.round(tt_matrix_to_matrix(XZ_tt), decimals=2)
+        print("---")
+        print(A)
         Delta_XZ_tt = _get_xz_block(Delta_tt)
-        #D = np.round(tt_matrix_to_matrix(Delta_XZ_tt), decimals=2)
+        D = np.round(tt_matrix_to_matrix(Delta_XZ_tt), decimals=2)
+        print(D)
         Delta_XZ_tt = _symmetrisation(Delta_XZ_tt)
-        V_tt = _tt_psd_homotopy_step(XZ_tt, Delta_XZ_tt, V_tt)
-        # TODO: get step size that minimises dual residual
-        #Y_tt = tt_rank_reduce(tt_add(Y_tt, Delta_Y_tt))
+        D = np.round(tt_matrix_to_matrix(Delta_XZ_tt), decimals=2)
+        print(D)
+        V_tt, alpha = _tt_psd_homotopy_step(XZ_tt, Delta_XZ_tt, V_tt)
+        print("---")
+        ## TODO: get step size that minimises dual residual
+        Delta_Y_tt = _tt_get_block(1, 0, Delta_tt)
+        Y_tt = tt_rank_reduce(tt_add(Y_tt, tt_scale(alpha, Delta_Y_tt)))
     return V_tt, Y_tt
 
 
