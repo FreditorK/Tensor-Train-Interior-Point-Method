@@ -73,7 +73,7 @@ def tt_infeasible_newton_system_rhs(obj_tt, linear_op_tt, bias_tt, X_tt, Y_tt, Z
     lower_rhs = IDX_3 + tt_sub(tt_mat_mat_mul(Z_tt, X_tt), tt_scale(mu, tt_identity(len(X_tt))))
     newton_rhs = tt_add(upper_rhs, middle_rhs)
     newton_rhs = tt_add(newton_rhs, lower_rhs)
-    return tt_rank_reduce(tt_vec(newton_rhs))
+    return tt_rank_reduce(tt_scale(-1, tt_vec(newton_rhs)))
 
 
 def tt_infeasible_newton_system_lhs(lhs_skeleton, X_tt, Z_tt):
