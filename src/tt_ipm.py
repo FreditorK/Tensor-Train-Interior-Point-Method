@@ -76,17 +76,10 @@ def tt_infeasible_newton_system_rhs(obj_tt, linear_op_tt, bias_tt, X_tt, Y_tt, Z
     return tt_rank_reduce(tt_vec(newton_rhs))
 
 
-def tt_infeasible_newton_system_lhs(linear_op_tt, X_tt, Z_tt):
-    linear_op_tt = tt_scale(-1, linear_op_tt)
-    linear_op_tt_adjoint = IDX_01 + tt_op_to_mat(tt_adjoint(linear_op_tt))
-    linear_op_tt = IDX_10 + tt_op_to_mat(linear_op_tt)
-    I_mat_tt = tt_op_to_mat(tt_op_from_tt_matrix(tt_identity(len(X_tt))))
-    I_op_tt = IDX_03 + I_mat_tt
+def tt_infeasible_newton_system_lhs(lhs_skeleton, X_tt, Z_tt):
     Z_op_tt = IDX_30 + tt_op_to_mat(tt_op_from_tt_matrix(Z_tt))
     X_op_tt = IDX_33 + tt_op_to_mat(tt_op_from_tt_matrix(X_tt))
-    newton_system = tt_add(linear_op_tt, linear_op_tt_adjoint)
-    newton_system = tt_add(newton_system, I_op_tt)
-    newton_system = tt_add(newton_system, Z_op_tt)
+    newton_system = tt_add(lhs_skeleton, Z_op_tt)
     newton_system = tt_add(newton_system, X_op_tt)
     # For numerical stability?
     #newton_system = tt_add(newton_system, IDX_33 + I_mat_tt)
@@ -99,43 +92,34 @@ def _tt_get_block(i, j, block_matrix_tt):
     return [first_core] + block_matrix_tt[2:]
 
 
-def _tt_ipm_newton_step(obj_tt, linear_op_tt, bias_tt, XZ_tt, Y_tt, beta=5e-4):
+def _tt_ipm_newton_step(obj_tt, linear_op_tt, lhs_skeleton, bias_tt, XZ_tt, Y_tt):
     X_tt = _tt_get_block(0, 0, XZ_tt)
     Z_tt = _tt_get_block(1, 1, XZ_tt)
-    lhs_matrix_tt = tt_infeasible_newton_system_lhs(linear_op_tt, X_tt, Z_tt)
-    mu = tt_inner_prod(Z_tt, [0.5 * c for c in X_tt])
+    lhs_matrix_tt = tt_infeasible_newton_system_lhs(lhs_skeleton, X_tt, Z_tt)
+    mu = np.divide(tt_inner_prod(Z_tt, [0.5 * c for c in X_tt]), 2)
+    print("mu: ", mu)
     rhs_vec_tt = tt_infeasible_newton_system_rhs(obj_tt, linear_op_tt, bias_tt, X_tt, Y_tt, Z_tt, mu)
-    #np.set_printoptions(threshold=np.inf, linewidth=200)
-    #lhs_matrix_tt_2 = tt_rank_reduce(tt_mat_mat_mul(tt_transpose(lhs_matrix_tt), lhs_matrix_tt))
-    #rhs_vec_tt_2 = tt_rank_reduce(tt_matrix_vec_mul(tt_transpose(lhs_matrix_tt), rhs_vec_tt))
-    #print(tt_ranks(lhs_matrix_tt_2), tt_ranks(rhs_vec_tt_2))
-    # Tikhononv regularization
-    lhs_matrix_tt_reg = tt_rank_reduce(
-        tt_add(lhs_matrix_tt, [beta * np.eye(4).reshape(1, 4, 4, 1) for _ in range(len(lhs_matrix_tt))]),
-        err_bound=0.5 * beta)
-    Delta_tt = tt_amen(lhs_matrix_tt_reg, rhs_vec_tt, verbose=True, nswp=10)
-    #res = tt_sub(tt_matrix_vec_mul(lhs_matrix_tt, Delta_tt), rhs_vec_tt)
-    #print("Error: ", np.sqrt(tt_inner_prod(res, res)))
+    Delta_tt = tt_amen(lhs_matrix_tt, rhs_vec_tt, verbose=False, nswp=10)
     return tt_mat(Delta_tt, shape=(2, 2))
 
 
-def _tt_psd_homotopy_step(XZ_tt, Delta_XZ_tt, prev_V_tt, max_iter=5, tol=1e-5):
+def _tt_psd_homotopy_step(XZ_tt, Delta_XZ_tt, prev_V_tt, inc_factor=0.05, max_iter=5, tol=1e-5):
     # Projection to PSD-cone
+    prev_step_size = 0
     step_size = 0
     V_tt = prev_V_tt
     # TODO: More iterations
     for iter in range(max_iter):
-        step_size += 0.05
+        step_size += inc_factor
         new_XZ_tt = tt_rank_reduce(tt_add(XZ_tt, tt_scale(step_size, Delta_XZ_tt)))
-        M = np.round(tt_matrix_to_matrix(new_XZ_tt), decimals=2)
-        #print(M)
-        print("Eigenvalues: ", np.linalg.eigvals(M))
         prev_V_tt, err = tt_burer_monteiro_factorisation(new_XZ_tt, solution_tt=prev_V_tt, is_block=True, tol=tol)
         if np.greater(err, tol):
-            step_size -= 0.05
-            break
-        V_tt = prev_V_tt
-    print(f"Final step size: {step_size}")
+            step_size = (prev_step_size + step_size)/2
+            inc_factor *= 0.5
+        else:
+            V_tt = prev_V_tt
+            prev_step_size = step_size
+    print(f"Final step size: {step_size}, Error: {err}")
     return V_tt, step_size
 
 
@@ -151,24 +135,27 @@ def _get_xz_block(XYZ_tt):
     return [new_index_block] + XYZ_tt[1:]
 
 
-def tt_ipm(obj_tt, linear_op_tt, bias_tt):
+def tt_ipm(obj_tt, linear_op_tt, bias_tt, max_iter=10, beta=5e-4):
     dim = len(obj_tt)
+    op_tt = tt_scale(-1, linear_op_tt)
+    op_tt_adjoint = IDX_01 + tt_op_to_mat(tt_adjoint(op_tt))
+    op_tt = IDX_10 + tt_op_to_mat(op_tt)
+    I_mat_tt = tt_op_to_mat(tt_op_from_tt_matrix(tt_identity(dim)))
+    I_op_tt = IDX_03 + I_mat_tt
+    lhs_skeleton = tt_add(op_tt, op_tt_adjoint)
+    lhs_skeleton = tt_add(lhs_skeleton, I_op_tt)
+    # Tikhononv regularization
+    lhs_skeleton = tt_rank_reduce(tt_add(lhs_skeleton, [beta * np.eye(4).reshape(1, 4, 4, 1) for _ in range(len(lhs_skeleton))]), err_bound=0.5 * beta)
+
     V_tt = [np.eye(2).reshape(1, 2, 2, 1)] + tt_identity(dim)  # [X, 0, 0, Z]^T
     Y_tt = tt_zeros(dim, shape=(2, 2))
-    for _ in range(3):
+    for _ in range(max_iter):
         XZ_tt = tt_rank_reduce(tt_mat_mat_mul(V_tt, tt_transpose(V_tt)))
-        Delta_tt = _tt_ipm_newton_step(obj_tt, linear_op_tt, bias_tt, XZ_tt, Y_tt)
-        A = np.round(tt_matrix_to_matrix(XZ_tt), decimals=2)
-        print("---")
-        print(A)
+        print(np.round(tt_matrix_to_matrix(XZ_tt), decimals=2))
+        Delta_tt = _tt_ipm_newton_step(obj_tt, linear_op_tt, lhs_skeleton, bias_tt, XZ_tt, Y_tt)
         Delta_XZ_tt = _get_xz_block(Delta_tt)
-        D = np.round(tt_matrix_to_matrix(Delta_XZ_tt), decimals=2)
-        print(D)
         Delta_XZ_tt = _symmetrisation(Delta_XZ_tt)
-        D = np.round(tt_matrix_to_matrix(Delta_XZ_tt), decimals=2)
-        print(D)
         V_tt, alpha = _tt_psd_homotopy_step(XZ_tt, Delta_XZ_tt, V_tt)
-        print("---")
         ## TODO: get step size that minimises dual residual
         Delta_Y_tt = _tt_get_block(1, 0, Delta_tt)
         Y_tt = tt_rank_reduce(tt_add(Y_tt, tt_scale(alpha, Delta_Y_tt)))

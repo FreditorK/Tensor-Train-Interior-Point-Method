@@ -149,11 +149,19 @@ def _tt_bm_core_wise(matrix_tt, factor_tt, A_22, A_33, A_44, idx, lr, is_block=F
         vec_11 = _tt_burer_monteiro_grad(K_orig_qp, A_44, S_4, S_3, S_2, V_11_nest, V_10_nest, V_01_nest,
                                          V_00_nest, orig_p, orig_q, p, q)
 
+        max_norm = max(np.linalg.norm(vec_00), np.linalg.norm(vec_11))
         if idx != 0 or not is_block:
             vec_01 = _tt_burer_monteiro_grad(K_orig_qp, A_44, S_4, S_3, S_2, V_01_nest, V_00_nest, V_11_nest,
                                              V_10_nest, orig_p, orig_q, p, q)
             vec_10 = _tt_burer_monteiro_grad(K_orig_qp, A_44, S_1, S_2, S_3, V_10_nest, V_11_nest, V_00_nest,
                                              V_01_nest, orig_p, orig_q, p, q)
+            max_norm = max(max_norm, np.linalg.norm(vec_01), np.linalg.norm(vec_10))
+
+        # gradient clipping for numerical stability
+        vec_00 = np.divide(vec_00, max_norm)
+        vec_01 = np.divide(vec_01, max_norm)
+        vec_10 = np.divide(vec_10, max_norm)
+        vec_11 = np.divide(vec_11, max_norm)
 
         v_00_grad, v_01_grad, v_10_grad, v_11_grad, lr = _tt_bm_backtracking(
             A_22, A_33, A_44,
@@ -200,15 +208,16 @@ def _adjust_diff(matrix_tt, factor_tt, idx):
 
 
 def tt_burer_monteiro_factorisation(psd_tt, solution_tt=None, is_block=False, num_swps=20, max_iter=25, beta=0.9,
-                                    tol=1e-5):
+                                    tol=1e-5, verbose=False):
     train_tt = tt_scale(-1, psd_tt)
     target_ranks = [int(np.ceil(np.sqrt(r))) + 1 for r in tt_ranks(train_tt)]
     if solution_tt is None:
         solution_tt = tt_random_gaussian(target_ranks, shape=(2, 2))
     else:
-        add_on_ranks = [max(r - c_r, 0) for c_r, r in zip(tt_ranks(solution_tt), target_ranks)]
-        if np.all(np.array(add_on_ranks) > 0):
-            solution_tt = tt_add(solution_tt, tt_random_gaussian(add_on_ranks, shape=(2, 2)))
+        add_on_ranks = [max(r - c_r, 1) for c_r, r in zip(tt_ranks(solution_tt), target_ranks)]
+        # TODO: We could also do a rank compression of solution_tt here so that the ranks fit
+        solution_tt = tt_rank_retraction(solution_tt, [r - ar for ar, r in zip(add_on_ranks, target_ranks)])
+        solution_tt = tt_add(solution_tt, tt_random_gaussian(add_on_ranks, shape=(2, 2)))
     solution_tt = tt_rl_orthogonalise(solution_tt)
     if is_block:
         solution_tt[0][:, 0, 1] = 0
@@ -241,7 +250,8 @@ def tt_burer_monteiro_factorisation(psd_tt, solution_tt=None, is_block=False, nu
     ]
     terminal_idx = len(solution_tt) - 1
     err = safe_multi_dot(diff)
-    print(f"Initial Error: {err}, {lr}")
+    if verbose:
+        print(f"Initial Error: {err}, {lr}")
     for iteration in range(max_iter):
         left_contraction = 1
         for k in range(len(solution_tt) - 1):
@@ -290,9 +300,9 @@ def tt_burer_monteiro_factorisation(psd_tt, solution_tt=None, is_block=False, nu
 
         diff[0] = _adjust_diff(train_tt, solution_tt, 0)
         err = (diff[0] @ right_contraction).item()
-        print(f"Error: {err}, {lr}")
+        if verbose:
+            print(f"Error: {err}, {lr}")
         if np.less_equal(err, tol) or np.less_equal(np.max(lr), tol):
-            print(f"Converged in {iteration} iterations")
             break
 
     return solution_tt, err
