@@ -1,3 +1,5 @@
+import time
+
 import numpy as np
 import scipy as scp
 from src.tt_ops import *
@@ -144,6 +146,7 @@ def _tt_bm_core_wise(matrix_tt, factor_tt, A_22, A_33, A_44, idx, lr, is_block=F
         V_01_nest = V_01 - gamma * v_01_grad
         V_10_nest = V_10 - gamma * v_10_grad
         V_11_nest = V_11 - gamma * v_11_grad
+
         vec_00 = _tt_burer_monteiro_grad(K_orig_qp, A_44, S_1, S_2, S_3, V_00_nest, V_01_nest, V_10_nest,
                                          V_11_nest, orig_p, orig_q, p, q)
         vec_11 = _tt_burer_monteiro_grad(K_orig_qp, A_44, S_4, S_3, S_2, V_11_nest, V_10_nest, V_01_nest,
