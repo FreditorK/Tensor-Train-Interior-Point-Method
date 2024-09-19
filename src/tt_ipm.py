@@ -61,10 +61,14 @@ IDX_33 = [
               [0, 0, 0, 1]]).reshape(1, 4, 4, 1)
 ]
 
-IDX_0 = [np.array([[1, 0], [0, 0]]).reshape(1, 2, 2, 1)]
-IDX_1 = [np.array([[0, 1], [0, 0]]).reshape(1, 2, 2, 1)]
-IDX_2 = [np.array([[0, 0], [1, 0]]).reshape(1, 2, 2, 1)]
-IDX_3 = [np.array([[0, 0], [0, 1]]).reshape(1, 2, 2, 1)]
+IDX_0 = [np.array([[1, 0],
+                   [0, 0]]).reshape(1, 2, 2, 1)]
+IDX_1 = [np.array([[0, 1],
+                   [0, 0]]).reshape(1, 2, 2, 1)]
+IDX_2 = [np.array([[0, 0],
+                   [1, 0]]).reshape(1, 2, 2, 1)]
+IDX_3 = [np.array([[0, 0],
+                   [0, 1]]).reshape(1, 2, 2, 1)]
 
 
 def tt_infeasible_newton_system_rhs(obj_tt, linear_op_tt, bias_tt, X_tt, Y_tt, Z_tt, mu):
@@ -99,7 +103,8 @@ def _tt_ipm_newton_step(obj_tt, linear_op_tt, lhs_skeleton, bias_tt, XZ_tt, Y_tt
     mu = np.divide(tt_inner_prod(Z_tt, [0.5 * c for c in X_tt]), 2)
     print("mu: ", mu)
     rhs_vec_tt = tt_infeasible_newton_system_rhs(obj_tt, linear_op_tt, bias_tt, X_tt, Y_tt, Z_tt, mu)
-    Delta_tt = tt_amen(lhs_matrix_tt, rhs_vec_tt, verbose=False, nswp=10)
+    Delta_tt, res = tt_amen(lhs_matrix_tt, rhs_vec_tt, verbose=False, nswp=10)
+    print("AMeN error: ", res)
     return tt_mat(Delta_tt, shape=(2, 2))
 
 
@@ -152,7 +157,10 @@ def tt_ipm(obj_tt, linear_op_tt, bias_tt, max_iter=10, beta=5e-4):
     for _ in range(max_iter):
         XZ_tt = tt_rank_reduce(tt_mat_mat_mul(V_tt, tt_transpose(V_tt)))
         print(np.round(tt_matrix_to_matrix(XZ_tt), decimals=2))
+        # FIXME: Very large Delta_tt in second iteration+, Y_tt seems to be the problem
         Delta_tt = _tt_ipm_newton_step(obj_tt, linear_op_tt, lhs_skeleton, bias_tt, XZ_tt, Y_tt)
+        print("Delta:")
+        print(np.round(tt_matrix_to_matrix(Delta_tt), decimals=2))
         Delta_XZ_tt = _get_xz_block(Delta_tt)
         Delta_XZ_tt = _symmetrisation(Delta_XZ_tt)
         V_tt, alpha = _tt_psd_homotopy_step(XZ_tt, Delta_XZ_tt, V_tt)

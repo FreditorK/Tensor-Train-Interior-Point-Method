@@ -15,6 +15,7 @@ if __name__ == "__main__":
     t1 = time.time()
     print(f"Random graph produced in {t1 - t0:.3f}s")
     C = np.round(tt_matrix_to_matrix(G))
+    print(f"Graph: \n {C}")
     X = cp.Variable(C.shape, symmetric=True)
     constraints = [X >> 0]
     constraints += [cp.diag(X) == 1]
@@ -22,7 +23,7 @@ if __name__ == "__main__":
     prob = cp.Problem(cp.Maximize(cp.trace(C @ X)), constraints)
     prob.solve()
     t3 = time.time()
-    print(np.round(X.value, decimals=2))
+    print("Solution: \n", np.round(X.value, decimals=2))
     print(f"Problem solved in {t3 - t2:.3f}s")
     print(f"Objective value: {prob.value}")
     chol = robust_cholesky(X.value, epsilon=1e-3)

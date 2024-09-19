@@ -321,7 +321,7 @@ def _amen_solve_python(A, b, nswp=22, x0=None, eps=1e-10, kickrank=4, kick2=0, t
 
     x_cores = [x_cores[k] * normx for k in range(d)]
 
-    return x_cores
+    return x_cores, max_res
 
 
 def _compute_phi_bck_A(Phi_now, core_left, core_A, core_right):

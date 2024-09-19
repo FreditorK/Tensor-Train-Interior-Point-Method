@@ -215,7 +215,6 @@ def tt_burer_monteiro_factorisation(psd_tt, solution_tt=None, is_block=False, nu
         solution_tt = tt_random_gaussian(target_ranks, shape=(2, 2))
     else:
         add_on_ranks = [max(r - c_r, 1) for c_r, r in zip(tt_ranks(solution_tt), target_ranks)]
-        # TODO: We could also do a rank compression of solution_tt here so that the ranks fit
         solution_tt = tt_rank_retraction(solution_tt, [r - ar for ar, r in zip(add_on_ranks, target_ranks)])
         solution_tt = tt_add(solution_tt, tt_random_gaussian(add_on_ranks, shape=(2, 2)))
     solution_tt = tt_rl_orthogonalise(solution_tt)
