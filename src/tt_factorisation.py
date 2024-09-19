@@ -198,13 +198,7 @@ def _tt_bm_core_wise(matrix_tt, factor_tt, A_22, A_33, A_44, idx, lr, is_block=F
 
 def _adjust_diff(matrix_tt, factor_tt, idx):
     comp_tt_idx = _tt_mat_mat_collapse(factor_tt[idx], np.swapaxes(factor_tt[idx], axis1=1, axis2=2))
-    if 0 < idx < len(factor_tt) - 1:
-        diff_core_idx = _block_diag_tensor(matrix_tt[idx], comp_tt_idx)
-    elif idx == 0:
-        diff_core_idx = np.concatenate((matrix_tt[idx], comp_tt_idx), axis=-1)
-    else:
-        diff_core_idx = np.concatenate((matrix_tt[idx], comp_tt_idx), axis=0)
-    return _tt_core_collapse(diff_core_idx, diff_core_idx)
+    return _tt_core_collapse(matrix_tt[idx], comp_tt_idx), _tt_core_collapse(comp_tt_idx, matrix_tt[idx]), _tt_core_collapse(comp_tt_idx, comp_tt_idx)
 
 
 def tt_burer_monteiro_factorisation(psd_tt, solution_tt=None, is_block=False, num_swps=20, max_iter=25, beta=0.9,
@@ -223,82 +217,72 @@ def tt_burer_monteiro_factorisation(psd_tt, solution_tt=None, is_block=False, nu
         solution_tt[0][:, 1, 0] = 0
     lr = np.array([0.1] * len(train_tt))
     comp_tt = tt_mat_mat_mul(solution_tt, tt_transpose(solution_tt))
-    diff = [_tt_core_collapse(c, c) for c in tt_add(train_tt, comp_tt)]
-    train_shapes = [(train_tt[0].shape[-1], train_tt[0].shape[-1])] + [(c.shape[0], c.shape[-1]) for c in
-                                                                       train_tt[1:-1]] + [
-                       (train_tt[-1].shape[0], train_tt[-1].shape[0])]
-    solution_shapes = [(solution_tt[0].shape[-1] ** 2, solution_tt[0].shape[-1] ** 2)] + [
-        (c.shape[0] ** 2, c.shape[-1] ** 2) for c in solution_tt[1:-1]] + [
-                          (solution_tt[-1].shape[0] ** 2, solution_tt[-1].shape[0] ** 2)]
-    index_set = [
-        (
-            (
-                np.array([[i + (n + q) * j for i in range(q)] for j in range(n)]).flatten() + n,
-                np.array([[i + (m + p) * j for i in range(p)] for j in range(m)]).flatten() + m
-            ),
-            (
-                np.array([[i + (n + q) * j for i in range(n)] for j in range(q)]).flatten() + n * (n + q),
-                np.array([[i + (m + p) * j for i in range(m)] for j in range(p)]).flatten() + m * (m + p)
-            ),
-            (
-                np.array([[i + (n + q) * j for i in range(q)] for j in range(q)]).flatten() + n * (n + q + 1),
-                np.array([[i + (m + p) * j for i in range(p)] for j in range(p)]).flatten() + m * (m + p + 1)
-            )
-        )
-        for (m, n), (p, q) in zip(train_shapes, solution_shapes)
-    ]
+    A_44s = [_tt_core_collapse(c, c) for c in comp_tt]
+    A_33s = [_tt_core_collapse(a, c) for a, c in zip(train_tt, comp_tt)]
+    A_22s = [_tt_core_collapse(c, a) for c, a in zip(comp_tt, train_tt)]
+    A_11_constant = tt_inner_prod(train_tt, train_tt)
+
     terminal_idx = len(solution_tt) - 1
-    err = safe_multi_dot(diff)
+    err = A_11_constant + safe_multi_dot(A_22s) + safe_multi_dot(A_33s) + safe_multi_dot(A_44s)
     if verbose:
         print(f"Initial Error: {err}, {lr}")
     for iteration in range(max_iter):
-        left_contraction = 1
-        for k in range(len(solution_tt) - 1):
+        left_contraction_A_22 = 1
+        left_contraction_A_33 = 1
+        left_contraction_A_44 = 1
+        for k in range(terminal_idx):
             solution_tt = core_forward_orthogonalise(k, solution_tt)
-            diff[k] = _adjust_diff(train_tt, solution_tt, k)
-            left_contraction = np.dot(left_contraction, diff[k])
+            A_22s[k], A_33s[k], A_44s[k] = _adjust_diff(train_tt, solution_tt, k)
+            left_contraction_A_22 = np.dot(left_contraction_A_22, A_22s[k])
+            left_contraction_A_33 = np.dot(left_contraction_A_33, A_33s[k])
+            left_contraction_A_44 = np.dot(left_contraction_A_44, A_44s[k])
             if k + 1 != terminal_idx:
-                right_contraction = safe_multi_dot(diff[k + 2:])
-                A_22 = right_contraction.reshape(-1, 1)[index_set[k + 1][0][0]] @ left_contraction.reshape(1, -1)[:,
-                                                                                  index_set[k + 1][0][1]]
-                A_33 = right_contraction.reshape(-1, 1)[index_set[k + 1][1][0]] @ left_contraction.reshape(1, -1)[:,
-                                                                                  index_set[k + 1][1][1]]
-                A_44 = right_contraction.reshape(-1, 1)[index_set[k + 1][2][0]] @ left_contraction.reshape(1, -1)[:,
-                                                                                  index_set[k + 1][2][1]]
+                right_contraction_A_22 = safe_multi_dot(A_22s[k + 2:])
+                right_contraction_A_33 = safe_multi_dot(A_33s[k + 2:])
+                right_contraction_A_44 = safe_multi_dot(A_44s[k + 2:])
+
+                A_22 = np.outer(right_contraction_A_22, left_contraction_A_22)
+                A_33 = np.outer(right_contraction_A_33, left_contraction_A_33)
+                A_44 = np.outer(right_contraction_A_44, left_contraction_A_44)
             else:
-                A_22 = np.diag(left_contraction.flatten()[index_set[k + 1][0][1]])
-                A_33 = np.diag(left_contraction.flatten()[index_set[k + 1][1][1]])
-                A_44 = np.diag(left_contraction.flatten()[index_set[k + 1][2][1]])
-            solution_tt, _ = _tt_bm_core_wise(train_tt, solution_tt, A_22, A_33, A_44, k + 1, lr[k],
+                A_22 = np.diag(left_contraction_A_22.flatten())
+                A_33 = np.diag(left_contraction_A_33.flatten())
+                A_44 = np.diag(left_contraction_A_44.flatten())
+            solution_tt, lr_local = _tt_bm_core_wise(train_tt, solution_tt, A_22, A_33, A_44, k + 1, lr[k],
                                                   is_block=is_block,
                                                   beta=beta,
                                                   num_swps=num_swps, tol=0.1 * tol)
+            lr[k] = beta * lr[k] + (1 - beta) * lr_local
 
-        right_contraction = 1
+        right_contraction_A_22 = 1
+        right_contraction_A_33 = 1
+        right_contraction_A_44 = 1
         for k in range(terminal_idx, 0, -1):
             solution_tt = core_backward_orthogonalise(k, solution_tt)
-            diff[k] = _adjust_diff(train_tt, solution_tt, k)
-            right_contraction = np.dot(diff[k], right_contraction)
+            A_22s[k], A_33s[k], A_44s[k] = _adjust_diff(train_tt, solution_tt, k)
+            right_contraction_A_22 = np.dot(A_22s[k], right_contraction_A_22)
+            right_contraction_A_33 = np.dot(A_33s[k], right_contraction_A_33)
+            right_contraction_A_44 = np.dot(A_44s[k], right_contraction_A_44)
             if k - 1 != 0:
-                left_contraction = safe_multi_dot(diff[:k - 1]).reshape(1, -1)
-                A_22 = right_contraction.reshape(-1, 1)[index_set[k - 1][0][0]] @ left_contraction.reshape(1, -1)[:,
-                                                                                  index_set[k - 1][0][1]]
-                A_33 = right_contraction.reshape(-1, 1)[index_set[k - 1][1][0]] @ left_contraction.reshape(1, -1)[:,
-                                                                                  index_set[k - 1][1][1]]
-                A_44 = right_contraction.reshape(-1, 1)[index_set[k - 1][2][0]] @ left_contraction.reshape(1, -1)[:,
-                                                                                  index_set[k - 1][2][1]]
+                left_contraction_A_22 = safe_multi_dot(A_22s[:k - 1])
+                left_contraction_A_33 = safe_multi_dot(A_33s[:k - 1])
+                left_contraction_A_44 = safe_multi_dot(A_44s[:k - 1])
+
+                A_22 = np.outer(right_contraction_A_22, left_contraction_A_22)
+                A_33 = np.outer(right_contraction_A_33, left_contraction_A_33)
+                A_44 = np.outer(right_contraction_A_44, left_contraction_A_44)
             else:
-                A_22 = np.diag(right_contraction.flatten()[index_set[k - 1][0][1]])
-                A_33 = np.diag(right_contraction.flatten()[index_set[k - 1][1][1]])
-                A_44 = np.diag(right_contraction.flatten()[index_set[k - 1][2][1]])
+                A_22 = np.diag(right_contraction_A_22.flatten())
+                A_33 = np.diag(right_contraction_A_33.flatten())
+                A_44 = np.diag(right_contraction_A_44.flatten())
             solution_tt, lr_local = _tt_bm_core_wise(train_tt, solution_tt, A_22, A_33, A_44, k - 1, lr[k],
                                                   is_block=is_block,
                                                   beta=beta,
                                                   num_swps=num_swps, tol=0.1 * tol)
             lr[k] = beta*lr[k] + (1-beta)*lr_local
 
-        diff[0] = _adjust_diff(train_tt, solution_tt, 0)
-        err = (diff[0] @ right_contraction).item()
+        A_22s[0], A_33s[0], A_44s[0] = _adjust_diff(train_tt, solution_tt, 0)
+        err = A_11_constant + A_22s[0] @ right_contraction_A_22 + A_33s[0] @ right_contraction_A_33 + A_44s[0] @ right_contraction_A_44
         if verbose:
             print(f"Error: {err}, {lr}")
         if np.less_equal(err, tol) or np.less_equal(np.max(lr), tol):
