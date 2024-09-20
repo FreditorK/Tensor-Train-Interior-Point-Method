@@ -28,7 +28,7 @@ if __name__ == "__main__":
     print(f"Objective Ranks: {tt_ranks(G)}")
     print(f"Constraint Ranks: As {tt_ranks(As)}, bias {tt_ranks(bias)}")
     t0 = time.time()
-    V_tt, Y_tt = tt_ipm(G, As, bias, max_iter=10)
+    V_tt, Y_tt = tt_ipm(G, As, bias, max_iter=30)
     t1 = time.time()
     VX_tt = tt_rank_reduce(_tt_get_block(0, 0, V_tt))
     print("V_tt-rank: ", tt_ranks(V_tt), tt_ranks(VX_tt))
