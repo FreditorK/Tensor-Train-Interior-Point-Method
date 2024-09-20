@@ -74,7 +74,9 @@ IDX_3 = [np.array([[0, 0],
 def tt_infeasible_newton_system_rhs(obj_tt, linear_op_tt, bias_tt, X_tt, Y_tt, Z_tt, mu):
     upper_rhs = IDX_0 + tt_sub(tt_add(Z_tt, obj_tt), tt_mat(tt_linear_op(tt_adjoint(linear_op_tt), Y_tt), shape=(2, 2)))
     middle_rhs = IDX_1 + tt_sub(bias_tt, tt_mat(tt_linear_op(linear_op_tt, X_tt), shape=(2, 2)))
-    lower_rhs = IDX_3 + tt_add(tt_mat_mat_mul(Z_tt, X_tt), tt_scale(-mu, tt_identity(len(X_tt))))
+    lower_rhs = IDX_3 + tt_sub(tt_mat_mat_mul(Z_tt, X_tt), tt_scale(mu, tt_identity(len(X_tt))))
+    print(tt_inner_prod(upper_rhs, upper_rhs), tt_inner_prod(middle_rhs, middle_rhs), tt_inner_prod(lower_rhs, lower_rhs))
+    print(np.round(tt_matrix_to_matrix(tt_mat_mat_mul(Z_tt, X_tt)), decimals=2))
     newton_rhs = tt_add(upper_rhs, middle_rhs)
     newton_rhs = tt_add(newton_rhs, lower_rhs)
     return tt_rank_reduce(tt_scale(-1, tt_vec(newton_rhs)))
