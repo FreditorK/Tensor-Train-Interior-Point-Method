@@ -96,40 +96,34 @@ def _tt_get_block(i, j, block_matrix_tt):
     return [first_core] + block_matrix_tt[2:]
 
 
-def _tt_ipm_newton_step(obj_tt, linear_op_tt, lhs_skeleton, bias_tt, XZ_tt, Y_tt):
+def _tt_ipm_newton_step(obj_tt, linear_op_tt, lhs_skeleton, bias_tt, XZ_tt, Y_tt, tol=1e-5):
     X_tt = _tt_get_block(0, 0, XZ_tt)
     Z_tt = _tt_get_block(1, 1, XZ_tt)
-    lhs_matrix_tt = tt_infeasible_newton_system_lhs(lhs_skeleton, X_tt, Z_tt)
     mu = np.divide(tt_inner_prod(Z_tt, [0.5 * c for c in X_tt]), 2)
     print("mu: ", mu)
     rhs_vec_tt = tt_infeasible_newton_system_rhs(obj_tt, linear_op_tt, bias_tt, X_tt, Y_tt, Z_tt, mu)
+    print("Stop", tt_inner_prod(rhs_vec_tt, rhs_vec_tt))
+    if np.less(tt_inner_prod(rhs_vec_tt, rhs_vec_tt), tol):
+        return 0, mu, True
+    lhs_matrix_tt = tt_infeasible_newton_system_lhs(lhs_skeleton, X_tt, Z_tt)
     Delta_tt, res = tt_amen(lhs_matrix_tt, rhs_vec_tt, verbose=False, nswp=10)
     print("AMeN error: ", res)
-    return tt_mat(Delta_tt, shape=(2, 2)), mu
+    return tt_mat(Delta_tt, shape=(2, 2)), mu, False
 
 
-def _tt_psd_homotopy_step(XZ_tt, Delta_XZ_tt, prev_V_tt, inc_factor=0.1, max_iter=5, tol=1e-5):
+def _tt_psd_step(XZ_tt, Delta_XZ_tt, step_size=0.5, max_iter=10, tol=1e-6):
     # Projection to PSD-cone
-    step_size = 100*tol
-    prev_step_size = step_size
-    new_XZ_tt = tt_rank_reduce(tt_add(XZ_tt, tt_scale(step_size, Delta_XZ_tt)))
-    V_tt, last_err = tt_burer_monteiro_factorisation(new_XZ_tt, solution_tt=prev_V_tt, is_block=True, tol=tol)
-    # TODO: More iterations
+    last_err = 0
     for iter in range(max_iter):
-        step_size += inc_factor
         new_XZ_tt = tt_rank_reduce(tt_add(XZ_tt, tt_scale(step_size, Delta_XZ_tt)))
-        prev_V_tt, err = tt_burer_monteiro_factorisation(new_XZ_tt, solution_tt=V_tt, is_block=True, tol=tol)
-        if np.greater(err, tol):
-            step_size = (prev_step_size + step_size)/2
-            inc_factor *= 0.5
+        _, lamb = tt_randomised_min_eigentensor(new_XZ_tt, max_iter, tol)
+        if np.less(lamb, tol):
+            step_size *= 0.75
         else:
-            V_tt = prev_V_tt
-            last_err = err
-            prev_step_size = step_size
-    print(f"Final step size: {prev_step_size}, Error: {last_err}")
-    eig, lamb = tt_randomised_min_eigentensor(new_XZ_tt)
-    print("Min eig: ", lamb, tt_ranks(eig))
-    return V_tt, prev_step_size
+            XZ_tt = tt_rank_reduce(tt_add(XZ_tt, tt_scale(0.95*step_size, Delta_XZ_tt)))
+            last_err = lamb
+    print(f"Final step size: {step_size}, Error: {last_err}")
+    return XZ_tt, step_size
 
 
 def _symmetrisation(Delta_XZ_tt):
@@ -155,22 +149,23 @@ def tt_ipm(obj_tt, linear_op_tt, bias_tt, max_iter=10, beta=5e-4):
     lhs_skeleton = tt_add(lhs_skeleton, I_op_tt)
     # Tikhononv regularization
     lhs_skeleton = tt_rank_reduce(tt_add(lhs_skeleton, [beta * np.eye(4).reshape(1, 4, 4, 1) for _ in range(len(lhs_skeleton))]), err_bound=0.5 * beta)
-    V_tt = [np.eye(2).reshape(1, 2, 2, 1)] + tt_identity(dim)  # [X, 0, 0, Z]^T
+    XZ_tt = [np.eye(2).reshape(1, 2, 2, 1)] + tt_identity(dim)  # [X, 0, 0, Z]^T
     Y_tt = tt_zeros(dim, shape=(2, 2))
     for _ in range(max_iter):
-        XZ_tt = tt_rank_reduce(tt_mat_mat_mul(V_tt, tt_transpose(V_tt)))
         print(np.round(tt_matrix_to_matrix(XZ_tt), decimals=2))
         # FIXME: Very large Delta_tt in second iteration+, Y_tt seems to be the problem
-        Delta_tt, mu = _tt_ipm_newton_step(obj_tt, linear_op_tt, lhs_skeleton, bias_tt, XZ_tt, Y_tt)
+        Delta_tt, mu, stopping_crit = _tt_ipm_newton_step(obj_tt, linear_op_tt, lhs_skeleton, bias_tt, XZ_tt, Y_tt)
+        if stopping_crit:
+            break
         Delta_XZ_tt = _get_xz_block(Delta_tt)
         Delta_XZ_tt = _symmetrisation(Delta_XZ_tt)
-        V_tt, alpha = _tt_psd_homotopy_step(XZ_tt, Delta_XZ_tt, V_tt)
+        XZ_tt, alpha= _tt_psd_step(XZ_tt, Delta_XZ_tt)
         ## TODO: get step size that minimises dual residual
         Delta_Y_tt = _tt_get_block(0, 1, Delta_tt)
         Y_tt = tt_rank_reduce(tt_add(Y_tt, tt_scale(0.95*alpha, Delta_Y_tt)))
         print("Y_tt:")
         print(np.round(tt_matrix_to_matrix(Y_tt), decimals=4))
-    return V_tt, Y_tt
+    return XZ_tt, Y_tt
 
 
 if __name__ == "__main__":
