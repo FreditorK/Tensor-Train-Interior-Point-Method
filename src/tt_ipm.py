@@ -75,8 +75,6 @@ def tt_infeasible_newton_system_rhs(obj_tt, linear_op_tt, bias_tt, X_tt, Y_tt, Z
     upper_rhs = IDX_0 + tt_sub(tt_add(Z_tt, obj_tt), tt_mat(tt_linear_op(tt_adjoint(linear_op_tt), Y_tt), shape=(2, 2)))
     middle_rhs = IDX_1 + tt_sub(bias_tt, tt_mat(tt_linear_op(linear_op_tt, X_tt), shape=(2, 2)))
     lower_rhs = IDX_3 + tt_sub(tt_mat_mat_mul(Z_tt, X_tt), tt_scale(mu, tt_identity(len(X_tt))))
-    print(tt_inner_prod(upper_rhs, upper_rhs), tt_inner_prod(middle_rhs, middle_rhs), tt_inner_prod(lower_rhs, lower_rhs))
-    print(np.round(tt_matrix_to_matrix(tt_mat_mat_mul(Z_tt, X_tt)), decimals=2))
     newton_rhs = tt_add(upper_rhs, middle_rhs)
     newton_rhs = tt_add(newton_rhs, lower_rhs)
     return tt_rank_reduce(tt_scale(-1, tt_vec(newton_rhs)))
@@ -102,29 +100,22 @@ def _tt_ipm_newton_step(obj_tt, linear_op_tt, lhs_skeleton, bias_tt, XZ_tt, Y_tt
     X_tt = _tt_get_block(0, 0, XZ_tt)
     Z_tt = _tt_get_block(1, 1, XZ_tt)
     mu = np.divide(tt_inner_prod(Z_tt, [0.5 * c for c in X_tt]), 2)
-    print("mu: ", mu)
     rhs_vec_tt = tt_infeasible_newton_system_rhs(obj_tt, linear_op_tt, bias_tt, X_tt, Y_tt, Z_tt, mu)
-    print("Stop", tt_inner_prod(rhs_vec_tt, rhs_vec_tt))
-    if np.less(tt_inner_prod(rhs_vec_tt, rhs_vec_tt), tol):
+    if np.less(np.divide(tt_inner_prod(rhs_vec_tt, rhs_vec_tt), 3), tol):
         return 0, mu, True
     lhs_matrix_tt = tt_infeasible_newton_system_lhs(lhs_skeleton, X_tt, Z_tt)
     Delta_tt, res = tt_amen(lhs_matrix_tt, rhs_vec_tt, verbose=False, nswp=10)
-    print("AMeN error: ", res)
     return tt_mat(Delta_tt, shape=(2, 2)), mu, False
 
 
-def _tt_psd_step(XZ_tt, Delta_XZ_tt, step_size=0.5, max_iter=10, tol=1e-6):
+def _tt_psd_step(XZ_tt, Delta_XZ_tt, step_size=0.5, discount=0.75, max_iter=10, tol=1e-6):
     # Projection to PSD-cone
-    last_err = 0
     for iter in range(max_iter):
         new_XZ_tt = tt_rank_reduce(tt_add(XZ_tt, tt_scale(step_size, Delta_XZ_tt)))
-        _, lamb = tt_randomised_min_eigentensor(new_XZ_tt, max_iter, tol)
-        if np.less(lamb, tol):
-            step_size *= 0.75
-        else:
-            XZ_tt = tt_rank_reduce(tt_add(XZ_tt, tt_scale(0.95*step_size, Delta_XZ_tt)))
-            last_err = lamb
-    print(f"Final step size: {step_size}, Error: {last_err}")
+        if tt_is_psd(new_XZ_tt, max_iter, tol):
+            return tt_rank_reduce(tt_add(XZ_tt, tt_scale(0.95 * step_size, Delta_XZ_tt))), step_size
+        step_size *= discount
+    #print(f"Final step size: {step_size}, Error: {last_err}")
     return XZ_tt, step_size
 
 
@@ -153,20 +144,20 @@ def tt_ipm(obj_tt, linear_op_tt, bias_tt, max_iter=10, beta=5e-4):
     lhs_skeleton = tt_rank_reduce(tt_add(lhs_skeleton, [beta * np.eye(4).reshape(1, 4, 4, 1) for _ in range(len(lhs_skeleton))]), err_bound=0.5 * beta)
     XZ_tt = [np.eye(2).reshape(1, 2, 2, 1)] + tt_identity(dim)  # [X, 0, 0, Z]^T
     Y_tt = tt_zeros(dim, shape=(2, 2))
-    for _ in range(max_iter):
-        print(np.round(tt_matrix_to_matrix(XZ_tt), decimals=2))
-        # FIXME: Very large Delta_tt in second iteration+, Y_tt seems to be the problem
+    iter = 0
+    for iter in range(max_iter):
+        #print(np.round(tt_matrix_to_matrix(XZ_tt), decimals=2))
         Delta_tt, mu, stopping_crit = _tt_ipm_newton_step(obj_tt, linear_op_tt, lhs_skeleton, bias_tt, XZ_tt, Y_tt)
         if stopping_crit:
             break
         Delta_XZ_tt = _get_xz_block(Delta_tt)
         Delta_XZ_tt = _symmetrisation(Delta_XZ_tt)
         XZ_tt, alpha= _tt_psd_step(XZ_tt, Delta_XZ_tt)
-        ## TODO: get step size that minimises dual residual
         Delta_Y_tt = _tt_get_block(0, 1, Delta_tt)
         Y_tt = tt_rank_reduce(tt_add(Y_tt, tt_scale(0.95*alpha, Delta_Y_tt)))
-        print("Y_tt:")
-        print(np.round(tt_matrix_to_matrix(Y_tt), decimals=4))
+        #print("Y_tt:")
+        #print(np.round(tt_matrix_to_matrix(Y_tt), decimals=4))
+    print(f"Converged in {iter+1} iterations.")
     return XZ_tt, Y_tt
 
 

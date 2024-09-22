@@ -1,3 +1,4 @@
+import numpy as np
 import scipy as scp
 from src.ops import *
 import copy
@@ -506,8 +507,8 @@ def tt_min_eigentensor(matrix_tt: List[np.array], num_iter=10, tol=1e-3):
 
 
 def tt_randomised_min_eigentensor(matrix_tt: List[np.array], num_iter=10, tol=1e-3):
-    ranks = [2 ** i for i in range(int(np.ceil((len(matrix_tt) + 1) / 2)))]
-    target_ranks = ranks + list(reversed(ranks[:len(matrix_tt) + 1 - len(ranks)]))
+    # TODO: We can compress more here, the ranks of the eigenvector are actually dependent on the tt_matrix ranks
+    target_ranks = [1] + [int(np.round(np.sqrt(r))) + 1 for r in tt_ranks(matrix_tt)] + [1]
     gaussian_tt = [
         np.divide(1, l_n * 2 * l_np1) * np.random.randn(l_n, 2, l_np1)
         for i, (l_n, l_np1) in enumerate(zip(target_ranks[:-1], target_ranks[1:]))
@@ -531,13 +532,43 @@ def _tt_randomised_min_eigentensor(matrix_tt: List[np.array], gaussian_tt, num_i
         prev_norm_2 = norm_2
         eig_vec_tt = _tt_lr_random_orthogonalise(_tt_matrix_vec_mul(matrix_tt, eig_vec_tt), gaussian_tt)
         norm_2 = tt_inner_prod(eig_vec_tt, eig_vec_tt)
-        eig_vec_tt = tt_scale(np.divide(1, np.sqrt(norm_2)), eig_vec_tt)
+        eig_vec_tt[-1] *= np.divide(1, np.sqrt(norm_2))
         if np.less_equal(np.abs(norm_2 - prev_norm_2), tol):
             break
     prev_eig_vec = eig_vec_tt
     eig_vec_tt = _tt_lr_random_orthogonalise(_tt_matrix_vec_mul(matrix_tt, eig_vec_tt), gaussian_tt)
     eig_val = tt_inner_prod(prev_eig_vec, eig_vec_tt)
     return tt_normalise(eig_vec_tt), normalisation * (2 - eig_val)
+
+
+def tt_is_psd(matrix_tt: List[np.array], num_iter=10, tol=1e-3):
+    """
+    Only for symmetric matrices
+    """
+    target_ranks = [1] + [int(np.round(np.sqrt(r))) + 1 for r in tt_ranks(matrix_tt)] + [1]
+    gaussian_tt = [
+        np.divide(1, l_n * 2 * l_np1) * np.random.randn(l_n, 2, l_np1)
+        for i, (l_n, l_np1) in enumerate(zip(target_ranks[:-1], target_ranks[1:]))
+    ]
+    n = len(matrix_tt)
+    normalisation = np.sqrt(tt_inner_prod(matrix_tt, matrix_tt))
+    matrix_tt = tt_scale(-np.divide(1, normalisation), matrix_tt)
+    identity = tt_identity(n)
+    identity = tt_scale(2, identity)
+    matrix_tt = tt_rank_reduce(tt_add(identity, matrix_tt), err_bound=tol)
+    eig_vec_tt = tt_normalise([np.random.randn(1, 2, 1) for _ in range(n)])
+    norm_2 = np.inf
+    for i in range(num_iter):
+        prev_norm_2 = norm_2
+        eig_vec_tt = _tt_lr_random_orthogonalise(_tt_matrix_vec_mul(matrix_tt, eig_vec_tt), gaussian_tt)
+        norm_2 = tt_inner_prod(eig_vec_tt, eig_vec_tt)
+        sq_root = np.sqrt(norm_2)
+        eig_vec_tt[-1] *= np.divide(1, np.sqrt(norm_2))
+        if np.less(normalisation*(2 - sq_root), 0):
+            return False
+        elif np.less_equal(np.abs(norm_2 - prev_norm_2), tol):
+            return True
+    return True
 
 
 def tt_outer_product(train_1_tt, train_2_tt):
