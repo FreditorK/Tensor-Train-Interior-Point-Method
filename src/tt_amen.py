@@ -91,11 +91,6 @@ def _amen_solve_python(A, b, nswp=22, x0=None, eps=1e-10, kickrank=4, kick2=0, t
     for swp in range(nswp):
         # right to left orthogonalization
 
-        if verbose:
-            print('Starting sweep %d %s...' %
-                  (swp+1, "(last one) " if last else ""))
-            tme_sweep = datetime.datetime.now()
-
         for k in range(d-1, 0, -1):
 
             # update the z part (ALS) update
@@ -166,8 +161,6 @@ def _amen_solve_python(A, b, nswp=22, x0=None, eps=1e-10, kickrank=4, kick2=0, t
         max_dx = 0
 
         for k in range(d):
-            if verbose:
-                print('\tCore', k)
             previous_solution = np.reshape(x_cores[k], [-1, 1])
 
             # assemble rhs
@@ -191,9 +184,6 @@ def _amen_solve_python(A, b, nswp=22, x0=None, eps=1e-10, kickrank=4, kick2=0, t
 
             # compute residual and step size
             dx = np.linalg.norm(solution_now-previous_solution) / np.linalg.norm(solution_now)
-            if verbose:
-                print('\t\tdx = %g, res_now = %g, res_old = %g' %
-                      (dx, res_new, res_old))
 
             max_dx = max(dx, max_dx)
             max_res = max(max_res, res_old)
@@ -299,27 +289,18 @@ def _amen_solve_python(A, b, nswp=22, x0=None, eps=1e-10, kickrank=4, kick2=0, t
             else:
                 x_cores[k] = np.reshape(u @ np.diag(s[:r]) @ v[:r, :].T, (rx[k], N[k], rx[k+1]))
 
-        if verbose:
-            print('Solution rank is', rx)
-            print('Maxres ', max_res)
-            tme_sweep = datetime.datetime.now()-tme_sweep
-            print('Time ', tme_sweep)
-
         if last:
             break
 
         if max_res < eps:
             last = True
 
-    if verbose:
-        time_total = datetime.datetime.now() - time_total
-        print()
-        print('Finished after', swp+1, ' sweeps and ', time_total)
-        print()
-
     normx = np.exp(np.sum(np.log(normx))/d)
 
     x_cores = [x_cores[k] * normx for k in range(d)]
+    if verbose:
+        print('Solution rank is', rx[1:-1])
+        print('Residual ', max_res)
 
     return x_cores, max_res
 

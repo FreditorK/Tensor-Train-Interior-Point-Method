@@ -13,28 +13,28 @@ from src.tt_ipm import tt_ipm, _tt_get_block
 
 @dataclass
 class Config:
-    seed = 3
+    seed = 3 #999: Very low rank solution, 9: Low rank solution, 3: Regular solution
     ranks = [3]
 
 
 if __name__ == "__main__":
     np.random.seed(Config.seed)
     print("Creating Problem...")
-    G = tt_random_graph(Config.ranks)
-    print(np.round(tt_matrix_to_matrix(G), decimals=2))
-    As = tt_mask_to_linear_op(tt_identity(len(G)))
-    bias = tt_identity(len(G))
+    G_tt = tt_random_graph(Config.ranks)
+    print(np.round(tt_matrix_to_matrix(G_tt), decimals=2))
+    As_tt = tt_mask_to_linear_op(tt_identity(len(G_tt)))
+    bias_tt = tt_identity(len(G_tt))
     print("...Problem created!")
-    print(f"Objective Ranks: {tt_ranks(G)}")
-    print(f"Constraint Ranks: As {tt_ranks(As)}, bias {tt_ranks(bias)}")
+    print(f"Objective Ranks: {tt_ranks(G_tt)}")
+    print(f"Constraint Ranks: As {tt_ranks(As_tt)}, bias {tt_ranks(bias_tt)}")
     t0 = time.time()
-    XZ_tt, Y_tt = tt_ipm(G, As, bias, max_iter=35)
+    XZ_tt, Y_tt = tt_ipm(G_tt, As_tt, bias_tt, max_iter=50, verbose=True)
     t1 = time.time()
     X_tt = tt_rank_reduce(_tt_get_block(0, 0, XZ_tt))
     Z_tt = tt_rank_reduce(_tt_get_block(1, 1, XZ_tt))
     print("Solution: ")
     print(np.round(tt_matrix_to_matrix(XZ_tt), decimals=2))
-    print(f"Objective value: {tt_inner_prod(G, X_tt)}")
+    print(f"Objective value: {tt_inner_prod(G_tt, X_tt)}")
     print("Complementary Slackness: ", tt_inner_prod(X_tt, Z_tt))
     print(f"Ranks- XZ_tt {tt_ranks(XZ_tt)} X_tt {tt_ranks(X_tt)} Z_tt {tt_ranks(Z_tt)} ")
     print(f"Time: {t1-t0}s")

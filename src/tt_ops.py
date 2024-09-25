@@ -545,7 +545,7 @@ def tt_is_psd(matrix_tt: List[np.array], num_iter=10, tol=1e-3):
     """
     Only for symmetric matrices
     """
-    target_ranks = [1] + [int(np.round(np.sqrt(r))) + 1 for r in tt_ranks(matrix_tt)] + [1]
+    target_ranks = [1] + [int(np.ceil(np.sqrt(r))) + 1 for r in tt_ranks(matrix_tt)] + [1]
     gaussian_tt = [
         np.divide(1, l_n * 2 * l_np1) * np.random.randn(l_n, 2, l_np1)
         for i, (l_n, l_np1) in enumerate(zip(target_ranks[:-1], target_ranks[1:]))
