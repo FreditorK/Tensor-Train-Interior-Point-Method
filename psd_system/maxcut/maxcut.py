@@ -39,7 +39,7 @@ if __name__ == "__main__":
     print(np.round(tt_matrix_to_matrix(XZ_tt), decimals=2))
     print(f"Objective value: {tt_inner_prod(G_tt, X_tt)}")
     print("Complementary Slackness: ", tt_inner_prod(X_tt, Z_tt))
-    print(f"Ranks- XZ_tt {tt_ranks(XZ_tt)} X_tt {tt_ranks(X_tt)} Z_tt {tt_ranks(Z_tt)} ")
+    print(f"Ranks XZ_tt {tt_ranks(XZ_tt)} X_tt {tt_ranks(X_tt)} Z_tt {tt_ranks(Z_tt)} ")
     print(f"Time: {t1-t0}s")
     """
     print(f"Problem solved in {t1 - t0:.3f}s")
