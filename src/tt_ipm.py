@@ -1,6 +1,9 @@
 import sys
 import os
 
+import numpy as np
+from numpy.core.defchararray import lower
+
 sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
@@ -66,13 +69,15 @@ IDX_3 = [np.array([[0, 0],
                    [0, 1]]).reshape(1, 2, 2, 1)]
 
 
-def tt_infeasible_newton_system_rhs(obj_tt, linear_op_tt, bias_tt, X_tt, Y_tt, Z_tt, mu):
-    upper_rhs = IDX_0 + tt_sub(tt_add(Z_tt, obj_tt), tt_mat(tt_linear_op(tt_adjoint(linear_op_tt), Y_tt), shape=(2, 2)))
+def tt_infeasible_newton_system_rhs(obj_tt, linear_op_tt, bias_tt, X_tt, Y_tt, Z_tt, mu, i):
+    upper_rhs = IDX_0 + tt_sub(tt_add(obj_tt, Z_tt), tt_mat(tt_linear_op(tt_adjoint(linear_op_tt), Y_tt), shape=(2, 2)))
     middle_rhs = IDX_1 + tt_sub(bias_tt, tt_mat(tt_linear_op(linear_op_tt, X_tt), shape=(2, 2)))
-    lower_rhs = IDX_3 + tt_sub(tt_mat_mat_mul(Z_tt, X_tt), tt_scale(mu, tt_identity(len(X_tt))))
+    #if i % 2 == 0: Mehrotra's Predictor-Corrector
+    lower_rhs = IDX_3 + tt_sub(tt_mat_mat_mul(X_tt, Z_tt), tt_scale(mu, tt_identity(len(X_tt))))
     newton_rhs = tt_add(upper_rhs, middle_rhs)
+    primal_dual_error = tt_inner_prod(newton_rhs, newton_rhs)
     newton_rhs = tt_add(newton_rhs, lower_rhs)
-    return tt_rank_reduce(tt_scale(-1, tt_vec(newton_rhs)))
+    return tt_rank_reduce(tt_scale(-1, tt_vec(newton_rhs)), err_bound=0), primal_dual_error
 
 
 def tt_infeasible_newton_system_lhs(lhs_skeleton, X_tt, Z_tt):
@@ -80,7 +85,7 @@ def tt_infeasible_newton_system_lhs(lhs_skeleton, X_tt, Z_tt):
     X_op_tt = IDX_33 + tt_op_to_mat(tt_op_from_tt_matrix(X_tt))
     newton_system = tt_add(lhs_skeleton, Z_op_tt)
     newton_system = tt_add(newton_system, X_op_tt)
-    return tt_rank_reduce(newton_system)
+    return tt_rank_reduce(newton_system, err_bound=0)
 
 
 def _tt_get_block(i, j, block_matrix_tt):
@@ -89,34 +94,61 @@ def _tt_get_block(i, j, block_matrix_tt):
     return [first_core] + block_matrix_tt[2:]
 
 
-def _tt_ipm_newton_step(obj_tt, linear_op_tt, lhs_skeleton, bias_tt, XZ_tt, Y_tt, verbose, tol=1e-5):
+def _tt_ipm_newton_step(obj_tt, linear_op_tt, lhs_skeleton, bias_tt, XZ_tt, Y_tt, centering_param, i, verbose, tol=1e-5):
     X_tt = _tt_get_block(0, 0, XZ_tt)
     Z_tt = _tt_get_block(1, 1, XZ_tt)
-    mu = np.divide(tt_inner_prod(Z_tt, [0.5 * c for c in X_tt]), 2)
-    rhs_vec_tt = tt_infeasible_newton_system_rhs(obj_tt, linear_op_tt, bias_tt, X_tt, Y_tt, Z_tt, mu)
-    error = np.divide(tt_inner_prod(rhs_vec_tt, rhs_vec_tt), 3)
+    mu = tt_inner_prod(Z_tt, [0.5 * c for c in X_tt])
+    rhs_vec_tt, primal_dual_error = tt_infeasible_newton_system_rhs(obj_tt, linear_op_tt, bias_tt, X_tt, Y_tt, Z_tt, centering_param*mu, i)
+    error = np.divide(primal_dual_error + mu, 3)
     if verbose:
-        print(f"KKT error: {error:.2f}")
+        print(f"---Step {iter}---")
+        print(f"Duality Gap: {abs(mu):.4f}%")
+        print(f"Primal-Dual error: {primal_dual_error:.4f}")
     if np.less(error, tol):
-        return 0, mu, True
+        return 0, primal_dual_error/mu, True
     lhs_matrix_tt = tt_infeasible_newton_system_lhs(lhs_skeleton, X_tt, Z_tt)
-    Delta_tt, res = tt_amen(lhs_matrix_tt, rhs_vec_tt, verbose=verbose, nswp=15)
-    return tt_mat(Delta_tt, shape=(2, 2)), mu, False
+    Delta_tt, res = tt_amen(lhs_matrix_tt, rhs_vec_tt, verbose=verbose, nswp=22)
+    return tt_mat(Delta_tt, shape=(2, 2)), primal_dual_error/mu, False
 
 
-def _tt_psd_step(XZ_tt, Delta_XZ_tt, step_size=0.5, discount=0.75, max_num_steps=10, tol=1e-6):
+def _tt_psd_step(XZ_tt, Delta_XZ_tt, step_size=1, discount=0.5, max_num_steps=10, tol=1e-6):
+    x_step_size = step_size
+    z_step_size = step_size
+    discount_x = True
+    discount_z = True
     # Projection to PSD-cone
     for iter in range(max_num_steps):
-        new_XZ_tt = tt_rank_reduce(tt_add(XZ_tt, tt_scale(step_size, Delta_XZ_tt)))
-        if tt_is_psd(new_XZ_tt, max_num_steps, tol):
-            return tt_rank_reduce(tt_add(XZ_tt, tt_scale(0.95 * step_size, Delta_XZ_tt))), step_size
-        step_size *= discount
-    #print(f"Final step size: {step_size}, Error: {last_err}")
-    return XZ_tt, step_size
+        new_XZ_tt = tt_add(XZ_tt, Delta_XZ_tt)
+        #discount_x, discount_z = tt_block_psd(new_XZ_tt, 1000, tol)
+        X_tt = _tt_get_block(0, 0, new_XZ_tt)
+        Z_tt = _tt_get_block(1, 1, new_XZ_tt)
+        #print("Check x: ", discount_x, np.linalg.eigvals(tt_matrix_to_matrix(X_tt)))
+        #print("Check z: ", discount_z, np.linalg.eigvals(tt_matrix_to_matrix(Z_tt)))
+        print("Eigs_1: ", np.linalg.eigvals(tt_matrix_to_matrix(X_tt)))
+        print("Eigs_2: ", np.linalg.eigvals(tt_matrix_to_matrix(Z_tt)))
+        discount_x = np.all(np.linalg.eigvals(tt_matrix_to_matrix(X_tt)) >= 0)
+        discount_z = np.all(np.linalg.eigvals(tt_matrix_to_matrix(Z_tt)) >= 0)
+        if ~discount_x:
+            x_step_size *= discount
+            Delta_XZ_tt[0][:, 0, 0, :] *= discount
+        if ~discount_z:
+            z_step_size *= discount
+            Delta_XZ_tt[0][:, 1, 1, :] *= discount
+        if discount_x and discount_z:
+            Delta_XZ_tt[0] *= 0.95
+            print(f"Step Size: {x_step_size}, {z_step_size}")
+            return tt_rank_reduce(tt_add(XZ_tt, Delta_XZ_tt), err_bound=0), z_step_size
+    x_step_size *= discount_x
+    z_step_size *= discount_z
+    Delta_XZ_tt[0][:, 0, 0, :] *= discount_x
+    Delta_XZ_tt[0][:, 1, 1, :] *= discount_z
+    Delta_XZ_tt[0] *= 0.95
+    print(f"Step Size: {x_step_size}, {z_step_size}")
+    return tt_rank_reduce(tt_add(XZ_tt, Delta_XZ_tt), err_bound=0), z_step_size
 
 
 def _symmetrisation(Delta_XZ_tt):
-    Delta_XZ_tt = tt_rank_reduce(tt_scale(0.5, tt_add(Delta_XZ_tt, tt_transpose(Delta_XZ_tt))))
+    Delta_XZ_tt = tt_rank_reduce(tt_scale(0.5, tt_add(Delta_XZ_tt, tt_transpose(Delta_XZ_tt))), err_bound=0)
     return Delta_XZ_tt
 
 
@@ -127,7 +159,7 @@ def _get_xz_block(XYZ_tt):
     return [new_index_block] + XYZ_tt[1:]
 
 
-def tt_ipm(obj_tt, linear_op_tt, bias_tt, max_iter, beta=8e-4, verbose=False):
+def tt_ipm(obj_tt, linear_op_tt, bias_tt, max_iter, beta=1e-4, tol=1e-6, verbose=False):
     dim = len(obj_tt)
     beta = beta ** (1 / (dim - 1))
     op_tt = tt_scale(-1, linear_op_tt)
@@ -139,23 +171,26 @@ def tt_ipm(obj_tt, linear_op_tt, bias_tt, max_iter, beta=8e-4, verbose=False):
     lhs_skeleton = tt_add(lhs_skeleton, I_op_tt)
     # Tikhononv regularization
     lhs_skeleton = tt_rank_reduce(
-        tt_add(lhs_skeleton, [beta * np.eye(4).reshape(1, 4, 4, 1) for _ in range(len(lhs_skeleton))]))
+        tt_add(lhs_skeleton, [beta * np.eye(4).reshape(1, 4, 4, 1) for _ in range(len(lhs_skeleton))]), err_bound=0)
     XZ_tt = tt_identity(dim + 1)  # [X, 0, 0, Z]^T
     Y_tt = tt_zeros(dim, shape=(2, 2))  # [0, Y_1, Y_2, 0]^T
     iter = 0
+    centering_param = 0.5
     for iter in range(max_iter):
-        #print(np.round(tt_matrix_to_matrix(XZ_tt), decimals=2))
-        Delta_tt, mu, stopping_crit = _tt_ipm_newton_step(obj_tt, linear_op_tt, lhs_skeleton, bias_tt, XZ_tt, Y_tt,
-                                                          verbose)
-        if verbose:
-            print(f"Duality Gap: {abs(mu):.3f}%")
+        Delta_tt, error_ratio, stopping_crit = _tt_ipm_newton_step(
+            obj_tt, linear_op_tt, lhs_skeleton, bias_tt, XZ_tt, Y_tt, centering_param, iter, verbose
+        )
+        condition = min(1, error_ratio**3)
+        centering_param = 0.8*centering_param + 0.2*(0.5*condition + 0.1*(1-condition))
+        print("Centering Param: ", centering_param)
+        print(np.round(tt_matrix_to_matrix(Delta_tt), decimals=2))
         if stopping_crit:
             break
         Delta_XZ_tt = _get_xz_block(Delta_tt)
         Delta_XZ_tt = _symmetrisation(Delta_XZ_tt)
         XZ_tt, alpha = _tt_psd_step(XZ_tt, Delta_XZ_tt)
         Delta_Y_tt = _tt_get_block(0, 1, Delta_tt)
-        Y_tt = tt_rank_reduce(tt_add(Y_tt, tt_scale(0.95 * alpha, Delta_Y_tt)))
+        Y_tt = tt_rank_reduce(tt_add(Y_tt, tt_scale(0.95 * alpha, Delta_Y_tt)), err_bound=0)
         #print("Y_tt:")
         #print(np.round(tt_matrix_to_matrix(Y_tt), decimals=4))
     if verbose:

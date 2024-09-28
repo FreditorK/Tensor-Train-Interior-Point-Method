@@ -11,7 +11,7 @@ from src.tt_ops import *
 
 linear_op = tt_random_gaussian([4, 5, 8, 6, 4], shape=(2, 2))
 #linear_op = tt_mat_mat_mul(linear_op, tt_transpose(linear_op))
-linear_op = tt_rank_retraction(tt_add(linear_op, tt_transpose(linear_op)), [2, 3, 3, 3, 2])
+linear_op = tt_rank_reduce(tt_add(linear_op, tt_transpose(linear_op)))
 t0 = time.time()
 tt_eig, tt_eig_val = tt_randomised_min_eigentensor(linear_op, num_iter=1500, tol=1e-8)
 t1 = time.time()

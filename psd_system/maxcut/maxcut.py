@@ -2,6 +2,8 @@ import sys
 import os
 import time
 
+import numpy as np
+
 sys.path.append(os.getcwd() + '/../../')
 
 from dataclasses import dataclass
@@ -28,11 +30,12 @@ if __name__ == "__main__":
     print(f"Objective Ranks: {tt_ranks(G_tt)}")
     print(f"Constraint Ranks: As {tt_ranks(As_tt)}, bias {tt_ranks(bias_tt)}")
     t0 = time.time()
-    XZ_tt, Y_tt = tt_ipm(G_tt, As_tt, bias_tt, max_iter=50, verbose=True)
+    XZ_tt, Y_tt = tt_ipm(G_tt, As_tt, bias_tt, max_iter=100, verbose=True)
     t1 = time.time()
     X_tt = tt_rank_reduce(_tt_get_block(0, 0, XZ_tt))
     Z_tt = tt_rank_reduce(_tt_get_block(1, 1, XZ_tt))
     print("Solution: ")
+    np.set_printoptions(linewidth=600, threshold=np.inf, precision=4, suppress=True)
     print(np.round(tt_matrix_to_matrix(XZ_tt), decimals=2))
     print(f"Objective value: {tt_inner_prod(G_tt, X_tt)}")
     print("Complementary Slackness: ", tt_inner_prod(X_tt, Z_tt))

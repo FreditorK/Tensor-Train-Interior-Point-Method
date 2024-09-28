@@ -1,5 +1,5 @@
-import numpy as np
 import scipy as scp
+
 from src.ops import *
 import copy
 
@@ -412,7 +412,7 @@ def _tt_mat_core_collapse(core_op: np.array, core: np.array) -> np.array:
     ])
 
 
-def _tt_matrix_vec_mul(matrix_tt: List[np.array], vec_tt: List[np.array]) -> List[np.array]:
+def tt_matrix_vec_mul(matrix_tt: List[np.array], vec_tt: List[np.array]) -> List[np.array]:
     split_idx = np.argmax([len(c.shape) for c in matrix_tt])
     op_length = len(matrix_tt) - split_idx
     full_cores = [_tt_mat_core_collapse(core_op, core) for core_op, core in
@@ -426,15 +426,6 @@ def _tt_matrix_vec_mul(matrix_tt: List[np.array], vec_tt: List[np.array]) -> Lis
         full_cores[0] = np.einsum("ab, bce -> ace", half_core, full_cores[0])
     full_cores = matrix_tt[:split_idx - left_overs] + full_cores
     return full_cores
-
-
-def tt_matrix_vec_mul(matrix_tt, vec_tt: List[np.array], bound=None) -> List[np.array]:
-    vec_tt = _tt_matrix_vec_mul(matrix_tt, vec_tt)
-    return tt_rank_reduce(vec_tt, bound)
-
-
-def tt_randomised_matrix_vec_mul(matrix_tt, vec_tt: List[np.array], ranks) -> List[np.array]:
-    return tt_lr_random_orthogonalise(_tt_matrix_vec_mul(matrix_tt, vec_tt), target_ranks=ranks)
 
 
 def _tt_mat_mat_collapse(mat_core_1, mat_core_2):
@@ -508,7 +499,7 @@ def tt_min_eigentensor(matrix_tt: List[np.array], num_iter=10, tol=1e-3):
 
 def tt_randomised_min_eigentensor(matrix_tt: List[np.array], num_iter=10, tol=1e-3):
     # TODO: We can compress more here, the ranks of the eigenvector are actually dependent on the tt_matrix ranks
-    target_ranks = [1] + [int(np.round(np.sqrt(r))) + 1 for r in tt_ranks(matrix_tt)] + [1]
+    target_ranks = [1] + tt_ranks(matrix_tt) + [1]
     gaussian_tt = [
         np.divide(1, l_n * 2 * l_np1) * np.random.randn(l_n, 2, l_np1)
         for i, (l_n, l_np1) in enumerate(zip(target_ranks[:-1], target_ranks[1:]))
@@ -530,22 +521,22 @@ def _tt_randomised_min_eigentensor(matrix_tt: List[np.array], gaussian_tt, num_i
     norm_2 = np.inf
     for i in range(num_iter):
         prev_norm_2 = norm_2
-        eig_vec_tt = _tt_lr_random_orthogonalise(_tt_matrix_vec_mul(matrix_tt, eig_vec_tt), gaussian_tt)
+        eig_vec_tt = _tt_lr_random_orthogonalise(tt_matrix_vec_mul(matrix_tt, eig_vec_tt), gaussian_tt)
         norm_2 = tt_inner_prod(eig_vec_tt, eig_vec_tt)
         eig_vec_tt[-1] *= np.divide(1, np.sqrt(norm_2))
         if np.less_equal(np.abs(norm_2 - prev_norm_2), tol):
             break
     prev_eig_vec = eig_vec_tt
-    eig_vec_tt = _tt_lr_random_orthogonalise(_tt_matrix_vec_mul(matrix_tt, eig_vec_tt), gaussian_tt)
+    eig_vec_tt = _tt_lr_random_orthogonalise(tt_matrix_vec_mul(matrix_tt, eig_vec_tt), gaussian_tt)
     eig_val = tt_inner_prod(prev_eig_vec, eig_vec_tt)
     return tt_normalise(eig_vec_tt), normalisation * (2 - eig_val)
 
 
-def tt_is_psd(matrix_tt: List[np.array], num_iter=10, tol=1e-3):
+def tt_block_psd(matrix_tt: List[np.array], num_iter=10, error_tol=1e-8):
     """
     Only for symmetric matrices
     """
-    target_ranks = [1] + [int(np.ceil(np.sqrt(r))) + 1 for r in tt_ranks(matrix_tt)] + [1]
+    target_ranks = [1] + tt_ranks(matrix_tt) + [1]#[int(np.ceil(np.sqrt(r))) + 1 for r in tt_ranks(matrix_tt)] + [1]
     gaussian_tt = [
         np.divide(1, l_n * 2 * l_np1) * np.random.randn(l_n, 2, l_np1)
         for i, (l_n, l_np1) in enumerate(zip(target_ranks[:-1], target_ranks[1:]))
@@ -555,20 +546,29 @@ def tt_is_psd(matrix_tt: List[np.array], num_iter=10, tol=1e-3):
     matrix_tt = tt_scale(-np.divide(1, normalisation), matrix_tt)
     identity = tt_identity(n)
     identity = tt_scale(2, identity)
-    matrix_tt = tt_rank_reduce(tt_add(identity, matrix_tt), err_bound=tol)
+    matrix_tt = tt_rank_reduce(tt_add(identity, matrix_tt), 0)
+    print("Ranks: ", tt_ranks(matrix_tt))
     eig_vec_tt = tt_normalise([np.random.randn(1, 2, 1) for _ in range(n)])
-    norm_2 = np.inf
+    sq_root = np.inf
+    mask_1 = np.array([1, 0]).reshape(1, 2, 1)
+    mask_2 = np.array([0, 1]).reshape(1, 2, 1)
     for i in range(num_iter):
-        prev_norm_2 = norm_2
-        eig_vec_tt = _tt_lr_random_orthogonalise(_tt_matrix_vec_mul(matrix_tt, eig_vec_tt), gaussian_tt)
-        norm_2 = tt_inner_prod(eig_vec_tt, eig_vec_tt)
-        sq_root = np.sqrt(norm_2)
-        eig_vec_tt[-1] *= np.divide(1, np.sqrt(norm_2))
-        if np.less(normalisation*(2 - sq_root), 0):
-            return False
-        elif np.less_equal(np.abs(norm_2 - prev_norm_2), tol):
-            return True
-    return True
+        prev_sq_root = sq_root
+        eig_vec_tt = _tt_lr_random_orthogonalise(tt_matrix_vec_mul(matrix_tt, eig_vec_tt), gaussian_tt)
+        norm_vec = safe_multi_dot([_tt_core_collapse(c, c) for c in eig_vec_tt[1:]])
+        e_1 = mask_1 * eig_vec_tt[0]
+        e_2 = mask_2 * eig_vec_tt[0]
+        norm_1 = _tt_core_collapse(e_1, e_1) @ norm_vec
+        norm_2 = _tt_core_collapse(e_2, e_2) @ norm_vec
+        sq_root = np.sqrt(norm_1+norm_2)
+        eig_vec_tt[0] *= np.divide(1, np.sqrt(np.array([norm_1, norm_2]))).reshape(1, 2, 1)
+        non_psd_1 = np.less((2 - np.sqrt(norm_1)), error_tol)
+        non_psd_2 = np.less((2 - np.sqrt(norm_2)), error_tol)
+        if non_psd_1 or non_psd_2:
+            return ~non_psd_1, ~non_psd_2
+        elif np.less_equal(np.abs(sq_root - prev_sq_root), error_tol):
+            return True, True
+    return True, True
 
 
 def tt_outer_product(train_1_tt, train_2_tt):
