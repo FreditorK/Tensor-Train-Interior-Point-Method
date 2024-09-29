@@ -70,7 +70,17 @@ IDX_3 = [np.array([[0, 0],
                    [0, 1]]).reshape(1, 2, 2, 1)]
 
 
-def tt_infeasible_newton_system_rhs(obj_tt, linear_op_tt, bias_tt, X_tt, Y_tt, Z_tt, Delta_XZ_tt, mu, feasible):
+def tt_infeasible_newton_system_rhs(
+    obj_tt,
+    linear_op_tt,
+    bias_tt,
+    X_tt,
+    Y_tt,
+    Z_tt,
+    Delta_XZ_tt,
+    mu,
+    feasible
+):
     # Mehrotra's Aggregated System
     if feasible:
         # If primal-dual error is beneath tolerance, quicken up newton_system construction by assuming zero pd-error
@@ -81,10 +91,9 @@ def tt_infeasible_newton_system_rhs(obj_tt, linear_op_tt, bias_tt, X_tt, Y_tt, Z
                                    tt_mat(tt_linear_op(tt_adjoint(linear_op_tt), Y_tt), shape=(2, 2)))
         middle_rhs = IDX_1 + tt_sub(bias_tt, tt_mat(tt_linear_op(linear_op_tt, X_tt), shape=(2, 2)))
         XZ_term = tt_mat_mat_mul(X_tt, Z_tt)
-        if Delta_XZ_tt is not None:
-            Delta_X_tt = _tt_get_block(0, 0, Delta_XZ_tt)
-            Delta_Z_tt = _tt_get_block(1, 1, Delta_XZ_tt)
-            XZ_term = tt_add(tt_mat_mat_mul(Delta_X_tt, Delta_Z_tt), XZ_term)
+        Delta_X_tt = _tt_get_block(0, 0, Delta_XZ_tt)
+        Delta_Z_tt = _tt_get_block(1, 1, Delta_XZ_tt)
+        XZ_term = tt_add(tt_mat_mat_mul(Delta_X_tt, Delta_Z_tt), XZ_term)
         lower_rhs = IDX_3 + tt_sub(XZ_term, tt_scale(mu, tt_identity(len(X_tt))))
         newton_rhs = tt_add(upper_rhs, middle_rhs)
         primal_dual_error = tt_inner_prod(newton_rhs, newton_rhs)
@@ -121,8 +130,9 @@ def _tt_ipm_newton_step(
     X_tt = _tt_get_block(0, 0, XZ_tt)
     Z_tt = _tt_get_block(1, 1, XZ_tt)
     mu = tt_inner_prod(Z_tt, [0.5 * c for c in X_tt])
-    rhs_vec_tt, primal_dual_error = tt_infeasible_newton_system_rhs(obj_tt, linear_op_tt, bias_tt, X_tt, Y_tt, Z_tt,
-                                                                    Delta_XZ_tt, centering_param * mu, feasible)
+    rhs_vec_tt, primal_dual_error = tt_infeasible_newton_system_rhs(
+        obj_tt, linear_op_tt, bias_tt, X_tt, Y_tt, Z_tt, Delta_XZ_tt, centering_param * mu, feasible
+    )
     lhs_matrix_tt = tt_infeasible_newton_system_lhs(lhs_skeleton, X_tt, Z_tt)
     Delta_tt, res = tt_amen(lhs_matrix_tt, rhs_vec_tt, verbose=verbose, nswp=22)
     return tt_mat(Delta_tt, shape=(2, 2)), primal_dual_error, mu
@@ -148,8 +158,8 @@ def _tt_psd_step(
         Z_tt = _tt_get_block(1, 1, new_XZ_tt)
         #print("Check x: ", discount_x, np.linalg.eigvals(tt_matrix_to_matrix(X_tt)))
         #print("Check z: ", discount_z, np.linalg.eigvals(tt_matrix_to_matrix(Z_tt)))
-        print("Eigs_1: ", np.linalg.eigvals(tt_matrix_to_matrix(X_tt)))
-        print("Eigs_2: ", np.linalg.eigvals(tt_matrix_to_matrix(Z_tt)))
+        #print("Eigs_1: ", np.linalg.eigvals(tt_matrix_to_matrix(X_tt)))
+        #print("Eigs_2: ", np.linalg.eigvals(tt_matrix_to_matrix(Z_tt)))
         discount_x = np.all(np.linalg.eigvals(tt_matrix_to_matrix(X_tt)) >= 0)
         discount_z = np.all(np.linalg.eigvals(tt_matrix_to_matrix(Z_tt)) >= 0)
         if ~discount_x:
@@ -189,7 +199,9 @@ def tt_ipm(
     bias_tt,
     max_iter,
     tikhonov_param=1e-4,
-    tol=1e-6,
+    interpol_damp=0.8,
+    feasibility_tol=1e-8,
+    centrality_tol=1e-4,
     verbose=False
 ):
     dim = len(obj_tt)
@@ -208,7 +220,7 @@ def tt_ipm(
     Y_tt = tt_zeros(dim, shape=(2, 2))  # [0, Y_1, Y_2, 0]^T
     iter = 0
     centering_param = 0.5
-    Delta_XZ_tt = None
+    Delta_XZ_tt = tt_zeros(dim+1, shape=(2, 2))
     feasible = False
     for iter in range(max_iter):
         Delta_tt, pd_error, mu = _tt_ipm_newton_step(
@@ -219,16 +231,15 @@ def tt_ipm(
             print("Centering Param: ", centering_param)
             print(f"Duality Gap: {abs(mu):.4f}%")
             print(f"Primal-Dual error: {pd_error:.4f}")
-        error = np.divide(pd_error + mu, 3)
-        if np.less(pd_error, tol):
-            feasible = True
-        if np.less(error, tol):
-            break
         condition = min(1, (pd_error / mu) ** 3)
-        centering_param = 0.8 * centering_param + 0.2 * (0.5 * condition + 0.1 * (1 - condition))
+        centering_param = interpol_damp * centering_param + (1-interpol_damp) * condition
         Delta_XZ_tt = _get_xz_block(Delta_tt)
         Delta_XZ_tt = _symmetrisation(Delta_XZ_tt)
         XZ_tt, alpha = _tt_psd_step(XZ_tt, Delta_XZ_tt)
+        if np.less(pd_error, feasibility_tol):
+            feasible = True
+            if np.less(mu, centrality_tol):
+                break
         Delta_Y_tt = _tt_get_block(0, 1, Delta_tt)
         Y_tt = tt_rank_reduce(tt_add(Y_tt, tt_scale(0.95 * alpha, Delta_Y_tt)), err_bound=0)
         #print("Y_tt:")

@@ -1,3 +1,4 @@
+import numpy as np
 import scipy as scp
 
 from src.ops import *
@@ -132,8 +133,18 @@ def tt_rl_contraction(train_1_tt: List[np.array], train_2_tt: List[np.array]):
 
 def tt_lr_contraction(train_1_tt: List[np.array], train_2_tt: List[np.array]):
     train_1_tt = tt_swap_all(train_1_tt)
+    train_2_tt = tt_swap_all(train_2_tt)
     train_1_tt = tt_rl_contraction(train_1_tt, train_2_tt)
     return tt_swap_all(train_1_tt)
+
+
+def tt_symmetric_lr_random_orthogonalise(train_tt: List[np.array], target_ranks: List[int]) -> List[np.array]:
+    if len(train_tt) > 1:
+        tt_gaussian = tt_random_gaussian(target_ranks, shape=train_tt[0].shape[1:-1])
+        train_tt = _tt_lr_random_orthogonalise(train_tt, tt_gaussian)
+        train_tt = [(c + np.swapaxes(c, 1, 2))/2 for c in train_tt]
+        return train_tt
+    return train_tt
 
 
 def tt_lr_random_orthogonalise(train_tt: List[np.array], target_ranks: List[int]) -> List[np.array]:
@@ -141,6 +152,20 @@ def tt_lr_random_orthogonalise(train_tt: List[np.array], target_ranks: List[int]
         tt_gaussian = tt_random_gaussian(target_ranks, shape=train_tt[0].shape[1:-1])
         return _tt_lr_random_orthogonalise(train_tt, tt_gaussian)
     return train_tt
+
+
+def tt_rl_random_orthogonalise(train_tt: List[np.array], target_ranks: List[int]) -> List[np.array]:
+    if len(train_tt) > 1:
+        tt_gaussian = tt_swap_all(tt_random_gaussian(target_ranks, shape=train_tt[0].shape[1:-1]))
+        train_tt = tt_swap_all(train_tt)
+        return tt_swap_all(_tt_lr_random_orthogonalise(train_tt, tt_gaussian))
+    return train_tt
+
+
+def _tt_rl_random_orthogonalise(train_tt, gaussian_tt):
+    train_tt = tt_swap_all(train_tt)
+    gaussian_tt = tt_swap_all(gaussian_tt)
+    return tt_swap_all(_tt_lr_random_orthogonalise(train_tt, gaussian_tt))
 
 
 def _tt_lr_random_orthogonalise(train_tt, gaussian_tt):
@@ -536,7 +561,7 @@ def tt_block_psd(matrix_tt: List[np.array], num_iter=10, error_tol=1e-8):
     """
     Only for symmetric matrices
     """
-    target_ranks = [1] + tt_ranks(matrix_tt) + [1]#[int(np.ceil(np.sqrt(r))) + 1 for r in tt_ranks(matrix_tt)] + [1]
+    target_ranks = [1] + tt_ranks(matrix_tt) + [1]  #[int(np.ceil(np.sqrt(r))) + 1 for r in tt_ranks(matrix_tt)] + [1]
     gaussian_tt = [
         np.divide(1, l_n * 2 * l_np1) * np.random.randn(l_n, 2, l_np1)
         for i, (l_n, l_np1) in enumerate(zip(target_ranks[:-1], target_ranks[1:]))
@@ -560,7 +585,7 @@ def tt_block_psd(matrix_tt: List[np.array], num_iter=10, error_tol=1e-8):
         e_2 = mask_2 * eig_vec_tt[0]
         norm_1 = _tt_core_collapse(e_1, e_1) @ norm_vec
         norm_2 = _tt_core_collapse(e_2, e_2) @ norm_vec
-        sq_root = np.sqrt(norm_1+norm_2)
+        sq_root = np.sqrt(norm_1 + norm_2)
         eig_vec_tt[0] *= np.divide(1, np.sqrt(np.array([norm_1, norm_2]))).reshape(1, 2, 1)
         non_psd_1 = np.less((2 - np.sqrt(norm_1)), error_tol)
         non_psd_2 = np.less((2 - np.sqrt(norm_2)), error_tol)
@@ -792,3 +817,39 @@ def tt_mat(matrix_tt, shape=(2, 2)):
 
 def tt_op_to_mat(op_tt):
     return [c.reshape(c.shape[0], 4, 4, c.shape[-1]) for c in op_tt]
+
+
+def _tt_generalised_nystroem(tt_train, tt_gaussian_1, tt_gaussian_2):
+    lr_contractions = tt_lr_contraction(tt_train, tt_gaussian_1)
+    rl_contractions = tt_rl_contraction(tt_train, tt_gaussian_2)
+    Ls = []
+    Rs = []
+    for W_L, W_R in zip(lr_contractions, rl_contractions):
+        U, S, V_T = np.linalg.svd(W_L @ W_R, full_matrices=False)
+        root_S_inv = np.diag(np.divide(1, np.sqrt(S)))
+        print(W_R.shape, V_T.shape, root_S_inv.shape)
+        L = W_R @ V_T.T @ root_S_inv
+        R = root_S_inv @ U.T @ W_L
+        Ls.append(L)
+        Rs.append(R)
+    tt_train[0] = (tt_train[0].reshape(-1, tt_train[0].shape[-1]) @ Ls[0]).reshape(*tt_train[0].shape[:-1], -1)
+    for i in range(1, len(tt_train) - 1):
+        tt_train[i] = (
+            Rs[i - 1] @ (tt_train[i].reshape(-1, tt_train[i].shape[-1]) @ Ls[i]).reshape(tt_train[i].shape[0],
+                                                                                         -1)).reshape(
+            tt_train[i - 1].shape[-1], *tt_train[i].shape[1:-1], -1)
+    tt_train[-1] = (Rs[-1] @ tt_train[-1].reshape(tt_train[-1].shape[0], -1)).reshape(-1, *tt_train[-1].shape[1:])
+    return tt_train
+
+
+def tt_generalised_nystroem(tt_train, target_ranks: List[int]) -> List[np.array]:
+    if len(tt_train) > 1:
+        tt_gaussian_1 = tt_random_gaussian(target_ranks, shape=tt_train[0].shape[1:-1])
+        tt_gaussian_2 = tt_random_gaussian([r + 1 for r in target_ranks], shape=tt_train[0].shape[1:-1])
+        return _tt_generalised_nystroem(tt_train, tt_gaussian_1, tt_gaussian_2)
+    return tt_train
+
+
+def tt_l2_dist(train_tt_1, train_tt_2):
+    diff_tt = tt_sub(train_tt_1, train_tt_2)
+    return np.sqrt(tt_inner_prod(diff_tt, diff_tt))
