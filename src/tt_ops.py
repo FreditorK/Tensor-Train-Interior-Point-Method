@@ -711,9 +711,11 @@ def tt_vec_to_vec(vec_tt):
 
 
 def _tt_op_core_collapse(op_core: np.array, core: np.array) -> np.array:
+    ises = list(range(core.shape[1]))
+    jses = list(range(core.shape[2]))
     return sum([
         np.kron(op_core[:, :, i, j], core[:, None, i, j])
-        for (i, j) in product([0, 1], [0, 1])
+        for (i, j) in product(ises, jses)
     ])
 
 
@@ -841,29 +843,32 @@ def tt_op_from_tt_matrix(matrix_tt):
 
 
 def _matrix_op_blockify(core):
-    op_core = np.zeros((core.shape[0], 4, *core.shape[1:]))
-    op_core[:, 0, 0, 0] = core[:, 0, 0]
-    op_core[:, 1, 0, 1] = core[:, 0, 1]
-    op_core[:, 2, 1, 0] = core[:, 1, 0]
-    op_core[:, 3, 1, 1] = core[:, 1, 1]
+    block_shape = core.shape[1:-1]
+    dim = np.prod(block_shape)
+    op_core = np.zeros((core.shape[0], dim, *core.shape[1:]))
+    indices = list(product(list(range(block_shape[0])), list(range(block_shape[1]))))
+    for i in range(dim):
+        op_core[:, i, indices[i][0], indices[i][1]] = core[:, indices[i][0], indices[i][1]]
     return op_core
 
 
-def tt_block_inner_prod(train_tt_1, train_tt_2, i):
-    train_tt_1 = [_matrix_op_blockify(c) for c in train_tt_1[:i]] + train_tt_1[i:]
-    block_inner_prod_tt = [_tt_op_core_collapse(op_c, c) for op_c, c in zip(train_tt_1[:i], train_tt_2[:i])]
-    scalar_block = safe_multi_dot([_tt_core_collapse(c_1, c_2) for c_1, c_2 in zip(train_tt_1[i:], train_tt_2[i:])])
+def tt_block_inner_prod(train_tt_1, train_tt_2):
+    block_shape = train_tt_1[0].shape[1:-1]
+    train_tt_1 = [_matrix_op_blockify(c) for c in train_tt_1[:1]] + train_tt_1[1:]
+    block_inner_prod_tt = [_tt_op_core_collapse(op_c, c) for op_c, c in zip(train_tt_1[:1], train_tt_2[:1])]
+    scalar_block = safe_multi_dot([_tt_core_collapse(c_1, c_2) for c_1, c_2 in zip(train_tt_1[1:], train_tt_2[1:])])
     block_inner_prod_tt[-1] = np.einsum("abc, cd -> abd", block_inner_prod_tt[-1], scalar_block)
-    return [c.reshape(c.shape[0], 2, 2, c.shape[-1]) for c in block_inner_prod_tt]
+    return [c.reshape(c.shape[0], *block_shape, c.shape[-1]) for c in block_inner_prod_tt]
 
 
-def tt_block_matrix_vec_mul(block_matrix_tt, block_vector_tt, i):
-    block_matrix_tt = [_matrix_op_blockify(c) for c in block_matrix_tt[:i]] + block_matrix_tt[i:]
+def tt_block_matrix_vec_mul(block_matrix_tt, block_vector_tt):
+    block_shape = block_vector_tt[0].shape[1:-1]
+    block_matrix_tt = [_matrix_op_blockify(c) for c in block_matrix_tt[:1]] + block_matrix_tt[1:]
     block_vector_tt = (
-        [_tt_op_core_collapse(op_c, c) for op_c, c in zip(block_matrix_tt[:i], block_vector_tt[:i])]
-        + [_tt_mat_core_collapse(m_c, c) for m_c, c in zip(block_matrix_tt[i:], block_vector_tt[i:])]
+        [_tt_op_core_collapse(op_c, c) for op_c, c in zip(block_matrix_tt[:1], block_vector_tt[:1])]
+        + [_tt_mat_core_collapse(m_c, c) for m_c, c in zip(block_matrix_tt[1:], block_vector_tt[1:])]
     )
-    return [m_c.reshape(m_c.shape[0], 2, 2, m_c.shape[-1]) for m_c in block_vector_tt[:i]] + block_vector_tt[i:]
+    return [m_c.reshape(m_c.shape[0], *block_shape, m_c.shape[-1]) for m_c in block_vector_tt[:1]] + block_vector_tt[1:]
 
 
 def tt_adjoint(linear_op_tt):

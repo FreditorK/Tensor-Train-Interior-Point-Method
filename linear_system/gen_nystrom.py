@@ -94,45 +94,46 @@ def tt_min_eigentensor_part(matrix_tt: List[np.array], num_iter=10, tol=1e-12):
 """
 
 
-def tt_randomised_min_eigentensor_exp(block_matrix_tt: List[np.array], block_Delta_tt, num_iter=10, tol=1e-6):
+def tt_randomised_min_eigentensor_exp(block_matrix_tt: List[np.array], block_Delta_tt, block_size=2, num_iter=10, tol=1e-4):
     """
     Only for symmetric matrices
     """
     n = len(block_matrix_tt)
     upper_ranks = tt_ranks(block_matrix_tt)
-    target_ranks = [1] + upper_ranks + [1]
-    gaussian_tt = [
-        np.divide(1, l_n * 2 * l_np1) * np.random.randn(l_n, 2, l_np1)
-        for i, (l_n, l_np1) in enumerate(zip(target_ranks[:-1], target_ranks[1:]))
-    ]
+    #target_ranks = [1] + upper_ranks + [1]
+    #gaussian_tt = [
+    #    np.divide(1, l_n * 2 * l_np1) * np.random.randn(l_n, 2, l_np1)
+    #    for i, (l_n, l_np1) in enumerate(zip(target_ranks[:-1], target_ranks[1:]))
+    #]
     np.set_printoptions(linewidth=800, threshold=np.inf)
-    block_matrix_tt = [np.array([[1, 1], [1, 1]]).reshape(1, 2, 2, 1)] + block_matrix_tt
-    block_Delta_tt = [np.array([[-1, -0.75], [-0.5, -0.25]]).reshape(1, 2, 2, 1)] + block_Delta_tt
+    block_matrix_tt = [np.ones((1, block_size, 2, 1))] + block_matrix_tt
+    block_Delta_tt = [np.array([-(0.5**i) for i in range(2*block_size)]).reshape(1, block_size, 2, 1)] + block_Delta_tt
     block_matrix_tt = tt_rank_reduce(tt_add(block_matrix_tt, block_Delta_tt), err_bound=0)
-    normalisation = np.sqrt(tt_block_inner_prod(block_matrix_tt, block_matrix_tt, 1)).reshape(1, 2, 2, 1)
+    normalisation = np.sqrt(tt_block_inner_prod(block_matrix_tt, block_matrix_tt)).reshape(1, block_size, 2, 1)
     block_matrix_tt[0] *= -np.divide(1, normalisation)
-    identity = [np.array([[2, 2], [2, 2]]).reshape(1, 2, 2, 1)] + tt_identity(n)
+    identity = [2*np.ones((1, block_size, 2, 1))] + tt_identity(n)
     block_matrix_tt = tt_rank_reduce(tt_add(identity, block_matrix_tt), err_bound=0)
-    block_eig_vec_tt = tt_normalise([np.random.randn(1, 2, 2, 1)] + [np.random.randn(1, 2, 1) for _ in range(n)])
+    block_eig_vec_tt = tt_normalise([np.random.randn(1, block_size, 2, 1)] + [np.random.randn(1, 2, 1) for _ in range(n)])
     norm_2 = np.inf
     for i in range(num_iter):
         prev_norm_2 = norm_2
-        block_eig_vec_tt = tt_block_matrix_vec_mul(block_matrix_tt, block_eig_vec_tt, 1)
+        block_eig_vec_tt = tt_block_matrix_vec_mul(block_matrix_tt, block_eig_vec_tt)
         block_eig_vec_tt = tt_rank_retraction(block_eig_vec_tt, upper_ranks)
-        block_norm_2 = tt_block_inner_prod(block_eig_vec_tt, block_eig_vec_tt, 1)
+        block_norm_2 = tt_block_inner_prod(block_eig_vec_tt, block_eig_vec_tt)
         block_eig_vec_tt[0] *= np.divide(1, np.sqrt(block_norm_2[0]))
-        if np.less_equal(np.abs(norm_2 - prev_norm_2), tol):
+        if np.less_equal(np.linalg.norm(norm_2 - prev_norm_2), tol):
             break
     prev_block_eig_vec_tt = block_eig_vec_tt
-    block_eig_vec_tt = tt_block_matrix_vec_mul(block_matrix_tt, block_eig_vec_tt, 1)
+    block_eig_vec_tt = tt_block_matrix_vec_mul(block_matrix_tt, block_eig_vec_tt)
     block_eig_vec_tt = tt_rank_retraction(block_eig_vec_tt, upper_ranks)
-    block_eig_vals = tt_block_inner_prod(block_eig_vec_tt, prev_block_eig_vec_tt, 1)
+    block_eig_vals = tt_block_inner_prod(block_eig_vec_tt, prev_block_eig_vec_tt)
+    print(f"Num of iterations: {i}")
     return tt_normalise(block_eig_vec_tt), normalisation * (2 - block_eig_vals[0])
 
 
-eig_val = np.min(np.linalg.eigvals(tt_matrix_to_matrix(copy.deepcopy(psd_matrix_tt_add))))
+eig_val = np.min(np.linalg.eigvals(tt_matrix_to_matrix(tt_add(copy.deepcopy(psd_matrix_tt), tt_scale(-0.0625, copy.deepcopy(Delta_tt))))))
 print("Eig val actual truth: ", eig_val)
 #_, eig_val_1 = tt_min_eigentensor(copy.deepcopy(psd_matrix_tt), 500)
 #print("Eig val my truth: ", eig_val_1)
-_, eig_val_2 = tt_randomised_min_eigentensor_exp(copy.deepcopy(psd_matrix_tt), copy.deepcopy(Delta_tt), 500)
+_, eig_val_2 = tt_randomised_min_eigentensor_exp(copy.deepcopy(psd_matrix_tt), copy.deepcopy(Delta_tt), block_size=4, num_iter=1000)
 print("Eig val part: ", eig_val_2)
