@@ -871,6 +871,33 @@ def tt_block_matrix_vec_mul(block_matrix_tt, block_vector_tt):
     return [m_c.reshape(m_c.shape[0], *block_shape, m_c.shape[-1]) for m_c in block_vector_tt[:1]] + block_vector_tt[1:]
 
 
+def tt_randomised_block_min_eigentensor(block_matrix_tt: List[np.array], num_iter=10, mu=1, tol=1e-4):
+    n = len(block_matrix_tt)
+    block_shape = block_matrix_tt[0].shape[1:-1]
+    normalisation = np.sqrt(tt_block_inner_prod(block_matrix_tt, block_matrix_tt)).reshape(1, *block_shape, 1)
+    block_matrix_tt[0] *= -np.divide(1, normalisation)
+    identity = [mu * np.ones((1, *block_shape, 1))] + tt_identity(n)
+    block_matrix_tt = tt_rank_reduce(tt_add(identity, block_matrix_tt), err_bound=0)
+    upper_ranks = tt_ranks(block_matrix_tt)
+    block_eig_vec_tt = tt_normalise(
+        [np.random.randn(1, *block_shape, 1)] + [np.random.randn(1, 2, 1) for _ in range(n)])
+    prev_norm_2 = 0
+    for i in range(num_iter):
+        block_eig_vec_tt = tt_block_matrix_vec_mul(block_matrix_tt, block_eig_vec_tt)
+        block_eig_vec_tt = tt_rank_retraction(block_eig_vec_tt, upper_ranks)
+        block_norm_2 = tt_block_inner_prod(block_eig_vec_tt, block_eig_vec_tt)[0]
+        block_eig_vec_tt[0] *= np.divide(1, np.sqrt(block_norm_2))
+        if np.less_equal(np.linalg.norm(block_norm_2 - prev_norm_2), tol):
+            break
+        prev_norm_2 = block_norm_2
+    prev_block_eig_vec_tt = block_eig_vec_tt
+    block_eig_vec_tt = tt_block_matrix_vec_mul(block_matrix_tt, block_eig_vec_tt)
+    block_eig_vec_tt = tt_rank_retraction(block_eig_vec_tt, upper_ranks)
+    block_eig_vals = tt_block_inner_prod(block_eig_vec_tt, prev_block_eig_vec_tt)[0]
+    block_eig_vals = normalisation * (mu - block_eig_vals)
+    return tt_normalise(block_eig_vec_tt), block_eig_vals
+
+
 def tt_adjoint(linear_op_tt):
     return [np.swapaxes(c, axis1=2, axis2=3) for c in linear_op_tt]
 
