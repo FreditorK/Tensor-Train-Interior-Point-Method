@@ -3,7 +3,16 @@ import scipy as scp
 
 from src.ops import *
 import copy
-from numba import jit
+from tt_ops_cy import (
+    tt_identity,
+    tt_zero_matrix,
+    tt_one_matrix,
+    tt_transpose,
+    tt_adjoint,
+    tt_ranks,
+    tt_scale,
+    tt_swap_all
+)
 
 PHI = np.array([[1, 1],
                 [1, -1]], dtype=float).reshape(1, 2, 2, 1)
@@ -13,22 +22,6 @@ PHI_INV = np.array([[1 / 2, 1 / 2],
 
 I = np.array([[1.0, 0],
               [0, 1.0]]).reshape(1, 2, 2, 1)
-
-
-@jit
-def tt_identity(dim):
-    return [I for _ in range(dim)]
-
-
-@jit
-def tt_zeros(dim, shape=(2,)):
-    return [np.zeros((1, *shape, 1)) for _ in range(dim)]
-
-
-@jit
-def tt_one(dim, shape=(2,)):
-    """ Returns an all-one tensor of dimension 2**dim """
-    return [np.ones((1, *shape, 1)) for _ in range(dim)]
 
 
 def phi(num_bonds):
@@ -202,10 +195,6 @@ def tt_rank_reduce(train_tt: List[np.array], err_bound=None):
     return train_tt
 
 
-def tt_ranks(train_tt):
-    return [t.shape[-1] for t in train_tt[:-1]]
-
-
 def tt_rank_retraction(train_tt: List[np.array], upper_ranks: List[int]):
     """ Might reduce TT-rank """
     train_tt = tt_rl_orthogonalise(train_tt)
@@ -310,18 +299,15 @@ def tt_hadamard(train_1_tt: List[np.array], train_2_tt: List[np.array]) -> List[
 
 
 def _tt_core_collapse(core_1: np.array, core_2: np.array) -> np.array:
-    return sum([
+    return np.sum([
         np.kron(core_1[(slice(None),) + i], core_2[(slice(None),) + i])
         for i in product(*([list(range(s)) for s in core_1.shape[1:-1]]))
-    ])
+    ], axis=0)
 
 
 def tt_inner_prod(train_1_tt: List[np.array], train_2_tt: List[np.array]) -> float:
-    """
-    Computes the inner product between two tensor trains
-    """
     return np.sum(
-        safe_multi_dot([_tt_core_collapse(core_1, core_2) for core_1, core_2 in zip(train_1_tt, train_2_tt)])
+        np.linalg.multi_dot([_tt_core_collapse(core_1, core_2) for core_1, core_2 in zip(train_1_tt, train_2_tt)])
     )
 
 
@@ -330,40 +316,6 @@ def tt_to_tensor(tt_train):
     for core in tt_train[1:]:
         tensor = np.tensordot(tensor, core, axes=(-1, 0))
     return np.sum(tensor, axis=(0, -1))
-
-
-def tt_xnor(train_1_tt: List[np.array], train_2_tt: List[np.array]) -> List[np.array]:
-    """
-    Produces the truth table result tensor
-    """
-    train_xnor_tt = tt_hadamard(train_1_tt, train_2_tt)
-    return tt_rank_reduce(train_xnor_tt)
-
-
-def tt_xor(train_1_tt: List[np.array], train_2_tt: List[np.array]) -> List[np.array]:
-    return tt_xnor(tt_neg(train_1_tt), train_2_tt)
-
-
-def tt_and(train_1_tt: List[np.array], train_2_tt: List[np.array]) -> List[np.array]:
-    train_1_tt = tt_scale(0.5, train_1_tt)
-    mul_tt = tt_hadamard(train_1_tt, train_2_tt)
-    train_2_tt = tt_scale(0.5, train_2_tt)
-    half = tt_scale(-0.5, tt_one(len(train_1_tt)))
-    train_and_tt = tt_add(tt_add(half, mul_tt), tt_add(train_1_tt, train_2_tt))
-    return tt_rank_reduce(train_and_tt)
-
-
-def tt_or(train_1_tt: List[np.array], train_2_tt: List[np.array]) -> List[np.array]:
-    return tt_neg(tt_and(tt_neg(train_1_tt), tt_neg(train_2_tt)))
-
-
-def tt_neg(train_tt: List[np.array]) -> List[np.array]:
-    return tt_scale(-1, train_tt)
-
-
-def tt_scale(alpha, train_tt):
-    idx = np.random.randint(low=0, high=len(train_tt))
-    return sum([train_tt[:idx], [alpha * train_tt[idx]], train_tt[idx + 1:]], [])
 
 
 def tt_normalise(train_tt, radius=1):
@@ -397,10 +349,6 @@ def tt_conjugate_gradient(linear_op: List[np.array], tt_train: List[np.array], n
             break
         p = tt_rl_orthogonalise(tt_add(r, tt_scale(beta, p, idx=np.random.randint(low=0, high=len(p)))))
     return tt_rank_reduce(x)
-
-
-def tt_swap_all(tt_train: List[np.array]):
-    return [np.swapaxes(c, 0, -1) for c in reversed(tt_train)]
 
 
 def tt_max_eigentensor(matrix_tt: List[np.array], num_iter=10, tol=1e-3):
@@ -468,14 +416,6 @@ def tt_mat_mat_mul(matrix_tt_1, matrix_tt_2):
     if len(half_core) > 0:
         full_cores[0] = np.einsum("ab, bcde -> acde", half_core, full_cores[0])
     return full_cores
-
-
-def tt_transpose(matrix_tt):
-    """
-    Constructs the transpose of the linear op
-    """
-    split_idx = np.argmax([len(c.shape) for c in matrix_tt])
-    return matrix_tt[:split_idx] + [np.swapaxes(c, axis1=1, axis2=2) for c in matrix_tt[split_idx:]]
 
 
 def tt_gram(matrix_tt):
@@ -606,16 +546,15 @@ def tt_random_graph(target_ranks):
     matrix = tt_random_gaussian([int(np.ceil(r / 2)) for r in target_ranks], shape=(2, 2))
     matrix_t = tt_transpose(matrix)
     symmetric_matrix = tt_rank_reduce(tt_add(matrix, matrix_t))
-    I_tensor = sum([break_core_bond(I) for _ in symmetric_matrix], [])
-    mask = tt_add(tt_one(len(I_tensor)), tt_scale(-1, I_tensor))
+    mask = tt_sub(tt_one_matrix(len(symmetric_matrix)), tt_identity(len(symmetric_matrix)))
     symmetric_matrix = sum([break_core_bond(core) for core in symmetric_matrix], [])
     symmetric_matrix = tt_walsh_op(symmetric_matrix)
     symmetric_matrix = tt_normalise(symmetric_matrix)
     symmetric_matrix = tt_binary_round(symmetric_matrix)
+    symmetric_matrix = [core_bond(c_1, c_2) for c_1, c_2 in zip(symmetric_matrix[:-1:2], symmetric_matrix[1::2])]
     symmetric_matrix = tt_hadamard(symmetric_matrix, mask)
-    symmetric_matrix = tt_add(symmetric_matrix, tt_scale(-1, I_tensor))
-    return tt_rank_reduce([core_bond(c_1, c_2) for c_1, c_2 in zip(symmetric_matrix[:-1:2], symmetric_matrix[1::2])],
-                          err_bound=0)
+    symmetric_matrix = tt_sub(symmetric_matrix, tt_identity(len(symmetric_matrix)))
+    return tt_rank_reduce(symmetric_matrix, err_bound=0)
 
 
 def tt_matrix_to_matrix(matrix_tt):
@@ -714,18 +653,6 @@ def tt_argmax(train_tt, p=1):
     return I[0]
 
 
-def commutation_matrix(m, n):
-    return np.eye(m * n)[np.arange(m * n).reshape((m, n), order="F").T.ravel(order="F"), :]
-
-
-def vec(Y):
-    return Y.reshape(-1, 1, order='F')
-
-
-def mat(y, shape):
-    return y.reshape(*shape, order='F')
-
-
 def tt_to_ring(train_tt):
     first_core_top_row = np.hstack((np.diag(train_tt[0][:, 0, 0].flatten()), np.diag(train_tt[0][:, 0, 1].flatten())))
     first_core_bottom_row = np.hstack(
@@ -819,10 +746,6 @@ def tt_randomised_block_min_eig_values(block_matrix_tt: List[np.array], num_iter
         0]
     block_eig_vals = normalisation * (mu - block_eig_vals)
     return block_eig_vals
-
-
-def tt_adjoint(linear_op_tt):
-    return [np.swapaxes(c, axis1=2, axis2=3) for c in linear_op_tt]
 
 
 def tt_vec(matrix_tt):

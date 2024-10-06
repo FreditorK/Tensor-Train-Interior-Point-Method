@@ -9,7 +9,7 @@ import numpy as np
 import scipy as scip
 import time
 import datetime
-from src.tt_ops import *
+from src.tt_ops import tt_ranks, tt_random_gaussian, tt_rl_orthogonalise
 
 def _local_product(Phi_right, Phi_left, coreA, core, shape, bandA=-1):
 
@@ -323,19 +323,3 @@ def _compute_phi_bck_rhs(Phi_now, core_b, core):
 def _compute_phi_fwd_rhs(Phi_now, core_rhs, core):
     Phi_next = np.einsum('br,bnB,rnR->BR', Phi_now, core_rhs, core)
     return Phi_next
-
-
-if __name__ == "__main__":
-    np.random.seed(158)
-    L = tt_rank_reduce(tt_random_binary([3, 4], shape=(4, 4)))
-    initial_guess = tt_scale(5, tt_random_gaussian([4, 2], shape=(4,)))
-    B = tt_rank_reduce(tt_matrix_vec_mul(L, initial_guess))
-    res = tt_sub(tt_matrix_vec_mul(L, tt_one(len(L), shape=(4, ))), B)
-    print("Start Error: ", tt_inner_prod(res, res))
-    # L = tt_add(L, [(1e-6)*np.eye(4).reshape(1, 4, 4, 1) for _ in range(len(L))])
-    t0 = time.time()
-    solution = tt_amen(L, B, verbose=True)
-    t1 = time.time()
-    res = tt_sub(tt_matrix_vec_mul(L, solution), B)
-    print(f"Time taken: {t1 - t0}s")
-    print("Error: ", tt_inner_prod(res, res))

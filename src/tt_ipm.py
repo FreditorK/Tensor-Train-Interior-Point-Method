@@ -212,12 +212,12 @@ def tt_ipm(
         tt_add(lhs_skeleton, [tikhonov_param * np.eye(4).reshape(1, 4, 4, 1) for _ in range(len(lhs_skeleton))]),
         err_bound=0)
     X_tt = tt_identity(dim)
-    Y_tt = tt_zeros(dim, shape=(2, 2))  # [0, Y_1, Y_2, 0]^T
+    Y_tt = tt_zero_matrix(dim)  # [0, Y_1, Y_2, 0]^T
     Z_tt = tt_identity(dim)
     iter = 0
     centering_param = 0.5
-    Delta_X_tt = tt_zeros(dim, shape=(2, 2))
-    Delta_Z_tt = tt_zeros(dim, shape=(2, 2))
+    Delta_X_tt = tt_zero_matrix(dim)
+    Delta_Z_tt = tt_zero_matrix(dim)
     feasible = False
     for iter in range(max_iter):
         Delta_tt, pd_error, mu = _tt_ipm_newton_step(
