@@ -13,4 +13,6 @@ extensions = [
 
 setup(
     ext_modules=cythonize(extensions),
+    zip_safe=False,
+    script_args=["build_ext", "--build-temp=build", "--build-lib=build"],
 )

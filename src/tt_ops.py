@@ -3,7 +3,7 @@ import scipy as scp
 
 from src.ops import *
 import copy
-from tt_ops_cy import (
+from build.tt_ops_cy import (
     tt_identity,
     tt_zero_matrix,
     tt_one_matrix,
