@@ -1,5 +1,6 @@
 import sys
 import os
+import time
 
 sys.path.append(os.getcwd() + '/../')
 
@@ -129,26 +130,29 @@ def _tt_ipm_newton_step(
         obj_tt, linear_op_tt, bias_tt, X_tt, Y_tt, Z_tt, Delta_X_tt, Delta_Z_tt, centering_param * mu, feasible
     )
     lhs_matrix_tt = tt_infeasible_newton_system_lhs(lhs_skeleton, X_tt, Z_tt)
+    t0 = time.time()
     Delta_tt, res = tt_amen(lhs_matrix_tt, rhs_vec_tt, verbose=verbose, nswp=22)
+    print(f"AMeN-time: {time.time() - t0:2f}s")
     return tt_mat(Delta_tt, shape=(2, 2)), primal_dual_error, mu
 
 
-def tt_psd_step(matrix_tt: List[np.array], Delta_tt, block_size=2, num_iter=500, mu=2, tol=1e-5):
+def tt_psd_step(matrix_tt: List[np.array], Delta_tt, block_size=2, num_iter=500, mu=1, tol=1e-5):
     # FIXME: Could potentially change to mu=1
 
     block_matrix_tt = [np.ones((1, block_size, 2, 1))] + matrix_tt
     discount_block = np.array([0.5 ** i for i in range(2 * block_size)]).reshape(1, block_size, 2, 1)
     block_Delta_tt = [discount_block] + Delta_tt
     block_matrix_tt = tt_add(block_matrix_tt, block_Delta_tt)
-    _, block_eig_vals = tt_randomised_block_min_eigentensor(block_matrix_tt, num_iter=num_iter, mu=mu, tol=tol)
-    min_index = np.argmin(np.abs(block_eig_vals - (block_eig_vals < tol)))
-    multi_min_index = np.unravel_index(min_index, block_eig_vals.shape)
+    t0 = time.time()
+    block_eig_vals = tt_randomised_block_min_eig_values(block_matrix_tt, num_iter=num_iter, mu=mu, tol=tol)
+    print(f"Eig-time: {time.time()-t0:2f}s")
+    multi_min_index = np.unravel_index(np.argmin(np.abs(block_eig_vals - np.less(block_eig_vals, tol))), block_eig_vals.shape)
     if np.greater(block_eig_vals[multi_min_index], 0):
         factor = block_matrix_tt[0][:, multi_min_index[1], multi_min_index[2], :]
         matrix_tt = [np.einsum("ab, bcde -> acde", factor, block_matrix_tt[1])] + block_matrix_tt[2:]
         return matrix_tt, discount_block[multi_min_index]
 
-    return matrix_tt, (0.5) ** (2 * block_size + 2)
+    return matrix_tt, (0.5) ** (2 * block_size + 1)
 
 
 def _tt_psd_step(
@@ -178,63 +182,9 @@ def _tt_psd_step(
     )
 
 
-"""
-def _tt_psd_step(
-    X_tt,
-    Y_tt,
-    Z_tt,
-    Delta_X_tt,
-    Delta_Y_tt,
-    Delta_Z_tt,
-    block_size=5,
-    tol=1e-5
-):
-    x_step_size = 1
-    z_step_size = 1
-    discount = 0.5
-    discount_x = True
-    discount_z = True
-    for iter in range(10):
-        new_X_tt = tt_add(X_tt, Delta_X_tt)
-        new_Z_tt = tt_add(Z_tt, Delta_Z_tt)
-        discount_x = np.all(np.linalg.eigvals(tt_matrix_to_matrix(new_X_tt)) >= 0)
-        discount_z = np.all(np.linalg.eigvals(tt_matrix_to_matrix(new_Z_tt)) >= 0)
-        if ~discount_x:
-            x_step_size *= discount
-            Delta_X_tt[0] *= discount
-        if ~discount_z:
-            z_step_size *= discount
-            Delta_Z_tt[0] *= discount
-        if discount_x and discount_z:
-            Delta_X_tt[0] *= 0.95
-            Delta_Z_tt[0] *= 0.95
-            print(f"Step Size: {x_step_size}, {z_step_size}")
-            return (
-                tt_rank_reduce(tt_add(X_tt, Delta_X_tt), err_bound=0),
-                tt_rank_reduce(tt_add(Y_tt, tt_scale(z_step_size, Delta_Y_tt)), err_bound=0),
-                tt_rank_reduce(tt_add(Z_tt, Delta_Z_tt), err_bound=0)
-            )
-    Delta_X_tt[0] *= discount_x
-    Delta_Z_tt[0] *= discount_z
-    print(f"Step Size: {x_step_size}, {z_step_size}")
-    return (
-        tt_rank_reduce(tt_add(X_tt, Delta_X_tt), err_bound=0),
-        tt_rank_reduce(tt_add(Y_tt, tt_scale(z_step_size, Delta_Y_tt)), err_bound=0),
-        tt_rank_reduce(tt_add(Z_tt, Delta_Z_tt), err_bound=0)
-    )
-"""
-
-
 def _symmetrisation(train_tt):
     train_tt = tt_rank_reduce(tt_scale(0.5, tt_add(train_tt, tt_transpose(train_tt))), err_bound=0)
     return train_tt
-
-
-def _get_xz_block(XYZ_tt):
-    new_index_block = np.zeros_like(XYZ_tt[0])
-    new_index_block[:, 0, 0] += XYZ_tt[0][:, 0, 0]
-    new_index_block[:, 1, 1] += XYZ_tt[0][:, 1, 1]
-    return [new_index_block] + XYZ_tt[1:]
 
 
 def tt_ipm(

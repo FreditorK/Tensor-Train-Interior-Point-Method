@@ -53,6 +53,14 @@ def tt_psd_exp(matrix_tt: List[np.array], num_iter=1500, conv_tol=1e-8, error_to
             return normalisation*(2-np.sqrt(norm_1)), normalisation*(2-np.sqrt(norm_2))
     return normalisation * (2 - norm_1), normalisation * (2 - norm_2)
 
+def tt_symmetric_lr_random_orthogonalise(train_tt: List[np.array], target_ranks: List[int]) -> List[np.array]:
+    if len(train_tt) > 1:
+        tt_gaussian = tt_random_gaussian(target_ranks, shape=train_tt[0].shape[1:-1])
+        train_tt = _tt_lr_random_orthogonalise(train_tt, tt_gaussian)
+        train_tt = [(c + np.swapaxes(c, 1, 2)) / 2 for c in train_tt]
+        return train_tt
+    return train_tt
+
 block_matrix = [np.array([[1, 0], [0, 0]]).reshape(1, 2, 2, 1)] + psd_matrix
 block_matrix = tt_add(block_matrix, [np.array([[0, 0], [0, 1]]).reshape(1, 2, 2, 1)] + linear_op)
 
