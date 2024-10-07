@@ -82,14 +82,16 @@ def tt_infeasible_newton_system_rhs(
     # Mehrotra's Aggregated System
     if feasible:
         # If primal-dual error is beneath tolerance, quicken up newton_system construction by assuming zero pd-error
-        newton_rhs = IDX_3 + tt_sub(tt_mat_mat_mul(X_tt, Z_tt), tt_scale(mu, tt_identity(len(X_tt))))
+        XZ_term = tt_mat_mat_mul(X_tt, Z_tt)
+        XZ_term = tt_add(XZ_term, tt_mat_mat_mul(Delta_X_tt, Delta_Z_tt))
+        newton_rhs = IDX_3 + tt_sub(XZ_term, tt_scale(mu, tt_identity(len(X_tt))))
         primal_dual_error = 0
     else:
         upper_rhs = IDX_0 + tt_sub(tt_add(obj_tt, Z_tt),
                                    tt_mat(tt_linear_op(tt_adjoint(linear_op_tt), Y_tt), shape=(2, 2)))
         middle_rhs = IDX_1 + tt_sub(bias_tt, tt_mat(tt_linear_op(linear_op_tt, X_tt), shape=(2, 2)))
         XZ_term = tt_mat_mat_mul(X_tt, Z_tt)
-        XZ_term = tt_add(tt_mat_mat_mul(Delta_X_tt, Delta_Z_tt), XZ_term)
+        XZ_term = tt_add(XZ_term, tt_mat_mat_mul(Delta_X_tt, Delta_Z_tt))
         lower_rhs = IDX_3 + tt_sub(XZ_term, tt_scale(mu, tt_identity(len(X_tt))))
         newton_rhs = tt_add(upper_rhs, middle_rhs)
         primal_dual_error = tt_inner_prod(newton_rhs, newton_rhs)
@@ -152,7 +154,7 @@ def tt_psd_step(matrix_tt: List[np.array], Delta_tt, block_size=2, num_iter=500,
         matrix_tt = [np.einsum("ab, bcde -> acde", factor, block_matrix_tt[1])] + block_matrix_tt[2:]
         return matrix_tt, discount_block[multi_min_index]
 
-    return matrix_tt, (0.5) ** (2 * block_size + 1)
+    return matrix_tt, (0.5) ** (2 * block_size)
 
 
 def _tt_psd_step(
@@ -173,7 +175,8 @@ def _tt_psd_step(
                                         num_iter=1500, tol=tol)
     Delta_Z_tt[0] *= 0.95*step_size_z
     new_Z_tt = tt_add(Z_tt, Delta_Z_tt)
-    new_Y_tt = tt_add(Y_tt, tt_scale(0.95*step_size_z, Delta_Y_tt))
+    step_size = max(step_size_x, step_size_z)
+    new_Y_tt = tt_add(Y_tt, tt_scale(0.95*step_size, Delta_Y_tt))
     print(f"Step Size: {step_size_x}, {step_size_z}")
     return (
         tt_rank_reduce(new_X_tt, err_bound=0),
@@ -210,7 +213,8 @@ def tt_ipm(
     # Tikhononv regularization
     lhs_skeleton = tt_rank_reduce(
         tt_add(lhs_skeleton, [tikhonov_param * np.eye(4).reshape(1, 4, 4, 1) for _ in range(len(lhs_skeleton))]),
-        err_bound=0)
+        err_bound=0
+    )
     X_tt = tt_identity(dim)
     Y_tt = tt_zero_matrix(dim)  # [0, Y_1, Y_2, 0]^T
     Z_tt = tt_identity(dim)
@@ -234,24 +238,16 @@ def tt_ipm(
             feasible,
             verbose
         )
-        condition = min(1, (pd_error / mu) ** 3)
+        condition = max(0.05, 0.5*min(1, (pd_error / mu) ** 3))
         centering_param = interpol_damp * centering_param + (1 - interpol_damp) * condition
         Delta_X_tt = _symmetrisation(_tt_get_block(0, 0, Delta_tt))
         Delta_Y_tt = _tt_get_block(0, 1, Delta_tt)
-        Delta_Z_tt = _symmetrisation(_tt_get_block(1, 1, Delta_tt))
+        Delta_Z_tt = _symmetrisation(_tt_get_block(1, 1, Delta_tt)) # Z should be symmetric but it isn't exactly
         if verbose:
             print(f"---Step {iter}---")
             print("Centering Param: ", centering_param)
             print(f"Duality Gap: {100 * abs(mu):.4f}%")
             print(f"Primal-Dual error: {pd_error:.4f}")
-            #print("X_tt:")
-            #print(np.round(tt_matrix_to_matrix(X_tt), decimals=2))
-            #print("Delta_X_tt:")
-            #print(np.round(tt_matrix_to_matrix(Delta_X_tt), decimals=2))
-            #print("Z_tt:")
-            #print(np.round(tt_matrix_to_matrix(Z_tt), decimals=2))
-            #print("Delta_Z_tt:")
-            #print(np.round(tt_matrix_to_matrix(Delta_Z_tt), decimals=2))
         X_tt, Y_tt, Z_tt = _tt_psd_step(X_tt, Y_tt, Z_tt, Delta_X_tt, Delta_Y_tt, Delta_Z_tt)
         if np.less(pd_error, feasibility_tol):
             feasible = True
