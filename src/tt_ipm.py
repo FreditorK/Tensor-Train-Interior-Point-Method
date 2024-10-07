@@ -198,7 +198,7 @@ def tt_ipm(
     tikhonov_param=1e-4,
     interpol_damp=0.8,
     feasibility_tol=1e-8,
-    centrality_tol=1e-4,
+    centrality_tol=1e-5,
     verbose=False
 ):
     dim = len(obj_tt)
@@ -238,8 +238,6 @@ def tt_ipm(
             feasible,
             verbose
         )
-        condition = max(0.05, 0.5*min(1, (pd_error / mu) ** 3))
-        centering_param = interpol_damp * centering_param + (1 - interpol_damp) * condition
         Delta_X_tt = _symmetrisation(_tt_get_block(0, 0, Delta_tt))
         Delta_Y_tt = _tt_get_block(0, 1, Delta_tt)
         Delta_Z_tt = _symmetrisation(_tt_get_block(1, 1, Delta_tt)) # Z should be symmetric but it isn't exactly
@@ -251,6 +249,7 @@ def tt_ipm(
         X_tt, Y_tt, Z_tt = _tt_psd_step(X_tt, Y_tt, Z_tt, Delta_X_tt, Delta_Y_tt, Delta_Z_tt)
         if np.less(pd_error, feasibility_tol):
             feasible = True
+            centering_param = interpol_damp * centering_param + (1 - interpol_damp) * 0.1
             if np.less(mu, centrality_tol):
                 break
     if verbose:
