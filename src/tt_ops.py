@@ -1,18 +1,8 @@
-import numpy as np
 import scipy as scp
 
 from src.ops import *
 import copy
-from build.tt_ops_cy import (
-    tt_identity,
-    tt_zero_matrix,
-    tt_one_matrix,
-    tt_transpose,
-    tt_adjoint,
-    tt_ranks,
-    tt_scale,
-    tt_swap_all
-)
+from cy_src.tt_ops_cy import *
 
 PHI = np.array([[1, 1],
                 [1, -1]], dtype=float).reshape(1, 2, 2, 1)
@@ -740,7 +730,6 @@ def tt_randomised_block_min_eig_values(block_matrix_tt: List[np.array], num_iter
         block_eig_vec_tt = tt_block_matrix_vec_mul(block_matrix_tt, block_eig_vec_tt)
         block_eig_vec_tt = _tt_lr_random_orthogonalise(block_eig_vec_tt, gaussian_tt)
         block_norm_2 = tt_block_inner_prod(block_eig_vec_tt, block_eig_vec_tt)[0]
-        print(block_norm_2)
         # eliminating negative eigenvalues so iteration becomes more accurate for smaller scales
         mask *= np.less(block_norm_2, mu + 0.01)
         block_norm_2 = mask*block_norm_2 + (1-mask)
@@ -750,10 +739,8 @@ def tt_randomised_block_min_eig_values(block_matrix_tt: List[np.array], num_iter
             break
         prev_norm_2 = block_norm_2
     block_eig_vals = tt_block_inner_prod(block_eig_vec_tt, tt_block_matrix_vec_mul(block_matrix_tt, block_eig_vec_tt))[0]
-    print("Before", block_eig_vals.flatten())
     block_eig_vals = mask*normalisation * (mu - block_eig_vals)
     print(f"    Power iterations: {i}")
-    print("After", block_eig_vals.flatten())
     return block_eig_vals
 
 
