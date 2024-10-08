@@ -25,9 +25,7 @@ def _tt_eig(matrix_tt, min_eig=False, nswp=1, x0=None, eps=1e-10, trunc_norm='re
     dtype = matrix_tt[0].dtype
     damp = 2
 
-    which = "LA"
-    if min_eig:
-        which = "SA"
+    which = "SA" if min_eig else "LA"
 
     if x0 == None:
         x_cores = [np.ones_like(c[:, :, 0], dtype=dtype) for c in matrix_tt]
@@ -62,9 +60,9 @@ def _tt_eig(matrix_tt, min_eig=False, nswp=1, x0=None, eps=1e-10, trunc_norm='re
 
             # ... and norms
             norm = np.linalg.norm(Phis[k])
-            norm = norm if norm > 0 else 1.0
+            norm = norm if np.greater(norm, 0) else 1.0
             normA[k - 1] = norm
-            Phis[k] = Phis[k] / norm
+            Phis[k] = np.divide(Phis[k], norm)
 
         # start loop
         max_res = 0
@@ -127,9 +125,9 @@ def _tt_eig(matrix_tt, min_eig=False, nswp=1, x0=None, eps=1e-10, trunc_norm='re
 
                 # ... and norms
                 norm = np.linalg.norm(Phis[k + 1])
-                norm = norm if norm > 0 else 1.0
+                norm = norm if np.greater(norm, 0) else 1.0
                 normA[k] = norm
-                Phis[k + 1] = Phis[k + 1] / norm
+                Phis[k + 1] = np.divide(Phis[k + 1], norm)
 
             else:
                 x_cores[k] = np.reshape(u @ np.diag(s[:r]) @ v[:r, :].T, (rx[k], N[k], rx[k + 1]))
