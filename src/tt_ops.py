@@ -723,10 +723,11 @@ def tt_randomised_block_min_eig_values(block_matrix_tt: List[np.array], num_iter
     block_shape = block_matrix_tt[0].shape[1:-1]
     normalisation = np.sqrt(tt_block_inner_prod(block_matrix_tt, block_matrix_tt)).reshape(1, *block_shape, 1)
     block_matrix_tt[0] *= -np.divide(1, normalisation)
+    block_matrix_tt = tt_rank_reduce(block_matrix_tt, err_bound=0)
     identity = [mu * np.ones((1, *block_shape, 1))] + tt_identity(n)
-    block_matrix_tt = tt_rank_reduce(tt_add(identity, block_matrix_tt), err_bound=0)
+    block_matrix_tt = tt_add(identity, block_matrix_tt)
     target_ranks = [1] + tt_ranks(block_matrix_tt) + [1]
-    gaussian_tt = [
+    gaussian_tt = [np.divide(np.random.randn(1, *block_shape, target_ranks[0]), np.prod(block_shape)* target_ranks[0])] + [
         np.divide(np.random.randn(l_n, 2, l_np1), l_n * 2 * l_np1)
         for i, (l_n, l_np1) in enumerate(zip(target_ranks[:-1], target_ranks[1:]))
     ]
@@ -734,17 +735,25 @@ def tt_randomised_block_min_eig_values(block_matrix_tt: List[np.array], num_iter
         [np.random.randn(1, *block_shape, 1)] + [np.random.randn(1, 2, 1) for _ in range(n)]
     )
     prev_norm_2 = 0
+    mask = np.ones((1, *block_shape, 1))
     for i in range(num_iter):
         block_eig_vec_tt = tt_block_matrix_vec_mul(block_matrix_tt, block_eig_vec_tt)
         block_eig_vec_tt = _tt_lr_random_orthogonalise(block_eig_vec_tt, gaussian_tt)
         block_norm_2 = tt_block_inner_prod(block_eig_vec_tt, block_eig_vec_tt)[0]
+        print(block_norm_2)
+        # eliminating negative eigenvalues so iteration becomes more accurate for smaller scales
+        mask *= np.less(block_norm_2, mu + 0.01)
+        block_norm_2 = mask*block_norm_2 + (1-mask)
+        block_matrix_tt[0] *= mask
         block_eig_vec_tt[0] *= np.divide(1, np.sqrt(block_norm_2))
         if np.less_equal(np.linalg.norm(block_norm_2 - prev_norm_2), tol):
             break
         prev_norm_2 = block_norm_2
-    block_eig_vals = tt_block_inner_prod(tt_block_matrix_vec_mul(block_matrix_tt, block_eig_vec_tt), block_eig_vec_tt)[
-        0]
-    block_eig_vals = normalisation * (mu - block_eig_vals)
+    block_eig_vals = tt_block_inner_prod(block_eig_vec_tt, tt_block_matrix_vec_mul(block_matrix_tt, block_eig_vec_tt))[0]
+    print("Before", block_eig_vals.flatten())
+    block_eig_vals = mask*normalisation * (mu - block_eig_vals)
+    print(f"    Power iterations: {i}")
+    print("After", block_eig_vals.flatten())
     return block_eig_vals
 
 
