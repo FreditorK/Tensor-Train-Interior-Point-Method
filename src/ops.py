@@ -2,6 +2,8 @@ import numpy as np
 from typing import List, Tuple
 from itertools import product
 from copy import deepcopy
+from cy_src.ops_cy import *
+
 
 
 def break_core_bond(core):

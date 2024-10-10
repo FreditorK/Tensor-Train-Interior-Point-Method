@@ -6,26 +6,26 @@ sys.path.append(os.getcwd() + '/../')
 import numpy as np
 import scipy as scip
 import time
-from src.tt_ops import tt_ranks, tt_normalise, tt_inner_prod, tt_matrix_vec_mul
-from src.tt_amen import _compute_phi_bck_A, _compute_phi_fwd_A, _local_product
+from src.tt_ops import tt_ranks, tt_normalise, tt_inner_prod, tt_matrix_vec_mul, tt_rl_orthogonalise
+from src.tt_amen import compute_phi_bcks_A, compute_phi_fwd_A, solution_truncation
 
 
-def tt_max_eig(matrix_tt, nswp=1, x0=None, eps=1e-10, trunc_norm='res', verbose=False):
-    return _tt_eig(matrix_tt, min_eig=False, nswp=nswp, x0=x0, eps=eps, trunc_norm=trunc_norm, verbose=verbose)
+def tt_max_eig(matrix_tt, nswp=5, x0=None, eps=1e-10, verbose=False):
+    return _tt_eig(matrix_tt, min_eig=False, nswp=nswp, x0=x0, eps=eps, verbose=verbose)
 
 
-def tt_min_eig(matrix_tt, nswp=1, x0=None, eps=1e-10, trunc_norm='res', verbose=False):
-    return _tt_eig(matrix_tt, min_eig=True, nswp=nswp, x0=x0, eps=eps, trunc_norm=trunc_norm, verbose=verbose)
+def tt_min_eig(matrix_tt, nswp=5, x0=None, eps=1e-10, verbose=False):
+    return _tt_eig(matrix_tt, min_eig=True, nswp=nswp, x0=x0, eps=eps, verbose=verbose)
 
 
-def _tt_eig(matrix_tt, min_eig=False, nswp=1, x0=None, eps=1e-10, trunc_norm='res', verbose=False):
+def _tt_eig(matrix_tt, min_eig, nswp, x0, eps, verbose):
     if verbose:
         print(f"Starting Eigen solve with:\n \t {eps} \n \t sweeps: {nswp}")
         t0 = time.time()
     dtype = matrix_tt[0].dtype
     damp = 2
 
-    which = "SA" if min_eig else "LA"
+    min_or_max = "SA" if min_eig else "LA"
 
     if x0 == None:
         x_cores = [np.ones_like(c[:, :, 0], dtype=dtype) for c in matrix_tt]
@@ -33,36 +33,16 @@ def _tt_eig(matrix_tt, min_eig=False, nswp=1, x0=None, eps=1e-10, trunc_norm='re
         x_cores = x0.copy()
 
     d = len(x_cores)
-    rx = [1] + tt_ranks(x_cores) + [1]
-    N = [c.shape[1] for c in x_cores]
+    rx = np.array([1] + tt_ranks(x_cores) + [1])
+    N = np.array([c.shape[1] for c in x_cores])
 
-    Phis = [np.ones((1, 1, 1), dtype=dtype)] + [None] * (d - 1) + [
-        np.ones((1, 1, 1), dtype=dtype)]  # size is rk x Rk x rk
-
-    normA = np.ones((d - 1))
+    Phis = [np.ones((1, 1, 1), dtype=dtype)] + [None] * (d - 1) + [np.ones((1, 1, 1), dtype=dtype)]  # size is rk x Rk x rk
 
     max_res = 0
     for swp in range(nswp):
-        # right to left orthogonalization
-
-        for k in range(d - 1, 0, -1):
-            core = np.reshape(x_cores[k], [rx[k], N[k] * rx[k + 1]]).T
-            Qmat, Rmat = np.linalg.qr(core)
-
-            core_prev = np.einsum('ijk,km->ijm', x_cores[k - 1], Rmat.T)
-            rx[k] = Qmat.shape[1]
-
-            x_cores[k] = np.reshape(Qmat.T, (rx[k], N[k], rx[k + 1]))
-            x_cores[k - 1] = core_prev[:]
-
-            # update phis (einsum)
-            Phis[k] = _compute_phi_bck_A(Phis[k + 1], x_cores[k], matrix_tt[k], x_cores[k])
-
-            # ... and norms
-            norm = np.linalg.norm(Phis[k])
-            norm = norm if np.greater(norm, 0) else 1.0
-            normA[k - 1] = norm
-            Phis[k] = np.divide(Phis[k], norm)
+        x_cores = tt_rl_orthogonalise(x_cores)
+        rx[1:-1] = np.array(tt_ranks(x_cores))
+        Phis, _ = compute_phi_bcks_A(Phis, x_cores, matrix_tt, x_cores, d=d)
 
         # start loop
         max_res = 0
@@ -78,7 +58,7 @@ def _tt_eig(matrix_tt, min_eig=False, nswp=1, x0=None, eps=1e-10, trunc_norm='re
             B = np.einsum("lsr,smnRL->lmLrnR", Phis[k], Bp)
             B = np.reshape(B, [rx[k] * N[k] * rx[k + 1], rx[k] * N[k] * rx[k + 1]])
 
-            eig_val, solution_now = scip.sparse.linalg.eigsh(B, k=1, which=which)
+            eig_val, solution_now = scip.sparse.linalg.eigsh(B, k=1, which=min_or_max)
             rhs = eig_val * solution_now
 
             res_new = np.linalg.norm(B @ solution_now - rhs)
@@ -88,32 +68,15 @@ def _tt_eig(matrix_tt, min_eig=False, nswp=1, x0=None, eps=1e-10, trunc_norm='re
             solution_now = np.reshape(solution_now, (rx[k] * N[k], rx[k + 1]))
             # truncation
             if k < d - 1:
-                u, s, v = np.linalg.svd(solution_now, full_matrices=False)
-                if trunc_norm != 'fro':
-                    # search for a rank such that offers small enough residuum
-                    r = 0
-                    for r in range(u.shape[1] - 1, 0, -1):
-                        # solution has the same size
-                        solution = u[:, :r] @ np.diag(s[:r]) @ v[:r, :]
-                        res = np.linalg.norm(np.reshape(
-                            _local_product(Phis[k + 1], Phis[k], matrix_tt[k], np.reshape(solution, [rx[k], N[k], rx[k + 1]]),
-                                           solution_now.shape), [-1, 1]) - rhs)
-
-                        if res > max(real_tol * damp, res_new):
-                            break
-                    r = min(r + 1, np.prod(s.shape))
+                u, v = solution_truncation(solution_now, Phis[k], Phis[k + 1], matrix_tt[k], rhs, rx[k], N[k], rx[k+1], max(real_tol * damp, res_new))
+                r = u.shape[1]
             else:
                 u, v = np.linalg.qr(solution_now)
                 r = u.shape[1]
-                s = np.ones(r, dtype=dtype)
+                v = v.T
 
-            u = u[:, :r]
-            v = np.diag(s[:r]) @ v[:r, :]
-            v = v.T
 
             if k < d - 1:
-
-                r = u.shape[1]
                 v = np.einsum('ji,jkl->ikl', v, x_cores[k + 1])
 
                 x_cores[k] = np.reshape(u, [rx[k], N[k], r])
@@ -121,18 +84,17 @@ def _tt_eig(matrix_tt, min_eig=False, nswp=1, x0=None, eps=1e-10, trunc_norm='re
                 rx[k + 1] = r
 
                 # next phis with norm correction
-                Phis[k + 1] = _compute_phi_fwd_A(Phis[k], x_cores[k], matrix_tt[k], x_cores[k])
+                Phis[k + 1] = compute_phi_fwd_A(Phis[k], x_cores[k], matrix_tt[k], x_cores[k])
 
                 # ... and norms
                 norm = np.linalg.norm(Phis[k + 1])
                 norm = norm if np.greater(norm, 0) else 1.0
-                normA[k] = norm
                 Phis[k + 1] = np.divide(Phis[k + 1], norm)
 
             else:
-                x_cores[k] = np.reshape(u @ np.diag(s[:r]) @ v[:r, :].T, (rx[k], N[k], rx[k + 1]))
+                x_cores[k] = np.reshape(u @ v.T, (rx[k], N[k], rx[k + 1]))
 
-        x_cores = tt_normalise([x_cores[k] for k in range(d)])
+        x_cores = tt_normalise(x_cores)
 
         if max_res < eps:
             break
