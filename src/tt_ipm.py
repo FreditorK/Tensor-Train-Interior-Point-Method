@@ -71,33 +71,31 @@ IDX_3 = [np.array([[0, 0],
                    [0, 1]]).reshape(1, 2, 2, 1)]
 
 
-def tt_infeasible_aggregated_rhs(
+def tt_infeasible_centr_rhs(
     X_tt,
     Z_tt,
     mu
 ):
-    # Mehrotra's Aggregated System
-    # If primal-dual error is beneath tolerance, quicken up newton_system construction by assuming zero pd-error
     XZ_term = tt_mat_mat_mul(X_tt, Z_tt)
     newton_rhs = IDX_3 + tt_sub(XZ_term, tt_scale(mu, tt_identity(len(X_tt))))
     return tt_rank_reduce(tt_scale(-1, tt_vec(newton_rhs)), err_bound=0)
 
 
-def tt_infeasible_pred_rhs(
+def tt_infeasible_feas_rhs(
     obj_tt,
     linear_op_tt,
     bias_tt,
     X_tt,
     Y_tt,
-    Z_tt
+    Z_tt,
+    mu
 ):
-    # Mehrotra's Predictor System
     upper_rhs = IDX_0 + tt_sub(tt_add(obj_tt, Z_tt), tt_mat(tt_linear_op(tt_adjoint(linear_op_tt), Y_tt), shape=(2, 2)))
     middle_rhs = IDX_1 + tt_sub(bias_tt, tt_mat(tt_linear_op(linear_op_tt, X_tt), shape=(2, 2)))
     newton_rhs = tt_add(upper_rhs, middle_rhs)
     primal_dual_error = tt_inner_prod(newton_rhs, newton_rhs)
     XZ_term = tt_mat_mat_mul(X_tt, Z_tt)
-    lower_rhs = IDX_3 + XZ_term
+    lower_rhs = IDX_3 + tt_sub(XZ_term, tt_scale(mu, tt_identity(len(X_tt))))
     newton_rhs = tt_add(newton_rhs, lower_rhs)
     return tt_rank_reduce(tt_scale(-1, tt_vec(newton_rhs)), err_bound=0), primal_dual_error
 
@@ -117,23 +115,25 @@ def _tt_get_block(i, j, block_matrix_tt):
 
 
 def _tt_ipm_newton_step(
-    obj_tt,
-    linear_op_tt,
-    lhs_skeleton,
-    bias_tt,
-    X_tt,
-    Y_tt,
-    Z_tt,
-    centering_param,
-    feasible,
-    verbose,
-    interpol_param=0.8
+        obj_tt,
+        linear_op_tt,
+        lhs_skeleton,
+        bias_tt,
+        X_tt,
+        Y_tt,
+        Z_tt,
+        centering_param,
+        mu,
+        feasible,
+        verbose,
+        interpol_param=0.98
 ):
+    prev_mu = mu
     mu = tt_inner_prod(Z_tt, [0.5 * c for c in X_tt])
     lhs_matrix_tt = tt_infeasible_newton_system_lhs(lhs_skeleton, X_tt, Z_tt)
     if feasible:
         # Corrector Step
-        rhs_vec_tt = tt_infeasible_aggregated_rhs(X_tt, Z_tt, centering_param*mu)
+        rhs_vec_tt = tt_infeasible_centr_rhs(X_tt, Z_tt, centering_param * mu)
         Delta_tt, res = tt_amen(lhs_matrix_tt, rhs_vec_tt, verbose=verbose, nswp=22)
         Delta_tt = tt_mat(Delta_tt, shape=(2, 2))
         Delta_X_tt = _symmetrisation(_tt_get_block(0, 0, Delta_tt))
@@ -141,14 +141,15 @@ def _tt_ipm_newton_step(
         # FIXME: Pay close attention here if not symmetric because of numerical errors it is not good
         Delta_Z_tt = _tt_get_block(1, 1, Delta_tt)  # Z should be symmetric but it isn't exactly
         x_step_size, z_step_size = _tt_line_search(X_tt, Z_tt, Delta_X_tt, Delta_Z_tt)
-        centering_param = interpol_param*centering_param + (1-interpol_param)*max(x_step_size, z_step_size)**2
-        new_X_tt = tt_add(X_tt, tt_scale(0.95 * x_step_size, Delta_X_tt))
-        new_Z_tt = tt_add(Z_tt, tt_scale(0.95 * z_step_size, Delta_Z_tt))
+        print(f"Step sizes: {x_step_size} {z_step_size}")
+        #centering_param = max(interpol_param*centering_param if (mu/prev_mu) > 0.75 else centering_param, 0.1)
+        new_X_tt = tt_add(X_tt, tt_scale(0.98 * x_step_size, Delta_X_tt))
+        new_Z_tt = tt_add(Z_tt, tt_scale(0.98 * z_step_size, Delta_Z_tt))
         primal_dual_error = 0
     else:
         # Predictor Step
-        rhs_vec_tt, primal_dual_error = tt_infeasible_pred_rhs(
-            obj_tt, linear_op_tt, bias_tt, X_tt, Y_tt, Z_tt
+        rhs_vec_tt, primal_dual_error = tt_infeasible_feas_rhs(
+            obj_tt, linear_op_tt, bias_tt, X_tt, Y_tt, Z_tt, centering_param*mu
         )
         Delta_tt, res = tt_amen(lhs_matrix_tt, rhs_vec_tt, verbose=verbose, nswp=22)
         Delta_tt = tt_mat(Delta_tt, shape=(2, 2))
@@ -156,12 +157,13 @@ def _tt_ipm_newton_step(
         Delta_Y_tt = _tt_get_block(0, 1, Delta_tt)
         Delta_Z_tt = _tt_get_block(1, 1, Delta_tt)  # Z should be symmetric but it isn't exactly
         x_step_size, z_step_size = _tt_line_search(X_tt, Z_tt, Delta_X_tt, Delta_Z_tt)
-        new_X_tt = tt_add(X_tt, tt_scale(0.95 * x_step_size, Delta_X_tt))
-        new_Z_tt = tt_add(Z_tt, tt_scale(0.95 * z_step_size, Delta_Z_tt))
+        print(f"Step sizes: {x_step_size} {z_step_size}")
+        new_X_tt = tt_add(X_tt, tt_scale(0.98 * x_step_size, Delta_X_tt))
+        new_Z_tt = tt_add(Z_tt, tt_scale(0.98 * z_step_size, Delta_Z_tt))
 
     return (
         tt_rank_reduce(new_X_tt, err_bound=0),
-        tt_rank_reduce(tt_add(Y_tt, tt_scale(0.95*z_step_size, Delta_Y_tt)), err_bound=0),
+        tt_rank_reduce(tt_add(Y_tt, tt_scale(0.98*z_step_size, Delta_Y_tt)), err_bound=0),
         tt_rank_reduce(new_Z_tt, err_bound=0),
         primal_dual_error,
         mu,
@@ -175,7 +177,7 @@ def _tt_line_search(X_tt, Z_tt, Delta_X_tt, Delta_Z_tt, crit=0):
     discount = 0.5
     discount_x = False
     discount_z = False
-    for iter in range(10):
+    for iter in range(15):
         if ~discount_x:
             new_X_tt = tt_add(X_tt, tt_scale(x_step_size, Delta_X_tt))
             val_x, _, _ = tt_min_eig(new_X_tt)
@@ -217,7 +219,8 @@ def tt_ipm(
     Y_tt = tt_zero_matrix(dim)  # [0, Y_1, Y_2, 0]^T
     Z_tt = tt_identity(dim)
     iter = 0
-    centering_param = 1
+    centering_param = 0.5
+    mu = 1.0
     feasible = False
     for iter in range(max_iter):
         X_tt, Y_tt, Z_tt, pd_error, mu, centering_param = _tt_ipm_newton_step(
@@ -229,6 +232,7 @@ def tt_ipm(
             Y_tt,
             Z_tt,
             centering_param,
+            mu,
             feasible,
             verbose
         )
@@ -238,6 +242,10 @@ def tt_ipm(
             print(f"Primal-Dual error: {pd_error:.8f}")
             print(f"Centering Parameter: {centering_param}")
         if np.less(pd_error, feasibility_tol):
+            if not feasible and verbose:
+                print("-------------------------")
+                print(f"IPM reached feasibility!")
+                print("-------------------------")
             feasible = True
             if np.less(mu, centrality_tol):
                 break

@@ -6,50 +6,50 @@ cdef extern from "numpy/arrayobject.h":
     ctypedef void npy_no_deprecated_api
 
 import numpy as np
-cimport numpy as np  # This allows Cython to understand NumPy's C-API
+cimport numpy as cnp  # This allows Cython to understand NumPy's C-API
 from typing import List
 
-cpdef np.ndarray[double, ndim=2] compute_phi_fwd_rhs(np.ndarray[double, ndim=2] Phi_now,
-                                                     np.ndarray[double, ndim=3] core_rhs,
-                                                     np.ndarray[double, ndim=3] core):
+cpdef cnp.ndarray[double, ndim=2] compute_phi_fwd_rhs(cnp.ndarray[double, ndim=2] Phi_now,
+                                                     cnp.ndarray[double, ndim=3] core_rhs,
+                                                     cnp.ndarray[double, ndim=3] core):
 
-    cdef np.ndarray[double, ndim=2] Phi_next = np.einsum('br,bnB,rnR->BR', Phi_now, core_rhs, core)
+    cdef cnp.ndarray[double, ndim=2] Phi_next = np.einsum('br,bnB,rnR->BR', Phi_now, core_rhs, core)
     return Phi_next
 
-cpdef np.ndarray[double, ndim=2] _compute_phi_bck_rhs(np.ndarray[double, ndim=2] Phi_now,
-                                                      np.ndarray[double, ndim=3] core_b,
-                                                      np.ndarray[double, ndim=3] core):
+cdef cnp.ndarray[double, ndim=2] _compute_phi_bck_rhs(cnp.ndarray[double, ndim=2] Phi_now,
+                                                      cnp.ndarray[double, ndim=3] core_b,
+                                                      cnp.ndarray[double, ndim=3] core):
 
-    cdef np.ndarray[double, ndim=2] Phi = np.einsum('BR,bnB,rnR->br', Phi_now, core_b, core)
+    cdef cnp.ndarray[double, ndim=2] Phi = np.einsum('BR,bnB,rnR->br', Phi_now, core_b, core)
 
     return Phi
 
-cpdef np.ndarray[double, ndim=3] compute_phi_fwd_A(np.ndarray[double, ndim=3] Phi_now,
-                                                   np.ndarray[double, ndim=3] core_left,
-                                                   np.ndarray[double, ndim=4] core_A,
-                                                   np.ndarray[double, ndim=3] core_right):
+cpdef cnp.ndarray[double, ndim=3] compute_phi_fwd_A(cnp.ndarray[double, ndim=3] Phi_now,
+                                                   cnp.ndarray[double, ndim=3] core_left,
+                                                   cnp.ndarray[double, ndim=4] core_A,
+                                                   cnp.ndarray[double, ndim=3] core_right):
 
-    cdef np.ndarray[double, ndim=3] Phi_next = np.einsum('lsr,lML,sMNS,rNR->LSR', Phi_now, core_left, core_A, core_right)
+    cdef cnp.ndarray[double, ndim=3] Phi_next = np.einsum('lsr,lML,sMNS,rNR->LSR', Phi_now, core_left, core_A, core_right)
 
     return Phi_next
 
-cpdef np.ndarray[double, ndim=3] _compute_phi_bck_A(np.ndarray[double, ndim=3] Phi_now,
-                                                    np.ndarray[double, ndim=3] core_left,
-                                                    np.ndarray[double, ndim=4] core_A,
-                                                    np.ndarray[double, ndim=3] core_right):
+cdef cnp.ndarray[double, ndim=3] _compute_phi_bck_A(cnp.ndarray[double, ndim=3] Phi_now,
+                                                    cnp.ndarray[double, ndim=3] core_left,
+                                                    cnp.ndarray[double, ndim=4] core_A,
+                                                    cnp.ndarray[double, ndim=3] core_right):
 
-    cdef np.ndarray[double, ndim=3] Phi = np.einsum('LSR,lML,sMNS,rNR->lsr', Phi_now, core_left, core_A, core_right)
+    cdef cnp.ndarray[double, ndim=3] Phi = np.einsum('LSR,lML,sMNS,rNR->lsr', Phi_now, core_left, core_A, core_right)
 
     return Phi
 
-cpdef np.ndarray[double, ndim=3] local_product(np.ndarray[double, ndim=3] Phi_right,
-                                               np.ndarray[double, ndim=3] Phi_left,
-                                               np.ndarray[double, ndim=4] coreA,
-                                               np.ndarray[double, ndim=3] core,
+cpdef cnp.ndarray[double, ndim=3] local_product(cnp.ndarray[double, ndim=3] Phi_right,
+                                               cnp.ndarray[double, ndim=3] Phi_left,
+                                               cnp.ndarray[double, ndim=4] coreA,
+                                               cnp.ndarray[double, ndim=3] core,
                                                int bandA=-1):
 
-    cdef np.ndarray[double, ndim=3] w
-    cdef np.ndarray[double, ndim=3] tmp
+    cdef cnp.ndarray[double, ndim=3] w
+    cdef cnp.ndarray[double, ndim=3] tmp
     cdef int i
     cdef int zero = 0
 
@@ -82,11 +82,12 @@ cpdef np.ndarray[double, ndim=3] local_product(np.ndarray[double, ndim=3] Phi_ri
 
 cpdef tuple compute_phi_bcks_rhs(list Phis_b, list b, list x_cores, int d):
 
-    cdef np.ndarray[double, ndim=2] current_Phis_b
-    cdef np.ndarray[double, ndim=2] next_Phis_b
-    cdef np.ndarray[double, ndim=3] current_b
-    cdef np.ndarray[double, ndim=3] x_core
-    cdef np.ndarray[double, ndim=1] normb = np.ones(d - 1)
+    cdef cnp.ndarray[double, ndim=2] current_Phis_b
+    cdef cnp.ndarray[double, ndim=2] next_Phis_b
+    cdef cnp.ndarray[double, ndim=3] current_b
+    cdef cnp.ndarray[double, ndim=3] x_core
+    cdef cnp.ndarray[double, ndim=1] normb = np.ones(d - 1)
+    cdef int k
     cdef tuple return_tuple
 
     for k in range(d - 1, 0, -1):
@@ -107,14 +108,14 @@ cpdef tuple compute_phi_bcks_rhs(list Phis_b, list b, list x_cores, int d):
 
 
 cpdef tuple compute_phi_bcks_A(list Phis, list z_cores, list matrix_tt, list x_cores, int d):
-    cdef int k
     cdef double norm
-    cdef np.ndarray[double, ndim=3] current_phi
-    cdef np.ndarray[double, ndim=3] next_phi
-    cdef np.ndarray[double, ndim=3] x_core
-    cdef np.ndarray[double, ndim=3] z_core
-    cdef np.ndarray[double, ndim=4] matrix_core
-    cdef np.ndarray[double, ndim=1] normA = np.ones(d-1)
+    cdef cnp.ndarray[double, ndim=3] current_phi
+    cdef cnp.ndarray[double, ndim=3] next_phi
+    cdef cnp.ndarray[double, ndim=3] x_core
+    cdef cnp.ndarray[double, ndim=3] z_core
+    cdef cnp.ndarray[double, ndim=4] matrix_core
+    cdef cnp.ndarray[double, ndim=1] normA = np.ones(d-1)
+    cdef int k
     cdef tuple return_tuple
 
     for k in range(d - 1, 0, -1):
@@ -137,20 +138,20 @@ cpdef tuple compute_phi_bcks_A(list Phis, list z_cores, list matrix_tt, list x_c
 
     return return_tuple
 
-cpdef tuple solution_truncation(np.ndarray[double, ndim=2] solution_now,
-                                np.ndarray[double, ndim=3] current_phi,
-                                np.ndarray[double, ndim=3] next_phi,
-                                np.ndarray[double, ndim=4] current_matrix_core,
-                                np.ndarray[double, ndim=2] rhs,
+cpdef tuple solution_truncation(cnp.ndarray[double, ndim=2] solution_now,
+                                cnp.ndarray[double, ndim=3] current_phi,
+                                cnp.ndarray[double, ndim=3] next_phi,
+                                cnp.ndarray[double, ndim=4] current_matrix_core,
+                                cnp.ndarray[double, ndim=2] rhs,
                                 int rank,
                                 int current_N,
                                 int rankp1,
                                 double tol):
     cdef tuple solution_tuple
-    cdef np.ndarray[double, ndim=2] U
-    cdef np.ndarray[double, ndim=1] s
-    cdef np.ndarray[double, ndim=2] S
-    cdef np.ndarray[double, ndim=2] V
+    cdef cnp.ndarray[double, ndim=2] U
+    cdef cnp.ndarray[double, ndim=1] s
+    cdef cnp.ndarray[double, ndim=2] S
+    cdef cnp.ndarray[double, ndim=2] V
     cdef int r = 0
 
     U, s, V = np.linalg.svd(solution_now, full_matrices=False)

@@ -2,8 +2,6 @@ import sys
 import os
 import time
 
-import numpy as np
-
 sys.path.append(os.getcwd() + '/../../')
 
 from dataclasses import dataclass
@@ -15,7 +13,7 @@ from src.tt_ipm import tt_ipm, _tt_get_block
 
 @dataclass
 class Config:
-    seed = 3 #999: Very low rank solution, 9: Low rank solution, 3: Regular solution
+    seed = 5 #999: Very low rank solution, 9: Low rank solution, 3: Regular solution
     ranks = [3]
 
 
@@ -30,7 +28,7 @@ if __name__ == "__main__":
     print(f"Objective Ranks: {tt_ranks(G_tt)}")
     print(f"Constraint Ranks: As {tt_ranks(As_tt)}, bias {tt_ranks(bias_tt)}")
     t0 = time.time()
-    X_tt, Y_tt, Z_tt = tt_ipm(G_tt, As_tt, bias_tt, max_iter=50, verbose=True)
+    X_tt, Y_tt, Z_tt = tt_ipm(G_tt, As_tt, bias_tt, max_iter=60, verbose=True)
     t1 = time.time()
     print("Solution: ")
     np.set_printoptions(linewidth=600, threshold=np.inf, precision=4, suppress=True)

@@ -8,12 +8,12 @@ sys.path.append(os.getcwd() + '/../')
 import numpy as np
 import scipy as scip
 import time
-from src.tt_ops import tt_ranks, tt_random_gaussian, tt_rl_orthogonalise
+from src.tt_ops import tt_ranks, tt_random_gaussian, tt_rl_orthogonalise, tt_mat_mat_mul, tt_inner_prod, tt_sub, \
+    tt_matrix_vec_mul
 from cy_src.ops_cy import *
-from cy_src.ops_cy import _compute_phi_bck_rhs, _compute_phi_bck_A
 
 
-def tt_amen(A, b, nswp=22, x0=None, eps=1e-10, kickrank=4, kick2=0, trunc_norm='res', verbose=False, band_diagonal=-1):
+def tt_amen(A, b, nswp=22, x0=None, eps=1e-10, kickrank=4, kick2=0, verbose=False, band_diagonal=-1):
     if verbose:
         print('Starting AMEn solve with:\n\tepsilon: %g\n\tsweeps: %d' % (eps, nswp))
         t0 = time.time()
@@ -41,41 +41,14 @@ def tt_amen(A, b, nswp=22, x0=None, eps=1e-10, kickrank=4, kick2=0, trunc_norm='
     Phis = [np.ones((1, 1, 1), dtype=dtype)] + [None] * (d-1) + [np.ones((1, 1, 1), dtype=dtype)]  # size is rk x Rk x rk
     Phis_b = [np.ones((1, 1), dtype=dtype)] + [None] * (d-1) + [np.ones((1, 1), dtype=dtype)]  # size is rk x rbk
 
-    normA = np.ones((d-1))
-    normb = np.ones((d-1))
     normx = np.ones((d-1))
-    nrmsc = 1.0
 
     for swp in range(nswp):
         # right to left orthogonalization
 
-        for k in range(d-1, 0, -1):
-
-            # update the z part (ALS) update
-            if swp == 0:
-                cz_new = np.reshape(z_cores[k], (rz[k], -1)).T
-
-                qz, _ = np.linalg.qr(cz_new)
-                rz[k] = qz.shape[1]
-                z_cores[k] = np.reshape(qz.T, (rz[k], N[k], -1))
-            else:
-                nrmsc = nrmsc * normA[k-1] * normx[k-1] / normb[k-1]
-
-            core = np.reshape(x_cores[k], [rx[k], N[k]*rx[k+1]]).T
-            Qmat, Rmat = np.linalg.qr(core)
-
-            core_prev = np.einsum('ijk,km->ijm', x_cores[k-1], Rmat.T)
-            rx[k] = Qmat.shape[1]
-
-            current_norm = np.linalg.norm(core_prev)
-            if current_norm > 0:
-                core_prev = core_prev / current_norm
-            else:
-                current_norm = 1.0
-            normx[k - 1] = normx[k - 1] * current_norm
-
-            x_cores[k] = np.reshape(Qmat.T, (rx[k], N[k], rx[k + 1]))
-            x_cores[k - 1] = core_prev[:]
+        x_cores = tt_rl_orthogonalise(x_cores)
+        rx[1:-1] = tt_ranks(x_cores)
+        normx = np.cumprod([np.linalg.norm(np.reshape(x_cores[k], [rx[k], N[k]*rx[k+1]]).T) for k in range(d-1, 0, -1)])[::-1]
 
         Phis, normA = compute_phi_bcks_A(Phis, x_cores, A, x_cores, d=d)
         Phis_b, normb = compute_phi_bcks_rhs(Phis_b, b, x_cores, d=d)
@@ -84,11 +57,8 @@ def tt_amen(A, b, nswp=22, x0=None, eps=1e-10, kickrank=4, kick2=0, trunc_norm='
         Phiz, _ = compute_phi_bcks_A(Phiz, z_cores, A, x_cores, d=d)
         # start loop
         max_res = 0
-        max_dx = 0
 
         for k in range(d):
-            previous_solution = np.reshape(x_cores[k], [-1, 1])
-
             # assemble rhs
             rhs = np.einsum('br,bmB,BR->rmR',Phis_b[k], b[k] * nrmsc, Phis_b[k+1])
             rhs = np.reshape(rhs, [-1, 1])
@@ -103,38 +73,17 @@ def tt_amen(A, b, nswp=22, x0=None, eps=1e-10, kickrank=4, kick2=0, trunc_norm='
             B = np.einsum('lsr,smnRL->lmLrnR', Phis[k], Bp)
             B = np.reshape(B, [rx[k]*N[k]*rx[k+1], rx[k]*N[k]*rx[k+1]])
 
-            solution_now, solution_res, _, _ = scip.linalg.lstsq(B, rhs, cond=1e-18, check_finite=False)
-            res_new = solution_res/norm_rhs
-
-            # compute residual and step size
-            dx = np.linalg.norm(solution_now-previous_solution) / np.linalg.norm(solution_now)
-
-            max_dx = max(dx, max_dx)
+            solution_now, _, _, _ = scip.linalg.lstsq(B, rhs, lapack_driver="gelsy", cond=1e-18, check_finite=False)
+            res_new = np.linalg.norm(B @ solution_now - rhs)/norm_rhs
             max_res = max(max_res, res_new)
 
             solution_now = np.reshape(solution_now, (rx[k]*N[k], rx[k+1]))
             # truncation
-            if k < d-1:
-                u, s, v = np.linalg.svd(solution_now, full_matrices=False)
-                if trunc_norm != 'fro':
-                    # search for a rank such that offers small enough residuum
-                    r = 0
-                    for r in range(u.shape[1]-1, 0, -1):
-                        # solution has the same size
-                        solution = u[:, :r] @ np.diag(s[:r]) @ v[:r, :]
-                        res = np.linalg.norm(np.reshape(local_product(Phis[k + 1], Phis[k], A[k], np.reshape(solution, [rx[k], N[k], rx[k + 1]])), [-1, 1]) - rhs) / norm_rhs
-
-                        if res > max(real_tol*damp, res_new):
-                            break
-                    r = min(r+1, np.prod(s.shape))
+            if k < d - 1:
+                u, v = solution_truncation(solution_now, Phis[k], Phis[k + 1], A[k], rhs, rx[k], N[k], rx[k + 1], max(real_tol * damp, res_new))
             else:
                 u, v = np.linalg.qr(solution_now)
-                r = u.shape[1]
-                s = np.ones(r,  dtype=dtype)
-
-            u = u[:, :r]
-            v = np.diag(s[:r]) @ v[:r, :]
-            v = v.T
+                v = v.T
 
             czA = local_product(
                 Phiz[k+1],
@@ -207,7 +156,7 @@ def tt_amen(A, b, nswp=22, x0=None, eps=1e-10, kickrank=4, kick2=0, trunc_norm='
                 Phiz_b[k+1] = compute_phi_fwd_rhs(
                     Phiz_b[k], b[k], z_cores[k]) / normb[k]
             else:
-                x_cores[k] = np.reshape(u @ np.diag(s[:r]) @ v[:r, :].T, (rx[k], N[k], rx[k+1]))
+                x_cores[k] = np.reshape(u @ v.T, (rx[k], N[k], rx[k+1]))
 
         if np.less(max_res, eps):
             break

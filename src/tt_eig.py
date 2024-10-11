@@ -18,17 +18,17 @@ def tt_min_eig(matrix_tt, nswp=5, x0=None, eps=1e-10, verbose=False):
     return _tt_eig(matrix_tt, min_eig=True, nswp=nswp, x0=x0, eps=eps, verbose=verbose)
 
 
-def _tt_eig(matrix_tt, min_eig, nswp, x0, eps, verbose):
+def _tt_eig(A, min_eig, nswp, x0, eps, verbose):
     if verbose:
         print(f"Starting Eigen solve with:\n \t {eps} \n \t sweeps: {nswp}")
         t0 = time.time()
-    dtype = matrix_tt[0].dtype
+    dtype = A[0].dtype
     damp = 2
 
     min_or_max = "SA" if min_eig else "LA"
 
     if x0 == None:
-        x_cores = [np.ones_like(c[:, :, 0], dtype=dtype) for c in matrix_tt]
+        x_cores = [np.ones_like(c[:, :, 0], dtype=dtype) for c in A]
     else:
         x_cores = x0.copy()
 
@@ -42,7 +42,7 @@ def _tt_eig(matrix_tt, min_eig, nswp, x0, eps, verbose):
     for swp in range(nswp):
         x_cores = tt_rl_orthogonalise(x_cores)
         rx[1:-1] = np.array(tt_ranks(x_cores))
-        Phis, _ = compute_phi_bcks_A(Phis, x_cores, matrix_tt, x_cores, d=d)
+        Phis, _ = compute_phi_bcks_A(Phis, x_cores, A, x_cores, d=d)
 
         # start loop
         max_res = 0
@@ -54,7 +54,7 @@ def _tt_eig(matrix_tt, min_eig, nswp, x0, eps, verbose):
 
             # solve the local system
             # shape is Rp x N x N x r x r
-            Bp = np.einsum("smnS,LSR->smnRL", matrix_tt[k], Phis[k + 1])
+            Bp = np.einsum("smnS,LSR->smnRL", A[k], Phis[k + 1])
             B = np.einsum("lsr,smnRL->lmLrnR", Phis[k], Bp)
             B = np.reshape(B, [rx[k] * N[k] * rx[k + 1], rx[k] * N[k] * rx[k + 1]])
 
@@ -68,7 +68,7 @@ def _tt_eig(matrix_tt, min_eig, nswp, x0, eps, verbose):
             solution_now = np.reshape(solution_now, (rx[k] * N[k], rx[k + 1]))
             # truncation
             if k < d - 1:
-                u, v = solution_truncation(solution_now, Phis[k], Phis[k + 1], matrix_tt[k], rhs, rx[k], N[k], rx[k+1], max(real_tol * damp, res_new))
+                u, v = solution_truncation(solution_now, Phis[k], Phis[k + 1], A[k], rhs, rx[k], N[k], rx[k + 1], max(real_tol * damp, res_new))
                 r = u.shape[1]
             else:
                 u, v = np.linalg.qr(solution_now)
@@ -84,7 +84,7 @@ def _tt_eig(matrix_tt, min_eig, nswp, x0, eps, verbose):
                 rx[k + 1] = r
 
                 # next phis with norm correction
-                Phis[k + 1] = compute_phi_fwd_A(Phis[k], x_cores[k], matrix_tt[k], x_cores[k])
+                Phis[k + 1] = compute_phi_fwd_A(Phis[k], x_cores[k], A[k], x_cores[k])
 
                 # ... and norms
                 norm = np.linalg.norm(Phis[k + 1])
@@ -103,4 +103,4 @@ def _tt_eig(matrix_tt, min_eig, nswp, x0, eps, verbose):
         print(f"\t Solution rank is {rx[1:-1]}")
         print(f"\t Residual {max_res}")
         print(f"\t Time: {time.time() - t0:4f}s")
-    return tt_inner_prod(x_cores, tt_matrix_vec_mul(matrix_tt, x_cores)), x_cores, max_res
+    return tt_inner_prod(x_cores, tt_matrix_vec_mul(A, x_cores)), x_cores, max_res

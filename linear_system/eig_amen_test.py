@@ -8,7 +8,6 @@ sys.path.append(os.getcwd() + '/../')
 from src.tt_ops import *
 from src.tt_ops import _tt_core_collapse, _tt_lr_random_orthogonalise, \
     tt_randomised_min_eigentensor, tt_rank_reduce, _tt_generalised_nystroem, _tt_mat_core_collapse
-from src.tt_ipm import tt_psd_step
 from src.tt_eig import tt_max_eig, tt_min_eig
 
 np.random.seed(2)
