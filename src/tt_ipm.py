@@ -101,8 +101,8 @@ def tt_infeasible_feas_rhs(
 
 
 def tt_infeasible_newton_system_lhs(lhs_skeleton, X_tt, Z_tt):
-    Z_op_tt = IDX_30 + tt_op_to_mat(tt_op_from_tt_matrix(Z_tt))
-    X_op_tt = IDX_33 + tt_op_to_mat(tt_op_from_tt_matrix(X_tt))
+    Z_op_tt = IDX_30 + tt_op_to_mat(tt_op_left_from_tt_matrix(Z_tt))
+    X_op_tt = IDX_33 + tt_op_to_mat(tt_op_right_from_tt_matrix(X_tt))
     newton_system = tt_add(lhs_skeleton, Z_op_tt)
     newton_system = tt_add(newton_system, X_op_tt)
     return tt_rank_reduce(newton_system, err_bound=0)
@@ -211,7 +211,7 @@ def tt_ipm(
     op_tt = tt_scale(-1, linear_op_tt)
     op_tt_adjoint = IDX_01 + tt_op_to_mat(tt_adjoint(op_tt))
     op_tt = IDX_10 + tt_op_to_mat(op_tt)
-    I_mat_tt = tt_op_to_mat(tt_op_from_tt_matrix(tt_identity(dim)))
+    I_mat_tt = tt_op_to_mat(tt_op_right_from_tt_matrix(tt_identity(dim)))
     I_op_tt = IDX_03 + I_mat_tt
     lhs_skeleton = tt_add(op_tt, op_tt_adjoint)
     lhs_skeleton = tt_add(lhs_skeleton, I_op_tt)

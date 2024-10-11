@@ -659,7 +659,7 @@ def tt_to_ring(train_tt):
     return train_tt
 
 
-def _core_op_from_matrix(core):
+def _core_op_right_from_matrix(core):
     op_core = np.zeros((core.shape[0], 4, *core.shape[1:]))
     op_core[:, 0, 0, 0] = core[:, 0, 0]
     op_core[:, 0, 0, 1] = core[:, 1, 0]
@@ -672,11 +672,31 @@ def _core_op_from_matrix(core):
     return op_core
 
 
-def tt_op_from_tt_matrix(matrix_tt):
+def tt_op_right_from_tt_matrix(matrix_tt):
     """
     Converts a matrix_tt for matrix multiplication into a linear_op_tt
     """
-    return [_core_op_from_matrix(c) for c in matrix_tt]
+    return [_core_op_right_from_matrix(c) for c in matrix_tt]
+
+
+def _core_op_left_from_matrix(core):
+    op_core = np.zeros((core.shape[0], 4, *core.shape[1:]))
+    op_core[:, 0, 0, 0] = core[:, 0, 0]
+    op_core[:, 0, 1, 0] = core[:, 1, 0]
+    op_core[:, 2, 0, 0] = core[:, 0, 1]
+    op_core[:, 2, 1, 0] = core[:, 1, 1]
+    op_core[:, 1, 0, 1] = core[:, 0, 0]
+    op_core[:, 1, 1, 1] = core[:, 1, 0]
+    op_core[:, 3, 0, 1] = core[:, 0, 1]
+    op_core[:, 3, 1, 1] = core[:, 1, 1]
+    return op_core
+
+
+def tt_op_left_from_tt_matrix(matrix_tt):
+    """
+    Converts a matrix_tt for matrix multiplication into a linear_op_tt
+    """
+    return [_core_op_left_from_matrix(c) for c in matrix_tt]
 
 
 def _matrix_op_blockify(core):
