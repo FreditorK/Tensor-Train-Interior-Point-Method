@@ -96,8 +96,8 @@ def tt_infeasible_feas_rhs(
     primal_dual_error = tt_inner_prod(newton_rhs, newton_rhs)
     XZ_term = tt_mat_mat_mul(X_tt, Z_tt)
     lower_rhs = IDX_3 + tt_sub(XZ_term, tt_scale(mu, tt_identity(len(X_tt))))
-    newton_rhs = tt_add(newton_rhs, lower_rhs)
-    return tt_rank_reduce(tt_scale(-1, tt_vec(newton_rhs)), err_bound=0), primal_dual_error
+    newton_rhs = tt_vec(tt_add(newton_rhs, lower_rhs))
+    return tt_rank_reduce(tt_scale(-1, newton_rhs), err_bound=0), primal_dual_error
 
 
 def tt_infeasible_newton_system_lhs(lhs_skeleton, X_tt, Z_tt):
@@ -126,7 +126,7 @@ def _tt_ipm_newton_step(
         mu,
         feasible,
         verbose,
-        interpol_param=0.98
+        interpol_param=0.9
 ):
     prev_mu = mu
     mu = tt_inner_prod(Z_tt, [0.5 * c for c in X_tt])
@@ -142,7 +142,8 @@ def _tt_ipm_newton_step(
         Delta_Z_tt = _tt_get_block(1, 1, Delta_tt)  # Z should be symmetric but it isn't exactly
         x_step_size, z_step_size = _tt_line_search(X_tt, Z_tt, Delta_X_tt, Delta_Z_tt)
         print(f"Step sizes: {x_step_size} {z_step_size}")
-        #centering_param = max(interpol_param*centering_param if (mu/prev_mu) > 0.75 else centering_param, 0.1)
+        if (mu / prev_mu) > 0.5:
+            centering_param = max(interpol_param*centering_param, 0.1)
         new_X_tt = tt_add(X_tt, tt_scale(0.98 * x_step_size, Delta_X_tt))
         new_Z_tt = tt_add(Z_tt, tt_scale(0.98 * z_step_size, Delta_Z_tt))
         primal_dual_error = 0
@@ -183,15 +184,17 @@ def _tt_line_search(X_tt, Z_tt, Delta_X_tt, Delta_Z_tt, crit=0):
             val_x, _, _ = tt_min_eig(new_X_tt)
             discount_x = np.greater(val_x, crit)
             x_step_size *= discount
+            if discount_x:
+                break
+    for iter in range(15):
         if ~discount_z:
             new_Z_tt = tt_add(Z_tt, tt_scale(z_step_size, Delta_Z_tt))
             val_z, _, _ = tt_min_eig(new_Z_tt)
             discount_z = np.greater(val_z, crit)
             z_step_size *= discount
-        if discount_x and discount_z:
-            return x_step_size, z_step_size
-    return 0, 0
-
+        if discount_z:
+            break
+    return discount_x*x_step_size, discount_z*z_step_size
 
 def _symmetrisation(train_tt: List[np.ndarray]) -> np.ndarray:
     train_tt = tt_rank_reduce(tt_scale(0.5, tt_add(train_tt, tt_transpose(train_tt))), err_bound=0)
@@ -215,6 +218,7 @@ def tt_ipm(
     I_op_tt = IDX_03 + I_mat_tt
     lhs_skeleton = tt_add(op_tt, op_tt_adjoint)
     lhs_skeleton = tt_add(lhs_skeleton, I_op_tt)
+    lhs_skeleton = tt_rank_reduce(lhs_skeleton, err_bound=0)
     X_tt = tt_identity(dim)
     Y_tt = tt_zero_matrix(dim)  # [0, Y_1, Y_2, 0]^T
     Z_tt = tt_identity(dim)

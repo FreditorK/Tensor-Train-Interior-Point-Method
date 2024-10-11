@@ -13,7 +13,7 @@ from src.tt_ops import tt_ranks, tt_random_gaussian, tt_rl_orthogonalise, tt_mat
 from cy_src.ops_cy import *
 
 
-def tt_amen(A, b, nswp=22, x0=None, eps=1e-10, kickrank=4, kick2=0, verbose=False, band_diagonal=-1):
+def tt_amen(A, b, nswp=22, x0=None, eps=1e-10, kickrank=2, kick2=0, verbose=False, band_diagonal=-1):
     if verbose:
         print('Starting AMEn solve with:\n\tepsilon: %g\n\tsweeps: %d' % (eps, nswp))
         t0 = time.time()
@@ -44,8 +44,6 @@ def tt_amen(A, b, nswp=22, x0=None, eps=1e-10, kickrank=4, kick2=0, verbose=Fals
     normx = np.ones((d-1))
 
     for swp in range(nswp):
-        # right to left orthogonalization
-
         x_cores = tt_rl_orthogonalise(x_cores)
         rx[1:-1] = tt_ranks(x_cores)
         normx = np.cumprod([np.linalg.norm(np.reshape(x_cores[k], [rx[k], N[k]*rx[k+1]]).T) for k in range(d-1, 0, -1)])[::-1]
@@ -68,7 +66,6 @@ def tt_amen(A, b, nswp=22, x0=None, eps=1e-10, kickrank=4, kick2=0, verbose=Fals
             real_tol = (eps/np.sqrt(d))/damp
 
             # solve the local system
-            # shape is Rp x N x N x r x r
             Bp = np.einsum('smnS,LSR->smnRL', A[k], Phis[k+1])
             B = np.einsum('lsr,smnRL->lmLrnR', Phis[k], Bp)
             B = np.reshape(B, [rx[k]*N[k]*rx[k+1], rx[k]*N[k]*rx[k+1]])

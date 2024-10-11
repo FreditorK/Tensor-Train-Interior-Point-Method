@@ -13,8 +13,8 @@ from src.tt_ipm import tt_ipm, _tt_get_block
 
 @dataclass
 class Config:
-    seed = 5 #999: Very low rank solution, 9: Low rank solution, 3: Regular solution
-    ranks = [3]
+    seed = 54 #999: Very low rank solution, 9: Low rank solution, 3: Regular solution
+    ranks = [3, 3]
 
 
 if __name__ == "__main__":

@@ -53,7 +53,6 @@ def _tt_eig(A, min_eig, nswp, x0, eps, verbose):
             real_tol = (eps / np.sqrt(d)) / damp
 
             # solve the local system
-            # shape is Rp x N x N x r x r
             Bp = np.einsum("smnS,LSR->smnRL", A[k], Phis[k + 1])
             B = np.einsum("lsr,smnRL->lmLrnR", Phis[k], Bp)
             B = np.reshape(B, [rx[k] * N[k] * rx[k + 1], rx[k] * N[k] * rx[k + 1]])
