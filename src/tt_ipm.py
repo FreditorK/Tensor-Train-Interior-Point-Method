@@ -126,7 +126,7 @@ def _tt_ipm_newton_step(
         mu,
         feasible,
         verbose,
-        interpol_param=0.9
+        centr_decay=0.95
 ):
     prev_mu = mu
     mu = tt_inner_prod(Z_tt, [0.5 * c for c in X_tt])
@@ -142,8 +142,8 @@ def _tt_ipm_newton_step(
         Delta_Z_tt = _tt_get_block(1, 1, Delta_tt)  # Z should be symmetric but it isn't exactly
         x_step_size, z_step_size = _tt_line_search(X_tt, Z_tt, Delta_X_tt, Delta_Z_tt)
         print(f"Step sizes: {x_step_size} {z_step_size}")
-        if (mu / prev_mu) > 0.5:
-            centering_param = max(interpol_param*centering_param, 0.1)
+        if 1.0 > (mu / prev_mu) > 0.95:
+            centering_param = max(centr_decay * centering_param, 0.1)
         new_X_tt = tt_add(X_tt, tt_scale(0.98 * x_step_size, Delta_X_tt))
         new_Z_tt = tt_add(Z_tt, tt_scale(0.98 * z_step_size, Delta_Z_tt))
         primal_dual_error = 0
@@ -242,7 +242,7 @@ def tt_ipm(
         )
         if verbose:
             print(f"---Step {iter}---")
-            print(f"Duality Gap: {100 * abs(mu):.4f}%")
+            print(f"Duality Gap: {100 * np.abs(mu):.4f}%")
             print(f"Primal-Dual error: {pd_error:.8f}")
             print(f"Centering Parameter: {centering_param}")
         if np.less(pd_error, feasibility_tol):
@@ -251,7 +251,7 @@ def tt_ipm(
                 print(f"IPM reached feasibility!")
                 print("-------------------------")
             feasible = True
-            if np.less(mu, centrality_tol):
+            if np.less(np.abs(mu), centrality_tol):
                 break
     if verbose:
         print(f"Converged in {iter + 1} iterations.")

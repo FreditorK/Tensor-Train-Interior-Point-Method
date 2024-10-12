@@ -70,7 +70,7 @@ def tt_amen(A, b, nswp=22, x0=None, eps=1e-10, kickrank=2, kick2=0, verbose=Fals
             B = np.einsum('lsr,smnRL->lmLrnR', Phis[k], Bp)
             B = np.reshape(B, [rx[k]*N[k]*rx[k+1], rx[k]*N[k]*rx[k+1]])
 
-            solution_now, _, _, _ = scip.linalg.lstsq(B, rhs, lapack_driver="gelsy", cond=1e-18, check_finite=False)
+            solution_now, _, _, _ = scip.linalg.lstsq(B, rhs, cond=1e-18, check_finite=False)
             res_new = np.linalg.norm(B @ solution_now - rhs)/norm_rhs
             max_res = max(max_res, res_new)
 
