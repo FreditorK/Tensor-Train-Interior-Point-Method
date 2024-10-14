@@ -13,7 +13,7 @@ from src.tt_ops import tt_ranks, tt_random_gaussian, tt_rl_orthogonalise, tt_mat
 from cy_src.ops_cy import *
 
 
-def tt_amen(A, b, nswp=22, x0=None, eps=1e-10, kickrank=2, kick2=0, verbose=False, band_diagonal=-1):
+def tt_amen(A, b, nswp=5, x0=None, eps=1e-10, kickrank=2, kick2=0, verbose=False, band_diagonal=-1):
     if verbose:
         print('Starting AMEn solve with:\n\tepsilon: %g\n\tsweeps: %d' % (eps, nswp))
         t0 = time.time()
@@ -28,13 +28,14 @@ def tt_amen(A, b, nswp=22, x0=None, eps=1e-10, kickrank=2, kick2=0, verbose=Fals
 
     d = len(x)
     x_cores = x.copy()
+    x_cores = tt_rl_orthogonalise(x_cores)
     rx = [1] + tt_ranks(x) + [1]
     N = [c.shape[1] for c in x_cores]
 
     # z cores
     z_cores = tt_random_gaussian((d-1)*[kickrank+kick2], shape=x_cores[0].shape[1:-1])
     z_cores = tt_rl_orthogonalise(z_cores)
-    rz = [1] + tt_ranks(z_cores) + [1]
+    rz = [1] + (d-1)*[kickrank+kick2] + [1]
 
     Phiz = [np.ones((1, 1, 1), dtype=dtype)] + [None] * (d-1) + [np.ones((1, 1, 1), dtype=dtype)]  # size is rzk x Rk x rxk
     Phiz_b = [np.ones((1, 1), dtype=dtype)] + [None] * (d-1) + [np.ones((1, 1), dtype=dtype)]   # size is rzk x rzbk
@@ -44,8 +45,6 @@ def tt_amen(A, b, nswp=22, x0=None, eps=1e-10, kickrank=2, kick2=0, verbose=Fals
     normx = np.ones((d-1))
 
     for swp in range(nswp):
-        x_cores = tt_rl_orthogonalise(x_cores)
-        rx[1:-1] = tt_ranks(x_cores)
         normx = np.cumprod([np.linalg.norm(np.reshape(x_cores[k], [rx[k], N[k]*rx[k+1]]).T) for k in range(d-1, 0, -1)])[::-1]
 
         Phis, normA = compute_phi_bcks_A(Phis, x_cores, A, x_cores, d=d)
@@ -93,15 +92,15 @@ def tt_amen(A, b, nswp=22, x0=None, eps=1e-10, kickrank=2, kick2=0, verbose=Fals
             # shape is rzp x N x rz
             czy = np.einsum('br,bnB,BR->rnR',Phiz_b[k], b[k]*nrmsc, Phiz_b[k+1])
             cz_new = czy - czA
-            uz, _, _ = np.linalg.svd(np.reshape(cz_new, (rz[k]*N[k], -1)), full_matrices=False)
+            uz, _ = np.linalg.qr(np.reshape(cz_new, (rz[k]*N[k], -1)))
             # truncate to kickrank
             cz_new = uz[:, :min(kickrank, uz.shape[1])]
-            if k < d-1:  # extend cz_new with random elements
+            if k < d-1 and kick2 > 0:  # extend cz_new with random elements
                 cz_new = np.concatenate((cz_new, np.random.randn(cz_new.shape[0], kick2)), 1)
+                cz_new, _ = np.linalg.qr(cz_new)
 
-            qz, _ = np.linalg.qr(cz_new)
-            rz[k+1] = qz.shape[1]
-            z_cores[k] = np.reshape(qz, (rz[k], N[k], rz[k+1]))
+            rz[k+1] = cz_new.shape[1]
+            z_cores[k] = np.reshape(cz_new, (rz[k], N[k], rz[k+1]))
 
             if k < d-1:
                 left_res = local_product(Phiz[k + 1], Phis[k], A[k], np.reshape(

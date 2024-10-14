@@ -1,5 +1,6 @@
 # ops_cy.pyx
 # cython: language_level=3
+from numba.cuda import local
 
 cdef extern from "numpy/arrayobject.h":
     # Define NPY_NO_DEPRECATED_API for compatibility with numpy
@@ -152,18 +153,23 @@ cpdef tuple solution_truncation(cnp.ndarray[double, ndim=2] solution_now,
     cdef cnp.ndarray[double, ndim=1] s
     cdef cnp.ndarray[double, ndim=2] S
     cdef cnp.ndarray[double, ndim=2] V
+    cdef cnp.ndarray[double, ndim=3] local_core
     cdef int r = 0
+    cdef int iter
+    cdef double res
 
     U, s, V = np.linalg.svd(solution_now, full_matrices=False)
-    for r in range(U.shape[1] - 1, 0, -1):
+    iter = U.shape[1]
+    for r in range(iter - 1, 0, -1):
         S = np.diag(s[:r])
         solution = U[:, :r] @ S @ V[:r, :]
         solution = np.reshape(solution, (rank, current_N, rankp1))
-
-        res = np.linalg.norm(np.reshape(local_product(next_phi, current_phi, current_matrix_core, solution),(-1, 1)) - rhs)
+        local_core = local_product(next_phi, current_phi, current_matrix_core, solution)
+        res = np.linalg.norm(local_core.reshape(-1, 1) - rhs)
 
         if res > tol:
             break
+
     r = min(r + 1, len(s))
     U = U[:, :r]
     V = np.diag(s[:r]) @ V[:r, :]

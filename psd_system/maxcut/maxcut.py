@@ -13,14 +13,14 @@ from src.tt_ipm import tt_ipm, _tt_get_block
 
 @dataclass
 class Config:
-    seed = 54 #999: Very low rank solution, 9: Low rank solution, 3: Regular solution
-    ranks = [3, 3]
+    seed = 9 #999: Very low rank solution, 9: Low rank solution, 3: Regular solution
+    ranks = [4, 4]
 
 
 if __name__ == "__main__":
     np.random.seed(Config.seed)
     print("Creating Problem...")
-    G_tt = tt_random_graph(Config.ranks)
+    G_tt = tt_rank_retraction(tt_random_graph(Config.ranks), Config.ranks)
     print(np.round(tt_matrix_to_matrix(G_tt), decimals=2))
     As_tt = tt_mask_to_linear_op(tt_identity(len(G_tt)))
     bias_tt = tt_identity(len(G_tt))
@@ -35,7 +35,7 @@ if __name__ == "__main__":
     print(np.round(tt_matrix_to_matrix(X_tt), decimals=2))
     print(f"Objective value: {tt_inner_prod(G_tt, X_tt)}")
     print("Complementary Slackness: ", tt_inner_prod(X_tt, Z_tt))
-    print(f"Ranks X_tt {tt_ranks(X_tt)} Z_tt {tt_ranks(Z_tt)} ")
+    print(f"Ranks X_tt: {tt_ranks(X_tt)}, Y_tt: {tt_ranks(Y_tt)}, Z_tt: {tt_ranks(Z_tt)} ")
     print(f"Time: {t1-t0}s")
     """
     print(f"Problem solved in {t1 - t0:.3f}s")
