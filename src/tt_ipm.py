@@ -98,7 +98,7 @@ def tt_infeasible_feas_rhs(
     XZ_term = tt_mat_mat_mul(X_tt, Z_tt)
     lower_rhs = IDX_3 + tt_sub(tt_add(XZ_term, tt_transpose(XZ_term)), tt_scale(2 * mu, tt_identity(len(X_tt))))
     newton_rhs = tt_vec(tt_add(newton_rhs, lower_rhs))
-    return tt_rank_reduce(tt_scale(-1, newton_rhs), err_bound=0), primal_dual_error
+    return tt_rank_reduce(tt_scale(-1, newton_rhs), err_bound=1e-18), primal_dual_error
 
 
 def tt_infeasible_newton_system_lhs(lhs_skeleton, X_tt, Z_tt):
@@ -106,7 +106,7 @@ def tt_infeasible_newton_system_lhs(lhs_skeleton, X_tt, Z_tt):
     X_op_tt = IDX_33 + tt_op_to_mat(tt_add(tt_op_right_from_tt_matrix(X_tt), tt_op_left_from_tt_matrix(X_tt)))
     newton_system = tt_add(lhs_skeleton, Z_op_tt)
     newton_system = tt_add(newton_system, X_op_tt)
-    return tt_rank_reduce(newton_system, err_bound=0)
+    return tt_rank_reduce(newton_system, err_bound=1e-18)
 
 
 def _tt_get_block(i, j, block_matrix_tt):
@@ -123,6 +123,7 @@ def _tt_ipm_newton_step(
         X_tt,
         Y_tt,
         Z_tt,
+        tol,
         verbose
 ):
     mu = tt_inner_prod(Z_tt, [0.5 * c for c in X_tt])
@@ -138,17 +139,14 @@ def _tt_ipm_newton_step(
     x_step_size, z_step_size = _tt_line_search(X_tt, Z_tt, Delta_X_tt, Delta_Z_tt)
     print(f"Step sizes: {x_step_size} {z_step_size}")
 
+    # TODO: Mind the error bound here! May lead to inaccuracies and more iterations
     return (
-        tt_rank_reduce(tt_add(X_tt, tt_scale(0.98 * x_step_size, Delta_X_tt)), err_bound=0),
-        tt_rank_reduce(tt_add(Y_tt, tt_scale(0.98 * z_step_size, Delta_Y_tt)), err_bound=0),
-        tt_rank_reduce(tt_add(Z_tt, tt_scale(0.98 * z_step_size, Delta_Z_tt)), err_bound=0),
+        tt_rank_reduce(tt_add(X_tt, tt_scale(0.98 * x_step_size, Delta_X_tt)), err_bound=0.1*tol),
+        tt_rank_reduce(tt_add(Y_tt, tt_scale(0.98 * z_step_size, Delta_Y_tt)), err_bound=0.1*tol),
+        tt_rank_reduce(tt_add(Z_tt, tt_scale(0.98 * z_step_size, Delta_Z_tt)), err_bound=0.1*tol),
         primal_dual_error,
         mu
     )
-
-def _symmetrisation(train_tt: List[np.ndarray]) -> np.ndarray:
-    train_tt = tt_rank_reduce(tt_scale(0.5, tt_add(train_tt, tt_transpose(train_tt))), err_bound=0)
-    return train_tt
 
 
 def _tt_line_search(X_tt, Z_tt, Delta_X_tt, Delta_Z_tt, crit=0):
@@ -168,6 +166,7 @@ def _tt_line_search(X_tt, Z_tt, Delta_X_tt, Delta_Z_tt, crit=0):
             new_X_tt[0][:, :, :, r:] *= discount
             x_step_size *= discount
     new_Z_tt = tt_add(Z_tt, Delta_Z_tt)
+    r = Z_tt[0].shape[-1]
     for iter in range(15):
         val_z, _, _ = tt_min_eig(new_Z_tt)
         discount_z = np.greater(val_z, crit)
@@ -211,6 +210,7 @@ def tt_ipm(
             X_tt,
             Y_tt,
             Z_tt,
+            feasibility_tol,
             verbose
         )
         # Symmetry correction
