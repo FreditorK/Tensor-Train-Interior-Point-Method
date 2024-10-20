@@ -1,4 +1,5 @@
 import scipy as scp
+from numpy.ma.core import identity
 
 from src.ops import *
 import copy
@@ -161,11 +162,10 @@ def _tt_lr_random_orthogonalise(train_tt, gaussian_tt):
     return train_tt
 
 
-def tt_rank_reduce(train_tt: List[np.array], err_bound=None):
+def tt_rank_reduce(train_tt: List[np.array], err_bound=1e-18):
     """ Might reduce TT-rank """
     train_tt = tt_rl_orthogonalise(train_tt)
-    if err_bound is None:
-        err_bound = np.divide(1, 2 ** (len(train_tt) + 2))
+    err_bound = err_bound*np.sqrt(np.divide(tt_inner_prod(train_tt, train_tt), len(train_tt)-1))
     rank = 1
     for idx, tt_core in enumerate(train_tt[:-1]):
         idx_shape = tt_core.shape
@@ -604,9 +604,7 @@ def tt_mask_to_linear_op(train_tt):
     """
     Converts a matrix that serves as a mask via a Hadamard product to a linear operator
     """
-    return tt_rank_reduce(
-        [np.concatenate([_core_mask(c, i, j) for (i, j) in product([0, 1], [0, 1])], axis=1) for c in train_tt]
-    )
+    return [np.concatenate([_core_mask(c, i, j) for (i, j) in product([0, 1], [0, 1])], axis=1) for c in train_tt]
 
 
 def tt_argmax(train_tt, p=1):
@@ -641,22 +639,6 @@ def tt_argmax(train_tt, p=1):
         Q *= 2 ** p0
 
     return I[0]
-
-
-def tt_to_ring(train_tt):
-    first_core_top_row = np.hstack((np.diag(train_tt[0][:, 0, 0].flatten()), np.diag(train_tt[0][:, 0, 1].flatten())))
-    first_core_bottom_row = np.hstack(
-        (np.diag(train_tt[0][:, 1, 0].flatten()), np.diag(train_tt[0][:, 1, 1].flatten())))
-    first_core = np.vstack((first_core_top_row, first_core_bottom_row))
-    train_tt[0] = first_core
-
-    last_core_top_row = np.hstack((np.diag(train_tt[-1][:, 0, 0].flatten()), np.diag(train_tt[-1][:, 0, 1].flatten())))
-    last_core_bottom_row = np.hstack(
-        (np.diag(train_tt[-1][:, 1, 0].flatten()), np.diag(train_tt[-1][:, 1, 1].flatten())))
-    last_core = np.vstack((last_core_top_row, last_core_bottom_row))
-    train_tt[-1] = last_core
-
-    return train_tt
 
 
 def _core_op_right_from_matrix(core):
@@ -699,77 +681,12 @@ def tt_op_left_from_tt_matrix(matrix_tt):
     return [_core_op_left_from_matrix(c) for c in matrix_tt]
 
 
-def _matrix_op_blockify(core):
-    block_shape = core.shape[1:-1]
-    dim = np.prod(block_shape)
-    op_core = np.zeros((core.shape[0], dim, *core.shape[1:]))
-    indices = list(product(list(range(block_shape[0])), list(range(block_shape[1]))))
-    for i in range(dim):
-        op_core[:, i, indices[i][0], indices[i][1]] = core[:, indices[i][0], indices[i][1]]
-    return op_core
-
-
-def tt_block_inner_prod(train_tt_1, train_tt_2):
-    block_shape = train_tt_1[0].shape[1:-1]
-    train_tt_1 = [_matrix_op_blockify(c) for c in train_tt_1[:1]] + train_tt_1[1:]
-    block_inner_prod_tt = [_tt_op_core_collapse(op_c, c) for op_c, c in zip(train_tt_1[:1], train_tt_2[:1])]
-    scalar_block = safe_multi_dot([_tt_core_collapse(c_1, c_2) for c_1, c_2 in zip(train_tt_1[1:], train_tt_2[1:])])
-    block_inner_prod_tt[-1] = np.einsum("abc, cd -> abd", block_inner_prod_tt[-1], scalar_block)
-    return [c.reshape(c.shape[0], *block_shape, c.shape[-1]) for c in block_inner_prod_tt]
-
-
-def tt_block_matrix_vec_mul(block_matrix_tt, block_vector_tt):
-    block_shape = block_vector_tt[0].shape[1:-1]
-    block_matrix_tt = [_matrix_op_blockify(c) for c in block_matrix_tt[:1]] + block_matrix_tt[1:]
-    block_vector_tt = (
-        [_tt_op_core_collapse(op_c, c) for op_c, c in zip(block_matrix_tt[:1], block_vector_tt[:1])]
-        + [_tt_mat_core_collapse(m_c, c) for m_c, c in zip(block_matrix_tt[1:], block_vector_tt[1:])]
-    )
-    return [m_c.reshape(m_c.shape[0], *block_shape, m_c.shape[-1]) for m_c in block_vector_tt[:1]] + block_vector_tt[1:]
-
-
-def tt_randomised_block_min_eig_values(block_matrix_tt: List[np.array], num_iter=10, mu=1, tol=1e-4):
-    n = len(block_matrix_tt)
-    block_shape = block_matrix_tt[0].shape[1:-1]
-    normalisation = np.sqrt(tt_block_inner_prod(block_matrix_tt, block_matrix_tt)).reshape(1, *block_shape, 1)
-    block_matrix_tt[0] *= -np.divide(1, normalisation)
-    block_matrix_tt = tt_rank_reduce(block_matrix_tt, err_bound=0)
-    identity = [mu * np.ones((1, *block_shape, 1))] + tt_identity(n)
-    block_matrix_tt = tt_add(identity, block_matrix_tt)
-    target_ranks = [1] + tt_ranks(block_matrix_tt) + [1]
-    gaussian_tt = [np.divide(np.random.randn(1, *block_shape, target_ranks[0]), np.prod(block_shape)* target_ranks[0])] + [
-        np.divide(np.random.randn(l_n, 2, l_np1), l_n * 2 * l_np1)
-        for i, (l_n, l_np1) in enumerate(zip(target_ranks[:-1], target_ranks[1:]))
-    ]
-    block_eig_vec_tt = tt_normalise(
-        [np.random.randn(1, *block_shape, 1)] + [np.random.randn(1, 2, 1) for _ in range(n)]
-    )
-    prev_norm_2 = 0
-    mask = np.ones((1, *block_shape, 1))
-    for i in range(num_iter):
-        block_eig_vec_tt = tt_block_matrix_vec_mul(block_matrix_tt, block_eig_vec_tt)
-        block_eig_vec_tt = _tt_lr_random_orthogonalise(block_eig_vec_tt, gaussian_tt)
-        block_norm_2 = tt_block_inner_prod(block_eig_vec_tt, block_eig_vec_tt)[0]
-        # eliminating negative eigenvalues so iteration becomes more accurate for smaller scales
-        mask *= np.less(block_norm_2, mu + 0.01)
-        block_norm_2 = mask*block_norm_2 + (1-mask)
-        block_matrix_tt[0] *= mask
-        block_eig_vec_tt[0] *= np.divide(1, np.sqrt(block_norm_2))
-        if np.less_equal(np.linalg.norm(block_norm_2 - prev_norm_2), tol):
-            break
-        prev_norm_2 = block_norm_2
-    block_eig_vals = tt_block_inner_prod(block_eig_vec_tt, tt_block_matrix_vec_mul(block_matrix_tt, block_eig_vec_tt))[0]
-    block_eig_vals = mask*normalisation * (mu - block_eig_vals)
-    print(f"    Power iterations: {i}")
-    return block_eig_vals
-
-
 def tt_vec(matrix_tt):
     return [c.reshape(c.shape[0], np.prod(c.shape[1:-1]), c.shape[-1]) for c in matrix_tt]
 
 
 def tt_mat(matrix_tt, shape=(2, 2)):
-    return [c.reshape(c.shape[0], 2, 2, c.shape[-1]) for c in matrix_tt]
+    return [c.reshape(c.shape[0], *shape, c.shape[-1]) for c in matrix_tt]
 
 
 def tt_op_to_mat(op_tt):

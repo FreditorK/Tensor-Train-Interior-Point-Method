@@ -14,13 +14,13 @@ from src.tt_ipm import tt_ipm, _tt_get_block
 @dataclass
 class Config:
     seed = 9 #999: Very low rank solution, 9: Low rank solution, 3: Regular solution
-    ranks = [4, 4]
+    ranks = [3]
 
 
 if __name__ == "__main__":
     np.random.seed(Config.seed)
     print("Creating Problem...")
-    G_tt = tt_rank_retraction(tt_random_graph(Config.ranks), Config.ranks)
+    G_tt = tt_rank_reduce(tt_random_graph(Config.ranks)) # [np.array([[-1, 1], [1, -1]]).reshape(1, 2, 2, 1)] + [np.ones((1, 2, 2, 1)) for _ in Config.ranks]#
     print(np.round(tt_matrix_to_matrix(G_tt), decimals=2))
     As_tt = tt_mask_to_linear_op(tt_identity(len(G_tt)))
     bias_tt = tt_identity(len(G_tt))
@@ -28,7 +28,7 @@ if __name__ == "__main__":
     print(f"Objective Ranks: {tt_ranks(G_tt)}")
     print(f"Constraint Ranks: As {tt_ranks(As_tt)}, bias {tt_ranks(bias_tt)}")
     t0 = time.time()
-    X_tt, Y_tt, Z_tt = tt_ipm(G_tt, As_tt, bias_tt, max_iter=100, verbose=True)
+    X_tt, Y_tt, Z_tt = tt_ipm(G_tt, As_tt, bias_tt, verbose=True)
     t1 = time.time()
     print("Solution: ")
     np.set_printoptions(linewidth=600, threshold=np.inf, precision=4, suppress=True)

@@ -12,9 +12,10 @@ if __name__ == "__main__":
     np.random.seed(Config.seed)
     t0 = time.time()
     G = tt_random_graph(Config.ranks)
+    G = tt_rank_retraction(G, Config.ranks)
     t1 = time.time()
     print(f"Random graph produced in {t1 - t0:.3f}s")
-    C = np.round(tt_matrix_to_matrix(G))
+    C = tt_matrix_to_matrix(G)
     print(f"Graph: \n {C}")
     X = cp.Variable(C.shape, symmetric=True)
     constraints = [X >> 0]
