@@ -633,6 +633,7 @@ def tt_argmax(train_tt, p=1):
         I = np.hstack((I_l, I_r))
         q_max = np.max(np.abs(Q))
         norms = np.sum((Q / q_max) ** 2, axis=0)
+        print(len(norms))
         ind = np.argsort(norms)[:-(k + 1):-1]
         I = I[ind, :]
         Q = Q[:, ind]
@@ -726,3 +727,13 @@ def tt_generalised_nystroem(tt_train, target_ranks: List[int]) -> List[np.array]
 def tt_l2_dist(train_tt_1, train_tt_2):
     diff_tt = tt_sub(train_tt_1, train_tt_2)
     return np.sqrt(tt_inner_prod(diff_tt, diff_tt))
+
+def tt_diag(vec_tt):
+    mat_tt = []
+    for core in vec_tt:
+        shape = core.shape
+        mat_core = np.zeros((shape[0], shape[1], shape[1], shape[2]))
+        mat_core[:, 0, 0] = core[:, 0]
+        mat_core[:, 1, 1] = core[:, 1]
+        mat_tt.append(mat_core)
+    return mat_tt

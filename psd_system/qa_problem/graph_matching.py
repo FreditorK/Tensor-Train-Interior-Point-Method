@@ -128,6 +128,48 @@ def tt_partial_trace_op(block_size, dim, off_diagonal=True):
     return tt_mask_to_linear_op(matrix_tt[:-block_size]) + [_core_partial_trace(c) for c in matrix_tt[-block_size:]]
 
 
+def _core_ds_P(limit, c, i):
+    mask = np.zeros((c.shape[0], 4, *c.shape[1:]))
+    if i > limit:
+        mask[:, 0, 0, 0] = c[:, 0, 0]
+        mask[:, 0, 1, 0] = c[:, 1, 0]
+        mask[:, 1, 0, 1] = c[:, 0, 1]
+        mask[:, 2, 0, 0] = c[:, 0, 0]
+        mask[:, 2, 1, 0] = c[:, 1, 0]
+        mask[:, 3, 1, 1] = c[:, 1, 1]
+    else:
+        mask[:, 0, 0, 0] = c[:, 0, 0]
+        mask[:, 1, 0, 1] = c[:, 0, 1]
+        mask[:, 2, 1, 0] = c[:, 1, 0]
+        mask[:, 3, 1, 1] = c[:, 1, 1]
+    return mask
+
+def _core_ds_PT(limit, c, i):
+    mask = np.zeros((c.shape[0], 4, *c.shape[1:]))
+    if i > limit:
+        mask[:, 0, 0, 0] = c[:, 0, 0]
+        mask[:, 0, 0, 1] = c[:, 0, 1]
+        mask[:, 1, 0, 0] = c[:, 0, 0]
+        mask[:, 1, 0, 1] = c[:, 0, 1]
+        mask[:, 2, 1, 0] = c[:, 1, 0]
+        mask[:, 3, 1, 1] = c[:, 1, 1]
+    else:
+        mask[:, 0, 0, 0] = c[:, 0, 0]
+        mask[:, 1, 0, 1] = c[:, 0, 1]
+        mask[:, 2, 1, 0] = c[:, 1, 0]
+        mask[:, 3, 1, 1] = c[:, 1, 1]
+    return mask
+
+
+def tt_DS_op(block_size, dim):
+    matrix_tt = [np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [
+        np.array([[1.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(dim)]
+    custom_op_1 = [_core_ds_P(dim-block_size, c, i) for i, c in enumerate(matrix_tt)]
+    custom_op_2 = [_core_ds_PT(dim-block_size, c, i) for i, c in enumerate(tt_transpose(matrix_tt))]
+    custom_op = tt_add(custom_op_1, custom_op_2)
+    return custom_op
+
+
 if __name__ == "__main__":
     print("Creating Problem...")
     """
@@ -168,7 +210,9 @@ if __name__ == "__main__":
 
     n = 1 # 2^1
     n_sq = 2
-    partial_tr_op = [q_op_prefix] + tt_partial_trace_op(n, n_sq) # II
-    partial_tr_J_op = [q_op_prefix] + tt_partial_J_trace_op(n, n_sq) # III
-    diag_block_sum_op = [q_op_prefix] + tt_diag_block_sum_linear_op(n, n_sq) # IV
-    Q_m_P_op = tt_Q_m_P_op(n_sq) # V
+    #partial_tr_op = [q_op_prefix] + tt_partial_trace_op(n, n_sq) # II
+    #partial_tr_J_op = [q_op_prefix] + tt_partial_J_trace_op(n, n_sq) # III
+    #diag_block_sum_op = [q_op_prefix] + tt_diag_block_sum_linear_op(n, n_sq) # IV
+    #Q_m_P_op = tt_Q_m_P_op(n_sq) # V
+    DS_op = tt_DS_op(n, n_sq) # VI
+    print(np.round(tt_matrix_to_matrix(tt_mat(tt_linear_op(DS_op, G), shape=(2, 2))), decimals=2))

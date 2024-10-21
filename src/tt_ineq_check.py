@@ -6,31 +6,25 @@ sys.path.append(os.getcwd() + '/../')
 import numpy as np
 import scipy as scip
 import time
-from src.tt_ops import tt_ranks, tt_normalise, tt_inner_prod, tt_matrix_vec_mul, tt_rl_orthogonalise
+from src.tt_ops import *
 from src.tt_amen import compute_phi_bcks_A, compute_phi_fwd_A, solution_truncation
+from cy_src.ops_cy import *
 
 
-def tt_max_eig(matrix_tt, nswp=5, x0=None, eps=1e-10, verbose=False):
-    return _tt_eig(matrix_tt, min_eig=False, nswp=nswp, x0=x0, eps=eps, verbose=verbose)
 
-
-def tt_min_eig(matrix_tt, nswp=5, x0=None, eps=1e-10, verbose=False):
-    return _tt_eig(matrix_tt, min_eig=True, nswp=nswp, x0=x0, eps=eps, verbose=verbose)
-
-
-def _tt_eig(A, min_eig, nswp, x0, eps, verbose):
+def tt_is_geq(matrix, x, b, nswp=10, eps=1e-10, verbose=False):
     if verbose:
         print(f"Starting Eigen solve with:\n \t {eps} \n \t sweeps: {nswp}")
         t0 = time.time()
-    dtype = A[0].dtype
+    dtype = matrix[0].dtype
     damp = 2
 
-    min_or_max = "SA" if min_eig else "LA"
+    min_or_max = "SA"
 
-    if x0 == None:
-        x_cores = [np.ones_like(c[:, :, 0], dtype=dtype) for c in A]
-    else:
-        x_cores = x0.copy()
+    res_tt = tt_rl_orthogonalise(tt_sub(tt_matrix_vec_mul(matrix, x), b))
+    A = tt_diag(res_tt)
+
+    x_cores = tt_random_gaussian([1]*(len(A)-1), shape=(2, ))
 
     d = len(x_cores)
     rx = np.array([1] + tt_ranks(x_cores) + [1])
@@ -103,4 +97,8 @@ def _tt_eig(A, min_eig, nswp, x0, eps, verbose):
         print(f"\t Residual {max_res}")
         print(f"\t Time: {time.time() - t0:4f}s")
 
-    return tt_inner_prod(x_cores, tt_matrix_vec_mul(A, x_cores)), x_cores, max_res
+    x_cores = tt_rank_retraction(tt_matrix_vec_mul(A, x_cores), [1]*(d-1))
+    i_cores = [np.squeeze(c) for c in x_cores]
+    indices = [1 if c[0] > c[1] else 0 for c in i_cores]
+    min_val = tt_entry(x_cores, indices)
+    return np.greater_equal(min_val, 0), min_val
