@@ -607,41 +607,6 @@ def tt_mask_to_linear_op(train_tt):
     return [np.concatenate([_core_mask(c, i, j) for (i, j) in product([0, 1], [0, 1])], axis=1) for c in train_tt]
 
 
-def tt_argmax(train_tt, p=1):
-    """
-    FIXME:Acknowledgement missing here
-    """
-    orth_tt_train = tt_rl_orthogonalise(copy.copy(train_tt))
-    k = 2 * (len(orth_tt_train))
-    d = len(orth_tt_train)
-    p0 = p / d
-
-    G = orth_tt_train[-1]
-    r1, n, r2 = G.shape
-
-    I = np.arange(n).reshape(-1, 1)
-    Q = G.reshape(r1, n)
-
-    Q *= 2 ** p0
-
-    for G in orth_tt_train[:-1][::-1]:
-        r1, n, r2 = G.shape
-        Q = np.einsum('qir,rk->qik', G, Q, optimize='optimal')
-        Q = Q.reshape(r1, -1)
-        I_l = np.kron(np.arange(n).reshape(-1, 1), np.ones((I.shape[0], 1)))
-        I_r = np.kron(np.ones((n, 1)), I)
-        I = np.hstack((I_l, I_r))
-        q_max = np.max(np.abs(Q))
-        norms = np.sum((Q / q_max) ** 2, axis=0)
-        print(len(norms))
-        ind = np.argsort(norms)[:-(k + 1):-1]
-        I = I[ind, :]
-        Q = Q[:, ind]
-        Q *= 2 ** p0
-
-    return I[0]
-
-
 def _core_op_right_from_matrix(core):
     op_core = np.zeros((core.shape[0], 4, *core.shape[1:]))
     op_core[:, 0, 0, 0] = core[:, 0, 0]
