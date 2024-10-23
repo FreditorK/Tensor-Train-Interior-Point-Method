@@ -4,6 +4,7 @@ import os
 
 from numba.np.arraymath import np_quantile
 
+from linear_system.smallest_power_method import matrix
 
 sys.path.append(os.getcwd() + '/../../')
 
@@ -39,8 +40,8 @@ def _core_Q_diag_mPT(c, i):
     else:
         mask[:, 0, 0, 0] = c[:, 0, 0]
         mask[:, 1, 0, 1] = c[:, 0, 1]
-        mask[:, 2, 1, 0] = c[:, 1, 0]
         mask[:, 1, 1, 1] = c[:, 1, 1]
+        mask[:, 2, 1, 0] = c[:, 1, 0]
     return mask
 
 def _core_Q_diag_mPPT(c, i):
@@ -116,8 +117,8 @@ def _core_partial_trace(c):
     mask[:, 1, 1, 0] = c[:, 0, 1]
     mask[:, 2, 1, 0] = c[:, 1, 0]
     mask[:, 2, 0, 1] = c[:, 0, 1]
-    mask[:, 3, 1, 1] = c[:, 1, 1]
     mask[:, 3, 0, 0] = c[:, 0, 0]
+    mask[:, 3, 1, 1] = c[:, 1, 1]
     return mask
 
 def tt_partial_trace_op(block_size, dim, off_diagonal=True):
@@ -169,6 +170,10 @@ def tt_DS_op(block_size, dim):
     custom_op = tt_add(custom_op_1, custom_op_2)
     return custom_op
 
+def tt_DS_bias(dim):
+    matrix_tt = [np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [np.array([[1.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(dim-1)]
+    return tt_rank_reduce(tt_add(matrix_tt, tt_transpose(matrix_tt)))
+
 
 if __name__ == "__main__":
     print("Creating Problem...")
@@ -190,6 +195,8 @@ if __name__ == "__main__":
     """
     q_op_prefix = np.zeros((1, 4, 2, 2, 1))
     q_op_prefix[0, 0, 0, 0, 0] = 1
+    q_bias_prefix = np.zeros((1, 2, 2, 1))
+    q_bias_prefix[0, 0, 0, 0] = 1
     np.random.seed(Config.seed)
     #graph_A = tt_random_graph(Config.ranks)
     #G_A = tt_scale(0.5, tt_add(graph_A, tt_one_matrix(len(Config.ranks) + 1)))
@@ -210,9 +217,13 @@ if __name__ == "__main__":
 
     n = 1 # 2^1
     n_sq = 2
-    #partial_tr_op = [q_op_prefix] + tt_partial_trace_op(n, n_sq) # II
-    #partial_tr_J_op = [q_op_prefix] + tt_partial_J_trace_op(n, n_sq) # III
-    #diag_block_sum_op = [q_op_prefix] + tt_diag_block_sum_linear_op(n, n_sq) # IV
-    #Q_m_P_op = tt_Q_m_P_op(n_sq) # V
-    DS_op = tt_DS_op(n, n_sq) # VI
-    print(np.round(tt_matrix_to_matrix(tt_mat(tt_linear_op(DS_op, G), shape=(2, 2))), decimals=2))
+    #partial_tr_op = [q_op_prefix] + tt_partial_trace_op(n, n_sq) # IV
+    partial_tr_op_bias = tt_zero_matrix(n_sq+1)
+    #partial_tr_J_op = [q_op_prefix] + tt_partial_J_trace_op(n, n_sq) # V
+    partial_tr_J_op_bias = [q_bias_prefix] + tt_one_matrix(n_sq)
+    #diag_block_sum_op = [q_op_prefix] + tt_diag_block_sum_linear_op(n, n_sq) # VI
+    diag_block_sum_op_bias = [q_bias_prefix] + tt_identity(n_sq)
+    #Q_m_P_op = tt_Q_m_P_op(n_sq) # VII
+    Q_m_P_op_bias = tt_zero_matrix(n_sq+1)
+    #DS_op = tt_DS_op(n, n_sq) # VIII
+    DS_op_bias = tt_DS_bias(n_sq+1)
