@@ -195,8 +195,12 @@ if __name__ == "__main__":
     """
     q_op_prefix = np.zeros((1, 4, 2, 2, 1))
     q_op_prefix[0, 0, 0, 0, 0] = 1
+    padding_op_prefix = np.zeros((1, 4, 2, 2, 1))
+    padding_op_prefix[0, 3, 1, 1, 0] = 1
     q_bias_prefix = np.zeros((1, 2, 2, 1))
     q_bias_prefix[0, 0, 0, 0] = 1
+    padding_bias_prefix = np.zeros((1, 2, 2, 1))
+    padding_bias_prefix[0, 1, 1, 0] = 1
     np.random.seed(Config.seed)
     #graph_A = tt_random_graph(Config.ranks)
     #G_A = tt_scale(0.5, tt_add(graph_A, tt_one_matrix(len(Config.ranks) + 1)))
@@ -217,13 +221,45 @@ if __name__ == "__main__":
 
     n = 1 # 2^1
     n_sq = 2
-    #partial_tr_op = [q_op_prefix] + tt_partial_trace_op(n, n_sq) # IV
+    # Equality Operator
+    # IV
+    partial_tr_op = [q_op_prefix] + tt_partial_trace_op(n, n_sq)
     partial_tr_op_bias = tt_zero_matrix(n_sq+1)
-    #partial_tr_J_op = [q_op_prefix] + tt_partial_J_trace_op(n, n_sq) # V
+    # ---
+    # V
+    partial_tr_J_op = [q_op_prefix] + tt_partial_J_trace_op(n, n_sq)
     partial_tr_J_op_bias = [q_bias_prefix] + tt_one_matrix(n_sq)
-    #diag_block_sum_op = [q_op_prefix] + tt_diag_block_sum_linear_op(n, n_sq) # VI
+    # ---
+    # VI
+    diag_block_sum_op = [q_op_prefix] + tt_diag_block_sum_linear_op(n, n_sq)
     diag_block_sum_op_bias = [q_bias_prefix] + tt_identity(n_sq)
-    #Q_m_P_op = tt_Q_m_P_op(n_sq) # VII
+    # ---
+    # VII
+    Q_m_P_op = tt_Q_m_P_op(n_sq)
     Q_m_P_op_bias = tt_zero_matrix(n_sq+1)
-    #DS_op = tt_DS_op(n, n_sq) # VIII
+    # ---
+    # VIII
+    DS_op = tt_DS_op(n, n_sq)
     DS_op_bias = tt_DS_bias(n_sq+1)
+    # ---
+    # IX
+    padding_op = [padding_op_prefix] + tt_mask_to_linear_op(tt_identity(n_sq))
+    padding_op_bias = [padding_bias_prefix] + tt_identity(n_sq)
+    # ---
+    # Inequality Operator
+    # X
+    Q_ineq_op = [q_op_prefix] + tt_mask_to_linear_op(tt_one_matrix(n_sq))
+    Q_ineq_bias = tt_zero_matrix(n_sq+1)
+    # ---
+    number_1 = tt_mask_to_linear_op([np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1),
+                                     np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)])
+    number_2 = tt_mask_to_linear_op([np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1),
+                                     np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)])
+    number_3 = tt_mask_to_linear_op([np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1),
+                                     np.array([[0.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1)])
+    number_4 = tt_mask_to_linear_op([np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1),
+                                     np.array([[0.0, 0.0], [0.0, 1.0]]).reshape(1, 2, 2, 1)])
+    number_5 = tt_mask_to_linear_op([np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1),
+                                     np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)])
+    number_6 = tt_mask_to_linear_op([np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1),
+                                     np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)])
