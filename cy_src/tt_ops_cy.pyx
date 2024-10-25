@@ -57,19 +57,6 @@ cpdef list tt_transpose(list matrix_tt):
     return transposed_cores
 
 
-cpdef list tt_adjoint(list linear_op_tt):
-    cdef int n = len(linear_op_tt)
-    cdef list adjoint_cores = []
-    cdef cnp.ndarray[cnp.float64_t, ndim=5] core
-    cdef int i
-    for i in range(n):
-        core = linear_op_tt[i]
-        core = np.swapaxes(core, axis1=2, axis2=3)
-        adjoint_cores.append(core)
-
-    return adjoint_cores
-
-
 cpdef list tt_ranks(list train_tt):
     cdef int n = len(train_tt)
     cdef list ranks = []

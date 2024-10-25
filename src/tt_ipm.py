@@ -82,23 +82,19 @@ def tt_infeasible_centr_rhs(
 
 def tt_infeasible_feas_rhs(
     obj_tt,
-    linear_op_tt_1,
-    bias_tt_1,
-    linear_op_tt_2,
-    bias_tt_2,
+    linear_op_tt,
+    linear_op_tt_adjoint,
+    bias_tt,
+    linear_op_tt_ineq,
+    bias_tt_ineq,
     X_tt,
     Y_tt,
     Z_tt,
     mu
 ):
-    dual_feas = tt_sub(tt_add(obj_tt, Z_tt), tt_mat(tt_linear_op(tt_adjoint(linear_op_tt_1), _tt_get_block(0, 1, Y_tt)), shape=(2, 2)))
-    primal_feas_1 = tt_sub(bias_tt_1, tt_mat(tt_linear_op(linear_op_tt_1, X_tt), shape=(2, 2)))
+    dual_feas = tt_sub(tt_add(obj_tt, Z_tt), tt_mat(tt_linear_op(linear_op_tt_adjoint, _tt_get_block(0, 1, Y_tt)), shape=(2, 2)))
+    primal_feas_1 = tt_sub(bias_tt, tt_mat(tt_linear_op(linear_op_tt, X_tt), shape=(2, 2)))
     middle_rhs = IDX_1 + primal_feas_1
-    if linear_op_tt_2 is not None and bias_tt_2 is not None:
-        dual_feas = tt_sub(dual_feas, tt_mat(tt_linear_op(tt_adjoint(linear_op_tt_2), _tt_get_block(1, 0, Y_tt)), shape=(2, 2)))
-        primal_feas_2 = tt_sub(bias_tt_2, tt_mat(tt_linear_op(linear_op_tt_2, X_tt), shape=(2, 2)))
-        middle_rhs_2 = IDX_2 + primal_feas_2
-        middle_rhs = tt_add(middle_rhs, middle_rhs_2)
     upper_rhs = IDX_0 + dual_feas
     newton_rhs = tt_add(upper_rhs, middle_rhs)
     primal_dual_error = tt_inner_prod(newton_rhs, newton_rhs)
@@ -130,10 +126,11 @@ def _tt_get_dual_block(block_matrix_tt):
 def _tt_ipm_newton_step(
         obj_tt,
         lhs_skeleton,
-        linear_op_tt_1,
-        bias_tt_1,
-        linear_op_tt_2,
-        bias_tt_2,
+        linear_op_tt,
+        linear_op_tt_adjoint,
+        bias_tt,
+        linear_op_tt_ineq,
+        bias_tt_ineq,
         X_tt,
         Y_tt,
         Z_tt,
@@ -143,7 +140,7 @@ def _tt_ipm_newton_step(
     mu = tt_inner_prod(Z_tt, [0.5 * c for c in X_tt])
     lhs_matrix_tt = tt_infeasible_newton_system_lhs(lhs_skeleton, X_tt, Z_tt)
     rhs_vec_tt, primal_dual_error = tt_infeasible_feas_rhs(
-        obj_tt, linear_op_tt_1, bias_tt_1, linear_op_tt_2, bias_tt_2, X_tt, Y_tt, Z_tt, 0.5 * mu
+        obj_tt, linear_op_tt, linear_op_tt_adjoint, bias_tt, linear_op_tt_ineq, bias_tt_ineq, X_tt, Y_tt, Z_tt, 0.5 * mu
     )
     Delta_tt, res = tt_amen(lhs_matrix_tt, rhs_vec_tt, verbose=verbose, nswp=22)
     Delta_tt = tt_mat(Delta_tt, shape=(2, 2))
@@ -196,29 +193,24 @@ def _tt_line_search(X_tt, Z_tt, Delta_X_tt, Delta_Z_tt, crit=1e-18):
 
 def tt_ipm(
     obj_tt,
-    linear_op_tt_1,
-    bias_tt_1,
-    linear_op_tt_2=None,
-    bias_tt_2=None,
+    linear_op_tt,
+    linear_op_tt_adjoint,
+    bias_tt,
+    linear_op_tt_ineq=None,
+    bias_tt_ineq=None,
     max_iter=100,
     feasibility_tol=1e-4,
     centrality_tol=1e-3,
     verbose=False
 ):
     dim = len(obj_tt)
-    op_tt = tt_scale(-1, linear_op_tt_1)
-    op_tt_adjoint = IDX_01 + tt_op_to_mat(tt_adjoint(op_tt))
+    op_tt = tt_scale(-1, linear_op_tt)
+    op_tt_adjoint = IDX_01 + tt_op_to_mat(tt_scale(-1, linear_op_tt_adjoint))
     op_tt = IDX_10 + tt_op_to_mat(op_tt)
     I_mat_tt = tt_op_to_mat(tt_op_right_from_tt_matrix(tt_identity(dim)))
     I_op_tt = IDX_03 + I_mat_tt
     lhs_skeleton = tt_add(op_tt, op_tt_adjoint)
     lhs_skeleton = tt_add(lhs_skeleton, I_op_tt)
-    if linear_op_tt_2 is not None:
-        op_tt_2 = tt_scale(-1, linear_op_tt_2)
-        op_tt_adjoint_2 = IDX_02 + tt_op_to_mat(tt_adjoint(op_tt_2))
-        op_tt_2 = IDX_20 + tt_op_to_mat(op_tt_2)
-        lhs_skeleton = tt_add(lhs_skeleton, op_tt_adjoint_2)
-        lhs_skeleton = tt_add(lhs_skeleton, op_tt_2)
     lhs_skeleton = tt_rank_reduce(lhs_skeleton, err_bound=0)
     X_tt = tt_identity(dim)
     Y_tt = tt_zero_matrix(dim+1)  # [0, Y_1, Y_2, 0]^T
@@ -229,10 +221,11 @@ def tt_ipm(
         X_tt, Y_tt, Z_tt, pd_error, mu = _tt_ipm_newton_step(
             obj_tt,
             lhs_skeleton,
-            linear_op_tt_1,
-            bias_tt_1,
-            linear_op_tt_2,
-            bias_tt_2,
+            linear_op_tt,
+            linear_op_tt_adjoint,
+            bias_tt,
+            linear_op_tt_ineq,
+            bias_tt_ineq,
             X_tt,
             Y_tt,
             Z_tt,

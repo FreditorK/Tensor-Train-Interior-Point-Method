@@ -29,9 +29,7 @@ def tt_amen(A, b, nswp=5, x0=None, eps=1e-10, kickrank=2, reg_lambda=1e-12, verb
 
     # z cores
     z_cores = tt_random_gaussian((d - 1) * [kickrank], shape=x_cores[0].shape[1:-1])
-    z_cores = tt_rl_orthogonalise(z_cores)
     rz = [1] + tt_ranks(z_cores) + [1]
-    tt_z_gaussian = tt_random_gaussian((d - 1) * [kickrank], shape=x_cores[0].shape[1:-1])
 
     Phiz = [np.ones((1, 1, 1), dtype=dtype)] + [None] * (d - 1) + [
         np.ones((1, 1, 1), dtype=dtype)]  # size is rzk x Rk x rxk
@@ -53,17 +51,24 @@ def tt_amen(A, b, nswp=5, x0=None, eps=1e-10, kickrank=2, reg_lambda=1e-12, verb
         print('Starting AMEn solve with:\n\tepsilon: %g\n\tsweeps: %d' % (eps, nswp))
 
     for swp in range(nswp):
-        # right to left orthogonalization
-        if not last and swp > 0:
-            # truncate to kickrank
-            z_cores = _tt_rl_random_orthogonalise([
-                np.einsum('br,bnB,BR->rnR', Phiz_b[k], b[k], Phiz_b[k + 1])* nrmsc
-                - local_product(Phiz[k + 1], Phiz[k], A[k], x_cores[k]) for k in range(d - 1, 0, -1)
-            ], tt_z_gaussian)
-            rz[1:-1] = tt_ranks(z_cores)
-
-
         for k in range(d - 1, 0, -1):
+            # right to left orthogonalization
+            if not last:
+                if swp > 0:
+                    # shape rzp x N x rz
+                    czA = local_product(Phiz[k + 1], Phiz[k], A[k], x_cores[k])
+                    # shape is rzp x N x rz
+                    czy = np.einsum('br,bnB,BR->rnR', Phiz_b[k], b[k], Phiz_b[k + 1])
+                    cz_new = czy * nrmsc - czA
+                    _, _, vz = np.linalg.svd(np.reshape(cz_new, [cz_new.shape[0], -1]), full_matrices=False)
+                    # truncate to kickrank
+                    cz_new = vz[:min(kickrank, vz.shape[0]), :].T
+                else:
+                    cz_new = np.reshape(z_cores[k], (rz[k], -1)).T
+
+                qz, _ = np.linalg.qr(cz_new)
+                rz[k] = qz.shape[1]
+                z_cores[k] = np.reshape(qz.T, (rz[k], N[k], -1))
 
             # norm correction ?
             if swp > 0:

@@ -594,17 +594,33 @@ def tt_sketch(shape, target_ranks):
     ]
 
 
-def _core_mask(core, i, j):
-    mask = np.zeros_like(core)
-    mask[:, i, j] += core[:, i, j]
-    return np.expand_dims(mask, 1)
+def _core_mask(core):
+    mask = np.zeros((core.shape[0], 4, *core.shape[1:]))
+    mask[:, 0, 0, 0] = core[:, 0, 0]
+    mask[:, 1, 0, 1] = core[:, 0, 1]
+    mask[:, 2, 1, 0] = core[:, 1, 0]
+    mask[:, 3, 1, 1] = core[:, 1, 1]
+    return mask
 
 
 def tt_mask_to_linear_op(train_tt):
     """
     Converts a matrix that serves as a mask via a Hadamard product to a linear operator
     """
-    return [np.concatenate([_core_mask(c, i, j) for (i, j) in product([0, 1], [0, 1])], axis=1) for c in train_tt]
+    return [_core_mask(c) for c in train_tt]
+
+
+def _core_mask_adjoint(core):
+    mask = np.zeros((core.shape[0], 4, *core.shape[1:]))
+    mask[:, 0, 0, 0] = core[:, 0, 0]
+    mask[:, 1, 1, 0] = core[:, 0, 1]
+    mask[:, 2, 0, 1] = core[:, 1, 0]
+    mask[:, 3, 1, 1] = core[:, 1, 1]
+    return mask
+
+
+def tt_mask_to_linear_op_adjoint(train_tt):
+    return [_core_mask_adjoint(c) for c in train_tt]
 
 
 def _core_op_right_from_matrix(core):
