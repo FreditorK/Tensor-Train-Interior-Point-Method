@@ -2,6 +2,7 @@ import copy
 import sys
 import os
 
+import numpy as np
 
 sys.path.append(os.getcwd() + '/../../')
 
@@ -68,9 +69,6 @@ def tt_Q_m_P_op(dim):
 def _core_diag_block_sum():
     mask = np.zeros((4, 2, 2))
     mask[0, :, :] = np.eye(2)
-    mask[1, :, :] = np.zeros((2, 2))
-    mask[2, :, :] = np.zeros((2, 2))
-    mask[3, :, :] = np.eye(2)
     return mask.reshape(1, 4, 2, 2, 1)
 
 
@@ -92,41 +90,119 @@ def tt_diag_block_sum_linear_op(block_size, dim):
             + [_core_diag_block_sum_block() for _ in range(block_size)])
 
 
-def _core_partial_J_trace_middle_2(c):
-    mask_1 = np.zeros((c.shape[0], 4, *c.shape[1:]))
-    mask_1[:, 0] = c
-    mask_2 = np.zeros((c.shape[0], 4, *c.shape[1:]))
-    #mask_2[:, 1] = c
-    mask_3 = np.zeros((c.shape[0], 4, *c.shape[1:]))
-    #mask_3[:, 2] = c
-    mask_4 = np.zeros((c.shape[0], 4, *c.shape[1:]))
-    #mask_4[:, 3] = c
-    return mask_1#np.concatenate((mask_1, mask_2, mask_3, mask_4), axis=0)
-
-def _core_partial_J_trace_middle_1(c):
-    mask_1 = np.zeros((c.shape[0], 4, *c.shape[1:]))
-    mask_1[:, 0, 0, 0] = c[:, 0, 0]
-    #mask_2 = np.zeros((c.shape[0], 4, *c.shape[1:]))
-    #mask_2[:, 0, 0, 1] = c[:, 0, 1]
-    #mask_3 = np.zeros((c.shape[0], 4, *c.shape[1:]))
-    #mask_3[:, 0, 1, 0] = c[:, 1, 0]
-    #mask_4 = np.zeros((c.shape[0], 4, *c.shape[1:]))
-    #mask_4[:, 0, 1, 1] = c[:, 1, 1]
-    return mask_1 #np.concatenate((mask_1, mask_2, mask_3, mask_4), axis=-1)
-
-
-def _core_partial_J_trace(c):
+def _core_partial_J_trace(i, c):
     mask = np.zeros((c.shape[0], 4, *c.shape[1:]))
-    mask[:, 0] = c
+    if i == 0:
+        masks = [np.zeros((c.shape[0], 4, *c.shape[1:])) for _ in range(2)]
+        masks[0][:, 1, 0, 0] = c[:, 0, 0]
+        masks[0][:, 2, 0, 1] = c[:, 0, 1]
+
+        #masks[0][:, 2, 1, 0] = c[:, 1, 0]
+        #masks[0][:, 3, 1, 1] = c[:, 1, 1]
+
+        #masks[1][:, 0, 0, 0] = c[:, 0, 0]
+        #masks[1][:, 1, 0, 1] = c[:, 0, 1]
+
+        masks[1][:, 1, 1, 0] = c[:, 1, 0]
+        masks[1][:, 2, 1, 1] = c[:, 1, 1]
+        mask = np.concatenate(masks, axis=-1)
+    if i == 1:
+        masks = [np.zeros((c.shape[0], 4, *c.shape[1:])) for _ in range(2)]
+        masks[0][:, 0, 0, 0] = c[:, 0, 0]
+        masks[0][:, 1, 0, 1] = c[:, 0, 1]
+        masks[0][:, 2, 1, 0] = c[:, 1, 0]
+        masks[0][:, 3, 1, 1] = c[:, 1, 1]
+
+        #masks[1][:, 0, 0, 0] = c[:, 0, 0]
+        #masks[1][:, 1, 0, 1] = c[:, 0, 1]
+        #masks[1][:, 2, 1, 0] = c[:, 1, 0]
+        #masks[1][:, 3, 1, 1] = c[:, 1, 1]
+        mask_1 = np.concatenate(masks, axis=0)
+        masks = [np.zeros((c.shape[0], 4, *c.shape[1:])) for _ in range(2)]
+        #masks[0][:, 0, 0, 0] = c[:, 0, 0]
+        #masks[0][:, 1, 0, 1] = c[:, 0, 1]
+        #masks[0][:, 2, 1, 0] = c[:, 1, 0]
+        #masks[0][:, 3, 1, 1] = c[:, 1, 1]
+
+        masks[1][:, 0, 0, 0] = c[:, 0, 0]
+        masks[1][:, 1, 0, 1] = c[:, 0, 1]
+        masks[1][:, 2, 1, 0] = c[:, 1, 0]
+        masks[1][:, 3, 1, 1] = c[:, 1, 1]
+        mask_2 = np.concatenate(masks, axis=0)
+        mask = np.concatenate((mask_1, mask_2), axis=-1)
+    if i == 2:
+        masks = [np.zeros((c.shape[0], 4, *c.shape[1:])) for _ in range(2)]
+        masks[0][:, 0, 0, 0] = c[:, 0, 0]
+        masks[0][:, 0, 0, 1] = c[:, 0, 1]
+        masks[0][:, 0, 1, 0] = c[:, 1, 0]
+        masks[0][:, 0, 1, 1] = c[:, 1, 1]
+
+        #masks[1][:, 0, 0, 0] = c[:, 0, 0]
+        #masks[1][:, 0, 0, 1] = c[:, 0, 1]
+        #masks[1][:, 0, 1, 0] = c[:, 1, 0]
+        #masks[1][:, 0, 1, 1] = c[:, 1, 1]
+        mask_1 = np.concatenate(masks, axis=0)
+        masks = [np.zeros((c.shape[0], 4, *c.shape[1:])) for _ in range(2)]
+        #masks[0][:, 1, 0, 0] = c[:, 0, 0]
+        #masks[0][:, 1, 0, 1] = c[:, 0, 1]
+        #masks[0][:, 1, 1, 0] = c[:, 1, 0]
+        #masks[0][:, 1, 1, 1] = c[:, 1, 1]
+
+        masks[1][:, 3, 0, 0] = c[:, 0, 0]
+        masks[1][:, 3, 0, 1] = c[:, 0, 1]
+        masks[1][:, 3, 1, 0] = c[:, 1, 0]
+        masks[1][:, 3, 1, 1] = c[:, 1, 1]
+        mask_2 = np.concatenate(masks, axis=0)
+        mask = np.concatenate((mask_1, mask_2), axis=-1)
+    if i == 3:
+        masks = [np.zeros((c.shape[0], 4, *c.shape[1:])) for _ in range(2)]
+        masks[0][:, 0, 0, 0] = c[:, 0, 0]
+        masks[0][:, 0, 0, 1] = c[:, 0, 1]
+        masks[0][:, 0, 1, 0] = c[:, 1, 0]
+        masks[0][:, 0, 1, 1] = c[:, 1, 1]
+
+        masks[1][:, 3, 0, 0] = c[:, 0, 0]
+        masks[1][:, 3, 0, 1] = c[:, 0, 1]
+        masks[1][:, 3, 1, 0] = c[:, 1, 0]
+        masks[1][:, 3, 1, 1] = c[:, 1, 1]
+        mask = np.concatenate(masks, axis=0)
     return mask
 
 
 def tt_partial_J_trace_op(block_size, dim):
     matrix_tt = [np.ones((1, 2, 2, 1)) for _ in range(dim)]
-    first_cores = tt_mask_to_linear_op(matrix_tt[:dim-block_size-1])
-    middle_cores = [_core_partial_J_trace_middle_1(matrix_tt[dim-block_size-1]), _core_partial_J_trace_middle_2(matrix_tt[dim-block_size])]
-    last_cores = [_core_partial_J_trace(c) for c in matrix_tt[dim-block_size+1:]]
-    return first_cores + middle_cores + last_cores
+    cores = [_core_partial_J_trace(i, c) for i, c in enumerate(matrix_tt)]
+    return cores
+
+
+def _core_partial_J_trace_2(c, i):
+    mask = np.zeros((c.shape[0], 4, *c.shape[1:]))
+    if i == 0:
+        mask[:, 0, 0, 0] = c[:, 0, 0]
+        mask[:, 1, 0, 1] = c[:, 0, 1]
+        mask[:, 2, 1, 0] = c[:, 1, 0]
+        mask[:, 3, 1, 1] = c[:, 1, 1]
+    if i == 1:
+        mask[:, 0, 0, 0] = c[:, 0, 0]
+        mask[:, 1, 0, 1] = c[:, 0, 1]
+        mask[:, 2, 1, 0] = c[:, 1, 0]
+        mask[:, 3, 1, 1] = c[:, 1, 1]
+    if i == 2:
+        mask[:, 0, 0, 0] = c[:, 0, 0]
+        mask[:, 1, 0, 1] = c[:, 0, 1]
+        mask[:, 2, 1, 0] = c[:, 1, 0]
+        mask[:, 3, 1, 1] = c[:, 1, 1]
+    if i == 3:
+        mask[:, 0, 0, 0] = c[:, 0, 0]
+        mask[:, 1, 0, 1] = c[:, 0, 1]
+        mask[:, 2, 1, 0] = c[:, 1, 0]
+        mask[:, 3, 1, 1] = c[:, 1, 1]
+    return mask
+
+def tt_partial_J_trace_op_2(block_size, dim):
+    matrix_tt = [np.ones((1, 2, 2, 1)) for _ in range(dim)]
+    return [_core_partial_J_trace_2(c, i) for i, c in enumerate(matrix_tt)]
+
 
 def _core_partial_J_trace_adjoint(c):
     mask = np.zeros((c.shape[0], 4, *c.shape[1:]))
@@ -265,11 +341,11 @@ if __name__ == "__main__":
         [   0    0    0    0 |    0 |   0    0    1]
         
         
-        [ 5  5  | 0  0  | 7 | P P P]
-        [ 5  5  | 0  4  | 7 | P P P]
+        [ 6  6  | 5  4  | 7 | P P P]
+        [ 6  6  | 0  5  | 7 | P P P]
         [--------------------------]
-        [ 0  0  | 6  6  | 7 | P P P]
-        [ 0  4  | 6  6  | 7 | P P P]
+        [ 5  4  | 0  0  | 7 | P P P]
+        [ 0  5  | 0  0  | 7 | P P P]
     Y = [--------------------------]
         [ 8r 8c | 8r 8c | P | P P P]
         [--------------------------]
@@ -299,7 +375,7 @@ if __name__ == "__main__":
 
     test_graph = tt_random_gaussian([3, 3, 3], shape=(2, 2)) #tt_random_graph([3])
     #test_graph = tt_scale(0.5, tt_add(test_graph, tt_one_matrix(len(Config.ranks) + 1)))
-    G = tt_one_matrix(5) #tt_rank_reduce(test_graph) + [np.array([[0.9, 0.8], [0.7, 0.6]]).reshape(1, 2, 2, 1)]
+    G = tt_rank_reduce(test_graph)
     np.set_printoptions(linewidth=600, threshold=np.inf, precision=4, suppress=True)
     print(np.round(tt_matrix_to_matrix(G), decimals=2))
 
@@ -312,10 +388,15 @@ if __name__ == "__main__":
     #partial_tr_op_bias = tt_zero_matrix(n_sq+1)
     # ---
     # V
-    partial_tr_J_op = [q_op_prefix] + tt_partial_J_trace_op(n, n_sq)
+    partial_tr_J_op = tt_partial_J_trace_op(n, n_sq)
+    partial_tr_J_op_2 = tt_partial_J_trace_op_2(n, n_sq)
     #partial_tr_J_op_adjoint = [q_op_prefix] + tt_partial_J_trace_op_adjoint(n, n_sq)
     #partial_tr_J_op_bias = [q_bias_prefix] + tt_one_matrix(n_sq)
-    print(np.round(tt_matrix_to_matrix(tt_mat(tt_linear_op(partial_tr_J_op, G), shape=(2, 2))), decimals=2))
+    test_result = tt_mat(tt_linear_op(partial_tr_J_op, G), shape=(2, 2))
+    print()
+    print(np.round(tt_matrix_to_matrix(test_result), decimals=2))
+    #test_result = tt_mat(tt_linear_op(partial_tr_J_op_2, test_result), shape=(2, 2))
+    #print(np.round(tt_matrix_to_matrix(test_result), decimals=2))
     # ---
     # VI
     #diag_block_sum_op = [q_op_prefix] + tt_diag_block_sum_linear_op(n, n_sq)
