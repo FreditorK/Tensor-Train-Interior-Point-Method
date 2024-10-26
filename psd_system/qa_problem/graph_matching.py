@@ -133,10 +133,10 @@ def tt_partial_J_trace_op(block_size, dim):
 
 def _core_partial_J_trace_first_adjoint():
     core = np.zeros((1, 4, 2, 2, 2))
-    core[0, 1, 0, 1, 0] = 1
+    core[0, 0, 0, 1, 0] = 1
     core[0, 2, 1, 0, 0] = 1
     core[0, 1, 0, 1, 1] = 1
-    core[0, 2, 1, 0, 1] = 1
+    core[0, 3, 1, 0, 1] = 1
     return core
 
 def _core_partial_J_trace_middle_adjoint():
@@ -154,15 +154,15 @@ def _core_partial_J_trace_middle_adjoint():
 
 def _core_partial_J_trace_block_adjoint():
     core = np.zeros((2, 4, 2, 2, 2))
-    core[0, 0, :, :, 0] = np.array([[1.0, 0.0], [0.0, 0.0]])
-    core[1, 3, :, :, 1] = np.array([[0.0, 0.0], [0.0, 1.0]])
+    core[0, :, :, :, 0] = np.array([[1.0, 0.0], [0.0, 0.0]])
+    core[1, :, :, :, 1] = np.array([[0.0, 0.0], [0.0, 1.0]])
     return core
 
 
 def _core_partial_J_trace_block_last_adjoint():
     core = np.zeros((2, 4, 2, 2, 1))
-    core[0, 0] = np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(2, 2, 1)
-    core[1, 3] = np.array([[0.0, 0.0], [0.0, 1.0]]).reshape(2, 2, 1)
+    core[0, :] = np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(2, 2, 1)
+    core[1, :] = np.array([[0.0, 0.0], [0.0, 1.0]]).reshape(2, 2, 1)
     return core
 
 def tt_partial_J_trace_op_adjoint(block_size, dim):
@@ -338,7 +338,7 @@ if __name__ == "__main__":
     test_result = tt_mat(tt_linear_op(partial_tr_J_op, G), shape=(2, 2))
     #print()
     #print(np.round(tt_matrix_to_matrix(test_result), decimals=2))
-    test_result = tt_mat(tt_linear_op(partial_tr_J_op_adjoint, G), shape=(2, 2))
+    test_result = tt_mat(tt_linear_op(partial_tr_J_op_adjoint, test_result), shape=(2, 2))
     print()
     print(np.round(tt_matrix_to_matrix(test_result), decimals=2))
     # ---
