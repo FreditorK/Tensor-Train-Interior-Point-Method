@@ -19,6 +19,100 @@ class Config:
     seed = 4
     ranks = [3]
 
+# Constraint 4 -----------------------------------------------------------------
+
+def tt_partial_trace_op(block_size, dim):
+    matrix_tt = [np.ones((1, 2, 2, 1)) for _ in range(dim-block_size)] + tt_identity(block_size)
+    matrix_tt = tt_rank_reduce(tt_sub(matrix_tt, tt_identity(dim)))
+    op_tt = tt_mask_to_linear_op(matrix_tt[:-block_size])
+    for c in  matrix_tt[-block_size:]:
+        core = np.zeros((c.shape[0], 4, *c.shape[1:]))
+        core[:, 1] = c
+        op_tt.append(core)
+    return op_tt
+
+def tt_partial_trace_op_adj(block_size, dim):
+    matrix_tt = [np.ones((1, 2, 2, 1)) for _ in range(dim-block_size)] + [np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(block_size)]
+    matrix_tt = tt_rank_reduce(tt_sub(matrix_tt, tt_identity(dim-block_size) + [np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(block_size)]))
+    op_tt = tt_mask_to_linear_op(matrix_tt[:-block_size])
+    for c in matrix_tt[-block_size:]:
+        core = np.zeros((c.shape[0], 4, *c.shape[1:]))
+        core[:, 0, 0, 1] = c[:, 0, 1]
+        core[:, 3, 0, 1] = c[:, 0, 1]
+        op_tt.append(core)
+    return op_tt
+
+# ------------------------------------------------------------------------------
+# Constraint 5 -----------------------------------------------------------------
+
+def tt_partial_J_trace_op(block_size, dim):
+    op_tt = []
+    core = np.zeros((1, 4, 2, 2, 2))
+    core[0, 1, 0, 0, 0] = 1
+    core[0, 2, 1, 0, 0] = 1
+    core[0, 1, 0, 1, 1] = 1
+    core[0, 2, 1, 1, 1] = 1
+    op_tt.append(core)
+    for _ in range(dim-block_size-1):
+        core = np.zeros((2, 4, 2, 2, 2))
+        core[:, 0, 0, 0] = np.eye(2)
+        core[:, 1, 0, 1] = np.eye(2)
+        core[:, 2, 1, 0] = np.eye(2)
+        core[:, 3, 1, 1] = np.eye(2)
+        op_tt.append(core)
+    for _ in range(block_size-1):
+        core = np.zeros((2, 4, 2, 2, 2))
+        core[0, 0, :, :, 0] = 1
+        core[1, 3, :, :, 1] = 1
+        op_tt.append(core)
+    core = np.zeros((2, 4, 2, 2, 1))
+    core[0, 0] = 1
+    core[1, 3] = 1
+    op_tt.append(core)
+    return op_tt
+
+
+def _core_partial_J_trace_first_adjoint():
+    core = np.zeros((1, 4, 2, 2, 2))
+    core[0, 0, 0, 1, 0] = 1
+    core[0, 2, 1, 0, 0] = 1
+    core[0, 1, 0, 1, 1] = 1
+    core[0, 3, 1, 0, 1] = 1
+    return core
+
+def _core_partial_J_trace_middle_adjoint():
+    core = np.zeros((2, 4, 2, 2, 2))
+    core[0, 0, 0, 0, 0] = 1
+    core[0, 1, 0, 1, 0] = 1
+    core[0, 2, 1, 0, 0] = 1
+    core[0, 3, 1, 1, 0] = 1
+
+    core[1, 0, 0, 0, 1] = 1
+    core[1, 1, 0, 1, 1] = 1
+    core[1, 2, 1, 0, 1] = 1
+    core[1, 3, 1, 1, 1] = 1
+    return core
+
+def _core_partial_J_trace_block_adjoint():
+    core = np.zeros((2, 4, 2, 2, 2))
+    core[0, :, :, :, 0] = np.array([[1.0, 0.0], [0.0, 0.0]])
+    core[1, :, :, :, 1] = np.array([[0.0, 0.0], [0.0, 1.0]])
+    return core
+
+
+def _core_partial_J_trace_block_last_adjoint():
+    core = np.zeros((2, 4, 2, 2, 1))
+    core[0, :] = np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(2, 2, 1)
+    core[1, :] = np.array([[0.0, 0.0], [0.0, 1.0]]).reshape(2, 2, 1)
+    return core
+
+def tt_partial_J_trace_op_adjoint(block_size, dim):
+    cores = ([_core_partial_J_trace_first_adjoint()]
+             + [_core_partial_J_trace_middle_adjoint() for _ in range(dim-block_size-1)]
+             + [_core_partial_J_trace_block_adjoint() for _ in range(block_size-1)]
+             + [_core_partial_J_trace_block_last_adjoint()])
+    return cores
+# ------------------------------------------------------------------------------
 
 def _core_Q_diag_mP(c, i):
     mask = np.zeros((c.shape[0], 4, *c.shape[1:]))
@@ -145,117 +239,6 @@ def tt_diag_block_sum_linear_op_adjoint(block_size, dim):
     """
     return ([_core_diag_block_sum_adjoint() for _ in range(dim - block_size)]
             + [_core_diag_block_sum_block_adjoint() for _ in range(block_size)])
-
-
-def _core_partial_J_trace_first():
-    core = np.zeros((1, 4, 2, 2, 2))
-    core[0, 1, 0, 0, 0] = 1
-    core[0, 2, 0, 1, 0] = 1
-    core[0, 1, 1, 0, 1] = 1
-    core[0, 2, 1, 1, 1] = 1
-    return core
-
-def _core_partial_J_trace_middle():
-    core = np.zeros((2, 4, 2, 2, 2))
-    core[0, 0, 0, 0, 0] = 1
-    core[0, 1, 0, 1, 0] = 1
-    core[0, 2, 1, 0, 0] = 1
-    core[0, 3, 1, 1, 0] = 1
-
-    core[1, 0, 0, 0, 1] = 1
-    core[1, 1, 0, 1, 1] = 1
-    core[1, 2, 1, 0, 1] = 1
-    core[1, 3, 1, 1, 1] = 1
-    return core
-
-def _core_partial_J_trace_block():
-    core = np.zeros((2, 4, 2, 2, 2))
-    core[0, 0, :, :, 0] = np.ones((2, 2))
-    core[1, 3, :, :, 1] = np.ones((2, 2))
-    return core
-
-
-def _core_partial_J_trace_block_last():
-    core = np.zeros((2, 4, 2, 2, 1))
-    core[0, 0] = np.ones((2, 2, 1))
-    core[1, 3] = np.ones((2, 2, 1))
-    return core
-
-def tt_partial_J_trace_op(block_size, dim):
-    cores = ([_core_partial_J_trace_first()]
-             + [_core_partial_J_trace_middle() for _ in range(dim-block_size-1)]
-             + [_core_partial_J_trace_block() for _ in range(block_size-1)]
-             + [_core_partial_J_trace_block_last()])
-    return cores
-
-
-def _core_partial_J_trace_first_adjoint():
-    core = np.zeros((1, 4, 2, 2, 2))
-    core[0, 0, 0, 1, 0] = 1
-    core[0, 2, 1, 0, 0] = 1
-    core[0, 1, 0, 1, 1] = 1
-    core[0, 3, 1, 0, 1] = 1
-    return core
-
-def _core_partial_J_trace_middle_adjoint():
-    core = np.zeros((2, 4, 2, 2, 2))
-    core[0, 0, 0, 0, 0] = 1
-    core[0, 1, 0, 1, 0] = 1
-    core[0, 2, 1, 0, 0] = 1
-    core[0, 3, 1, 1, 0] = 1
-
-    core[1, 0, 0, 0, 1] = 1
-    core[1, 1, 0, 1, 1] = 1
-    core[1, 2, 1, 0, 1] = 1
-    core[1, 3, 1, 1, 1] = 1
-    return core
-
-def _core_partial_J_trace_block_adjoint():
-    core = np.zeros((2, 4, 2, 2, 2))
-    core[0, :, :, :, 0] = np.array([[1.0, 0.0], [0.0, 0.0]])
-    core[1, :, :, :, 1] = np.array([[0.0, 0.0], [0.0, 1.0]])
-    return core
-
-
-def _core_partial_J_trace_block_last_adjoint():
-    core = np.zeros((2, 4, 2, 2, 1))
-    core[0, :] = np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(2, 2, 1)
-    core[1, :] = np.array([[0.0, 0.0], [0.0, 1.0]]).reshape(2, 2, 1)
-    return core
-
-def tt_partial_J_trace_op_adjoint(block_size, dim):
-    cores = ([_core_partial_J_trace_first_adjoint()]
-             + [_core_partial_J_trace_middle_adjoint() for _ in range(dim-block_size-1)]
-             + [_core_partial_J_trace_block_adjoint() for _ in range(block_size-1)]
-             + [_core_partial_J_trace_block_last_adjoint()])
-    return cores
-
-
-def _core_partial_trace(c):
-    mask = np.zeros((c.shape[0], 4, *c.shape[1:]))
-    mask[:, 1] = c
-    return mask
-
-def tt_partial_trace_op(block_size, dim, off_diagonal=True):
-    matrix_tt = [np.ones((1, 2, 2, 1)) for _ in range(dim-block_size)] + tt_identity(block_size)
-    identity = tt_identity(dim)
-    if off_diagonal:
-        matrix_tt = tt_rank_reduce(tt_sub(matrix_tt, identity))
-    return tt_mask_to_linear_op(matrix_tt[:-block_size]) + [_core_partial_trace(c) for c in matrix_tt[-block_size:]]
-
-
-def _core_partial_trace_adjoint(c):
-    mask = np.zeros((c.shape[0], 4, *c.shape[1:]))
-    mask[:, 0, 0, 1] = c[:, 0, 1]
-    mask[:, 3, 0, 1] = c[:, 0, 1]
-    return mask
-
-def tt_partial_trace_op_adjoint(block_size, dim, off_diagonal=True):
-    matrix_tt = [np.ones((1, 2, 2, 1)) for _ in range(dim-block_size)] + [np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(block_size)]
-    identity = tt_identity(dim-block_size) + [np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(block_size)]
-    if off_diagonal:
-        matrix_tt = tt_rank_reduce(tt_sub(matrix_tt, identity))
-    return tt_mask_to_linear_op(matrix_tt[:-block_size]) + [_core_partial_trace_adjoint(c) for c in matrix_tt[-block_size:]]
 
 
 def _core_ds_P_rows(limit, i):
@@ -415,9 +398,9 @@ if __name__ == "__main__":
     #G_B = tt_rank_reduce(G_B)
     #print(np.round(tt_matrix_to_matrix(G_B), decimals=2))
 
-    test_graph = tt_random_gaussian([3, 1], shape=(2, 2)) #tt_random_graph([3])
+    test_graph = tt_random_gaussian([3, 3, 3], shape=(2, 2)) #tt_random_graph([3])
     #test_graph = tt_scale(0.5, tt_add(test_graph, tt_one_matrix(len(Config.ranks) + 1)))
-    G = tt_rank_reduce(test_graph)
+    G = [np.ones((1, 2, 2, 1))] + tt_rank_reduce(test_graph)
     np.set_printoptions(linewidth=600, threshold=np.inf, precision=4, suppress=True)
     print(np.round(tt_matrix_to_matrix(G), decimals=2))
 
@@ -425,19 +408,25 @@ if __name__ == "__main__":
     n_sq = 4
     # Equality Operator
     # IV
-    #partial_tr_op = tt_partial_trace_op(n, n_sq) #[q_op_prefix] + tt_partial_trace_op(n, n_sq)
-    #partial_tr_op_adjoint = tt_partial_trace_op_adjoint(n, n_sq) # [q_op_prefix] + tt_partial_trace_op_adjoint(n, n_sq)
+    #partial_tr_op = [q_op_prefix] + tt_partial_trace_op(n, n_sq)
+    #partial_tr_op_adjoint = [q_op_prefix] + tt_partial_trace_op_adj(n, n_sq)
     #partial_tr_op_bias = tt_zero_matrix(n_sq+1)
     # ---
     # V
-    #partial_tr_J_op = tt_partial_J_trace_op(n, n_sq)
-    #partial_tr_J_op_adjoint = tt_partial_J_trace_op_adjoint(n, n_sq) #[q_op_prefix] + tt_partial_J_trace_op_adjoint(n, n_sq)
+    #partial_tr_J_op = [q_op_prefix] + tt_partial_J_trace_op(n, n_sq)
+    #partial_tr_J_op_adjoint = [q_op_prefix] + tt_partial_J_trace_op_adjoint(n, n_sq)
     #partial_tr_J_op_bias = [q_bias_prefix] + tt_one_matrix(n_sq)
     # ---
     # VI
     #diag_block_sum_op = tt_diag_block_sum_linear_op(n, n_sq) #[q_op_prefix] + tt_diag_block_sum_linear_op(n, n_sq)
     #diag_block_sum_op_adjoint = tt_diag_block_sum_linear_op_adjoint(n, n_sq)
     #diag_block_sum_op_bias = [q_bias_prefix] + tt_identity(n_sq)
+    test_result = tt_mat(tt_linear_op(partial_tr_J_op, G), shape=(2, 2))
+    print()
+    print(np.round(tt_matrix_to_matrix(test_result), decimals=2))
+    test_result = tt_mat(tt_linear_op(partial_tr_J_op_adjoint, G), shape=(2, 2))
+    print()
+    print(np.round(tt_matrix_to_matrix(test_result), decimals=2))
     # ---
     # VII
     #Q_m_P_op = tt_Q_m_P_op(n_sq)
