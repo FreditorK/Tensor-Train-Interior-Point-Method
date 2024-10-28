@@ -429,5 +429,6 @@ if __name__ == "__main__":
     # Inequality Operator
     # X
     #Q_ineq_op = [q_op_prefix] + tt_mask_to_linear_op(tt_one_matrix(n_sq))
+    #Q_ineq_op_adjoint = [q_op_prefix] + tt_mask_to_linear_op_adjoint(tt_one_matrix(n_sq))
     #Q_ineq_bias = tt_zero_matrix(n_sq+1)
     # ---
