@@ -71,260 +71,241 @@ def tt_partial_J_trace_op(block_size, dim):
     op_tt.append(core)
     return op_tt
 
-
-def _core_partial_J_trace_first_adjoint():
+def tt_partial_J_trace_op_adj(block_size, dim):
+    op_tt = []
     core = np.zeros((1, 4, 2, 2, 2))
     core[0, 0, 0, 1, 0] = 1
     core[0, 2, 1, 0, 0] = 1
     core[0, 1, 0, 1, 1] = 1
     core[0, 3, 1, 0, 1] = 1
-    return core
-
-def _core_partial_J_trace_middle_adjoint():
-    core = np.zeros((2, 4, 2, 2, 2))
-    core[0, 0, 0, 0, 0] = 1
-    core[0, 1, 0, 1, 0] = 1
-    core[0, 2, 1, 0, 0] = 1
-    core[0, 3, 1, 1, 0] = 1
-
-    core[1, 0, 0, 0, 1] = 1
-    core[1, 1, 0, 1, 1] = 1
-    core[1, 2, 1, 0, 1] = 1
-    core[1, 3, 1, 1, 1] = 1
-    return core
-
-def _core_partial_J_trace_block_adjoint():
-    core = np.zeros((2, 4, 2, 2, 2))
-    core[0, :, :, :, 0] = np.array([[1.0, 0.0], [0.0, 0.0]])
-    core[1, :, :, :, 1] = np.array([[0.0, 0.0], [0.0, 1.0]])
-    return core
-
-
-def _core_partial_J_trace_block_last_adjoint():
+    op_tt.append(core)
+    for _ in range(dim - block_size - 1):
+        core = np.zeros((2, 4, 2, 2, 2))
+        core[:, 0, 0, 0] = np.eye(2)
+        core[:, 1, 0, 1] = np.eye(2)
+        core[:, 2, 1, 0] = np.eye(2)
+        core[:, 3, 1, 1] = np.eye(2)
+        op_tt.append(core)
+    for _ in range(block_size - 1):
+        core = np.zeros((2, 4, 2, 2, 2))
+        core[0, :, 0, 0, 0] = 1
+        core[1, :, 1, 1, 1] = 1
+        op_tt.append(core)
     core = np.zeros((2, 4, 2, 2, 1))
-    core[0, :] = np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(2, 2, 1)
-    core[1, :] = np.array([[0.0, 0.0], [0.0, 1.0]]).reshape(2, 2, 1)
-    return core
-
-def tt_partial_J_trace_op_adjoint(block_size, dim):
-    cores = ([_core_partial_J_trace_first_adjoint()]
-             + [_core_partial_J_trace_middle_adjoint() for _ in range(dim-block_size-1)]
-             + [_core_partial_J_trace_block_adjoint() for _ in range(block_size-1)]
-             + [_core_partial_J_trace_block_last_adjoint()])
-    return cores
+    core[0, :, 0, 0] = 1
+    core[1, :, 1, 1] = 1
+    op_tt.append(core)
+    return op_tt
 # ------------------------------------------------------------------------------
+# Constraint 6 -----------------------------------------------------------------
 
-def _core_Q_diag_mP(c, i):
-    mask = np.zeros((c.shape[0], 4, *c.shape[1:]))
-    if i == 0:
-        mask[:, 1] = c
-    else:
-        mask[:, 0, 0, 0] = c[:, 0, 0]
-        mask[:, 1, 0, 1] = c[:, 0, 1]
-        mask[:, 2, 1, 0] = c[:, 1, 0]
-        mask[:, 2, 1, 1] = c[:, 1, 1]
-    return mask
+def tt_diag_block_sum_linear_op(block_size, dim):
+    op_tt = []
+    for _ in range(dim - block_size):
+        core = np.zeros((1, 4, 2, 2, 1))
+        core[0, 0, :, :, 0] = np.eye(2)
+        op_tt.append(core)
+    for _ in range(block_size):
+        core = np.zeros((1, 4, 2, 2, 1))
+        core[0, 0, 0, 0] = 1
+        core[0, 1, 0, 1] = 1
+        core[0, 2, 1, 0] = 1
+        core[0, 3, 1, 1] = 1
+        op_tt.append(core)
+    return op_tt
 
-def _core_Q_diag_mPT(c, i):
-    mask = np.zeros((c.shape[0], 4, *c.shape[1:]))
-    if i == 0:
-        mask[:, 2] = c
-    else:
-        mask[:, 0, 0, 0] = c[:, 0, 0]
-        mask[:, 1, 0, 1] = c[:, 0, 1]
-        mask[:, 1, 1, 1] = c[:, 1, 1]
-        mask[:, 2, 1, 0] = c[:, 1, 0]
-    return mask
 
-def _core_Q_diag_mPPT(c, i):
-    mask = np.zeros((c.shape[0], 4, *c.shape[1:]))
-    if i == 0:
-        mask[:, 0] = c
-    else:
-        mask[:, 0, 0, 0] = c[:, 0, 0]
-        mask[:, 3, 0, 1] = c[:, 0, 1]
-        mask[:, 3, 1, 0] = c[:, 1, 0]
-        mask[:, 3, 1, 1] = c[:, 1, 1]
-    return mask
-
+def tt_diag_block_sum_linear_op_adj(block_size, dim):
+    op_tt = []
+    for _ in range(dim - block_size):
+        core = np.zeros((1, 4, 2, 2, 1))
+        core[0, 0, 0, 0] = 1
+        core[0, 3, 0, 0] = 1
+        op_tt.append(core)
+    for _ in range(block_size):
+        core = np.zeros((1, 4, 2, 2, 1))
+        core[0, 0, 0, 0] = 1
+        core[0, 1, 0, 1] = 1
+        core[0, 2, 1, 0] = 1
+        core[0, 3, 1, 1] = 1
+        op_tt.append(core)
+    return op_tt
+# ------------------------------------------------------------------------------
+# Constraint 7 -----------------------------------------------------------------
 
 def tt_Q_m_P_op(dim):
     v_matrix_1 = [np.array([[1, 0], [0, 0]]).reshape(1, 2, 2, 1)] + tt_identity(dim)
     v_matrix_2 = [np.array([[0.0, -1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [
         np.array([[1.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(dim)]
-    matrix_tt = tt_rank_reduce(tt_add(v_matrix_1, v_matrix_2))
-    return tt_rank_reduce([_core_Q_diag_mP(c, i) for i, c in enumerate(matrix_tt)])
+    matrix_tt = tt_add(v_matrix_1, v_matrix_2)
+    op_tt = []
+    core = np.zeros((matrix_tt[0].shape[0], 4, *matrix_tt[0].shape[1:]))
+    core[:, 1] = matrix_tt[0]
+    op_tt.append(core)
+    for c in matrix_tt[1:]:
+        core = np.zeros((c.shape[0], 4, *c.shape[1:]))
+        core[:, 0, 0, 0] = c[:, 0, 0]
+        core[:, 1, 0, 1] = c[:, 0, 1]
+        core[:, 2, 1, 0] = c[:, 1, 0]
+        core[:, 2, 1, 1] = c[:, 1, 1]
+        op_tt.append(core)
+    return tt_rank_reduce(op_tt)
 
 
-def _core_Q_diag_mP_adjoint(i):
-    mask = np.zeros((1, 4, 2, 2, 1))
-    if i == 0:
-        mask[:, 1, 0, 1] = -0.5
-    else:
-        mask[:, 0, 0, 0] = 1
-        mask[:, 2, 1, 0] = 1
-    return mask
+def tt_Q_m_P_op_adj(dim):
+    op_part_1_tt = []
+    core = np.zeros((1, 4, 2, 2, 1))
+    core[:, 1, 0, 1] = -0.5
+    op_part_1_tt.append(core)
+    for i in range(dim):
+        core = np.zeros((1, 4, 2, 2, 1))
+        core[:, 0, 0, 0] = 1
+        core[:, 2, 1, 0] = 1
+        op_part_1_tt.append(core)
+    op_part_2_tt = []
+    core = np.zeros((1, 4, 2, 2, 1))
+    core[:, 2, 0, 1] = -0.5
+    op_part_2_tt.append(core)
+    for i in range(dim):
+        core = np.zeros((1, 4, 2, 2, 1))
+        core[:, 0, 0, 0] = 1
+        core[:, 1, 1, 0] = 1
+        op_part_2_tt.append(core)
+    op_part_3_tt = []
+    core = np.zeros((1, 4, 2, 2, 1))
+    core[:, 0, 0, 1] = 1
+    op_part_3_tt.append(core)
+    for i in range(dim):
+        core = np.zeros((1, 4, 2, 2, 1))
+        core[:, 0, 0, 0] = 1
+        core[:, 3, 1, 0] = 1
+        op_part_3_tt.append(core)
 
-def _core_Q_diag_mPT_adjoint(i):
-    mask = np.zeros((1, 4, 2, 2, 1))
-    if i == 0:
-        mask[:, 2, 0, 1] = -0.5
-    else:
-        mask[:, 0, 0, 0] = 1
-        mask[:, 1, 1, 0] = 1
-    return mask
+    op_tt = tt_add(tt_add(op_part_1_tt, op_part_2_tt), op_part_3_tt)
+    return tt_rank_reduce(op_tt)
 
-def _core_Q_diag_mPPT_adjoint(i):
-    mask = np.zeros((1, 4, 2, 2, 1))
-    if i == 0:
-        mask[:, 0, 0, 1] = 1
-    else:
-        mask[:, 0, 0, 0] = 1
-        mask[:, 3, 1, 0] = 1
-    return mask
-
-
-def tt_Q_m_P_op_adjoint(dim):
-    custom_op_1 = [_core_Q_diag_mP_adjoint(i) for i in range(dim+1)]
-    custom_op_2 = [_core_Q_diag_mPT_adjoint(i) for i in range(dim+1)]
-    custom_op_3 = [_core_Q_diag_mPPT_adjoint(i) for i in range(dim+1)]
-    custom_op = tt_add(custom_op_1, custom_op_2)
-    return tt_rank_reduce(tt_add(custom_op, custom_op_3))
-
-
-def _core_diag_block_sum():
-    mask = np.zeros((4, 2, 2))
-    mask[0, :, :] = np.eye(2)
-    return mask.reshape(1, 4, 2, 2, 1)
-
-
-def _core_diag_block_sum_block():
-    mask = np.zeros((4, 2, 2))
-    mask[0, :, :] = np.array([[1, 0], [0, 0]])
-    mask[1, :, :] = np.array([[0, 1], [0, 0]])
-    mask[2, :, :] = np.array([[0, 0], [1, 0]])
-    mask[3, :, :] = np.array([[0, 0], [0, 1]])
-    return mask.reshape(1, 4, 2, 2, 1)
-
-
-def tt_diag_block_sum_linear_op(block_size, dim):
-    """
-    Linear operator that sums the block diagonal of a TT-matrix and allocates it to the block diagonals,
-    where the blocks are of size 2^block_size x 2^block_size and the matrix is 2^dim x 2^dim
-    """
-    return ([_core_diag_block_sum() for _ in range(dim - block_size)]
-            + [_core_diag_block_sum_block() for _ in range(block_size)])
-
-
-def _core_diag_block_sum_adjoint():
-    mask = np.zeros((4, 2, 2))
-    mask[0, 0, 0] = 1
-    mask[3, 0, 0] = 1
-    return mask.reshape(1, 4, 2, 2, 1)
-
-
-def _core_diag_block_sum_block_adjoint():
-    mask = np.zeros((4, 2, 2))
-    mask[0, :, :] = np.array([[1, 0], [0, 0]])
-    mask[1, :, :] = np.array([[0, 1], [0, 0]])
-    mask[2, :, :] = np.array([[0, 0], [1, 0]])
-    mask[3, :, :] = np.array([[0, 0], [0, 1]])
-    return mask.reshape(1, 4, 2, 2, 1)
-
-
-def tt_diag_block_sum_linear_op_adjoint(block_size, dim):
-    """
-    Linear operator that sums the block diagonal of a TT-matrix and allocates it to the block diagonals,
-    where the blocks are of size 2^block_size x 2^block_size and the matrix is 2^dim x 2^dim
-    """
-    return ([_core_diag_block_sum_adjoint() for _ in range(dim - block_size)]
-            + [_core_diag_block_sum_block_adjoint() for _ in range(block_size)])
-
-
-def _core_ds_P_rows(limit, i):
-    mask = np.zeros((1, 4, 2, 2, 1))
-    if i > limit:
-        mask[:, 0, 0, 0] = 1
-        mask[:, 0, 0, 1] = 1
-    elif i == 0:
-        mask[:, 2, 1, 0] = 1
-    elif i == limit:
-        mask[:, 0, 0, 0] = 1
-        mask[:, 1, 0, 1] = 1
-    else:
-        mask[:, 0, 0, 0] = 1
-        mask[:, 1, 0, 1] = 1
-    return mask
-
-def _core_ds_P_cols(limit, i):
-    mask = np.zeros((1, 4, 2, 2, 1))
-    if i > limit:
-        mask[:, 0, 0, 0] = 1
-        mask[:, 3, 0, 1] = 1
-    elif i == 0:
-        mask[:, 0, 1, 0] = 1
-    elif i == 1:
-        mask[:, 3, 0, 0] = 1
-        mask[:, 3, 0, 1] = 1
-    elif i <= limit:
-        mask[:, 0, 0, 0] = 1
-        mask[:, 0, 0, 1] = 1
-        #mask[:, 1, 0, 0] = 1
-        #mask[:, 1, 0, 1] = 1
-    return mask
+# ------------------------------------------------------------------------------
+# Constraint 8 -----------------------------------------------------------------
 
 
 def tt_DS_op(block_size, dim):
-    custom_op_1 = [_core_ds_P_rows(dim - block_size, i) for i in range(dim + 1)]
-    custom_op_2 = [_core_ds_P_cols(dim - block_size, i) for i in range(dim + 1)]
-    custom_op = tt_rank_reduce(tt_add(custom_op_1, custom_op_2))
-    return custom_op
+    row_op = []
+    core = np.zeros((1, 4, 2, 2, 1))
+    core[:, 2, 1, 0] = 1
+    row_op.append(core)
+    for _ in range(dim-block_size):
+        core = np.zeros((1, 4, 2, 2, 1))
+        core[:, 0, 0, 0] = 1
+        core[:, 1, 0, 1] = 1
+        row_op.append(core)
+    for _ in range(block_size):
+        core = np.zeros((1, 4, 2, 2, 1))
+        core[:, 0, 0, 0] = 1
+        core[:, 0, 0, 1] = 1
+        row_op.append(core)
+    col_op = []
+    core = np.zeros((1, 4, 2, 2, 1))
+    core[:, 0, 1, 0] = 1
+    col_op.append(core)
+    for _ in range(dim - block_size):
+        core = np.zeros((1, 4, 2, 2, 1))
+        core[:, 3, 0, 0] = 1
+        core[:, 3, 0, 1] = 1
+        col_op.append(core)
+    for _ in range(block_size):
+        core = np.zeros((1, 4, 2, 2, 1))
+        core[:, 0, 0, 0] = 1
+        core[:, 3, 0, 1] = 1
+        col_op.append(core)
+    op_tt = tt_rank_reduce(tt_add(row_op, col_op))
+    return op_tt
 
 
-def _core_ds_P_adjoint(limit, c, i):
-    mask = np.zeros((c.shape[0], 4, *c.shape[1:]))
-    if i > limit:
-        mask[:, 0, 0, 0] = c[:, 0, 0]
-        mask[:, 0, 1, 0] = c[:, 1, 0]
-        mask[:, 1, 0, 1] = c[:, 0, 1]
-        mask[:, 2, 0, 0] = c[:, 0, 0]
-        mask[:, 2, 1, 0] = c[:, 1, 0]
-        mask[:, 3, 1, 1] = c[:, 1, 1]
-    else:
-        mask[:, 0, 0, 0] = c[:, 0, 0]
-        mask[:, 1, 0, 1] = c[:, 0, 1]
-        mask[:, 2, 1, 0] = c[:, 1, 0]
-        mask[:, 3, 1, 1] = c[:, 1, 1]
-    return mask
+def tt_DS_op_adj(block_size, dim):
+    row_op_1 = []
+    core = np.zeros((1, 4, 2, 2, 1))
+    core[:, 2, 1, 0] = 1
+    row_op_1.append(core)
+    for _ in range(dim - block_size):
+        core = np.zeros((1, 4, 2, 2, 1))
+        core[:, 0, 0, 0] = 1
+        core[:, 1, 0, 1] = 1
+        row_op_1.append(core)
+    for _ in range(block_size):
+        core = np.zeros((1, 4, 2, 2, 1))
+        core[:, 0, 0, 0] = 1
+        core[:, 1, 0, 0] = 1
+        row_op_1.append(core)
 
-def _core_ds_PT_adjoint(limit, c, i):
-    mask = np.zeros((c.shape[0], 4, *c.shape[1:]))
-    if i > limit:
-        mask[:, 0, 0, 0] = c[:, 0, 0]
-        mask[:, 0, 0, 1] = c[:, 0, 1]
-        mask[:, 1, 0, 0] = c[:, 0, 0]
-        mask[:, 1, 0, 1] = c[:, 0, 1]
-        mask[:, 2, 1, 0] = c[:, 1, 0]
-        mask[:, 3, 1, 1] = c[:, 1, 1]
-    else:
-        mask[:, 0, 0, 0] = c[:, 0, 0]
-        mask[:, 1, 0, 1] = c[:, 0, 1]
-        mask[:, 2, 1, 0] = c[:, 1, 0]
-        mask[:, 3, 1, 1] = c[:, 1, 1]
-    return mask
+    row_op_2 = []
+    core = np.zeros((1, 4, 2, 2, 1))
+    core[:, 1, 1, 0] = 1
+    row_op_2.append(core)
+    for _ in range(dim - block_size):
+        core = np.zeros((1, 4, 2, 2, 1))
+        core[:, 0, 0, 0] = 1
+        core[:, 2, 0, 1] = 1
+        row_op_2.append(core)
+    for _ in range(block_size):
+        core = np.zeros((1, 4, 2, 2, 1))
+        core[:, 0, 0, 0] = 1
+        core[:, 2, 0, 0] = 1
+        row_op_2.append(core)
+    row_op = tt_add(row_op_1, row_op_2)
 
+    col_op_1 = []
+    core = np.zeros((1, 4, 2, 2, 1))
+    core[:, 1, 1, 0] = 1
+    col_op_1.append(core)
+    for _ in range(dim - block_size):
+        core = np.zeros((1, 4, 2, 2, 1))
+        core[:, 0, 0, 0] = 1
+        core[:, 0, 0, 1] = 1
+        core[:, 2, 0, 0] = 1
+        core[:, 2, 0, 1] = 1
+        col_op_1.append(core)
+    for _ in range(block_size):
+        core = np.zeros((1, 4, 2, 2, 1))
+        core[:, 0, 0, 0] = 1
+        core[:, 2, 0, 1] = 1
+        col_op_1.append(core)
 
-def tt_DS_op_adjoint(block_size, dim):
-    matrix_tt = [np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [
-        np.array([[1.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(dim)]
-    custom_op_1 = [_core_ds_P_rows(dim - block_size, c, i) for i, c in enumerate(matrix_tt)]
-    custom_op_2 = [_core_ds_P_cols(dim - block_size, c, i) for i, c in enumerate(tt_transpose(matrix_tt))]
-    custom_op = tt_add(custom_op_1, custom_op_2)
-    return custom_op
+    col_op_2 = []
+    core = np.zeros((1, 4, 2, 2, 1))
+    core[:, 2, 1, 0] = 1
+    col_op_2.append(core)
+    for _ in range(dim - block_size):
+        core = np.zeros((1, 4, 2, 2, 1))
+        core[:, 0, 0, 0] = 1
+        core[:, 0, 0, 1] = 1
+        core[:, 1, 0, 0] = 1
+        core[:, 1, 0, 1] = 1
+        col_op_2.append(core)
+    for _ in range(block_size):
+        core = np.zeros((1, 4, 2, 2, 1))
+        core[:, 0, 0, 0] = 1
+        core[:, 1, 0, 1] = 1
+        col_op_2.append(core)
+    col_op = tt_add(col_op_1, col_op_2)
 
-def tt_DS_bias(dim):
-    matrix_tt = [np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [np.array([[1.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(dim-1)]
-    return tt_rank_reduce(tt_add(matrix_tt, tt_transpose(matrix_tt)))
+    op_tt = tt_rank_reduce(tt_add(row_op, col_op))
+    return op_tt
+
+def tt_DS_bias(block_size, dim):
+    matrix_tt_1 = (
+            [np.array([[0.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1)]
+            + [np.array([[1.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(dim - block_size)]
+            + [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(block_size)]
+    )
+    matrix_tt_2 = (
+            [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)]
+            + [np.array([[0.0, 0.0], [0.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(dim - block_size)]
+            + [np.eye(2).reshape(1, 2, 2, 1) for _ in range(block_size)]
+    )
+    return tt_rank_reduce(tt_add(matrix_tt_1, matrix_tt_2))
+
+# ------------------------------------------------------------------------------
+# Constraint 9 -----------------------------------------------------------------
 
 def tt_padding_op(dim):
     matrix_tt_1 = [np.array([[0.0, 1.0], [1.0, 1.0]]).reshape(1, 2, 2, 1)] + [np.ones((1, 2, 2, 1)) for _ in range(dim-1)]
@@ -346,6 +327,7 @@ def tt_padding_op_adjoint(dim):
     matrix_tt = tt_rank_reduce(tt_sub(tt_sub(matrix_tt_1, matrix_tt_2), matrix_tt_3))
     return tt_mask_to_linear_op_adjoint(matrix_tt)
 
+# ------------------------------------------------------------------------------
 
 if __name__ == "__main__":
     print("Creating Problem...")
@@ -378,6 +360,7 @@ if __name__ == "__main__":
         [ P  P  | P  P  | P | P P P]
         [ P  P  | P  P  | P | P P P]
     """
+
     q_op_prefix = np.zeros((1, 4, 2, 2, 1))
     q_op_prefix[0, 0, 0, 0, 0] = 1
     padding_op_prefix = np.zeros((1, 4, 2, 2, 1))
@@ -411,22 +394,22 @@ if __name__ == "__main__":
     #partial_tr_op = [q_op_prefix] + tt_partial_trace_op(n, n_sq)
     #partial_tr_op_adjoint = [q_op_prefix] + tt_partial_trace_op_adj(n, n_sq)
     #partial_tr_op_bias = tt_zero_matrix(n_sq+1)
+    # test_result = tt_mat(tt_linear_op(padding_op_adjoint, G), shape=(2, 2))
+    # print()
+    # print(np.round(tt_matrix_to_matrix(test_result), decimals=2))
     # ---
     # V
     #partial_tr_J_op = [q_op_prefix] + tt_partial_J_trace_op(n, n_sq)
-    #partial_tr_J_op_adjoint = [q_op_prefix] + tt_partial_J_trace_op_adjoint(n, n_sq)
-    #partial_tr_J_op_bias = [q_bias_prefix] + tt_one_matrix(n_sq)
+    #partial_tr_J_op_adjoint = [q_op_prefix] + tt_partial_J_trace_op_adj(n, n_sq)
+    #partial_tr_J_op_bias = [q_bias_prefix] + tt_add(
+    #    [np.array([[0.0, 1.0], [1.0, 0.0]]).reshape(1, 2, 2, 1)] + tt_one_matrix(n_sq-n-1) + [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)],
+    #    [np.array([[0.0, 1.0], [1.0, 0.0]]).reshape(1, 2, 2, 1)] + tt_one_matrix(n_sq - n - 1) + [np.array([[0.0, 0.0], [0.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(n)]
+    #)
     # ---
     # VI
-    #diag_block_sum_op = tt_diag_block_sum_linear_op(n, n_sq) #[q_op_prefix] + tt_diag_block_sum_linear_op(n, n_sq)
-    #diag_block_sum_op_adjoint = tt_diag_block_sum_linear_op_adjoint(n, n_sq)
-    #diag_block_sum_op_bias = [q_bias_prefix] + tt_identity(n_sq)
-    test_result = tt_mat(tt_linear_op(partial_tr_J_op, G), shape=(2, 2))
-    print()
-    print(np.round(tt_matrix_to_matrix(test_result), decimals=2))
-    test_result = tt_mat(tt_linear_op(partial_tr_J_op_adjoint, G), shape=(2, 2))
-    print()
-    print(np.round(tt_matrix_to_matrix(test_result), decimals=2))
+    #diag_block_sum_op = [q_op_prefix] + tt_diag_block_sum_linear_op(n, n_sq)
+    #diag_block_sum_op_adjoint = [q_op_prefix] + tt_diag_block_sum_linear_op_adjoint(n, n_sq)
+    #diag_block_sum_op_bias = [q_bias_prefix] + [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n_sq-n)] + tt_identity(n)
     # ---
     # VII
     #Q_m_P_op = tt_Q_m_P_op(n_sq)
@@ -434,8 +417,9 @@ if __name__ == "__main__":
     #Q_m_P_op_bias = tt_zero_matrix(n_sq+1)
     # ---
     # VIII
-    #DS_op = tt_DS_op(1, 2)
-    #DS_op_bias = tt_DS_bias(n_sq+1)
+    #DS_op = tt_DS_op(n, n_sq)
+    #DS_op_adjoint = tt_DS_op_adj(n, n_sq)
+    #DS_op_bias = tt_DS_bias(n, n_sq)
     # ---
     # IX
     #padding_op = tt_padding_op(n_sq+1)
