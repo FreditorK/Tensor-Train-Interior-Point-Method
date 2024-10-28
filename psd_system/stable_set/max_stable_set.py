@@ -60,20 +60,11 @@ if __name__ == "__main__":
     L_tt_adjoint = tt_rank_reduce(tt_add(As_tt_op_adjoint, tr_tt_op_adjoint))
     bias_tt = tt_rank_reduce(tt_add(bias_tt, tr_bias_tt))
 
-    #X = tt_random_gaussian([2]*(n-1), shape=(2, 2))
-    #Y = tt_random_gaussian([2]*(n-1), shape=(2, 2))
-
-    #print(np.round(tt_matrix_to_matrix(X), decimals=2))
-    #print(np.round(tt_matrix_to_matrix(Y), decimals=2))
-    #print(np.round(tt_matrix_to_matrix(tt_mat(tt_linear_op(L_tt, X), shape=(2, 2))), decimals=2))
-    #print(np.round(tt_matrix_to_matrix(tt_mat(tt_linear_op(L_tt_adjoint, Y), shape=(2, 2))), decimals=2))
-    #print(tt_inner_prod(tt_mat(tt_linear_op(L_tt, X), shape=(2, 2)), Y), tt_inner_prod(X, tt_mat(tt_linear_op(L_tt_adjoint, Y), shape=(2, 2))))
-
     print("...Problem created!")
     print(f"Objective Ranks: {tt_ranks(J_tt)}")
     print(f"Constraint Ranks: \n \t As {tt_ranks(L_tt)}, bias {tt_ranks(bias_tt)}")
     t0 = time.time()
-    X_tt, Y_tt, Z_tt = tt_ipm(
+    X_tt, Y_tt, _, Z_tt = tt_ipm(
         J_tt,
         L_tt,
         L_tt_adjoint,

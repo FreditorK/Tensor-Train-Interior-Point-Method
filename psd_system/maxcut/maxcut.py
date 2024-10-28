@@ -29,7 +29,7 @@ if __name__ == "__main__":
     print(f"Objective Ranks: {tt_ranks(G_tt)}")
     print(f"Constraint Ranks: As {tt_ranks(diag_tt_op)}, bias {tt_ranks(bias_tt)}")
     t0 = time.time()
-    X_tt, Y_tt, Z_tt = tt_ipm(G_tt, diag_tt_op, diag_tt_op_adjoint, bias_tt, verbose=True)
+    X_tt, Y_tt, _, Z_tt = tt_ipm(G_tt, diag_tt_op, diag_tt_op_adjoint, bias_tt, verbose=True)
     t1 = time.time()
     print("Solution: ")
     np.set_printoptions(linewidth=600, threshold=np.inf, precision=4, suppress=True)
