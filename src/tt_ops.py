@@ -408,6 +408,22 @@ def tt_mat_mat_mul(matrix_tt_1, matrix_tt_2):
     return full_cores
 
 
+def _tt_op_op_collapse(op_1, op_2):
+    return sum([
+        np.kron(op_1[:, None, i], op_2[:, :, None, i])
+        for i in range(op_2.shape[2])
+    ])
+
+
+def tt_op_op_compose(op_tt_1, op_tt_2):
+    shapes = [c.shape for c in op_tt_1]
+    mat_tt_1 = [c.reshape(c.shape[0], c.shape[1], np.prod(c.shape[2:4]), *c.shape[4:]) for c in op_tt_1]
+    mat_tt_2 = [c.reshape(c.shape[0], c.shape[1], np.prod(c.shape[2:4]), *c.shape[4:]) for c in op_tt_2]
+    mat_mat_tt = tt_mat_mat_mul(mat_tt_1, mat_tt_2)
+    op_tt = [c.reshape(*shape) for shape, c in zip(shapes, mat_mat_tt)]
+    return op_tt
+
+
 def tt_gram(matrix_tt):
     """ Constructs the gram tensor for a linear op"""
     matrix_tt_t = tt_transpose(matrix_tt)
