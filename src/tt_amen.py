@@ -6,8 +6,7 @@ sys.path.append(os.getcwd() + '/../')
 import numpy as np
 import scipy as scip
 import time
-from src.tt_ops import tt_ranks, tt_random_gaussian, tt_rl_orthogonalise, _tt_rl_random_orthogonalise
-from cy_src.ops_cy import *
+from src.tt_ops import tt_ranks, tt_random_gaussian, tt_rank_retraction, tt_linear_op, tt_matrix_vec_mul, tt_sub
 
 
 def tt_amen(A, b, nswp=5, x0=None, eps=1e-10, kickrank=2, reg_lambda=1e-12, verbose=False):
@@ -49,6 +48,8 @@ def tt_amen(A, b, nswp=5, x0=None, eps=1e-10, kickrank=2, reg_lambda=1e-12, verb
 
     if verbose:
         print('Starting AMEn solve with:\n\tepsilon: %g\n\tsweeps: %d' % (eps, nswp))
+        print(f"\tTT-Matrix rank: {tt_ranks(A)}")
+        print(f"\tTT-bias rank: {tt_ranks(b)}")
 
     for swp in range(nswp):
         for k in range(d - 1, 0, -1):
@@ -56,11 +57,11 @@ def tt_amen(A, b, nswp=5, x0=None, eps=1e-10, kickrank=2, reg_lambda=1e-12, verb
             if not last:
                 if swp > 0:
                     # shape rzp x N x rz
-                    czA = local_product(Phiz[k + 1], Phiz[k], A[k], x_cores[k])
+                    czA = np.einsum('lsr,smnS,LSR,rnR->lmL', Phiz[k], A[k], Phiz[k + 1], x_cores[k], optimize=True)
                     # shape is rzp x N x rz
-                    czy = np.einsum('br,bnB,BR->rnR', Phiz_b[k], b[k], Phiz_b[k + 1])
+                    czy = np.einsum('br,bnB,BR->rnR', Phiz_b[k], b[k], Phiz_b[k + 1], optimize=True)
                     cz_new = czy * nrmsc - czA
-                    _, _, vz = np.linalg.svd(np.reshape(cz_new, [cz_new.shape[0], -1]), full_matrices=False)
+                    _, _, vz = scip.linalg.svd(np.reshape(cz_new, [cz_new.shape[0], -1]), full_matrices=False)
                     # truncate to kickrank
                     cz_new = vz[:min(kickrank, vz.shape[0]), :].T
                 else:
@@ -77,7 +78,7 @@ def tt_amen(A, b, nswp=5, x0=None, eps=1e-10, kickrank=2, reg_lambda=1e-12, verb
             core = np.reshape(x_cores[k], [rx[k], N[k] * rx[k + 1]]).T
             Qmat, Rmat = np.linalg.qr(core)
 
-            core_prev = np.einsum('ijk,km->ijm', x_cores[k - 1], Rmat.T)
+            core_prev = np.einsum('ijk,km->ijm', x_cores[k - 1], Rmat.T, optimize=True)
             rx[k] = Qmat.shape[1]
 
             current_norm = np.linalg.norm(core_prev)
@@ -91,32 +92,32 @@ def tt_amen(A, b, nswp=5, x0=None, eps=1e-10, kickrank=2, reg_lambda=1e-12, verb
             x_cores[k - 1] = core_prev[:]
 
             # update phis (einsum)
-            Phis[k] = compute_phi_bck_A(Phis[k + 1], x_cores[k], A[k], x_cores[k])
-            Phis_b[k] = compute_phi_bck_rhs(Phis_b[k + 1], b[k], x_cores[k])
+            Phis[k] = np.einsum('LSR,lML,sMNS,rNR->lsr', Phis[k + 1], x_cores[k], A[k], x_cores[k], optimize=True)
+            Phis_b[k] = np.einsum('BR,bnB,rnR->br', Phis_b[k + 1], b[k], x_cores[k], optimize=True)
 
             # ... and norms
             norm = np.linalg.norm(Phis[k])
             norm = norm if norm > 0 else 1.0
             normA[k - 1] = norm
-            Phis[k] = Phis[k] / norm
+            Phis[k] /= norm
             norm = np.linalg.norm(Phis_b[k])
             norm = norm if norm > 0 else 1.0
             normb[k - 1] = norm
-            Phis_b[k] = Phis_b[k] / norm
+            Phis_b[k] /= norm
 
             # norm correction
             nrmsc = nrmsc * normb[k - 1] / (normA[k - 1] * normx[k - 1])
 
             # compute phis_z
-            Phiz[k] = compute_phi_bck_A(Phiz[k + 1], z_cores[k], A[k], x_cores[k]) / normA[k - 1]
-            Phiz_b[k] = compute_phi_bck_rhs(Phiz_b[k + 1], b[k], z_cores[k]) / normb[k - 1]
+            Phiz[k] = np.einsum('LSR,lML,sMNS,rNR->lsr', Phiz[k + 1], z_cores[k], A[k], x_cores[k], optimize=True) / normA[k - 1]
+            Phiz_b[k] = np.einsum('BR,bnB,rnR->br', Phiz_b[k + 1], b[k], z_cores[k], optimize=True) / normb[k - 1]
 
         # start loop
         max_res = 0
 
         for k in range(d):
             # assemble rhs
-            rhs = np.einsum('br,bmB,BR->rmR', Phis_b[k], b[k] * nrmsc, Phis_b[k + 1])
+            rhs = np.einsum('br,bmB,BR->rmR', Phis_b[k], b[k] * nrmsc, Phis_b[k + 1], optimize=True)
             rhs = np.reshape(rhs, [-1, 1])
             norm_rhs = np.linalg.norm(rhs)
 
@@ -125,14 +126,15 @@ def tt_amen(A, b, nswp=5, x0=None, eps=1e-10, kickrank=2, reg_lambda=1e-12, verb
 
             # solve the local system
             # shape is Rp x N x N x r x r
-            Bp = np.einsum('smnS,LSR->smnRL', A[k], Phis[k + 1])
-            B = np.einsum('lsr,smnRL->lmLrnR', Phis[k], Bp)
-            B = np.reshape(B, [rx[k] * N[k] * rx[k + 1], rx[k] * N[k] * rx[k + 1]])
+            Bp = np.einsum('smnS,LSR->smnRL', A[k], Phis[k + 1], optimize=True)
+            local_matrix_core = np.einsum('lsr,smnRL->lmLrnR', Phis[k], Bp, optimize=True)
+            B = np.reshape(local_matrix_core, [rx[k] * N[k] * rx[k + 1], rx[k] * N[k] * rx[k + 1]])
 
             # We need the solution with the lowest x-norm so that the dual variables Y do not diverge
             # TODO: Prove that the regularisation yields minimum norm solution for Delta
             reg_B = B + reg_lambda * np.identity(B.shape[0])
-            solution_now, _, _, _ = scip.linalg.lstsq(reg_B, rhs, cond=1e-18, check_finite=False)
+
+            solution_now = scip.linalg.solve(reg_B, rhs, check_finite=False)
 
             res_new = np.linalg.norm(B @ solution_now - rhs) / norm_rhs
 
@@ -141,24 +143,32 @@ def tt_amen(A, b, nswp=5, x0=None, eps=1e-10, kickrank=2, reg_lambda=1e-12, verb
             solution_now = np.reshape(solution_now, (rx[k] * N[k], rx[k + 1]))
             # truncation
             if k < d - 1:
-                u, v = solution_truncation(solution_now, Phis[k], Phis[k + 1], A[k], rhs, rx[k], N[k], rx[k + 1],
-                                           max(real_tol * damp, res_new))
+                tol = max(real_tol * damp, res_new)
+                U, s, V = scip.linalg.svd(solution_now, full_matrices=False)
+                V = np.diag(s) @ V
+                for r in range(U.shape[1], 0, -1):
+                    trunc_solution = U[:, :r] @ V[:r, :]
+                    solution = trunc_solution.reshape((rx[k], N[k], rx[k + 1]))
+                    local_core = np.einsum('lmLrnR,rnR->lmL', local_matrix_core, solution, optimize=True)
+                    res = np.linalg.norm(local_core.reshape(*rhs.shape) - rhs)
+
+                    if res > tol:
+                        break
+
+                r = min(r + 1, len(s))
+                u = U[:, :r]
+                v = V[:r, :].T
             else:
                 u, v = np.linalg.qr(solution_now)
                 v = v.T
 
             if not last:
-                czA = local_product(
-                    Phiz[k + 1],
-                    Phiz[k],
-                    A[k],
-                    np.reshape(u @ v.T, [rx[k], N[k], rx[k + 1]])
-                )  # shape rzp x N x rz
+                czA = np.einsum('lsr,smnS,LSR,rnR->lmL', Phiz[k], A[k], Phiz[k + 1], np.reshape(u @ v.T, [rx[k], N[k], rx[k + 1]]), optimize=True)
 
                 # shape is rzp x N x rz
-                czy = np.einsum('br,bnB,BR->rnR', Phiz_b[k], b[k] * nrmsc, Phiz_b[k + 1])
+                czy = np.einsum('br,bnB,BR->rnR', Phiz_b[k], b[k] * nrmsc, Phiz_b[k + 1], optimize=True)
                 cz_new = czy - czA
-                uz, _, _ = np.linalg.svd(np.reshape(cz_new, (rz[k] * N[k], -1)), full_matrices=False)
+                uz, _, _ = scip.linalg.svd(np.reshape(cz_new, (rz[k] * N[k], -1)), full_matrices=False)
                 # truncate to kickrank
                 qz = uz[:, :min(kickrank, uz.shape[1])]
                 rz[k + 1] = qz.shape[1]
@@ -166,9 +176,8 @@ def tt_amen(A, b, nswp=5, x0=None, eps=1e-10, kickrank=2, reg_lambda=1e-12, verb
 
             if k < d - 1:
                 if not last:
-                    left_res = local_product(Phiz[k + 1], Phis[k], A[k], np.reshape(
-                        u @ v.T, [rx[k], N[k], rx[k + 1]]))
-                    left_b = np.einsum('br,bmB,BR->rmR', Phis_b[k], b[k] * nrmsc, Phiz_b[k + 1])
+                    left_res = np.einsum('lsr,smnS,LSR,rnR->lmL', Phis[k], A[k], Phiz[k + 1], np.reshape(u @ v.T, [rx[k], N[k], rx[k + 1]]), optimize=True)
+                    left_b = np.einsum('br,bmB,BR->rmR', Phis_b[k], b[k] * nrmsc, Phiz_b[k + 1], optimize=True)
                     uk = left_b - left_res  # rx_k x N_k x rz_k+1
                     u, Rmat = np.linalg.qr(np.concatenate((u, np.reshape(uk, [u.shape[0], -1])), 1))
                     r_add = uk.shape[2]
@@ -176,7 +185,7 @@ def tt_amen(A, b, nswp=5, x0=None, eps=1e-10, kickrank=2, reg_lambda=1e-12, verb
                     v = v @ Rmat.T
 
                 r = u.shape[1]
-                v = np.einsum('ji,jkl->ikl', v, x_cores[k + 1])
+                v = np.einsum('ji,jkl->ikl', v, x_cores[k + 1], optimize=True)
                 # remove norm correction
                 nrmsc = nrmsc * normA[k] * normx[k] / normb[k]
 
@@ -193,27 +202,25 @@ def tt_amen(A, b, nswp=5, x0=None, eps=1e-10, kickrank=2, reg_lambda=1e-12, verb
                 rx[k + 1] = r
 
                 # next phis with norm correction
-                Phis[k + 1] = compute_phi_fwd_A(Phis[k], x_cores[k], A[k], x_cores[k])
-                Phis_b[k + 1] = compute_phi_fwd_rhs(Phis_b[k], b[k], x_cores[k])
+                Phis[k + 1] = np.einsum('lsr,lML,sMNS,rNR->LSR', Phis[k], x_cores[k], A[k], x_cores[k], optimize=True)
+                Phis_b[k + 1] = np.einsum('br,bnB,rnR->BR', Phis_b[k], b[k], x_cores[k], optimize=True)
 
                 # ... and norms
                 norm = np.linalg.norm(Phis[k + 1])
                 norm = norm if norm > 0 else 1.0
                 normA[k] = norm
-                Phis[k + 1] = Phis[k + 1] / norm
+                Phis[k + 1] /= norm
                 norm = np.linalg.norm(Phis_b[k + 1])
                 norm = norm if norm > 0 else 1.0
                 normb[k] = norm
-                Phis_b[k + 1] = Phis_b[k + 1] / norm
+                Phis_b[k + 1] /= norm
 
                 # norm correction
                 nrmsc = nrmsc * normb[k] / (normA[k] * normx[k])
 
                 # next phiz
-                Phiz[k + 1] = compute_phi_fwd_A(Phiz[k], z_cores[k],
-                                                 A[k], x_cores[k]) / normA[k]
-                Phiz_b[k + 1] = compute_phi_fwd_rhs(
-                    Phiz_b[k], b[k], z_cores[k]) / normb[k]
+                Phiz[k + 1] = np.einsum('lsr,lML,sMNS,rNR->LSR', Phiz[k], z_cores[k], A[k], x_cores[k], optimize=True) / normA[k]
+                Phiz_b[k + 1] = np.einsum('br,bnB,rnR->BR', Phiz_b[k], b[k], z_cores[k], optimize=True) / normb[k]
             else:
                 x_cores[k] = np.reshape(u @ v.T, (rx[k], N[k], rx[k + 1]))
 
@@ -231,5 +238,6 @@ def tt_amen(A, b, nswp=5, x0=None, eps=1e-10, kickrank=2, reg_lambda=1e-12, verb
         print('\tResidual ', max_res)
         print('\tNumber of sweeps', swp)
         print('\tTime: ', time.time() - t0)
+        print('\tTime per sweep: ', (time.time() - t0)/swp)
 
     return x_cores, max_res

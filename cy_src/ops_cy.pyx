@@ -7,19 +7,20 @@ cdef extern from "numpy/arrayobject.h":
 
 import numpy as np
 cimport numpy as cnp  # This allows Cython to understand NumPy's C-API
+import scipy as scip
 
 cpdef cnp.ndarray[double, ndim=2] compute_phi_fwd_rhs(cnp.ndarray[double, ndim=2] Phi_now,
                                                      cnp.ndarray[double, ndim=3] core_rhs,
                                                      cnp.ndarray[double, ndim=3] core):
 
-    cdef cnp.ndarray[double, ndim=2] Phi_next = np.einsum('br,bnB,rnR->BR', Phi_now, core_rhs, core)
+    cdef cnp.ndarray[double, ndim=2] Phi_next = np.einsum('br,bnB,rnR->BR', Phi_now, core_rhs, core, optimize=True)
     return Phi_next
 
 cpdef cnp.ndarray[double, ndim=2] compute_phi_bck_rhs(cnp.ndarray[double, ndim=2] Phi_now,
                                                      cnp.ndarray[double, ndim=3] core_b,
                                                      cnp.ndarray[double, ndim=3] core):
 
-    cdef cnp.ndarray[double, ndim=2] Phi = np.einsum('BR,bnB,rnR->br', Phi_now, core_b, core)
+    cdef cnp.ndarray[double, ndim=2] Phi = np.einsum('BR,bnB,rnR->br', Phi_now, core_b, core, optimize=True)
 
     return Phi
 
@@ -28,7 +29,7 @@ cpdef cnp.ndarray[double, ndim=3] compute_phi_fwd_A(cnp.ndarray[double, ndim=3] 
                                                    cnp.ndarray[double, ndim=4] core_A,
                                                    cnp.ndarray[double, ndim=3] core_right):
 
-    cdef cnp.ndarray[double, ndim=3] Phi_next = np.einsum('lsr,lML,sMNS,rNR->LSR', Phi_now, core_left, core_A, core_right)
+    cdef cnp.ndarray[double, ndim=3] Phi_next = np.einsum('lsr,lML,sMNS,rNR->LSR', Phi_now, core_left, core_A, core_right, optimize=True)
 
     return Phi_next
 
@@ -37,7 +38,7 @@ cpdef cnp.ndarray[double, ndim=3] compute_phi_bck_A(cnp.ndarray[double, ndim=3] 
                                                    cnp.ndarray[double, ndim=4] core_A,
                                                    cnp.ndarray[double, ndim=3] core_right):
 
-    cdef cnp.ndarray[double, ndim=3] Phi = np.einsum('LSR,lML,sMNS,rNR->lsr', Phi_now, core_left, core_A, core_right)
+    cdef cnp.ndarray[double, ndim=3] Phi = np.einsum('LSR,lML,sMNS,rNR->lsr', Phi_now, core_left, core_A, core_right, optimize=True)
 
     return Phi
 
@@ -46,7 +47,7 @@ cpdef cnp.ndarray[double, ndim=3] local_product(cnp.ndarray[double, ndim=3] Phi_
                                                cnp.ndarray[double, ndim=4] coreA,
                                                cnp.ndarray[double, ndim=3] core):
 
-    cdef cnp.ndarray[double, ndim=3] w = np.einsum('lsr,smnS,LSR,rnR->lmL', Phi_left, coreA, Phi_right, core)
+    cdef cnp.ndarray[double, ndim=3] w = np.einsum('lsr,smnS,LSR,rnR->lmL', Phi_left, coreA, Phi_right, core, optimize=True)
 
     return w
 
@@ -123,18 +124,19 @@ cpdef tuple solution_truncation(cnp.ndarray[double, ndim=2] solution_now,
     cdef cnp.ndarray[double, ndim=2] S
     cdef cnp.ndarray[double, ndim=2] V
     cdef cnp.ndarray[double, ndim=3] local_core
+    cdef cnp.ndarray[double, ndim=2] trunc_solution
     cdef int r = 0
     cdef int iter
     cdef double res
 
-    U, s, V = np.linalg.svd(solution_now, full_matrices=False)
+    U, s, V = scip.linalg.svd(solution_now, full_matrices=False)
     iter = U.shape[1]
     for r in range(iter - 1, 0, -1):
         S = np.diag(s[:r])
-        solution = U[:, :r] @ S @ V[:r, :]
-        solution = np.reshape(solution, (rank, current_N, rankp1))
-        local_core = local_product(next_phi, current_phi, current_matrix_core, solution)
-        res = np.linalg.norm(local_core.reshape(-1, 1) - rhs)
+        trunc_solution = U[:, :r] @ S @ V[:r, :]
+        solution = trunc_solution.reshape((rank, current_N, rankp1))
+        local_core = np.einsum('lsr,smnS,LSR,rnR->lmL', current_phi, current_matrix_core, next_phi, solution, optimize=True)
+        res = np.linalg.norm(local_core.reshape(rhs.shape[0], rhs.shape[1]) - rhs)
 
         if res > tol:
             break

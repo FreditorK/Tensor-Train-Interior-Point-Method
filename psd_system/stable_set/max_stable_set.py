@@ -2,21 +2,19 @@ import copy
 import sys
 import os
 
-from cvxpy.interface import shape
-
 sys.path.append(os.getcwd() + '/../../')
 
 from dataclasses import dataclass
 from src.tt_ops import *
-from psd_system.graph_plotting import *
 from src.tt_ipm import tt_ipm, _tt_get_block
 import time
 
 
 @dataclass
 class Config:
-    seed = 4
-    ranks = [3]
+    seed = 5
+    max_rank = 3
+    dim= 2
 
 
 def tt_tr_op(dim):
@@ -37,9 +35,7 @@ if __name__ == "__main__":
     print("Creating Problem...")
 
     np.random.seed(Config.seed)
-    graph = tt_random_graph(Config.ranks)
-    G = tt_scale(0.5, tt_add(graph, tt_one_matrix(len(Config.ranks) + 1)))
-    G = tt_rank_reduce(G)
+    G = tt_random_graph(Config.dim, Config.max_rank)
     print(np.round(tt_matrix_to_matrix(G), decimals=2))
     n = len(G)
 
@@ -60,22 +56,15 @@ if __name__ == "__main__":
     L_tt_adjoint = tt_rank_reduce(tt_add(As_tt_op_adjoint, tr_tt_op_adjoint))
     bias_tt = tt_rank_reduce(tt_add(bias_tt, tr_bias_tt))
 
-    Q_ineq_op = tt_mask_to_linear_op(tt_one_matrix(n))
-    Q_ineq_op_adjoint = tt_mask_to_linear_op_adjoint(tt_one_matrix(n))
-    Q_ineq_bias = tt_scale(-1, tt_one_matrix(n))
-
     print("...Problem created!")
     print(f"Objective Ranks: {tt_ranks(J_tt)}")
     print(f"Constraint Ranks: \n \t As {tt_ranks(L_tt)}, bias {tt_ranks(bias_tt)}")
     t0 = time.time()
-    X_tt, Y_tt, _, Z_tt = tt_ipm(
+    X_tt, Y_tt, T_tt, Z_tt = tt_ipm(
         J_tt,
         L_tt,
         L_tt_adjoint,
         bias_tt,
-        Q_ineq_op,
-        Q_ineq_op_adjoint,
-        Q_ineq_bias,
         verbose=True
     )
     t1 = time.time()

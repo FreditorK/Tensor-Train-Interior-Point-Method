@@ -6,7 +6,6 @@ sys.path.append(os.getcwd() + '/../../')
 
 from dataclasses import dataclass
 from src.tt_ops import *
-from psd_system.graph_plotting import *
 from src.tt_ipm import tt_ipm, _tt_get_block
 
 
@@ -14,13 +13,15 @@ from src.tt_ipm import tt_ipm, _tt_get_block
 @dataclass
 class Config:
     seed = 9 #999: Very low rank solution, 9: Low rank solution, 3: Regular solution
-    ranks = [3]
+    max_rank = 3
+    dim = 2
 
 
 if __name__ == "__main__":
     np.random.seed(Config.seed)
     print("Creating Problem...")
-    G_tt = tt_rank_reduce(tt_random_graph(Config.ranks)) # [np.array([[-1, 1], [1, -1]]).reshape(1, 2, 2, 1)] + [np.ones((1, 2, 2, 1)) for _ in Config.ranks]#
+    G_tt = tt_rank_reduce(tt_random_graph(Config.dim, Config.max_rank))
+    #G_tt = tt_sub(tt_scale(2, G_tt), tt_one_matrix(Config.dim))
     print(np.round(tt_matrix_to_matrix(G_tt), decimals=2))
     diag_tt_op = tt_mask_to_linear_op(tt_identity(len(G_tt)))
     diag_tt_op_adjoint = tt_mask_to_linear_op_adjoint(tt_identity(len(G_tt)))

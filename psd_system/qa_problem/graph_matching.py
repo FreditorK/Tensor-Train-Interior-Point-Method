@@ -9,15 +9,9 @@ sys.path.append(os.getcwd() + '/../../')
 from dataclasses import dataclass
 from src.tt_ops import *
 from src.tt_ops import _tt_core_collapse, tt_random_gaussian
-from psd_system.graph_plotting import *
 from src.tt_ipm import tt_ipm, _tt_get_block
 import time
 
-
-@dataclass
-class Config:
-    seed = 4
-    ranks = [3]
 
 # Constraint 4 -----------------------------------------------------------------
 
@@ -329,6 +323,11 @@ def tt_padding_op_adjoint(dim):
 
 # ------------------------------------------------------------------------------
 
+@dataclass
+class Config:
+    seed = 4
+    max_rank = 3
+
 if __name__ == "__main__":
     print("Creating Problem...")
     """
@@ -360,7 +359,8 @@ if __name__ == "__main__":
         [ P  P  | P  P  | P | P P P]
         [ P  P  | P  P  | P | P P P]
     """
-
+    np.set_printoptions(linewidth=600, threshold=np.inf, precision=4, suppress=True)
+    print("Creating Problem...")
     q_op_prefix = np.zeros((1, 4, 2, 2, 1))
     q_op_prefix[0, 0, 0, 0, 0] = 1
     padding_op_prefix = np.zeros((1, 4, 2, 2, 1))
@@ -369,66 +369,113 @@ if __name__ == "__main__":
     q_bias_prefix[0, 0, 0, 0] = 1
     padding_bias_prefix = np.zeros((1, 2, 2, 1))
     padding_bias_prefix[0, 1, 1, 0] = 1
+
+    n = 2
+
     np.random.seed(Config.seed)
-    #graph_A = tt_random_graph(Config.ranks)
-    #G_A = tt_scale(0.5, tt_add(graph_A, tt_one_matrix(len(Config.ranks) + 1)))
-    #G_A = tt_rank_reduce(G_A)
+    G_A = tt_random_graph(n, Config.max_rank)
+    print(np.round(tt_matrix_to_matrix(G_A), decimals=2))
+    print(f"TT-Ranks: {tt_ranks(G_A)}")
 
-    #print(np.round(tt_matrix_to_matrix(G_A), decimals=2))
+    G_B = tt_random_graph(n, Config.max_rank)
+    print(np.round(tt_matrix_to_matrix(G_B), decimals=2))
+    print(f"TT-Ranks: {tt_ranks(G_B)}")
 
-    #graph_B = tt_random_graph(Config.ranks)
-    #G_B = tt_scale(0.5, tt_add(graph_B, tt_one_matrix(len(Config.ranks) + 1)))
-    #G_B = tt_rank_reduce(G_B)
-    #print(np.round(tt_matrix_to_matrix(G_B), decimals=2))
+    C_tt = tt_rank_reduce([q_bias_prefix] + tt_kron(G_B, G_A))
+    n_sq = len(C_tt) - 1
 
-    test_graph = tt_random_gaussian([3, 3, 3], shape=(2, 2)) #tt_random_graph([3])
-    #test_graph = tt_scale(0.5, tt_add(test_graph, tt_one_matrix(len(Config.ranks) + 1)))
-    G = [np.ones((1, 2, 2, 1))] + tt_rank_reduce(test_graph)
-    np.set_printoptions(linewidth=600, threshold=np.inf, precision=4, suppress=True)
-    print(np.round(tt_matrix_to_matrix(G), decimals=2))
 
-    n = 2 # 2^1
-    n_sq = 4
     # Equality Operator
     # IV
-    #partial_tr_op = [q_op_prefix] + tt_partial_trace_op(n, n_sq)
-    #partial_tr_op_adjoint = [q_op_prefix] + tt_partial_trace_op_adj(n, n_sq)
-    #partial_tr_op_bias = tt_zero_matrix(n_sq+1)
-    # test_result = tt_mat(tt_linear_op(padding_op_adjoint, G), shape=(2, 2))
-    # print()
-    # print(np.round(tt_matrix_to_matrix(test_result), decimals=2))
+    partial_tr_op = [q_op_prefix] + tt_partial_trace_op(n, n_sq)
+    partial_tr_op_adj = [q_op_prefix] + tt_partial_trace_op_adj(n, n_sq)
+    partial_tr_op_bias = tt_zero_matrix(n_sq+1)
+
+    L_op_tt = partial_tr_op
+    L_op_tt_adj = partial_tr_op_adj
+    eq_bias_tt = partial_tr_op_bias
     # ---
     # V
-    #partial_tr_J_op = [q_op_prefix] + tt_partial_J_trace_op(n, n_sq)
-    #partial_tr_J_op_adjoint = [q_op_prefix] + tt_partial_J_trace_op_adj(n, n_sq)
-    #partial_tr_J_op_bias = [q_bias_prefix] + tt_add(
-    #    [np.array([[0.0, 1.0], [1.0, 0.0]]).reshape(1, 2, 2, 1)] + tt_one_matrix(n_sq-n-1) + [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)],
-    #    [np.array([[0.0, 1.0], [1.0, 0.0]]).reshape(1, 2, 2, 1)] + tt_one_matrix(n_sq - n - 1) + [np.array([[0.0, 0.0], [0.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(n)]
-    #)
+    partial_tr_J_op = [q_op_prefix] + tt_partial_J_trace_op(n, n_sq)
+    partial_tr_J_op_adj = [q_op_prefix] + tt_partial_J_trace_op_adj(n, n_sq)
+    partial_tr_J_op_bias = [q_bias_prefix] + tt_add(
+        [np.array([[0.0, 1.0], [1.0, 0.0]]).reshape(1, 2, 2, 1)] + tt_one_matrix(n_sq-n-1) + [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)],
+        [np.array([[0.0, 1.0], [1.0, 0.0]]).reshape(1, 2, 2, 1)] + tt_one_matrix(n_sq - n - 1) + [np.array([[0.0, 0.0], [0.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(n)]
+    )
+
+    #L_op_tt = tt_rank_reduce(tt_add(L_op_tt, partial_tr_J_op))
+    #L_op_tt_adj = tt_rank_reduce(tt_add(L_op_tt_adj, partial_tr_J_op_adj))
+    #eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, partial_tr_J_op_bias))
     # ---
     # VI
-    #diag_block_sum_op = [q_op_prefix] + tt_diag_block_sum_linear_op(n, n_sq)
-    #diag_block_sum_op_adjoint = [q_op_prefix] + tt_diag_block_sum_linear_op_adjoint(n, n_sq)
-    #diag_block_sum_op_bias = [q_bias_prefix] + [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n_sq-n)] + tt_identity(n)
+    diag_block_sum_op = [q_op_prefix] + tt_diag_block_sum_linear_op(n, n_sq)
+    diag_block_sum_op_adj = [q_op_prefix] + tt_diag_block_sum_linear_op_adj(n, n_sq)
+    diag_block_sum_op_bias = [q_bias_prefix] + [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n_sq-n)] + tt_identity(n)
+
+    L_op_tt = tt_rank_reduce(tt_add(L_op_tt, diag_block_sum_op))
+    L_op_tt_adj = tt_rank_reduce(tt_add(L_op_tt_adj, diag_block_sum_op_adj))
+    eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, diag_block_sum_op_bias))
     # ---
     # VII
-    #Q_m_P_op = tt_Q_m_P_op(n_sq)
-    #Q_m_P_op_adjoint = tt_Q_m_P_op_adjoint(n_sq)
-    #Q_m_P_op_bias = tt_zero_matrix(n_sq+1)
+    # FIXME: AMeN error moderately high
+    Q_m_P_op = tt_Q_m_P_op(n_sq)
+    Q_m_P_op_adj = tt_Q_m_P_op_adj(n_sq)
+    Q_m_P_op_bias = tt_zero_matrix(n_sq+1)
+
+    #L_op_tt = tt_rank_reduce(tt_add(L_op_tt, Q_m_P_op))
+    #L_op_tt_adj = tt_rank_reduce(tt_add(L_op_tt_adj, Q_m_P_op_adj))
+    #eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, Q_m_P_op_bias))
     # ---
     # VIII
-    #DS_op = tt_DS_op(n, n_sq)
-    #DS_op_adjoint = tt_DS_op_adj(n, n_sq)
-    #DS_op_bias = tt_DS_bias(n, n_sq)
+    # FIXME: AMeN error very high
+    DS_op = tt_DS_op(n, n_sq)
+    DS_op_adj = tt_DS_op_adj(n, n_sq)
+    DS_op_bias = tt_DS_bias(n, n_sq)
+
+    #L_op_tt = tt_rank_reduce(tt_add(L_op_tt, DS_op))
+    #L_op_tt_adj = tt_rank_reduce(tt_add(L_op_tt_adj, DS_op_adj))
+    #eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, DS_op_bias))
     # ---
     # IX
-    #padding_op = tt_padding_op(n_sq+1)
-    #padding_op_adjoint = tt_padding_op_adjoint(n_sq+1)
-    #padding_op_bias = [padding_bias_prefix] + tt_identity(n_sq)
+    padding_op = tt_padding_op(n_sq+1)
+    padding_op_adj = tt_padding_op_adjoint(n_sq + 1)
+    padding_op_bias = [padding_bias_prefix] + tt_identity(n_sq)
+
+    #L_op_tt = tt_rank_reduce(tt_add(L_op_tt, padding_op))
+    #L_op_tt_adj = tt_rank_reduce(tt_add(L_op_tt_adj, padding_op_adj))
+    #eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, padding_op_bias))
     # ---
     # Inequality Operator
     # X
-    #Q_ineq_op = [q_op_prefix] + tt_mask_to_linear_op(tt_one_matrix(n_sq))
-    #Q_ineq_op_adjoint = [q_op_prefix] + tt_mask_to_linear_op_adjoint(tt_one_matrix(n_sq))
-    #Q_ineq_bias = tt_zero_matrix(n_sq+1)
+    Q_ineq_op = [q_op_prefix] + tt_mask_to_linear_op(tt_one_matrix(n_sq))
+    Q_ineq_op_adj = [q_op_prefix] + tt_mask_to_linear_op_adjoint(tt_one_matrix(n_sq))
+    Q_ineq_bias = tt_zero_matrix(n_sq+1)
     # ---
+    print("...Problem created!")
+    print(f"Objective TT-ranks: {tt_ranks(C_tt)}")
+    print(f"Eq Op-rank: {tt_ranks(L_op_tt)}")
+    print(f"Eq Op-adjoint-rank: {tt_ranks(L_op_tt)}")
+    print(f"Eq Bias-rank: {tt_ranks(eq_bias_tt)}")
+    print("-----------------------------------")
+    print(f"Ineq Op-rank: {tt_ranks(Q_ineq_op)}")
+    print(f"Ineq Op-adjoint-rank: {tt_ranks(Q_ineq_op_adj)}")
+    print(f"Ineq Bias-rank: {tt_ranks(Q_ineq_bias)}")
+    #print(np.round(tt_matrix_to_matrix(tt_mat(tt_linear_op(L_op_tt, tt_random_gaussian([3, 3, 3, 3], shape=(2, 2))), shape=(2, 2))), decimals=2))
+    #print(np.round(tt_matrix_to_matrix(eq_bias_tt), decimals=2))
+    t0 = time.time()
+    X_tt, Y_tt, T_tt, Z_tt = tt_ipm(
+        C_tt,
+        L_op_tt,
+        L_op_tt_adj,
+        eq_bias_tt,
+        max_iter=2,
+        verbose=True
+    )
+    t1 = time.time()
+    print("Solution: ")
+    #print(np.round(tt_matrix_to_matrix(X_tt), decimals=2))
+    print(f"Objective value: {tt_inner_prod(C_tt, X_tt)}")
+    print("Complementary Slackness: ", tt_inner_prod(X_tt, Z_tt))
+    print(f"Ranks X_tt: {tt_ranks(X_tt)}, Y_tt: {tt_ranks(Y_tt)}, \n "
+          f"     T_tt: {tt_ranks(T_tt)}, Z_tt: {tt_ranks(Z_tt)} ")
+    print(f"Time: {t1 - t0}s")

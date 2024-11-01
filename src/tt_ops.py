@@ -171,7 +171,7 @@ def tt_rank_reduce(train_tt: List[np.array], err_bound=1e-18):
         idx_shape = tt_core.shape
         next_idx_shape = train_tt[idx + 1].shape
         k = len(idx_shape) - 1
-        U, S, V_T = np.linalg.svd(train_tt[idx].reshape(rank * np.prod(idx_shape[1:k], dtype=int), -1))
+        U, S, V_T = scip.linalg.svd(train_tt[idx].reshape(rank * np.prod(idx_shape[1:k], dtype=int), -1), full_matrices=False)
         non_sing_eig_idxs = np.asarray(S >= min(np.max(S), err_bound)).nonzero()
         S = S[non_sing_eig_idxs]
         next_rank = len(S)
@@ -192,7 +192,7 @@ def tt_rank_retraction(train_tt: List[np.array], upper_ranks: List[int]):
     for idx, upper_rank in enumerate(upper_ranks):
         idx_shape = train_tt[idx].shape
         next_idx_shape = train_tt[idx + 1].shape
-        U, S, V_T = np.linalg.svd(train_tt[idx].reshape(rank * np.prod(idx_shape[1:-1], dtype=int), -1))
+        U, S, V_T = scip.linalg.svd(train_tt[idx].reshape(rank * np.prod(idx_shape[1:-1], dtype=int), -1), full_matrices=False)
         abs_S = np.abs(S)
         next_rank = min(upper_rank, len(abs_S > 0))
         non_sing_eig_idxs = np.argpartition(abs_S, -next_rank)[-next_rank:]
@@ -424,6 +424,10 @@ def tt_op_op_compose(op_tt_1, op_tt_2):
     return op_tt
 
 
+def tt_kron(train_tt_1, train_tt_2):
+    return train_tt_1 + train_tt_2
+
+
 def tt_gram(matrix_tt):
     """ Constructs the gram tensor for a linear op"""
     matrix_tt_t = tt_transpose(matrix_tt)
@@ -548,19 +552,31 @@ def tt_binary_round(train_tt, num_iter=30, tol=1e-10):
     return train_tt
 
 
-def tt_random_graph(target_ranks):
-    matrix = tt_random_gaussian([int(np.ceil(r / 2)) for r in target_ranks], shape=(2, 2))
-    matrix_t = tt_transpose(matrix)
-    symmetric_matrix = tt_rank_reduce(tt_add(matrix, matrix_t))
-    mask = tt_sub(tt_one_matrix(len(symmetric_matrix)), tt_identity(len(symmetric_matrix)))
-    symmetric_matrix = sum([break_core_bond(core) for core in symmetric_matrix], [])
-    symmetric_matrix = tt_walsh_op(symmetric_matrix)
-    symmetric_matrix = tt_normalise(symmetric_matrix)
-    symmetric_matrix = tt_binary_round(symmetric_matrix)
-    symmetric_matrix = [core_bond(c_1, c_2) for c_1, c_2 in zip(symmetric_matrix[:-1:2], symmetric_matrix[1::2])]
-    symmetric_matrix = tt_hadamard(symmetric_matrix, mask)
-    symmetric_matrix = tt_sub(symmetric_matrix, tt_identity(len(symmetric_matrix)))
-    return tt_rank_reduce(symmetric_matrix, err_bound=0)
+def tt_random_graph(dim, max_rank, max_iter=100):
+    max_rank = max_rank
+    perm_cores = [
+        np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1),
+        np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1),
+        np.array([[0.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1),
+        np.array([[0.0, 0.0], [0.0, 1.0]]).reshape(1, 2, 2, 1)
+    ]
+    unique_rows = set()
+    graph = tt_zero_matrix(dim)
+    for _ in range(max_iter):
+        row = np.random.randint(0, 3, dim)
+        if (1 in row) or (2 in row):
+            if tuple(row) not in unique_rows:
+                cores = [perm_cores[i] for i in row]
+                cores = tt_add(cores, tt_transpose(cores))
+                graph = tt_add(graph, cores)
+                graph = tt_rank_reduce(graph)
+            unique_rows.add(tuple(row))
+            row_t = np.where(row == 1, 2, np.where(row == 2, 1, row))
+            unique_rows.add(tuple(row_t))
+        if np.max(tt_ranks(graph)) >= max_rank:
+            break
+
+    return graph
 
 
 def tt_matrix_to_matrix(matrix_tt):

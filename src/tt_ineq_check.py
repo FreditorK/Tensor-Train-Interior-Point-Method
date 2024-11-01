@@ -8,7 +8,6 @@ import scipy as scip
 import time
 from src.tt_ops import *
 from src.tt_eig import tt_min_eig, tt_max_eig
-from src.tt_amen import compute_phi_bcks_A, compute_phi_fwd_A, solution_truncation
 from cy_src.ops_cy import *
 
 
