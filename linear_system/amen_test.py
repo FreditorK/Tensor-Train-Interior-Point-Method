@@ -13,7 +13,8 @@ s_matrix_tt = tt_random_gaussian([4, 4], shape=(2, 2))
 s_matrix_tt = tt_rank_reduce(tt_add(s_matrix_tt, tt_transpose(s_matrix_tt)), err_bound=0)
 
 b_tt = tt_random_gaussian([4, 4], shape=(2,))
-
+print([c.shape for c in s_matrix_tt])
+print([c.shape for c in b_tt])
 sol, res = tt_amen(s_matrix_tt, b_tt, kickrank=3)
 print(res)
 res_tt = tt_sub(tt_matrix_vec_mul(s_matrix_tt, sol), b_tt)

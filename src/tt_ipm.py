@@ -179,7 +179,7 @@ def _tt_ipm_newton_step(
         tol,
         active_ineq
     )
-    Delta_tt, res = tt_amen(lhs_matrix_tt, rhs_vec_tt, reg_lambda=1e-12, verbose=verbose, nswp=22)
+    Delta_tt, res = tt_amen(lhs_matrix_tt, rhs_vec_tt, reg_lambda=1e-12, verbose=verbose)
     Delta_tt = tt_mat(Delta_tt, shape=(2, 2))
     Delta_X_tt = tt_rank_reduce(_tt_get_block(0, 0, Delta_tt), err_bound=tol)
     Delta_Y_tt = tt_rank_reduce(_tt_get_block(0, 1, Delta_tt), err_bound=tol)

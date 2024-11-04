@@ -14,9 +14,8 @@ from psd_system.stable_set.max_stable_set import Config
 if __name__ == "__main__":
     np.random.seed(Config.seed)
     t0 = time.time()
-    G = tt_random_graph(Config.ranks)
+    G = tt_random_graph(Config.dim, Config.max_rank)
     adj_matrix = tt_matrix_to_matrix(G)
-    adj_matrix = np.round(0.5*(adj_matrix + 1), decimals=1)
     print(adj_matrix)
 
     t1 = time.time()

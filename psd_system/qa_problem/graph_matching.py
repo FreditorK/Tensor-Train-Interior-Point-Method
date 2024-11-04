@@ -403,9 +403,9 @@ if __name__ == "__main__":
         [np.array([[0.0, 1.0], [1.0, 0.0]]).reshape(1, 2, 2, 1)] + tt_one_matrix(n_sq - n - 1) + [np.array([[0.0, 0.0], [0.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(n)]
     )
 
-    #L_op_tt = tt_rank_reduce(tt_add(L_op_tt, partial_tr_J_op))
-    #L_op_tt_adj = tt_rank_reduce(tt_add(L_op_tt_adj, partial_tr_J_op_adj))
-    #eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, partial_tr_J_op_bias))
+    L_op_tt = tt_rank_reduce(tt_add(L_op_tt, partial_tr_J_op))
+    L_op_tt_adj = tt_rank_reduce(tt_add(L_op_tt_adj, partial_tr_J_op_adj))
+    eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, partial_tr_J_op_bias))
     # ---
     # VI
     diag_block_sum_op = [q_op_prefix] + tt_diag_block_sum_linear_op(n, n_sq)

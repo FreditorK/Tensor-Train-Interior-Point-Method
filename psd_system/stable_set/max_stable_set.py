@@ -10,13 +10,6 @@ from src.tt_ipm import tt_ipm, _tt_get_block
 import time
 
 
-@dataclass
-class Config:
-    seed = 5
-    max_rank = 3
-    dim= 2
-
-
 def tt_tr_op(dim):
     tr_tt_op = [np.zeros((1, 4, 2, 2, 1)) for _ in range(dim)]
     for c in tr_tt_op:
@@ -29,6 +22,12 @@ def tt_tr_op_adjoint(dim):
         c[:, 0, :, :, 0] = np.eye(2)
         c[:, 3, :, :, 0] = np.eye(2)
     return tr_tt_op
+
+@dataclass
+class Config:
+    seed = 5
+    max_rank = 3
+    dim= 2
 
 
 if __name__ == "__main__":
@@ -73,4 +72,4 @@ if __name__ == "__main__":
     print(f"Problem solved in {t1 - t0:.3f}s")
     print(f"Objective value: {tt_inner_prod(J_tt, X_tt)}")
     print("Complementary Slackness: ", tt_inner_prod(X_tt, Z_tt))
-    print(f"Ranks- X_tt {tt_ranks(X_tt)} Y_tt {tt_ranks(Y_tt)} Z_tt {tt_ranks(Z_tt)} ")
+    print(f"Ranks - X_tt {tt_ranks(X_tt)} Y_tt {tt_ranks(Y_tt)} Z_tt {tt_ranks(Z_tt)} ")
