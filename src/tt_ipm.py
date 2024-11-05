@@ -11,6 +11,35 @@ from src.tt_amen import tt_amen
 from src.tt_eig import tt_min_eig
 from src.tt_ineq_check import tt_is_geq, tt_is_geq_, tt_is_leq
 
+
+IDX_00 = [
+    np.array([[1, 0, 0, 0],
+              [0, 0, 0, 0],
+              [0, 0, 0, 0],
+              [0, 0, 0, 0]]).reshape(1, 4, 4, 1)
+]
+
+IDX_11 = [
+    np.array([[0, 0, 0, 0],
+              [0, 1, 0, 0],
+              [0, 0, 0, 0],
+              [0, 0, 0, 0]]).reshape(1, 4, 4, 1)
+]
+
+IDX_21 = [
+    np.array([[0, 0, 0, 0],
+              [0, 0, 0, 0],
+              [0, 1, 0, 0],
+              [0, 0, 0, 0]]).reshape(1, 4, 4, 1)
+]
+
+IDX_31 = [
+    np.array([[0, 0, 0, 0],
+              [0, 0, 0, 0],
+              [0, 0, 0, 0],
+              [0, 1, 0, 0]]).reshape(1, 4, 4, 1)
+]
+
 IDX_01 = [
     np.array([[0, 1, 0, 0],
               [0, 0, 0, 0],
@@ -116,7 +145,7 @@ def tt_infeasible_newton_system_lhs(
         tol,
         active_ineq
 ):
-    Z_op_tt = IDX_30 + tt_op_to_mat(tt_add(tt_op_left_from_tt_matrix(Z_tt), tt_op_right_from_tt_matrix(Z_tt)))
+    Z_op_tt = IDX_31 + tt_op_to_mat(tt_add(tt_op_left_from_tt_matrix(Z_tt), tt_op_right_from_tt_matrix(Z_tt)))
     X_op_tt = IDX_33 + tt_op_to_mat(tt_add(tt_op_right_from_tt_matrix(X_tt), tt_op_left_from_tt_matrix(X_tt)))
     newton_system = tt_add(lhs_skeleton, Z_op_tt)
     newton_system = tt_add(newton_system, X_op_tt)
@@ -126,7 +155,10 @@ def tt_infeasible_newton_system_lhs(
         T_op_tt = tt_scale(-1, tt_mask_to_linear_op(T_tt))
         T_comp_linear_op_tt_ineq = tt_op_to_mat(tt_op_op_compose(T_op_tt, lin_op_tt_ineq))
         newton_system = tt_add(newton_system, IDX_22 + ineq_res_op_tt)
-        newton_system = tt_add(newton_system, IDX_20 + T_comp_linear_op_tt_ineq)
+        newton_system = tt_add(newton_system, IDX_21 + T_comp_linear_op_tt_ineq)
+    else:
+        # For better conditioning
+        newton_system = tt_add(newton_system, IDX_22 + tt_op_to_mat(tt_op_right_from_tt_matrix(tt_identity(len(X_tt)))))
     return tt_rank_reduce(newton_system, err_bound=(1e-2)*tol)
 
 
@@ -179,10 +211,10 @@ def _tt_ipm_newton_step(
         tol,
         active_ineq
     )
-    Delta_tt, res = tt_amen(lhs_matrix_tt, rhs_vec_tt, reg_lambda=1e-12, verbose=verbose)
+    Delta_tt, res = tt_amen(lhs_matrix_tt, rhs_vec_tt, verbose=verbose)
     Delta_tt = tt_mat(Delta_tt, shape=(2, 2))
-    Delta_X_tt = tt_rank_reduce(_tt_get_block(0, 0, Delta_tt), err_bound=tol)
-    Delta_Y_tt = tt_rank_reduce(_tt_get_block(0, 1, Delta_tt), err_bound=tol)
+    Delta_Y_tt = tt_rank_reduce(_tt_get_block(0, 0, Delta_tt), err_bound=tol)
+    Delta_X_tt = tt_rank_reduce(_tt_get_block(0, 1, Delta_tt), err_bound=tol)
     Delta_T_tt = tt_rank_reduce(_tt_get_block(1, 0, Delta_tt), err_bound=tol) if active_ineq else None
     Delta_Z_tt = tt_rank_reduce(_tt_get_block(1, 1, Delta_tt), err_bound=tol)
     x_step_size, z_step_size = _tt_line_search(X_tt, T_tt, Z_tt, Delta_X_tt, Delta_T_tt, Delta_Z_tt, lin_op_tt_ineq, bias_tt_ineq, active_ineq)
@@ -274,9 +306,8 @@ def tt_ipm(
 ):
     dim = len(obj_tt)
     active_ineq = lin_op_tt_ineq is not None and lin_op_tt_ineq_adj is not None and bias_tt_ineq is not None
-    op_tt = tt_scale(-1, lin_op_tt)
-    op_tt_adjoint = IDX_01 + tt_op_to_mat(tt_scale(-1, lin_op_tt_adj))
-    op_tt = IDX_10 + tt_op_to_mat(op_tt)
+    op_tt_adjoint = IDX_00 + tt_op_to_mat(tt_scale(-1, lin_op_tt_adj))
+    op_tt = IDX_11 + tt_op_to_mat(tt_scale(-1, lin_op_tt))
     I_mat_tt = tt_op_to_mat(tt_op_right_from_tt_matrix(tt_identity(dim)))
     I_op_tt = IDX_03 + I_mat_tt
     lhs_skeleton = tt_add(op_tt, op_tt_adjoint)

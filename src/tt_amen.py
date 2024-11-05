@@ -10,10 +10,10 @@ from src.tt_ops import *
 
 def _local_product(Phi_right, Phi_left, coreA, core):
 
-    return np.einsum('lsr,smnS,LSR,rnR->lmL', Phi_left, coreA, Phi_right, core)
+    return np.einsum('lsr,smnS,LSR,rnR->lmL', Phi_left, coreA, Phi_right, core, optimize=True)
 
 
-def tt_amen(A, b, nswp=50, x0=None, eps=1e-10, kickrank=3, reg_lambda=1e-12, verbose=False):
+def tt_amen(A, b, nswp=50, x0=None, eps=1e-10, kickrank=2, reg_lambda=1e-12, verbose=False):
 
     dtype = A[0].dtype
     damp = 2
@@ -29,8 +29,7 @@ def tt_amen(A, b, nswp=50, x0=None, eps=1e-10, kickrank=3, reg_lambda=1e-12, ver
     N = [c.shape[1] for c in x_cores]
 
     # z cores
-    z_cores = tt_random_gaussian((d-1)*[kickrank], shape=x_cores[0].shape[1:-1])
-    z_cores = tt_rl_orthogonalise(z_cores)
+    z_cores = tt_rl_random_orthogonalise(tt_sub(tt_matrix_vec_mul(A, x_cores), b), (d-1)*[kickrank])
     rz = [1] + tt_ranks(z_cores) + [1]
 
     Phiz = [np.ones((1, 1, 1), dtype=dtype)] + [None] * (d-1) + [np.ones((1, 1, 1), dtype=dtype)]  # size is rzk x Rk x rxk
@@ -78,7 +77,7 @@ def tt_amen(A, b, nswp=50, x0=None, eps=1e-10, kickrank=3, reg_lambda=1e-12, ver
             if swp > 0:
                 nrmsc = nrmsc * normA[k-1] * normx[k-1] / normb[k-1]
 
-            core = np.reshape(x_cores[k], [rx[k], N[k]*rx[k+1]]).T
+            core = np.reshape(x_cores[k], (rx[k], N[k]*rx[k+1])).T
             Qmat, Rmat = np.linalg.qr(core)
 
             core_prev = np.einsum('ijk,km->ijm', x_cores[k-1], Rmat.T, optimize=True)
@@ -118,15 +117,13 @@ def tt_amen(A, b, nswp=50, x0=None, eps=1e-10, kickrank=3, reg_lambda=1e-12, ver
 
         # start loop
         max_res = 0
-        max_dx = 0
-        res_new = 0
 
         for k in range(d):
-            previous_solution = np.reshape(x_cores[k], [-1, 1])
+            previous_solution = np.reshape(x_cores[k], (-1, 1))
 
             # assemble rhs
             rhs = np.einsum('br,bmB,BR->rmR',Phis_b[k], b[k] * nrmsc, Phis_b[k+1], optimize=True)
-            rhs = np.reshape(rhs, [-1, 1])
+            rhs = np.reshape(rhs, (-1, 1))
             norm_rhs = np.linalg.norm(rhs)
 
             # residuals
@@ -135,15 +132,15 @@ def tt_amen(A, b, nswp=50, x0=None, eps=1e-10, kickrank=3, reg_lambda=1e-12, ver
             # solve the local system
             # shape is Rp x N x N x r x r
             Bp = np.einsum('smnS,LSR->smnRL', A[k], Phis[k+1], optimize=True)
-            B = np.einsum('lsr,smnRL->lmLrnR', Phis[k], Bp, optimize=True)
-            B = np.reshape(B, [rx[k]*N[k]*rx[k+1], rx[k]*N[k]*rx[k+1]])
+            local_core = np.einsum('lsr,smnRL->lmLrnR', Phis[k], Bp, optimize=True)
+            B = np.reshape(local_core, (rx[k]*N[k]*rx[k+1], rx[k]*N[k]*rx[k+1]))
 
             reg_B = B + reg_lambda * np.identity(B.shape[0])
 
-            solution_now = scip.linalg.solve(reg_B, rhs, check_finite=False)
+            solution_now, res, _, _ = scip.linalg.lstsq(reg_B, rhs, check_finite=False)
 
             res_old = np.linalg.norm(B @ previous_solution-rhs)/norm_rhs
-            res_new = np.linalg.norm(B @ solution_now-rhs)/norm_rhs
+            res_new = res/norm_rhs
 
             max_res = max(max_res, res_old)
 
@@ -151,12 +148,14 @@ def tt_amen(A, b, nswp=50, x0=None, eps=1e-10, kickrank=3, reg_lambda=1e-12, ver
             # truncation
             if k < d-1:
                 u, s, v = scp.linalg.svd(solution_now, full_matrices=False)
+                v = np.diag(s) @ v
                 # search for a rank such that offers small enough residuum
                 r = 0
                 for r in range(u.shape[1]-1, 0, -1):
                     # solution has the same size
-                    solution = u[:, :r] @ np.diag(s[:r]) @ v[:r, :]
-                    res = np.linalg.norm(np.reshape(_local_product(Phis[k+1],Phis[k],A[k],np.reshape(solution,[rx[k],N[k],rx[k+1]])),[-1,1]) - rhs)/norm_rhs
+                    solution = np.reshape(u[:, :r] @ v[:r, :],(rx[k],N[k],rx[k+1]))
+                    res = np.linalg.norm(np.reshape(
+                        np.einsum('lmLrnR,rnR->lmL', local_core, solution, optimize=True),(-1,1)) - rhs)/norm_rhs
 
                     if res > max(real_tol*damp, res_new):
                         break
@@ -165,10 +164,10 @@ def tt_amen(A, b, nswp=50, x0=None, eps=1e-10, kickrank=3, reg_lambda=1e-12, ver
                 u, v = np.linalg.qr(solution_now)
                 r = u.shape[1]
                 s = np.ones(r,  dtype=dtype)
+                v = np.diag(s) @ v
 
             u = u[:, :r]
-            v = np.diag(s[:r]) @ v[:r, :]
-            v = v.T
+            v = v[:r, :].T
 
             if not last:
                 czA = _local_product(
@@ -191,12 +190,12 @@ def tt_amen(A, b, nswp=50, x0=None, eps=1e-10, kickrank=3, reg_lambda=1e-12, ver
 
             if k < d-1:
                 if not last:
-                    left_res = _local_product(Phiz[k+1], Phis[k], A[k], np.reshape(u @ v.T, [rx[k], N[k], rx[k+1]]))
+                    left_res = _local_product(Phiz[k+1], Phis[k], A[k], np.reshape(u @ v.T, (rx[k], N[k], rx[k+1])))
                     left_b = np.einsum('br,bmB,BR->rmR', Phis_b[k], b[k]*nrmsc, Phiz_b[k+1], optimize=True)
                     uk = left_b - left_res  # rx_k x N_k x rz_k+1
-                    u, Rmat = np.linalg.qr(np.concatenate((u, np.reshape(uk, [u.shape[0], -1])), 1))
+                    u, Rmat = np.linalg.qr(np.concatenate((u, np.reshape(uk, (u.shape[0], -1))), 1))
                     r_add = uk.shape[2]
-                    v = np.concatenate((v, np.zeros([rx[k+1], r_add],  dtype=dtype)), 1)
+                    v = np.concatenate((v, np.zeros((rx[k+1], r_add),  dtype=dtype)), 1)
                     v = v @ Rmat.T
 
                 r = u.shape[1]
@@ -212,8 +211,8 @@ def tt_amen(A, b, nswp=50, x0=None, eps=1e-10, kickrank=3, reg_lambda=1e-12, ver
                     norm_now = 1.0
                 normx[k] = normx[k] * norm_now
 
-                x_cores[k] = np.reshape(u, [rx[k], N[k], r])
-                x_cores[k+1] = np.reshape(v, [r, N[k+1], rx[k+2]])
+                x_cores[k] = np.reshape(u, (rx[k], N[k], r))
+                x_cores[k+1] = np.reshape(v, (r, N[k+1], rx[k+2]))
                 rx[k+1] = r
 
                 # next phis with norm correction
