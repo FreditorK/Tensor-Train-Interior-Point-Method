@@ -7,6 +7,7 @@ sys.path.append(os.getcwd() + '/../')
 import time
 from src.tt_ops import tt_ranks, tt_normalise, tt_inner_prod, tt_matrix_vec_mul, tt_rl_orthogonalise
 from cy_src.ops_cy import *
+from opt_einsum import contract as einsum
 
 
 def tt_max_eig(matrix_tt, nswp=5, x0=None, eps=1e-10, verbose=False):
@@ -52,8 +53,8 @@ def _tt_eig(A, min_eig, nswp, x0, eps, verbose):
             real_tol = (eps / np.sqrt(d)) / damp
 
             # solve the local system
-            Bp = np.einsum("smnS,LSR->smnRL", A[k], Phis[k + 1], optimize=True)
-            B = np.einsum("lsr,smnRL->lmLrnR", Phis[k], Bp, optimize=True)
+            Bp = einsum("smnS,LSR->smnRL", A[k], Phis[k + 1], optimize=True)
+            B = einsum("lsr,smnRL->lmLrnR", Phis[k], Bp, optimize=True)
             B = np.reshape(B, [rx[k] * N[k] * rx[k + 1], rx[k] * N[k] * rx[k + 1]])
 
             eig_val, solution_now = scip.sparse.linalg.eigsh(B, k=1, which=min_or_max)
@@ -66,16 +67,20 @@ def _tt_eig(A, min_eig, nswp, x0, eps, verbose):
             solution_now = np.reshape(solution_now, (rx[k] * N[k], rx[k + 1]))
             # truncation
             if k < d - 1:
-                u, v = solution_truncation(solution_now, Phis[k], Phis[k + 1], A[k], rhs, rx[k], N[k], rx[k + 1], max(real_tol * damp, res_new))
-                r = u.shape[1]
+                u, s, v = scip.linalg.svd(solution_now, full_matrices=False)
+                v = np.diag(s) @ v
+                non_sing_eig_idxs = np.asarray(s >= min(np.max(s), eps)).nonzero()[0]
+                u = u[:, non_sing_eig_idxs]
+                v = v[non_sing_eig_idxs, :].T
             else:
                 u, v = np.linalg.qr(solution_now)
-                r = u.shape[1]
                 v = v.T
+
+            r = u.shape[-1]
 
 
             if k < d - 1:
-                v = np.einsum('ji,jkl->ikl', v, x_cores[k + 1], optimize=True)
+                v = einsum('ji,jkl->ikl', v, x_cores[k + 1], optimize=True)
 
                 x_cores[k] = np.reshape(u, [rx[k], N[k], r])
                 x_cores[k + 1] = np.reshape(v, [r, N[k + 1], rx[k + 2]])

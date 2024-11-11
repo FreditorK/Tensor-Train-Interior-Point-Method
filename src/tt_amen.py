@@ -3,17 +3,15 @@ import os
 
 sys.path.append(os.getcwd() + '/../')
 
-import numpy as np
-import scipy as scip
 import time
 from src.tt_ops import *
+from opt_einsum import contract as einsum
 
 def _local_product(Phi_right, Phi_left, coreA, core):
+    return einsum('lsr,smnS,LSR,rnR->lmL', Phi_left, coreA, Phi_right, core, optimize=True)
 
-    return np.einsum('lsr,smnS,LSR,rnR->lmL', Phi_left, coreA, Phi_right, core, optimize=True)
 
-
-def tt_amen(A, b, nswp=50, x0=None, eps=1e-10, kickrank=2, reg_lambda=1e-12, verbose=False):
+def tt_amen(A, b, nswp=100, x0=None, eps=1e-10, kickrank=2, reg_lambda=1e-12, verbose=False):
 
     dtype = A[0].dtype
     damp = 2
@@ -52,16 +50,14 @@ def tt_amen(A, b, nswp=50, x0=None, eps=1e-10, kickrank=2, reg_lambda=1e-12, ver
 
     for swp in range(nswp):
         # right to left orthogonalization
-
         for k in range(d-1, 0, -1):
-
             # update the z part (ALS) update
             if not last:
                 if swp > 0:
                     # shape rzp x N x rz
                     czA = _local_product(Phiz[k+1], Phiz[k], A[k], x_cores[k])
                     # shape is rzp x N x rz
-                    czy = np.einsum('br,bnB,BR->rnR',Phiz_b[k], b[k], Phiz_b[k+1], optimize=True)
+                    czy = einsum('br,bnB,BR->rnR',Phiz_b[k], b[k], Phiz_b[k+1], optimize=True)
                     cz_new = czy*nrmsc - czA
                     _, _, vz = scp.linalg.svd(np.reshape(cz_new, [cz_new.shape[0], -1]), full_matrices=False)
                     # truncate to kickrank
@@ -80,7 +76,7 @@ def tt_amen(A, b, nswp=50, x0=None, eps=1e-10, kickrank=2, reg_lambda=1e-12, ver
             core = np.reshape(x_cores[k], (rx[k], N[k]*rx[k+1])).T
             Qmat, Rmat = np.linalg.qr(core)
 
-            core_prev = np.einsum('ijk,km->ijm', x_cores[k-1], Rmat.T, optimize=True)
+            core_prev = einsum('ijk,km->ijm', x_cores[k-1], Rmat.T, optimize=True)
             rx[k] = Qmat.shape[1]
 
             current_norm = np.linalg.norm(core_prev)
@@ -122,52 +118,35 @@ def tt_amen(A, b, nswp=50, x0=None, eps=1e-10, kickrank=2, reg_lambda=1e-12, ver
             previous_solution = np.reshape(x_cores[k], (-1, 1))
 
             # assemble rhs
-            rhs = np.einsum('br,bmB,BR->rmR',Phis_b[k], b[k] * nrmsc, Phis_b[k+1], optimize=True)
+            rhs = einsum('br,bmB,BR->rmR',Phis_b[k], b[k] * nrmsc, Phis_b[k+1], optimize=True)
             rhs = np.reshape(rhs, (-1, 1))
             norm_rhs = np.linalg.norm(rhs)
 
-            # residuals
-            real_tol = (eps/np.sqrt(d))/damp
-
             # solve the local system
             # shape is Rp x N x N x r x r
-            Bp = np.einsum('smnS,LSR->smnRL', A[k], Phis[k+1], optimize=True)
-            local_core = np.einsum('lsr,smnRL->lmLrnR', Phis[k], Bp, optimize=True)
+            Bp = einsum('smnS,LSR->smnRL', A[k], Phis[k+1], optimize=True)
+            local_core = einsum('lsr,smnRL->lmLrnR', Phis[k], Bp, optimize=True)
             B = np.reshape(local_core, (rx[k]*N[k]*rx[k+1], rx[k]*N[k]*rx[k+1]))
 
             reg_B = B + reg_lambda * np.identity(B.shape[0])
 
-            solution_now, res, _, _ = scip.linalg.lstsq(reg_B, rhs, check_finite=False)
+            solution_now, _, _, _ = scip.linalg.lstsq(reg_B, rhs, check_finite=False)
 
             res_old = np.linalg.norm(B @ previous_solution-rhs)/norm_rhs
-            res_new = res/norm_rhs
 
             max_res = max(max_res, res_old)
 
             solution_now = np.reshape(solution_now, (rx[k]*N[k], rx[k+1]))
             # truncation
-            if k < d-1:
+            if k < d - 1:
                 u, s, v = scp.linalg.svd(solution_now, full_matrices=False)
                 v = np.diag(s) @ v
-                # search for a rank such that offers small enough residuum
-                r = 0
-                for r in range(u.shape[1]-1, 0, -1):
-                    # solution has the same size
-                    solution = np.reshape(u[:, :r] @ v[:r, :],(rx[k],N[k],rx[k+1]))
-                    res = np.linalg.norm(np.reshape(
-                        np.einsum('lmLrnR,rnR->lmL', local_core, solution, optimize=True),(-1,1)) - rhs)/norm_rhs
-
-                    if res > max(real_tol*damp, res_new):
-                        break
-                r = min(r+1, np.prod(s.shape))
+                non_sing_eig_idxs = np.asarray(s >= min(np.max(s), eps)).nonzero()[0]
+                u = u[:, non_sing_eig_idxs]
+                v = v[non_sing_eig_idxs, :].T
             else:
                 u, v = np.linalg.qr(solution_now)
-                r = u.shape[1]
-                s = np.ones(r,  dtype=dtype)
-                v = np.diag(s) @ v
-
-            u = u[:, :r]
-            v = v[:r, :].T
+                v = v.T
 
             if not last:
                 czA = _local_product(
@@ -178,7 +157,7 @@ def tt_amen(A, b, nswp=50, x0=None, eps=1e-10, kickrank=2, reg_lambda=1e-12, ver
                 )  # shape rzp x N x rz
 
                 # shape is rzp x N x rz
-                czy = np.einsum('br,bnB,BR->rnR',Phiz_b[k], b[k]*nrmsc, Phiz_b[k+1], optimize=True)
+                czy = einsum('br,bnB,BR->rnR',Phiz_b[k], b[k]*nrmsc, Phiz_b[k+1], optimize=True)
                 cz_new = czy - czA
                 uz, _, _ = scip.linalg.svd(np.reshape(cz_new, (rz[k]*N[k], -1)), full_matrices=False)
                 # truncate to kickrank
@@ -191,7 +170,7 @@ def tt_amen(A, b, nswp=50, x0=None, eps=1e-10, kickrank=2, reg_lambda=1e-12, ver
             if k < d-1:
                 if not last:
                     left_res = _local_product(Phiz[k+1], Phis[k], A[k], np.reshape(u @ v.T, (rx[k], N[k], rx[k+1])))
-                    left_b = np.einsum('br,bmB,BR->rmR', Phis_b[k], b[k]*nrmsc, Phiz_b[k+1], optimize=True)
+                    left_b = einsum('br,bmB,BR->rmR', Phis_b[k], b[k]*nrmsc, Phiz_b[k+1], optimize=True)
                     uk = left_b - left_res  # rx_k x N_k x rz_k+1
                     u, Rmat = np.linalg.qr(np.concatenate((u, np.reshape(uk, (u.shape[0], -1))), 1))
                     r_add = uk.shape[2]
@@ -199,7 +178,7 @@ def tt_amen(A, b, nswp=50, x0=None, eps=1e-10, kickrank=2, reg_lambda=1e-12, ver
                     v = v @ Rmat.T
 
                 r = u.shape[1]
-                v = np.einsum('ji,jkl->ikl', v, x_cores[k+1], optimize=True)
+                v = einsum('ji,jkl->ikl', v, x_cores[k+1], optimize=True)
                 # remove norm correction
                 nrmsc = nrmsc * normA[k] * normx[k] / normb[k]
 
@@ -239,7 +218,7 @@ def tt_amen(A, b, nswp=50, x0=None, eps=1e-10, kickrank=2, reg_lambda=1e-12, ver
                     Phiz_b[k+1] = _compute_phi_fwd_rhs(
                         Phiz_b[k], b[k], z_cores[k]) / normb[k]
             else:
-                x_cores[k] = np.reshape(u @ np.diag(s[:r]) @ v[:r, :].T, (rx[k], N[k], rx[k+1]))
+                x_cores[k] = np.reshape(u @ v.T, (rx[k], N[k], rx[k+1]))
 
         if last:
             break
@@ -263,21 +242,21 @@ def tt_amen(A, b, nswp=50, x0=None, eps=1e-10, kickrank=2, reg_lambda=1e-12, ver
 
 
 def _compute_phi_bck_A(Phi_now, core_left, core_A, core_right):
-    Phi = np.einsum('LSR,lML,sMNS,rNR->lsr', Phi_now, core_left, core_A, core_right, optimize=True)
+    Phi = einsum('LSR,lML,sMNS,rNR->lsr', Phi_now, core_left, core_A, core_right, optimize=True)
     return Phi
 
 
 def _compute_phi_fwd_A(Phi_now, core_left, core_A, core_right):
-    Phi_next = np.einsum('lsr,lML,sMNS,rNR->LSR', Phi_now, core_left, core_A, core_right, optimize=True)
+    Phi_next = einsum('lsr,lML,sMNS,rNR->LSR', Phi_now, core_left, core_A, core_right, optimize=True)
     return Phi_next
 
 
 def _compute_phi_bck_rhs(Phi_now, core_b, core):
-    Phi = np.einsum('BR,bnB,rnR->br', Phi_now, core_b, core, optimize=True)
+    Phi = einsum('BR,bnB,rnR->br', Phi_now, core_b, core, optimize=True)
     return Phi
 
 
 def _compute_phi_fwd_rhs(Phi_now, core_rhs, core):
-    Phi_next = np.einsum('br,bnB,rnR->BR', Phi_now, core_rhs, core, optimize=True)
+    Phi_next = einsum('br,bnB,rnR->BR', Phi_now, core_rhs, core, optimize=True)
     return Phi_next
 

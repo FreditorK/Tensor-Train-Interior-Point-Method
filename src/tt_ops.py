@@ -4,6 +4,7 @@ from numpy.ma.core import identity
 from src.ops import *
 import copy
 from cy_src.tt_ops_cy import *
+from opt_einsum import contract as einsum
 
 PHI = np.array([[1, 1],
                 [1, -1]], dtype=float).reshape(1, 2, 2, 1)
@@ -381,7 +382,7 @@ def tt_matrix_vec_mul(matrix_tt: List[np.array], vec_tt: List[np.array]) -> List
             [_tt_core_collapse(core_op, core) for core_op, core in
              zip(matrix_tt[split_idx - left_overs:split_idx], vec_tt[:-op_length])]
         )
-        full_cores[0] = np.einsum("ab, bce -> ace", half_core, full_cores[0])
+        full_cores[0] = einsum("ab, bce -> ace", half_core, full_cores[0])
     full_cores = matrix_tt[:split_idx - left_overs] + full_cores
     return full_cores
 
@@ -404,7 +405,7 @@ def tt_mat_mat_mul(matrix_tt_1, matrix_tt_2):
         zip(matrix_tt_1[split_idx:], matrix_tt_2[split_idx:])
     ]
     if len(half_core) > 0:
-        full_cores[0] = np.einsum("ab, bcde -> acde", half_core, full_cores[0])
+        full_cores[0] = einsum("ab, bcde -> acde", half_core, full_cores[0])
     return full_cores
 
 
@@ -607,7 +608,7 @@ def tt_linear_op(linear_op_tt, matrix_tt):
     full_cores = [_tt_op_core_collapse(core_1, core_2) for core_1, core_2 in
                   zip(linear_op_tt[split_idx:], matrix_tt[split_idx:])]
     if len(factor) > 0:
-        full_cores[0] = np.einsum("ab, bcd -> acd", factor, full_cores[0])
+        full_cores[0] = einsum("ab, bcd -> acd", factor, full_cores[0])
     return full_cores
 
 
