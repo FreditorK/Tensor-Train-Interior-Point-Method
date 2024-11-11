@@ -15,8 +15,7 @@ s_matrix_tt = tt_rank_reduce(tt_add(s_matrix_tt, tt_transpose(s_matrix_tt)), err
 b_tt = tt_random_gaussian([4, 4], shape=(2,))
 print([c.shape for c in s_matrix_tt])
 print([c.shape for c in b_tt])
-sol, res = tt_amen(s_matrix_tt, b_tt, kickrank=1, verbose=True)
-print(res)
+sol = tt_amen(s_matrix_tt, b_tt, kickrank=2, verbose=True)
 res_tt = tt_sub(tt_matrix_vec_mul(s_matrix_tt, sol), b_tt)
 print(tt_inner_prod(res_tt, res_tt))
 
