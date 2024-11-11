@@ -5,20 +5,18 @@ import scipy.linalg
 
 sys.path.append(os.getcwd() + '/../')
 
-import numpy as np
-import datetime
-import opt_einsum as oe
 from src.tt_ops import *
 import time
+from opt_einsum import contract as einsum
 
 
 def _local_product(Phi_right, Phi_left, coreA, core):
 
-    w = oe.contract('lsr,smnS,LSR,rnR->lmL', Phi_left, coreA, Phi_right, core)
+    w = einsum('lsr,smnS,LSR,rnR->lmL', Phi_left, coreA, Phi_right, core)
     return w
 
 
-def tt_amen(A, b, nswp=22, x0=None, eps=1e-10, rmax=1024, max_full=500, kickrank=4, local_iterations=40, resets=2, verbose=False):
+def tt_amen(A, b, nswp=25, x0=None, eps=1e-10, rmax=1024, kickrank=4, reg_lambda=1e-12, verbose=False):
 
     dtype = A[0].dtype
     damp = 2
@@ -60,13 +58,6 @@ def tt_amen(A, b, nswp=22, x0=None, eps=1e-10, rmax=1024, max_full=500, kickrank
 
     for swp in range(nswp):
         # right to left orthogonalization
-
-        if verbose:
-            print()
-            print('Starting sweep %d %s...' %
-                  (swp + 1, "(last one) " if last else ""))
-            tme_sweep = datetime.datetime.now()
-
         for k in range(d - 1, 0, -1):
 
             # update the z part (ALS) update
@@ -75,7 +66,7 @@ def tt_amen(A, b, nswp=22, x0=None, eps=1e-10, rmax=1024, max_full=500, kickrank
                     # shape rzp x N x rz
                     czA = _local_product(Phiz[k + 1], Phiz[k], A[k], x_cores[k])
                     # shape is rzp x N x rz
-                    czy = np.einsum('br,bnB,BR->rnR',
+                    czy = einsum('br,bnB,BR->rnR',
                                     Phiz_b[k], b[k], Phiz_b[k + 1])
                     cz_new = czy * nrmsc - czA
                     _, _, vz = scip.linalg.svd(np.reshape(cz_new, [cz_new.shape[0], -1]))
@@ -86,8 +77,8 @@ def tt_amen(A, b, nswp=22, x0=None, eps=1e-10, rmax=1024, max_full=500, kickrank
 
                 # FIXME: Change from here...
                 qz, _ = np.linalg.qr(cz_new)
-                rz[k] = qz.shape[0]
-                z_tt[k] = np.reshape(qz.T, [-1, N[k], rz[k]])
+                z_tt[k] = np.reshape(qz.T, [-1, N[k], rz[k+1]])
+                rz[k] = z_tt[k].shape[0]
                 # FIXME: To here
 
             # norm correction ?
@@ -97,7 +88,7 @@ def tt_amen(A, b, nswp=22, x0=None, eps=1e-10, rmax=1024, max_full=500, kickrank
             core = np.reshape(x_cores[k], [rx[k], N[k] * rx[k + 1]]).T
             Qmat, Rmat = np.linalg.qr(core)
 
-            core_prev = np.einsum('ijk,km->ijm', x_cores[k - 1], Rmat.T)
+            core_prev = einsum('ijk,km->ijm', x_cores[k - 1], Rmat.T)
             rx[k] = Qmat.shape[1]
 
             current_norm = np.linalg.norm(core_prev)
@@ -111,7 +102,6 @@ def tt_amen(A, b, nswp=22, x0=None, eps=1e-10, rmax=1024, max_full=500, kickrank
             x_cores[k - 1] = core_prev[:]
 
             # update phis (einsum)
-            # print(x_cores[k].shape,A.cores[k].shape,x_cores[k].shape)
             Phis[k] = _compute_phi_bck_A(
                 Phis[k + 1], x_cores[k], A[k], x_cores[k])
             Phis_b[k] = _compute_phi_bck_rhs(
@@ -144,12 +134,10 @@ def tt_amen(A, b, nswp=22, x0=None, eps=1e-10, rmax=1024, max_full=500, kickrank
         rz = [1] + tt_ranks(z_tt) + [1]
 
         for k in range(d):
-            if verbose:
-                print('\tCore', k)
             previous_solution = np.reshape(x_cores[k], [-1, 1])
 
             # assemble rhs
-            rhs = np.einsum('br,bmB,BR->rmR',
+            rhs = einsum('br,bmB,BR->rmR',
                             Phis_b[k], b[k] * nrmsc, Phis_b[k + 1])
             rhs = np.reshape(rhs, [-1, 1])
             norm_rhs = np.linalg.norm(rhs)
@@ -158,17 +146,12 @@ def tt_amen(A, b, nswp=22, x0=None, eps=1e-10, rmax=1024, max_full=500, kickrank
             real_tol = (eps / np.sqrt(d)) / damp
 
             # solve the local system
-            use_full = rx[k] * N[k] * rx[k + 1] < max_full
-            # solve the full system
-            if verbose:
-                print('\t\tChoosing direct solver (local size %d)....' %
-                      (rx[k] * N[k] * rx[k + 1]))
-            # shape is Rp x N x N x r x r
-            Bp = np.einsum('smnS,LSR->smnRL', A[k], Phis[k + 1])
-            B = np.einsum('lsr,smnRL->lmLrnR', Phis[k], Bp)
+            Bp = einsum('smnS,LSR->smnRL', A[k], Phis[k + 1])
+            B = einsum('lsr,smnRL->lmLrnR', Phis[k], Bp)
             B = np.reshape(B, [rx[k] * N[k] * rx[k + 1], rx[k] * N[k] * rx[k + 1]])
 
-            solution_now = np.linalg.solve(B, rhs)
+            reg_B = B + reg_lambda * np.identity(B.shape[0])
+            solution_now, _, _, _ = scip.linalg.lstsq(reg_B, rhs, check_finite=False)
 
             res_old = np.linalg.norm(B @ previous_solution - rhs) / norm_rhs
             res_new = np.linalg.norm(B @ solution_now - rhs) / norm_rhs
@@ -182,9 +165,6 @@ def tt_amen(A, b, nswp=22, x0=None, eps=1e-10, rmax=1024, max_full=500, kickrank
             # compute residual and step size
             dx = np.linalg.norm(solution_now - previous_solution) / \
                  np.linalg.norm(solution_now)
-            if verbose:
-                print('\t\tdx = %g, res_now = %g, res_old = %g' %
-                      (dx, res_new, res_old))
 
             max_dx = max(dx, max_dx)
             max_res = max(max_res, res_old)
@@ -194,10 +174,8 @@ def tt_amen(A, b, nswp=22, x0=None, eps=1e-10, rmax=1024, max_full=500, kickrank
             if k < d - 1:
                 u, s, v = scip.linalg.svd(solution_now, full_matrices=False)
                 r = 0
-                print(u.shape, s.shape, v.shape, r)
                 for r in range(u.shape[1] - 1, 0, -1):
                     # solution has the same size
-                    print( u[:, :r].shape, v[:r, :].shape, r)
                     solution = u[:, :r] @ np.diag(s[:r]) @ v[:r, :]
                     res = np.linalg.norm(B @ np.reshape(solution, [-1, 1]) - rhs) / norm_rhs
                     if res > max(real_tol * damp, res_new):
@@ -218,9 +196,8 @@ def tt_amen(A, b, nswp=22, x0=None, eps=1e-10, rmax=1024, max_full=500, kickrank
                 czA = _local_product(Phiz[k + 1], Phiz[k], A[k], np.reshape(u @ v.T, [rx[k], N[k], rx[k + 1]]))  # shape rzp x N x rz
 
                 # shape is rzp x N x rz
-                czy = np.einsum('br,bnB,BR->rnR', Phiz_b[k], b[k] * nrmsc, Phiz_b[k + 1])
+                czy = einsum('br,bnB,BR->rnR', Phiz_b[k], b[k] * nrmsc, Phiz_b[k + 1])
                 cz_new = czy - czA
-                print(cz_new.shape, [rz[k] * N[k], rz[k + 1]])
                 uz, _, _ = scipy.linalg.svd(np.reshape(cz_new, [rz[k] * N[k], rz[k + 1]]))
                 # truncate to kickrank
                 cz_new = uz[:, :min(kickrank, uz.shape[1])]
@@ -232,7 +209,7 @@ def tt_amen(A, b, nswp=22, x0=None, eps=1e-10, rmax=1024, max_full=500, kickrank
             if k < d - 1:
                 if not last:
                     left_res = _local_product(Phiz[k + 1], Phis[k], A[k], np.reshape(u @ v.T, [rx[k], N[k], rx[k + 1]]))
-                    left_b =np.einsum(
+                    left_b = einsum(
                         'br,bmB,BR->rmR', Phis_b[k], b[k] * nrmsc, Phiz_b[k + 1])
                     uk = left_b - left_res  # rx_k x N_k x rz_k+1
                     u, Rmat = scip.linalg.qr(np.concatenate((u, np.reshape(uk, [u.shape[0], -1])), 1))
@@ -241,7 +218,7 @@ def tt_amen(A, b, nswp=22, x0=None, eps=1e-10, rmax=1024, max_full=500, kickrank
                     v = v @ Rmat.T
 
                 r = u.shape[1]
-                v = np.einsum('ji,jkl->ikl', v, x_cores[k + 1])
+                v = einsum('ji,jkl->ikl', v, x_cores[k + 1])
                 # remove norm correction
                 nrmsc = nrmsc * normA[k] * normx[k] / normb[k]
 
@@ -286,12 +263,6 @@ def tt_amen(A, b, nswp=22, x0=None, eps=1e-10, rmax=1024, max_full=500, kickrank
                 x_cores[k] = np.reshape(
                     u @ np.diag(s[:r]) @ v[:r, :].T, [rx[k], N[k], rx[k + 1]])
 
-        if verbose:
-            print('Solution rank is', rx)
-            print('Maxres ', max_res)
-            tme_sweep = datetime.datetime.now() - tme_sweep
-            print('Time ', tme_sweep)
-
         if last:
             break
 
@@ -311,27 +282,27 @@ def tt_amen(A, b, nswp=22, x0=None, eps=1e-10, rmax=1024, max_full=500, kickrank
     for k in range(d):
         x_cores[k] = x_cores[k] * normx
 
-    return x_cores
+    return x_cores, max_res
 
 
 def _compute_phi_bck_A(Phi_now, core_left, core_A, core_right):
-    Phi = oe.contract('LSR,lML,sMNS,rNR->lsr', Phi_now,
+    Phi = einsum('LSR,lML,sMNS,rNR->lsr', Phi_now,
                       core_left, core_A, core_right)
     return Phi
 
 
 def _compute_phi_fwd_A(Phi_now, core_left, core_A, core_right):
-    Phi_next = oe.contract('lsr,lML,sMNS,rNR->LSR',
+    Phi_next = einsum('lsr,lML,sMNS,rNR->LSR',
                            Phi_now, core_left, core_A, core_right)
     return Phi_next
 
 
 def _compute_phi_bck_rhs(Phi_now, core_b, core):
-    Phi = oe.contract('BR,bnB,rnR->br', Phi_now, core_b, core)
+    Phi = einsum('BR,bnB,rnR->br', Phi_now, core_b, core)
     return Phi
 
 
 def _compute_phi_fwd_rhs(Phi_now, core_rhs, core):
-    Phi_next = oe.contract('br,bnB,rnR->BR', Phi_now, core_rhs, core)
+    Phi_next = einsum('br,bnB,rnR->BR', Phi_now, core_rhs, core)
     return Phi_next
 
