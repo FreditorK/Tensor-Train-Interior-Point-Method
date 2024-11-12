@@ -16,7 +16,7 @@ def _local_product(Phi_right, Phi_left, coreA, core):
     return w
 
 
-def tt_amen(A, b, nswp=25, x0=None, eps=1e-10, rmax=1024, kickrank=4, reg_lambda=1e-12, verbose=False):
+def tt_amen(A, b, nswp=50, x0=None, eps=1e-10, rmax=1024, kickrank=4, reg_lambda=1e-12, verbose=False):
 
     dtype = A[0].dtype
     damp = 2
@@ -69,7 +69,7 @@ def tt_amen(A, b, nswp=25, x0=None, eps=1e-10, rmax=1024, kickrank=4, reg_lambda
                     czy = einsum('br,bnB,BR->rnR',
                                     Phiz_b[k], b[k], Phiz_b[k + 1])
                     cz_new = czy * nrmsc - czA
-                    _, _, vz = scip.linalg.svd(np.reshape(cz_new, [cz_new.shape[0], -1]), full_matrices=False)
+                    _, _, vz = scip.linalg.svd(np.reshape(cz_new, [cz_new.shape[0], -1]), full_matrices=False, check_finite=False)
                     # truncate to kickrank
                     cz_new = vz[:min(kickrank, vz.shape[0]), :].T
                 else:
@@ -170,12 +170,12 @@ def tt_amen(A, b, nswp=25, x0=None, eps=1e-10, rmax=1024, kickrank=4, reg_lambda
             solution_now = np.reshape(solution_now, [rx[k] * N[k], rx[k + 1]])
             # truncation
             if k < d - 1:
-                u, s, v = scip.linalg.svd(solution_now, full_matrices=False)
+                u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False)
                 r = 0
                 for r in range(u.shape[1] - 1, 0, -1):
                     # solution has the same size
                     solution = u[:, :r] @ np.diag(s[:r]) @ v[:r, :]
-                    res = np.linalg.norm(B @ np.reshape(solution, [-1, 1]) - rhs) / norm_rhs
+                    res = np.linalg.norm(reg_B @ np.reshape(solution, [-1, 1]) - rhs) / norm_rhs
                     if res > max(real_tol * damp, res_new):
                         break
                 r += 1
@@ -196,7 +196,7 @@ def tt_amen(A, b, nswp=25, x0=None, eps=1e-10, rmax=1024, kickrank=4, reg_lambda
                 # shape is rzp x N x rz
                 czy = einsum('br,bnB,BR->rnR', Phiz_b[k], b[k] * nrmsc, Phiz_b[k + 1])
                 cz_new = czy - czA
-                uz, _, _ = scipy.linalg.svd(np.reshape(cz_new, [rz[k] * N[k], rz[k + 1]]), full_matrices=False)
+                uz, _, _ = scipy.linalg.svd(np.reshape(cz_new, [rz[k] * N[k], rz[k + 1]]), full_matrices=False, check_finite=False)
                 # truncate to kickrank
                 cz_new = uz[:, :min(kickrank, uz.shape[1])]
 
@@ -210,7 +210,7 @@ def tt_amen(A, b, nswp=25, x0=None, eps=1e-10, rmax=1024, kickrank=4, reg_lambda
                     left_b = einsum(
                         'br,bmB,BR->rmR', Phis_b[k], b[k] * nrmsc, Phiz_b[k + 1])
                     uk = left_b - left_res  # rx_k x N_k x rz_k+1
-                    u, Rmat = scip.linalg.qr(np.concatenate((u, np.reshape(uk, [u.shape[0], -1])), 1))
+                    u, Rmat = np.linalg.qr(np.concatenate((u, np.reshape(uk, [u.shape[0], -1])), 1))
                     r_add = uk.shape[2]
                     v = np.concatenate((v, np.zeros([rx[k + 1], r_add], dtype=dtype)), 1)
                     v = v @ Rmat.T
@@ -303,4 +303,20 @@ def _compute_phi_bck_rhs(Phi_now, core_b, core):
 def _compute_phi_fwd_rhs(Phi_now, core_rhs, core):
     Phi_next = einsum('br,bnB,rnR->BR', Phi_now, core_rhs, core)
     return Phi_next
+
+
+def tt_pinv(matrix_tt, err_bound):
+    if np.all(np.array(tt_ranks(matrix_tt))== 1):
+        pinv_tt = [np.linalg.pinv(np.squeeze(m)) for m in matrix_tt]
+        return [m.reshape(1, *m.shape, 1) for m in pinv_tt], 0
+    train_tt = [
+        np.kron(
+            t_t.reshape(t_t.shape[0], 1, 1, *t_t.shape[1:]), t.reshape(*t.shape[:3], 1, 1, t.shape[-1])
+        ) for t_t, t in zip(tt_transpose(matrix_tt), matrix_tt)
+    ]
+    train_tt = tt_rank_reduce(sum([break_core_bond(t) for t in train_tt], []), err_bound=err_bound)
+    b_tt = tt_rank_reduce(sum([break_core_bond(t) for t in matrix_tt], []), err_bound=err_bound)
+    sol, res = tt_amen(train_tt, b_tt, kickrank=2, verbose=True, reg_lambda=0)
+    sol = tt_rank_reduce([einsum("abc, cde -> abde", c_1, c_2, optimize=True) for c_1, c_2 in zip(sol[:-1:2], sol[1::2])], err_bound=err_bound)
+    return sol, res
 

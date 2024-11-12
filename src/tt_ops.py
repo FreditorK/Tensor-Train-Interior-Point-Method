@@ -83,8 +83,7 @@ def tt_lr_orthogonalise(train_tt: List[np.array]):
 def core_forward_orthogonalise(i, train_tt):
     shape_i = train_tt[i].shape
     shape_ip1 = train_tt[i + 1].shape
-    [q_T, r] = scp.linalg.qr(train_tt[i].reshape(-1, shape_i[-1]), overwrite_a=True, mode='economic',
-                             check_finite=False)
+    [q_T, r] = np.linalg.qr(train_tt[i].reshape(-1, shape_i[-1]))
     train_tt[i] = q_T.reshape(shape_i[0], *shape_i[1:-1], -1)
     r_ip1 = train_tt[i].shape[-1]
     train_tt[i + 1] = (r @ train_tt[i + 1].reshape(r.shape[-1], -1)).reshape(r_ip1, *shape_ip1[1:-1], -1)
@@ -94,8 +93,7 @@ def core_forward_orthogonalise(i, train_tt):
 def core_backward_orthogonalise(i, train_tt):
     shape_i = train_tt[i].shape
     shape_im1 = train_tt[i - 1].shape
-    [q_T, r] = scp.linalg.qr(train_tt[i].reshape(train_tt[i].shape[0], -1).T, overwrite_a=True, mode='economic',
-                             check_finite=False)
+    [q_T, r] = np.linalg.qr(train_tt[i].reshape(train_tt[i].shape[0], -1).T)
     train_tt[i] = q_T.T.reshape(-1, *shape_i[1:-1], shape_i[-1])
     r_im1 = train_tt[i].shape[0]
     train_tt[i - 1] = (
@@ -172,7 +170,7 @@ def tt_rank_reduce(train_tt: List[np.array], err_bound=1e-18):
         idx_shape = tt_core.shape
         next_idx_shape = train_tt[idx + 1].shape
         k = len(idx_shape) - 1
-        U, S, V_T = scip.linalg.svd(train_tt[idx].reshape(rank * np.prod(idx_shape[1:k], dtype=int), -1), full_matrices=False)
+        U, S, V_T = scip.linalg.svd(train_tt[idx].reshape(rank * np.prod(idx_shape[1:k], dtype=int), -1), full_matrices=False, check_finite=False)
         non_sing_eig_idxs = np.asarray(S >= min(np.max(S), err_bound)).nonzero()
         S = S[non_sing_eig_idxs]
         next_rank = len(S)

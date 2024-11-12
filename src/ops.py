@@ -9,15 +9,16 @@ from cy_src.ops_cy import *
 def break_core_bond(core):
     """ Breaks up a bond between two cores """
     shape = core.shape
-    A = core.reshape(shape[0] * shape[1], -1)
+    k = len(shape) // 2
+    A = core.reshape(np.prod(shape[:k]), -1)
     U, S, V_T = np.linalg.svd(A)
     non_sing_eig_idxs = np.asarray(np.abs(S) > 0).nonzero()
     S = S[non_sing_eig_idxs]
     next_rank = len(S)
     U = U[:, non_sing_eig_idxs]
     V_T = V_T[non_sing_eig_idxs, :]
-    G_i = U.reshape(shape[0], shape[1], next_rank)
-    G_ip1 = (np.diag(S) @ V_T).reshape(next_rank, shape[2], shape[-1])
+    G_i = U.reshape(*shape[:k], next_rank)
+    G_ip1 = (np.diag(S) @ V_T).reshape(next_rank, *shape[k:])
     return [G_i, G_ip1]
 
 
