@@ -1,11 +1,13 @@
 import sys
 import os
 
+import numpy as np
 import scipy.linalg
 
 sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
+from src.tt_ops import _tt_lr_random_orthogonalise
 import time
 from opt_einsum import contract as einsum
 
@@ -127,7 +129,6 @@ def tt_amen(A, b, nswp=50, x0=None, eps=1e-10, rmax=1024, kickrank=4, reg_lambda
 
         # start loop
         max_res = 0
-        max_dx = 0
 
         #rz = [1] + tt_ranks(z_tt) + [1]
 
@@ -149,10 +150,11 @@ def tt_amen(A, b, nswp=50, x0=None, eps=1e-10, rmax=1024, kickrank=4, reg_lambda
             B = np.reshape(B, [rx[k] * N[k] * rx[k + 1], rx[k] * N[k] * rx[k + 1]])
 
             reg_B = B + reg_lambda * np.identity(B.shape[0])
-            solution_now, res_new, _, _ = scip.linalg.lstsq(reg_B, rhs, check_finite=False)
+            solution_now, _, _, _ = scip.linalg.lstsq(reg_B, rhs, check_finite=False)
+            print(np.linalg.cond(reg_B))
 
             res_old = np.linalg.norm(reg_B @ previous_solution - rhs) / norm_rhs
-            res_new = np.divide(res_new, norm_rhs)
+            res_new = np.linalg.norm(reg_B @ solution_now - rhs) / norm_rhs
 
             # residual damp check
             if res_old / res_new < damp and res_new > real_tol:
@@ -160,11 +162,6 @@ def tt_amen(A, b, nswp=50, x0=None, eps=1e-10, rmax=1024, kickrank=4, reg_lambda
                     print('WARNING: residual increases. res_old %g, res_new %g, real_tol %g' % (
                         res_old, res_new, real_tol))  # warning (from tt toolbox)
 
-            # compute residual and step size
-            dx = np.linalg.norm(solution_now - previous_solution) / \
-                 np.linalg.norm(solution_now)
-
-            max_dx = max(dx, max_dx)
             max_res = max(max_res, res_old)
 
             solution_now = np.reshape(solution_now, [rx[k] * N[k], rx[k + 1]])
@@ -319,4 +316,16 @@ def tt_pinv(matrix_tt, err_bound):
     sol, res = tt_amen(train_tt, b_tt, kickrank=2, verbose=True, reg_lambda=0)
     sol = tt_rank_reduce([einsum("abc, cde -> abde", c_1, c_2, optimize=True) for c_1, c_2 in zip(sol[:-1:2], sol[1::2])], err_bound=err_bound)
     return sol, res
+
+def tt_inv_precond(matrix_tt, target_ranks, max_iter=100):
+    norm = np.sqrt(tt_inner_prod(matrix_tt, matrix_tt))
+    inv_tt = tt_scale(np.divide(1, norm), tt_transpose(matrix_tt))
+    tt_gaussian = tt_random_gaussian(target_ranks, shape=matrix_tt[0].shape[1:-1])
+    for _ in range(max_iter):
+        new_mat = tt_mat_mat_mul(inv_tt, tt_mat_mat_mul(matrix_tt, inv_tt))
+        inv_tt = tt_sub(tt_scale(2, inv_tt), new_mat)
+        inv_tt = _tt_lr_random_orthogonalise(inv_tt, tt_gaussian)
+
+    return tt_rank_reduce(inv_tt)
+
 

@@ -150,7 +150,7 @@ def tt_infeasible_newton_system_lhs(
     newton_system = tt_add(lhs_skeleton, Z_op_tt)
     newton_system = tt_add(newton_system, X_op_tt)
     if active_ineq:
-        ineq_res_tt = tt_rank_reduce(tt_sub(tt_mat(tt_linear_op(lin_op_tt_ineq, X_tt), shape=(2, 2)), bias_tt_ineq), err_bound=tol)
+        ineq_res_tt = tt_rank_reduce(tt_sub(tt_mat(tt_linear_op(lin_op_tt_ineq, X_tt), shape=(2, 2)), bias_tt_ineq), err_bound=0.1*tol)
         ineq_res_op_tt = tt_op_to_mat(tt_mask_to_linear_op(ineq_res_tt))
         T_op_tt = tt_scale(-1, tt_mask_to_linear_op(T_tt))
         T_comp_linear_op_tt_ineq = tt_op_to_mat(tt_op_op_compose(T_op_tt, lin_op_tt_ineq))
@@ -159,7 +159,7 @@ def tt_infeasible_newton_system_lhs(
     else:
         # For better conditioning
         newton_system = tt_add(newton_system, IDX_22 + tt_op_to_mat(tt_op_right_from_tt_matrix(tt_identity(len(X_tt)))))
-    return tt_rank_reduce(newton_system, err_bound=tol)
+    return tt_rank_reduce(newton_system, err_bound=0.1*tol)
 
 
 def _tt_get_block(i, j, block_matrix_tt):
@@ -315,7 +315,7 @@ def tt_ipm(
     if active_ineq:
         op_tt_ineq_adjoint = IDX_02 + tt_op_to_mat(tt_scale(-1, lin_op_tt_ineq_adj))
         lhs_skeleton = tt_add(lhs_skeleton, op_tt_ineq_adjoint)
-    lhs_skeleton = tt_rank_reduce(lhs_skeleton, err_bound=feasibility_tol)
+    lhs_skeleton = tt_rank_reduce(lhs_skeleton, err_bound=0.1*feasibility_tol)
     X_tt = tt_identity(dim)
     Y_tt = tt_zero_matrix(dim)
     T_tt = tt_one_matrix(dim)
