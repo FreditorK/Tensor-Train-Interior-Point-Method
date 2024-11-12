@@ -33,7 +33,7 @@ def tt_amen(A, b, nswp=25, x0=None, eps=1e-10, rmax=1024, kickrank=4, reg_lambda
     rmax = [1] + (d - 1) * [rmax] + [1]
 
     # z cores
-    z_tt = tt_random_gaussian([kickrank]*(d - 1), shape=x_cores[0].shape)
+    z_tt = tt_random_gaussian([kickrank]*(d - 1), shape=x_cores[0].shape[1:-1])
     z_tt = tt_rl_random_orthogonalise(z_tt, (d - 1) * [kickrank])
     rz = [1] + tt_ranks(z_tt) + [1]
 
@@ -52,7 +52,7 @@ def tt_amen(A, b, nswp=25, x0=None, eps=1e-10, rmax=1024, kickrank=4, reg_lambda
 
     if verbose:
         t0 = time.time()
-        print('Starting AMEn solve with:\n\tepsilon: %g\n\tsweeps: %d' % (eps, nswp))
+        print('Starting AMEn solve with:\n\tEpsilon: %g\n\tMax num of sweeps: %d' % (eps, nswp))
         print(f"\tTT-Matrix rank: {tt_ranks(A)}")
         print(f"\tTT-bias rank: {tt_ranks(b)}")
 
@@ -69,17 +69,15 @@ def tt_amen(A, b, nswp=25, x0=None, eps=1e-10, rmax=1024, kickrank=4, reg_lambda
                     czy = einsum('br,bnB,BR->rnR',
                                     Phiz_b[k], b[k], Phiz_b[k + 1])
                     cz_new = czy * nrmsc - czA
-                    _, _, vz = scip.linalg.svd(np.reshape(cz_new, [cz_new.shape[0], -1]))
+                    _, _, vz = scip.linalg.svd(np.reshape(cz_new, [cz_new.shape[0], -1]), full_matrices=False)
                     # truncate to kickrank
                     cz_new = vz[:min(kickrank, vz.shape[0]), :].T
                 else:
                     cz_new = np.reshape(z_tt[k], [rz[k], -1]).T
-
-                # FIXME: Change from here...
                 qz, _ = np.linalg.qr(cz_new)
-                z_tt[k] = np.reshape(qz.T, [-1, N[k], rz[k+1]])
-                rz[k] = z_tt[k].shape[0]
-                # FIXME: To here
+                rz[k] = qz.shape[1]
+                z_tt[k] = np.reshape(qz.T, [rz[k], N[k], rz[k + 1]])
+
 
             # norm correction ?
             if swp > 0:
@@ -131,7 +129,7 @@ def tt_amen(A, b, nswp=25, x0=None, eps=1e-10, rmax=1024, kickrank=4, reg_lambda
         max_res = 0
         max_dx = 0
 
-        rz = [1] + tt_ranks(z_tt) + [1]
+        #rz = [1] + tt_ranks(z_tt) + [1]
 
         for k in range(d):
             previous_solution = np.reshape(x_cores[k], [-1, 1])
@@ -151,10 +149,10 @@ def tt_amen(A, b, nswp=25, x0=None, eps=1e-10, rmax=1024, kickrank=4, reg_lambda
             B = np.reshape(B, [rx[k] * N[k] * rx[k + 1], rx[k] * N[k] * rx[k + 1]])
 
             reg_B = B + reg_lambda * np.identity(B.shape[0])
-            solution_now, _, _, _ = scip.linalg.lstsq(reg_B, rhs, check_finite=False)
+            solution_now, res_new, _, _ = scip.linalg.lstsq(reg_B, rhs, check_finite=False)
 
             res_old = np.linalg.norm(B @ previous_solution - rhs) / norm_rhs
-            res_new = np.linalg.norm(B @ solution_now - rhs) / norm_rhs
+            res_new = np.divide(res_new, norm_rhs)
 
             # residual damp check
             if res_old / res_new < damp and res_new > real_tol:
@@ -198,7 +196,7 @@ def tt_amen(A, b, nswp=25, x0=None, eps=1e-10, rmax=1024, kickrank=4, reg_lambda
                 # shape is rzp x N x rz
                 czy = einsum('br,bnB,BR->rnR', Phiz_b[k], b[k] * nrmsc, Phiz_b[k + 1])
                 cz_new = czy - czA
-                uz, _, _ = scipy.linalg.svd(np.reshape(cz_new, [rz[k] * N[k], rz[k + 1]]))
+                uz, _, _ = scipy.linalg.svd(np.reshape(cz_new, [rz[k] * N[k], rz[k + 1]]), full_matrices=False)
                 # truncate to kickrank
                 cz_new = uz[:, :min(kickrank, uz.shape[1])]
 
