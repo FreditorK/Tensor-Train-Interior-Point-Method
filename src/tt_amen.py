@@ -151,7 +151,7 @@ def tt_amen(A, b, nswp=25, x0=None, eps=1e-10, rmax=1024, kickrank=4, reg_lambda
             reg_B = B + reg_lambda * np.identity(B.shape[0])
             solution_now, res_new, _, _ = scip.linalg.lstsq(reg_B, rhs, check_finite=False)
 
-            res_old = np.linalg.norm(B @ previous_solution - rhs) / norm_rhs
+            res_old = np.linalg.norm(reg_B @ previous_solution - rhs) / norm_rhs
             res_new = np.divide(res_new, norm_rhs)
 
             # residual damp check
