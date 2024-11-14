@@ -422,9 +422,9 @@ if __name__ == "__main__":
     Q_m_P_op_adj = tt_Q_m_P_op_adj(n_sq)
     Q_m_P_op_bias = tt_zero_matrix(n_sq+1)
 
-    #L_op_tt = tt_rank_reduce(tt_add(L_op_tt, Q_m_P_op))
-    #L_op_tt_adj = tt_rank_reduce(tt_add(L_op_tt_adj, Q_m_P_op_adj))
-    #eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, Q_m_P_op_bias))
+    L_op_tt = tt_rank_reduce(tt_add(L_op_tt, Q_m_P_op))
+    L_op_tt_adj = tt_rank_reduce(tt_add(L_op_tt_adj, Q_m_P_op_adj))
+    eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, Q_m_P_op_bias))
     # ---
     # VIII
     # FIXME: AMeN error very high
@@ -432,18 +432,18 @@ if __name__ == "__main__":
     DS_op_adj = tt_DS_op_adj(n, n_sq)
     DS_op_bias = tt_DS_bias(n, n_sq)
 
-    #L_op_tt = tt_rank_reduce(tt_add(L_op_tt, DS_op))
-    #L_op_tt_adj = tt_rank_reduce(tt_add(L_op_tt_adj, DS_op_adj))
-    #eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, DS_op_bias))
+    L_op_tt = tt_rank_reduce(tt_add(L_op_tt, DS_op))
+    L_op_tt_adj = tt_rank_reduce(tt_add(L_op_tt_adj, DS_op_adj))
+    eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, DS_op_bias))
     # ---
     # IX
     padding_op = tt_padding_op(n_sq+1)
     padding_op_adj = tt_padding_op_adjoint(n_sq + 1)
     padding_op_bias = [padding_bias_prefix] + tt_identity(n_sq)
 
-    #L_op_tt = tt_rank_reduce(tt_add(L_op_tt, padding_op))
-    #L_op_tt_adj = tt_rank_reduce(tt_add(L_op_tt_adj, padding_op_adj))
-    #eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, padding_op_bias))
+    L_op_tt = tt_rank_reduce(tt_add(L_op_tt, padding_op))
+    L_op_tt_adj = tt_rank_reduce(tt_add(L_op_tt_adj, padding_op_adj))
+    eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, padding_op_bias))
     # ---
     # Inequality Operator
     # X
@@ -468,7 +468,7 @@ if __name__ == "__main__":
         L_op_tt,
         L_op_tt_adj,
         eq_bias_tt,
-        max_iter=2,
+        max_iter=1,
         verbose=True
     )
     t1 = time.time()

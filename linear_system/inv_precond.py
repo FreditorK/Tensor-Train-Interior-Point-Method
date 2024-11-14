@@ -20,12 +20,14 @@ s_matrix_tt_2 = [np.array([[0, 0, 1, 0],
                          [1, 0, 0, 0],
                          [0, 0, 0, 0.0]]).reshape(1, 4, 4, 1) for _ in range(2)]
 
-s_matrix_tt = tt_rank_reduce(tt_add(s_matrix_tt, s_matrix_tt_2)) #tt_random_gaussian([2], (2, 2))
+s_matrix_tt = tt_random_gaussian([2], (2, 2)) #tt_rank_reduce(tt_add(s_matrix_tt, s_matrix_tt_2)) #tt_random_gaussian([2], (2, 2))
 
 print(np.round(tt_matrix_to_matrix(s_matrix_tt), 3))
+print("Cond", np.linalg.cond(tt_matrix_to_matrix(s_matrix_tt)))
 print(tt_ranks(s_matrix_tt))
-sol = tt_inv_precond(copy.copy(s_matrix_tt), [4])
+sol = tt_inv_precond(copy.copy(s_matrix_tt), [3], verbose=True)
 print(np.round(tt_matrix_to_matrix(tt_mat_mat_mul(sol, s_matrix_tt)), decimals=2))
+print("Cond", np.linalg.cond(tt_matrix_to_matrix(tt_mat_mat_mul(sol, s_matrix_tt))))
 print(tt_ranks(sol))
 pseudo_inv = sol
 print([c.shape for c in pseudo_inv])

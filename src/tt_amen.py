@@ -18,7 +18,7 @@ def _local_product(Phi_right, Phi_left, coreA, core):
     return w
 
 
-def tt_amen(A, b, nswp=50, x0=None, eps=1e-10, rmax=1024, kickrank=4, reg_lambda=1e-12, verbose=False):
+def tt_amen(A, b, nswp=50, x0=None, eps=1e-10, rmax=1024, solver_limit=500, local_iters=50, kickrank=4, verbose=False):
 
     dtype = A[0].dtype
     damp = 2
@@ -130,8 +130,6 @@ def tt_amen(A, b, nswp=50, x0=None, eps=1e-10, rmax=1024, kickrank=4, reg_lambda
         # start loop
         max_res = 0
 
-        #rz = [1] + tt_ranks(z_tt) + [1]
-
         for k in range(d):
             previous_solution = np.reshape(x_cores[k], [-1, 1])
 
@@ -149,12 +147,24 @@ def tt_amen(A, b, nswp=50, x0=None, eps=1e-10, rmax=1024, kickrank=4, reg_lambda
             B = einsum('lsr,smnRL->lmLrnR', Phis[k], Bp)
             B = np.reshape(B, [rx[k] * N[k] * rx[k + 1], rx[k] * N[k] * rx[k + 1]])
 
-            reg_B = B + reg_lambda * np.identity(B.shape[0])
-            solution_now, _, _, _ = scip.linalg.lstsq(reg_B, rhs, check_finite=False)
-            print(np.linalg.cond(reg_B))
+            res_old = np.linalg.norm(B @ previous_solution - rhs) / norm_rhs
 
-            res_old = np.linalg.norm(reg_B @ previous_solution - rhs) / norm_rhs
-            res_new = np.linalg.norm(reg_B @ solution_now - rhs) / norm_rhs
+            #print("Getting stuck in solve")
+            is_large = B.shape[0] > solver_limit
+            is_sparse = np.count_nonzero(B) / B.size < 0.25
+            if is_large and is_sparse and False:
+                sparse_B = scipy.sparse.csc_matrix(B)
+                ilu = scipy.sparse.linalg.spilu(sparse_B)
+                precond = scipy.sparse.linalg.LinearOperator(sparse_B.shape, ilu.solve)
+                solution_now, _ = scipy.sparse.linalg.gmres(sparse_B, rhs, atol=10 * eps, M=precond,
+                                                            maxiter=local_iters)
+
+            else:
+                u, s, v = scip.linalg.svd(B, full_matrices=False, check_finite=False)
+                s_plus = np.diag(np.divide(1, s))
+                solution_now = v.T @ s_plus @ u.T @ rhs
+
+            res_new = np.linalg.norm(B @ solution_now - rhs) / norm_rhs
 
             # residual damp check
             if res_old / res_new < damp and res_new > real_tol:
@@ -172,7 +182,7 @@ def tt_amen(A, b, nswp=50, x0=None, eps=1e-10, rmax=1024, kickrank=4, reg_lambda
                 for r in range(u.shape[1] - 1, 0, -1):
                     # solution has the same size
                     solution = u[:, :r] @ np.diag(s[:r]) @ v[:r, :]
-                    res = np.linalg.norm(reg_B @ np.reshape(solution, [-1, 1]) - rhs) / norm_rhs
+                    res = np.linalg.norm(B @ np.reshape(solution, [-1, 1]) - rhs) / norm_rhs
                     if res > max(real_tol * damp, res_new):
                         break
                 r += 1
@@ -228,7 +238,6 @@ def tt_amen(A, b, nswp=50, x0=None, eps=1e-10, rmax=1024, kickrank=4, reg_lambda
                 x_cores[k] = np.reshape(u, [rx[k], N[k], r])
                 x_cores[k + 1] = np.reshape(v, [r, N[k + 1], rx[k + 2]])
                 rx[k + 1] = r
-
                 # next phis with norm correction
                 Phis[k + 1] = _compute_phi_fwd_A(Phis[k],
                                                  x_cores[k], A[k], x_cores[k])
@@ -244,7 +253,6 @@ def tt_amen(A, b, nswp=50, x0=None, eps=1e-10, rmax=1024, kickrank=4, reg_lambda
                 norm = norm if norm > 0 else 1.0
                 normb[k] = norm
                 Phis_b[k + 1] = Phis_b[k + 1] / norm
-
                 # norm correction
                 nrmsc = nrmsc * normb[k] / (normA[k] * normx[k])
 
@@ -302,30 +310,33 @@ def _compute_phi_fwd_rhs(Phi_now, core_rhs, core):
     return Phi_next
 
 
-def tt_pinv(matrix_tt, err_bound):
+def tt_inv_precond(matrix_tt, target_ranks, tol=1e-10, max_iter=100, verbose=False):
+    if verbose:
+        t0 = time.time()
     if np.all(np.array(tt_ranks(matrix_tt))== 1):
         pinv_tt = [np.linalg.pinv(np.squeeze(m)) for m in matrix_tt]
         return [m.reshape(1, *m.shape, 1) for m in pinv_tt], 0
-    train_tt = [
-        np.kron(
-            t_t.reshape(t_t.shape[0], 1, 1, *t_t.shape[1:]), t.reshape(*t.shape[:3], 1, 1, t.shape[-1])
-        ) for t_t, t in zip(tt_transpose(matrix_tt), matrix_tt)
-    ]
-    train_tt = tt_rank_reduce(sum([break_core_bond(t) for t in train_tt], []), err_bound=err_bound)
-    b_tt = tt_rank_reduce(sum([break_core_bond(t) for t in matrix_tt], []), err_bound=err_bound)
-    sol, res = tt_amen(train_tt, b_tt, kickrank=2, verbose=True, reg_lambda=0)
-    sol = tt_rank_reduce([einsum("abc, cde -> abde", c_1, c_2, optimize=True) for c_1, c_2 in zip(sol[:-1:2], sol[1::2])], err_bound=err_bound)
-    return sol, res
-
-def tt_inv_precond(matrix_tt, target_ranks, max_iter=100):
     norm = np.sqrt(tt_inner_prod(matrix_tt, matrix_tt))
     inv_tt = tt_scale(np.divide(1, norm), tt_transpose(matrix_tt))
     tt_gaussian = tt_random_gaussian(target_ranks, shape=matrix_tt[0].shape[1:-1])
+    identity = [np.eye(c.shape[1]).reshape(1, *c.shape[1:-1], 1) for c in matrix_tt]
+    matrix_tt_t = tt_transpose(matrix_tt)
+    prev_AG_ip = np.inf
+    alpha = 0
     for _ in range(max_iter):
-        new_mat = tt_mat_mat_mul(inv_tt, tt_mat_mat_mul(matrix_tt, inv_tt))
-        inv_tt = tt_sub(tt_scale(2, inv_tt), new_mat)
+        R = tt_sub(identity, tt_mat_mat_mul(matrix_tt, inv_tt))
+        G = tt_scale(-2, tt_mat_mat_mul(matrix_tt_t, R))
+        AG = tt_mat_mat_mul(matrix_tt, G)
+        AG_ip = tt_inner_prod(AG, AG)
+        alpha = 0.5*alpha + 0.5*tt_inner_prod(R, AG)/AG_ip
+        inv_tt = tt_add(inv_tt, tt_scale(alpha, G))
         inv_tt = _tt_lr_random_orthogonalise(inv_tt, tt_gaussian)
+        if np.abs(AG_ip - prev_AG_ip) < tol:
+            break
+        prev_AG_ip = AG_ip
 
-    return tt_rank_reduce(inv_tt)
+    if verbose:
+        print(f"Time: {time.time()-t0}s")
+    return inv_tt
 
 
