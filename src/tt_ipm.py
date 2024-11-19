@@ -162,6 +162,10 @@ def tt_infeasible_newton_system_lhs(
     return tt_rank_reduce(newton_system, err_bound=0.1*tol)
 
 
+def _tt_symmetrise(matrix_tt, err_bound):
+    return tt_rank_reduce(tt_add(matrix_tt, tt_transpose(matrix_tt)), err_bound=err_bound)
+
+
 def _tt_get_block(i, j, block_matrix_tt):
     first_core = block_matrix_tt[0][:, i, j, :]
     first_core = np.einsum("ab, bcde -> acde", first_core, block_matrix_tt[1])
@@ -214,9 +218,12 @@ def _tt_ipm_newton_step(
     Delta_tt, res = tt_amen(lhs_matrix_tt, rhs_vec_tt, kickrank=4, verbose=verbose)
     Delta_tt = tt_mat(Delta_tt, shape=(2, 2))
     Delta_Y_tt = tt_rank_reduce(_tt_get_block(0, 0, Delta_tt), err_bound=tol)
-    Delta_X_tt = tt_rank_reduce(_tt_get_block(0, 1, Delta_tt), err_bound=tol)
     Delta_T_tt = tt_rank_reduce(_tt_get_block(1, 0, Delta_tt), err_bound=tol) if active_ineq else None
+    Delta_X_tt = tt_rank_reduce(_tt_get_block(0, 1, Delta_tt), err_bound=tol)
     Delta_Z_tt = tt_rank_reduce(_tt_get_block(1, 1, Delta_tt), err_bound=tol)
+    if np.greater(res, 0.1*tol):
+        Delta_X_tt = _tt_symmetrise(Delta_X_tt, tol)
+        Delta_Z_tt = _tt_symmetrise(Delta_Z_tt, tol)
     x_step_size, z_step_size = _tt_line_search(X_tt, T_tt, Z_tt, Delta_X_tt, Delta_T_tt, Delta_Z_tt, lin_op_tt_ineq, bias_tt_ineq, active_ineq)
     X_tt = tt_rank_reduce(tt_add(X_tt, tt_scale(0.98 * x_step_size, Delta_X_tt)), err_bound=0.1*tol)
     Y_tt = tt_rank_reduce(tt_add(Y_tt, tt_scale(0.98 * z_step_size, Delta_Y_tt)), err_bound=tol)

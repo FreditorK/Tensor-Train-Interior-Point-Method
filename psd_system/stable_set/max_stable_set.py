@@ -46,6 +46,7 @@ if __name__ == "__main__":
     tr_tt_op = tt_tr_op(n)
     tr_tt_op_adjoint = tt_tr_op_adjoint(n)
     tr_bias_tt = [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)]
+    #print(np.round(tt_matrix_to_matrix(tt_mat(tt_linear_op(tr_tt_op_adjoint, [np.array([[1.0, 0.9], [0.7, 0.6]]).reshape(1, 2, 2, 1) for _ in range(n)]), shape=(2, 2))), decimals=2))
 
     # Objective
     J_tt = tt_one_matrix(n)
@@ -57,7 +58,7 @@ if __name__ == "__main__":
 
     print("...Problem created!")
     print(f"Objective Ranks: {tt_ranks(J_tt)}")
-    print(f"Constraint Ranks: \n \t As {tt_ranks(L_tt)}, bias {tt_ranks(bias_tt)}")
+    print(f"Constraint Ranks: \n \t As {tt_ranks(L_tt)}, As^* {tt_ranks(L_tt_adjoint)}, bias {tt_ranks(bias_tt)}")
     t0 = time.time()
     X_tt, Y_tt, T_tt, Z_tt = tt_ipm(
         J_tt,

@@ -26,7 +26,7 @@ def tt_partial_trace_op(block_size, dim):
     return op_tt
 
 def tt_partial_trace_op_adj(block_size, dim):
-    matrix_tt = [np.ones((1, 2, 2, 1)) for _ in range(dim-block_size)] + [np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(block_size)]
+    matrix_tt = [np.ones((1, 2, 2, 1)) for _ in range(dim-block_size)]
     matrix_tt = tt_rank_reduce(tt_sub(matrix_tt, tt_identity(dim-block_size) + [np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(block_size)]))
     op_tt = tt_mask_to_linear_op(matrix_tt[:-block_size])
     for c in matrix_tt[-block_size:]:
@@ -359,7 +359,7 @@ if __name__ == "__main__":
         [ P  P  | P  P  | P | P P P]
         [ P  P  | P  P  | P | P P P]
     """
-    np.set_printoptions(linewidth=600, threshold=np.inf, precision=4, suppress=True)
+    np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=4, suppress=True)
     print("Creating Problem...")
     q_op_prefix = np.zeros((1, 4, 2, 2, 1))
     q_op_prefix[0, 0, 0, 0, 0] = 1
@@ -370,7 +370,7 @@ if __name__ == "__main__":
     padding_bias_prefix = np.zeros((1, 2, 2, 1))
     padding_bias_prefix[0, 1, 1, 0] = 1
 
-    n = 2
+    n = 1
 
     np.random.seed(Config.seed)
     G_A = tt_random_graph(n, Config.max_rank)
@@ -460,22 +460,22 @@ if __name__ == "__main__":
     print(f"Ineq Op-rank: {tt_ranks(Q_ineq_op)}")
     print(f"Ineq Op-adjoint-rank: {tt_ranks(Q_ineq_op_adj)}")
     print(f"Ineq Bias-rank: {tt_ranks(Q_ineq_bias)}")
-    #print(np.round(tt_matrix_to_matrix(tt_mat(tt_linear_op(L_op_tt, tt_random_gaussian([3, 3, 3, 3], shape=(2, 2))), shape=(2, 2))), decimals=2))
-    #print(np.round(tt_matrix_to_matrix(eq_bias_tt), decimals=2))
     t0 = time.time()
     X_tt, Y_tt, T_tt, Z_tt = tt_ipm(
         C_tt,
         L_op_tt,
         L_op_tt_adj,
         eq_bias_tt,
-        max_iter=1,
+        max_iter=0,
         verbose=True
     )
     t1 = time.time()
     print("Solution: ")
-    #print(np.round(tt_matrix_to_matrix(X_tt), decimals=2))
+    print(np.round(tt_matrix_to_matrix(X_tt), decimals=2))
     print(f"Objective value: {tt_inner_prod(C_tt, X_tt)}")
     print("Complementary Slackness: ", tt_inner_prod(X_tt, Z_tt))
     print(f"Ranks X_tt: {tt_ranks(X_tt)}, Y_tt: {tt_ranks(Y_tt)}, \n "
           f"     T_tt: {tt_ranks(T_tt)}, Z_tt: {tt_ranks(Z_tt)} ")
     print(f"Time: {t1 - t0}s")
+    print(np.round(tt_matrix_to_matrix(tt_mat(tt_linear_op(L_op_tt, tt_one_matrix(len(L_op_tt))), shape=(2, 2))), decimals=2))
+    print(tt_ranks(tt_rank_reduce(L_op_tt, err_bound=1e-8)))

@@ -53,7 +53,10 @@ def tt_random_gaussian(target_ranks: List[int], shape=(2,)):
 
 
 def tt_rl_orthogonalise(train_tt: List[np.array]):
-    for idx in range(len(train_tt) - 1, 0, -1):
+    dim = len(train_tt)
+    if dim == 1:
+        return train_tt
+    for idx in range(dim - 1, 0, -1):
         shape_p1 = train_tt[idx].shape
         shape = train_tt[idx - 1].shape
         Q_T, R = np.linalg.qr(train_tt[idx].reshape(shape_p1[0], -1).T)
@@ -163,8 +166,11 @@ def _tt_lr_random_orthogonalise(train_tt, gaussian_tt):
 
 def tt_rank_reduce(train_tt: List[np.array], err_bound=1e-18):
     """ Might reduce TT-rank """
+    dim = len(train_tt)
+    if dim == 1:
+        return train_tt
     train_tt = tt_rl_orthogonalise(train_tt)
-    err_bound = err_bound*np.sqrt(np.divide(tt_inner_prod(train_tt, train_tt), len(train_tt)-1))
+    err_bound = err_bound*np.sqrt(np.divide(tt_inner_prod(train_tt, train_tt), dim-1))
     rank = 1
     for idx, tt_core in enumerate(train_tt[:-1]):
         idx_shape = tt_core.shape
@@ -552,6 +558,9 @@ def tt_binary_round(train_tt, num_iter=30, tol=1e-10):
 
 
 def tt_random_graph(dim, max_rank, max_iter=100):
+    if dim == 1:
+        d = np.round(np.random.rand())
+        return [np.array([[np.round(np.random.rand()), d], [d, np.round(np.random.rand())]]).reshape(1, 2, 2, 1)]
     max_rank = max_rank
     perm_cores = [
         np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1),
@@ -579,6 +588,8 @@ def tt_random_graph(dim, max_rank, max_iter=100):
 
 
 def tt_matrix_to_matrix(matrix_tt):
+    if len(matrix_tt) == 1:
+        return np.squeeze(matrix_tt)
     tensor = tt_to_tensor(matrix_tt)
     n = len(tensor.shape)
     axes = [i for i in range(0, n - 1, 2)] + [i for i in range(1, n, 2)]
