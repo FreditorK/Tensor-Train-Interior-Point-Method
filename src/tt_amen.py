@@ -194,23 +194,24 @@ def tt_amen(A, b, nswp=50, x0=None, eps=1e-10, rmax=1024, solver_limit=500, kick
             v = np.diag(s[:r]) @ v[:r, :]
             v = v.T
 
+            if not last:
+                czA = _local_product(ZAX[k + 1], ZAX[k], A[k],
+                                     np.reshape(u @ v.T, [rx[k], N[k], rx[k + 1]]))  # shape rzp x N x rz
+
+                # shape is rzp x N x rz
+                czy = einsum('br,bnB,BR->rnR', Zb[k], b[k] * nrmsc, Zb[k + 1])
+                cz_new = czy - czA
+                uz, _, _ = scipy.linalg.svd(np.reshape(cz_new, [rz[k] * N[k], rz[k + 1]]), full_matrices=False,
+                                            check_finite=False)
+                # truncate to kickrank
+                cz_new = uz[:, :min(kickrank, uz.shape[1])]
+
+                qz, _ = np.linalg.qr(cz_new)
+                rz[k + 1] = qz.shape[1]
+                z_cores[k] = np.reshape(qz, [rz[k], N[k], rz[k + 1]])
+
             if k < d - 1:
                 if not last:
-                    czA = _local_product(ZAX[k + 1], ZAX[k], A[k],
-                                         np.reshape(u @ v.T, [rx[k], N[k], rx[k + 1]]))  # shape rzp x N x rz
-
-                    # shape is rzp x N x rz
-                    czy = einsum('br,bnB,BR->rnR', Zb[k], b[k] * nrmsc, Zb[k + 1])
-                    cz_new = czy - czA
-                    uz, _, _ = scipy.linalg.svd(np.reshape(cz_new, [rz[k] * N[k], rz[k + 1]]), full_matrices=False,
-                                                check_finite=False)
-                    # truncate to kickrank
-                    cz_new = uz[:, :min(kickrank, uz.shape[1])]
-
-                    qz, _ = np.linalg.qr(cz_new)
-                    rz[k + 1] = qz.shape[1]
-                    z_cores[k] = np.reshape(qz, [rz[k], N[k], rz[k + 1]])
-
                     left_res = _local_product(ZAX[k + 1], XAX[k], A[k], np.reshape(u @ v.T, [rx[k], N[k], rx[k + 1]]))
                     left_b = einsum('br,bmB,BR->rmR', Xb[k], b[k] * nrmsc, Zb[k + 1])
                     uk = left_b - left_res  # rx_k x N_k x rz_k+1
@@ -376,11 +377,11 @@ def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, solv
         #print(f"\tTT-Matrix rank: {tt_ranks(A)}")
         #print(f"\tTT-bias rank: {tt_ranks(b)}")
 
-    nswp = 6
+    nswp = 5
+
     for swp in range(nswp):
         print("It ", swp, tt_ranks(x_cores))
-        if swp == 3:
-            last = True
+        last = True
         # right to left orthogonalization
         for k in range(d - 1, 0, -1):
             # update the z part (ALS) update
@@ -419,19 +420,16 @@ def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, solv
             for (i, j) in block_A:
                 # update phis (einsum)
                 local_XAX = _compute_phi_bck_A(XAX[(i, j)][k + 1], x_cores[k], block_A[(i, j)][k], x_cores[k]) # rx[k] x rA[k] x rx[k]
-                norm = np.linalg.norm(local_XAX)
-                norm = norm if norm > 0 else 1.0
-                XAX[(i, j)][k] = local_XAX / norm
+                XAX[(i, j)][k] = local_XAX
                 if not last:
-                    ZAX[(i, j)][k] = _compute_phi_bck_A(ZAX[(i, j)][k + 1], z_cores[k], block_A[(i, j)][k], x_cores[k]) / norm # rz[k] x rA[k] x rx[k]
+                    ZAX[(i, j)][k] = _compute_phi_bck_A(ZAX[(i, j)][k + 1], z_cores[k], block_A[(i, j)][k], x_cores[k]) # rz[k] x rA[k] x rx[k]
             for i in block_b:
                 local_Xb = _compute_phi_bck_rhs(Xb[i][k + 1], block_b[i][k], x_cores[k]) # rb[k] x rx[k]
-                norm = np.linalg.norm(local_Xb)
-                norm = norm if norm > 0 else 1.0
-                Xb[i][k] = local_Xb / norm
+                Xb[i][k] = local_Xb
                 if not last:
-                    Zb[i][k] = _compute_phi_bck_rhs(Zb[i][k + 1], block_b[i][k], z_cores[k]) / norm # rb[k] x rz[k]
+                    Zb[i][k] = _compute_phi_bck_rhs(Zb[i][k + 1], block_b[i][k], z_cores[k]) # rb[k] x rz[k]
 
+        # TODO: Up to here it should be safe, x_core does not change, i.e. you can shift block with QR
         # start loop
         max_res = 0
 
@@ -465,7 +463,7 @@ def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, solv
             solution_now = v[:r].T @ np.diag(np.divide(1, s)) @ u[:, :r].T @ rhs
 
             block_res_new = np.linalg.norm(B @ solution_now - rhs) / norm_rhs
-            print("Res", block_res_new, block_res_old)
+            print(f"Res {k}", block_res_new, block_res_old)
             # residual damp check
             if block_res_old / block_res_new < damp and block_res_new > real_tol:
                 if verbose:
@@ -474,10 +472,9 @@ def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, solv
 
             max_res = max(max_res, block_res_old)
 
-            # hold block on left so it ends up in u
             solution_now = np.reshape(solution_now, (block_size, rx[k], N[k], rx[k + 1]))
-            solution_now = np.swapaxes(solution_now, 0, 1)
-            solution_now = np.reshape(solution_now, [rx[k] * block_size * N[k], rx[k + 1]])
+            solution_now = np.transpose(solution_now, (1, 2, 0, 3))
+            solution_now = np.reshape(solution_now, [rx[k] * N[k] * block_size, rx[k + 1]])
             # truncation
             if k < d - 1:
                 u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False)
@@ -485,8 +482,8 @@ def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, solv
                 r = 0
                 for r in range(u.shape[1] - 1, 0, -1):
                     # solution has the same size
-                    solution = np.reshape(u[:, :r] @ np.diag(s[:r]) @ v[:r, :], (rx[k], block_size, N[k], rx[k + 1]))
-                    res = np.linalg.norm(B @ np.reshape(np.swapaxes(solution, 0, 1), (-1, 1)) - rhs) / norm_rhs
+                    solution = np.reshape(u[:, :r] @ np.diag(s[:r]) @ v[:r, :], (rx[k], N[k], block_size, rx[k + 1]))
+                    res = np.linalg.norm(B @ np.reshape(np.transpose(solution, (2, 0, 1, 3)), (-1, 1)) - rhs) / norm_rhs
                     if res > max(real_tol * damp, block_res_new):
                         break
                 r += 1
@@ -500,46 +497,55 @@ def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, solv
             u = u[:, :r]
             v = np.diag(s[:r]) @ v[:r, :]
 
-            if k < d - 1:
-                if not last:
-                    # Computing local residuals
-                    czA = np.zeros((block_size, rz[k], N[k], rz[k + 1]))
-                    local_core = np.reshape(u @ v, [rx[k], block_size, N[k], rx[k + 1]])
-                    for (i, j) in block_A:
-                        czA[i] += _local_product(ZAX[(i, j)][k + 1], ZAX[(i, j)][k], block_A[(i, j)][k],
-                                                 local_core[:, j])  # shape rzp x N x rz
-                    # shape is rzp x N x rz
-                    czy = np.zeros((block_size, rz[k], N[k], rz[k + 1]))
-                    for i in block_b:
-                        czy[i] = einsum('br,bnB,BR->rnR', Zb[i][k], block_b[i][k], Zb[i][k + 1])
-                    cz_new = czy - czA
+            if not last:
+                # Computing local residuals
+                czA = np.zeros((rz[k], block_size, N[k], rz[k + 1]))
+                local_core = np.reshape(u @ v, [rx[k], N[k], block_size, rx[k + 1]])
+                for (i, j) in block_A:
+                    czA[:, i] += _local_product(ZAX[(i, j)][k + 1], ZAX[(i, j)][k], block_A[(i, j)][k], local_core[:, :, j])  # shape rzp x N x rz
+                # shape is rzp x N x rz
+                czy = np.zeros((rz[k], block_size, N[k], rz[k + 1]))
+                for i in block_b:
+                    czy[:, i] = einsum('br,bnB,BR->rnR', Zb[i][k], block_b[i][k], Zb[i][k + 1])
+                cz_new = czy - czA
+
+                if k < d - 1:
                     # push block to right so it does not appear in uz
+                    cz_new = np.swapaxes(cz_new, 1, 2)
                     uz, sz, vz = scipy.linalg.svd(np.reshape(cz_new, (rz[k] * N[k], block_size * rz[k + 1])),
-                                                full_matrices=False, check_finite=False)
+                                                  full_matrices=False, check_finite=False)
                     # truncate to kickrank
                     trunc_r = min(kickrank, uz.shape[1])
                     cz_new = uz[:, :trunc_r]
                     cz_new = np.reshape(cz_new, [rz[k] * N[k], trunc_r])
 
-                    # lr orthogonalise
+                    # lr orthogonalise and shift block to right
                     Qz, _ = np.linalg.qr(cz_new)
                     z_cores[k] = np.reshape(Qz, (rz[k], N[k], trunc_r))
-                    z_cores[k + 1] = einsum('rdc,cbR->rbdR', (np.diag(sz[:trunc_r]) @ vz[:trunc_r]).reshape(trunc_r, block_size, rz[k + 1]), z_cores[k + 1])
+                    z_cores[k + 1] = einsum('rdc,cbR->rbdR',
+                                            (np.diag(sz[:trunc_r]) @ vz[:trunc_r]).reshape(trunc_r, block_size, rz[k + 1]),
+                                            z_cores[k + 1])
                     rz[k + 1] = trunc_r
+                else:
+                    # lr orthogonalise and shift block to right
+                    Qz, _ = np.linalg.qr(np.reshape(cz_new, (rz[k] * block_size * N[k], rz[k + 1])))
+                    z_cores[k] = np.reshape(Qz, (rz[k], block_size, N[k], rz[k + 1]))
 
-                    # hybrid enrichment
-                    left_res = np.zeros((block_size, rx[k], N[k], rz[k + 1]))
-                    local_core = np.reshape(u @ v, [rx[k], block_size, N[k], rx[k + 1]])
+            if k < d - 1:
+                if not last: # TODO: Remove False
+                    # Enrichment
+                    left_res = np.zeros((rx[k], N[k], block_size, rz[k + 1]))
+                    local_core = np.reshape(u @ v, [rx[k], N[k], block_size, rx[k + 1]])
                     for (i, j) in block_A:
-                        left_res[i] += _local_product(ZAX[(i, j)][k + 1], XAX[(i, j)][k], block_A[(i, j)][k], local_core[:, j])
-                    left_b = np.zeros((block_size, rx[k], N[k], rz[k + 1]))
+                        left_res[:, :, i] += _local_product(ZAX[(i, j)][k + 1], XAX[(i, j)][k], block_A[(i, j)][k], local_core[:, :, j])
+                    left_b = np.zeros((rx[k], N[k], block_size, rz[k + 1]))
                     for i in block_b:
-                        left_b[i] = einsum('br,bmB,BR->rmR', Xb[i][k], block_b[i][k], Zb[i][k + 1])
-                    uk = left_b - left_res  # b x rx_k x N_k x rz_k+1
+                        left_b[:, :, i] = einsum('br,bmB,BR->rmR', Xb[i][k], block_b[i][k], Zb[i][k + 1])
+                    uk = left_b - left_res  # rx_k x N_k x b x rz_k+1
                     uk = uk.reshape(rx[k]*N[k], -1)
                     enriched_u = np.concatenate((u.reshape(rx[k]*N[k], -1), uk), 1)
                     u = enriched_u
-                    v = np.concatenate((v, np.zeros((rz[k + 1], rx[k + 1]))), 0)  # rx[k+1] x r+rz[k+1]
+                    v = np.concatenate((v, np.zeros((rz[k + 1], rx[k + 1]))), 0)  # r+rz[k+1] x rx[k+1]
                 else:
                     u = u.reshape(rx[k]*N[k], -1)
                 # u: rx_k*N_k x enriched_rank, Rmat: enriched_rank x block_size*(r+rz[k+1])
@@ -555,24 +561,20 @@ def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, solv
                 # next phis with norm correction
                 for (i, j) in block_A:
                     local_XAX = _compute_phi_fwd_A(XAX[(i, j)][k], x_cores[k], block_A[(i, j)][k], x_cores[k])
-                    norm = np.linalg.norm(local_XAX)
-                    norm = norm if norm > 0 else 1.0
-                    XAX[(i, j)][k + 1] = local_XAX / norm
+                    XAX[(i, j)][k + 1] = local_XAX
                     if not last:
-                        ZAX[(i, j)][k + 1] = _compute_phi_fwd_A(ZAX[(i, j)][k], z_cores[k], block_A[(i, j)][k], x_cores[k]) / norm
+                        ZAX[(i, j)][k + 1] = _compute_phi_fwd_A(ZAX[(i, j)][k], z_cores[k], block_A[(i, j)][k], x_cores[k])
                 for i in block_b:
                     local_Xb = _compute_phi_fwd_rhs(Xb[i][k], block_b[i][k], x_cores[k])
-                    norm = np.linalg.norm(local_Xb)
-                    norm = norm if norm > 0 else 1.0
-                    Xb[i][k + 1] = local_Xb / norm
+                    Xb[i][k + 1] = local_Xb
                     if not last:
-                        Zb[i][k + 1] = _compute_phi_fwd_rhs(Zb[i][k], block_b[i][k], z_cores[k]) / norm
+                        Zb[i][k + 1] = _compute_phi_fwd_rhs(Zb[i][k], block_b[i][k], z_cores[k])
             else:
-                x_cores[k] = np.reshape(
-                    u @ v, (rx[k], block_size, N[k], rx[k + 1]))
+                solution_now = np.reshape(u @ v, (rx[k], N[k], block_size, rx[k + 1]))
+                x_cores[k] = np.swapaxes(solution_now, 1, 2)
 
-        if last:
-            break
+        #if last:
+         #   break
 
         if max_res < eps:
             last = True
