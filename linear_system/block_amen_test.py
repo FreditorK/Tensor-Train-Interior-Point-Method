@@ -17,7 +17,7 @@ block_matrix_tt = {(0, 0): block_1_tt, (1, 1): block_2_tt}
 b_1_tt = tt_rank_reduce(tt_matrix_vec_mul(block_1_tt, tt_random_gaussian(ranks, shape=(2,))))
 b_2_tt = tt_rank_reduce(tt_matrix_vec_mul(block_2_tt, tt_random_gaussian(ranks, shape=(2,))))
 block_b_tt = {0: b_1_tt, 1: b_2_tt}
-tt_block_amen(block_matrix_tt, block_b_tt, kickrank=4, verbose=True)
+tt_block_amen(block_matrix_tt, block_b_tt, kickrank=2, verbose=True)
 #res_tt = tt_sub(tt_matrix_vec_mul(s_matrix_tt, sol), b_tt)
 #print(tt_inner_prod(res_tt, res_tt))
 
