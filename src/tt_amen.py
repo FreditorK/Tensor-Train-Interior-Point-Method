@@ -378,6 +378,11 @@ def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, solv
         b_ranks = {key: tt_ranks(block) for key, block in block_b.items()}
         print(f"\tTT-bias rank: {b_ranks}")
 
+    normA = np.ones((block_size, d - 1))
+    normb = np.ones((block_size, d - 1))
+    normx = np.ones((d - 1))
+    nrmsc = np.ones(block_size)
+
     for swp in range(nswp):
 
         for k in range(d - 1, 0, -1):
@@ -390,7 +395,7 @@ def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, solv
                     # shape is rzp x N x rz
                     czy = np.zeros((block_size, rz[k], N[k], rz[k + 1]))
                     for i in block_b:
-                        czy[i] = einsum('br,bnB,BR->rnR', Zb[i][k], block_b[i][k], Zb[i][k + 1])
+                        czy[i] = einsum('br,bnB,BR->rnR', Zb[i][k], nrmsc[i] * block_b[i][k], Zb[i][k + 1])
                     cz_new = czy - czA
                     # push block to from right to left
                     uz, sz, vz = scip.linalg.svd(np.reshape(cz_new, (rz[k]*block_size, N[k]*rz[k+1])), full_matrices=False, check_finite=False)
@@ -407,6 +412,9 @@ def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, solv
                 z_cores[k] = np.reshape(Qz.T, (trunc_r, N[k], rz[k+1]))
                 rz[k] = trunc_r
 
+            if swp > 0:
+                nrmsc = nrmsc * normA[:, k-1] * normx[k-1] / normb[:, k-1]
+
             # right to left orthogonalisation of x_cores
             core = np.reshape(x_cores[k], [rx[k]*block_size, N[k]*rx[k + 1]]).T
             Qmat, Rmat = np.linalg.qr(core)
@@ -414,19 +422,36 @@ def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, solv
 
             x_cores[k] = np.reshape(Qmat.T, [shifted_r, N[k], rx[k + 1]])
             x_cores[k - 1] = einsum('rdc,cbR->rbdR', x_cores[k - 1], Rmat.T.reshape(rx[k], block_size, shifted_r))
+            norm_now = np.linalg.norm(x_cores[k-1])
+            x_cores[k - 1] /= norm_now
+            normx[k-1] *= norm_now
             rx[k] = shifted_r
 
+            row_A = np.zeros(block_size)
             for (i, j) in block_A:
                 # update phis (einsum)
                 XAX_ij_k = _compute_phi_bck_A(XAX[(i, j)][k + 1], x_cores[k], block_A[(i, j)][k], x_cores[k]) # rx[k] x rA[k] x rx[k]
+                row_A[i] += np.linalg.norm(XAX_ij_k)**2
                 XAX[(i, j)][k] = XAX_ij_k
                 if not last:
                     ZAX[(i, j)][k] = _compute_phi_bck_A(ZAX[(i, j)][k + 1], z_cores[k], block_A[(i, j)][k], x_cores[k]) # rz[k] x rA[k] x rx[k]
+            row_A += (row_A == 0)
+            normA[:, k - 1] = np.sqrt(row_A)
+            for (i, j) in block_A:
+                XAX[(i, j)][k] /= normA[i, k - 1]
+                if not last:
+                    ZAX[(i, j)][k] /= normA[i, k - 1]
+
             for i in block_b:
                 Xb_i_k = _compute_phi_bck_rhs(Xb[i][k + 1], block_b[i][k], x_cores[k]) # rb[k] x rx[k]
-                Xb[i][k] = Xb_i_k
+                norm = np.linalg.norm(Xb_i_k)
+                norm = norm if norm > 0 else 1.0
+                normb[i, k - 1] = norm
+                Xb[i][k] = Xb_i_k / norm
                 if not last:
-                    Zb[i][k] = _compute_phi_bck_rhs(Zb[i][k + 1], block_b[i][k], z_cores[k]) # rb[k] x rz[k]
+                    Zb[i][k] = _compute_phi_bck_rhs(Zb[i][k + 1], block_b[i][k], z_cores[k]) / norm # rb[k] x rz[k]
+            nrmsc = nrmsc * normb[:, k - 1] / (normA[:, k - 1] * normx[k - 1])
+
 
         # start loop
         max_res = 0
@@ -439,7 +464,7 @@ def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, solv
             # assemble rhs
             rhs = np.zeros((block_size*m, 1))
             for i in block_b:
-                local_rhs = einsum('br,bmB,BR->rmR', Xb[i][k], block_b[i][k], Xb[i][k + 1])
+                local_rhs = einsum('br,bmB,BR->rmR', Xb[i][k], nrmsc[i] * block_b[i][k], Xb[i][k + 1])
                 rhs[m*i: m*(i+1)] = np.reshape(local_rhs, (-1, 1))
             norm_rhs = np.linalg.norm(rhs)
 
@@ -498,7 +523,7 @@ def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, solv
                     czA[:, i] += _local_product(ZAX[(i, j)][k + 1], ZAX[(i, j)][k], block_A[(i, j)][k], local_core[:, :, j])  # shape rzp x N x rz
                 czy = np.zeros((rz[k], block_size, N[k], rz[k + 1]))
                 for i in block_b:
-                    czy[:, i] = einsum('br,bnB,BR->rnR', Zb[i][k], block_b[i][k], Zb[i][k + 1])
+                    czy[:, i] = einsum('br,bnB,BR->rnR', Zb[i][k], nrmsc[i] * block_b[i][k], Zb[i][k + 1])
                 cz_new = czy - czA
                 if k < d - 1:
                     # push block to right so it does not appear in uz
@@ -530,7 +555,7 @@ def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, solv
                         left_res[:, :, i] += _local_product(ZAX[(i, j)][k + 1], XAX[(i, j)][k], block_A[(i, j)][k], local_core[:, :, j])
                     left_b = np.zeros((rx[k], N[k], block_size, rz[k + 1]))
                     for i in block_b:
-                        left_b[:, :, i] = einsum('br,bmB,BR->rmR', Xb[i][k], block_b[i][k], Zb[i][k + 1])
+                        left_b[:, :, i] = einsum('br,bmB,BR->rmR', Xb[i][k], nrmsc[i] * block_b[i][k], Zb[i][k + 1])
                     uk = left_b - left_res  # rx_k x N_k x b x rz_k+1
                     uk = uk.reshape(rx[k]*N[k]*block_size, -1)
                     enriched_u = np.concatenate((np.reshape(u, (rx[k]*N[k]*block_size, -1)), uk), 1)
@@ -545,20 +570,38 @@ def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, solv
                 v = einsum("rbi, iR -> rbR", Rtens, v) #  enriched_r x b x rx[k+1]
                 v = einsum('rbj, jdR->rbdR', v, x_cores[k + 1]) # enriched_r x b x N_k+1 rx[k+2]
 
+                nrmsc = nrmsc * normA[:, k] * normx[k] / normb[:, k]
+                norm_now = np.linalg.norm(v)
+                v /= norm_now
+                normx[k] *= norm_now
+
                 x_cores[k] = np.reshape(u, [rx[k], N[k], r])
                 x_cores[k + 1] = np.reshape(v, [r, block_size, N[k + 1], rx[k + 2]])
                 rx[k + 1] = r
-                # next phis with norm correction
+                row_A = np.zeros(block_size)
                 for (i, j) in block_A:
                     XAX_ij_k = _compute_phi_fwd_A(XAX[(i, j)][k], x_cores[k], block_A[(i, j)][k], x_cores[k])
+                    row_A[i] += np.linalg.norm(XAX_ij_k)**2
                     XAX[(i, j)][k + 1] = XAX_ij_k
                     if not last:
                         ZAX[(i, j)][k + 1] = _compute_phi_fwd_A(ZAX[(i, j)][k], z_cores[k], block_A[(i, j)][k], x_cores[k])
+                row_A += (row_A == 0)
+                normA[:, k] = np.sqrt(row_A)
+                for (i, j) in block_A:
+                    XAX[(i, j)][k + 1] /= normA[i, k]
+                    if not last:
+                        ZAX[(i, j)][k + 1] /= normA[i, k]
                 for i in block_b:
                     Xb_i_k = _compute_phi_fwd_rhs(Xb[i][k], block_b[i][k], x_cores[k])
-                    Xb[i][k + 1] = Xb_i_k
+                    norm = np.linalg.norm(Xb_i_k)
+                    norm = norm if norm > 0 else 1.0
+                    normb[i, k] = norm
+                    Xb[i][k + 1] = Xb_i_k / norm
                     if not last:
-                        Zb[i][k + 1] = _compute_phi_fwd_rhs(Zb[i][k], block_b[i][k], z_cores[k])
+                        Zb[i][k + 1] = _compute_phi_fwd_rhs(Zb[i][k], block_b[i][k], z_cores[k]) / norm
+
+                nrmsc = nrmsc * normb[:, k] / (normA[:, k] * normx[k])
+
             else:
                 current_core = np.reshape(u @ v, (rx[k], N[k], block_size, rx[k + 1]))
                 x_cores[k] = np.transpose(current_core, (0, 2, 1, 3))
@@ -576,6 +619,11 @@ def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, solv
         print('\tNumber of sweeps', swp+1)
         print('\tTime: ', time.time() - t0)
         print('\tTime per sweep: ', (time.time() - t0) / (swp+1))
+
+    normx = np.exp(np.sum(np.log(normx)) / d)
+
+    for k in range(d):
+        x_cores[k] = x_cores[k] * normx
 
     return x_cores, max_res
 
