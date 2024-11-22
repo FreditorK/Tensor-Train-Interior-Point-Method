@@ -378,7 +378,6 @@ def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, solv
         #print(f"\tTT-bias rank: {tt_ranks(b)}")
 
     for swp in range(nswp):
-        print("It ", swp, tt_ranks(x_cores))
         # right to left orthogonalization
         for k in range(d - 1, 0, -1):
             # update the z part (ALS) update
