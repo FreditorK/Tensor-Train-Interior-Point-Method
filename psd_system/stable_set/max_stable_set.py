@@ -65,6 +65,7 @@ if __name__ == "__main__":
         L_tt,
         L_tt_adjoint,
         bias_tt,
+        max_iter=3,
         verbose=True
     )
     t1 = time.time()
@@ -73,4 +74,4 @@ if __name__ == "__main__":
     print(f"Problem solved in {t1 - t0:.3f}s")
     print(f"Objective value: {tt_inner_prod(J_tt, X_tt)}")
     print("Complementary Slackness: ", tt_inner_prod(X_tt, Z_tt))
-    print(f"Ranks - X_tt {tt_ranks(X_tt)} Y_tt {tt_ranks(Y_tt)} Z_tt {tt_ranks(Z_tt)} ")
+    print(f"Ranks X_tt {tt_ranks(X_tt)} Y_tt {tt_ranks(Y_tt)} Z_tt {tt_ranks(Z_tt)} ")

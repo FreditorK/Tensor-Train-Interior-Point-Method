@@ -706,15 +706,17 @@ def tt_op_left_from_tt_matrix(matrix_tt):
 
 
 def tt_vec(matrix_tt):
-    return [c.reshape(c.shape[0], np.prod(c.shape[1:-1]), c.shape[-1]) for c in matrix_tt]
+    return sum([break_core_bond(c) for c in matrix_tt], [])
 
 
-def tt_mat(matrix_tt, shape=(2, 2)):
-    return [c.reshape(c.shape[0], *shape, c.shape[-1]) for c in matrix_tt]
+def tt_mat(vec_tt):
+    return [einsum("abc, cde -> abde", c_1, c_2) for c_1, c_2 in zip(vec_tt[1::2], vec_tt[:-1:2])]
 
 
 def tt_op_to_mat(op_tt):
-    return [c.reshape(c.shape[0], 4, 4, c.shape[-1]) for c in op_tt]
+    op_tt = [c.reshape(c.shape[0], 4, 4, c.shape[-1]) for c in op_tt]
+    op_tt = tt_vec(op_tt)
+    return [c.reshape(c.shape[0], 2, 2, c.shape[-1]) for c in op_tt]
 
 
 def _tt_generalised_nystroem(tt_train, tt_gaussian_1, tt_gaussian_2):

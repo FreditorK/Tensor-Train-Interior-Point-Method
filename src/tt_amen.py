@@ -368,7 +368,7 @@ def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, solv
         A_ranks = {key: tt_ranks(block) for key, block in block_A.items()}
         print(f"\tTT-Matrix rank: {A_ranks}")
         b_ranks = {key: tt_ranks(block) for key, block in block_b.items()}
-        print(f"\tTT-bias rank: {b_ranks}")
+        print(f"\tTT-bias rank: {b_ranks} \n")
 
     normA = np.ones((block_size, d - 1)) # norm of each row in the block matrix
     normb = np.ones((block_size, d - 1)) # norm of each row of the rhs
@@ -449,6 +449,7 @@ def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, solv
         max_res = 0
 
         for k in range(d):
+
             # bring block dimension to front
             previous_solution = np.reshape(np.transpose(x_cores[k], (1, 0, 2, 3)), (-1, 1))
             m = rx[k] * N[k] * rx[k + 1]
@@ -469,6 +470,7 @@ def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, solv
                 local_B = einsum('lsr,smnS,LSR->lmLrnR', XAX[(i, j)][k], block_A[(i, j)][k], XAX[(i, j)][k + 1])
                 B[m*i:m*(i+1), m*j:m*(j+1)] = local_B.reshape(m, m)
 
+            #B = B + (1e-12)*np.eye(B.shape[0])
             # Solve block system
             u, s, v = scip.linalg.svd(B, full_matrices=False, check_finite=False)
             s = s[s > real_tol]
@@ -477,12 +479,12 @@ def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, solv
 
             block_res_old = np.linalg.norm(B @ previous_solution - rhs) / norm_rhs
             block_res_new = np.linalg.norm(B @ solution_now - rhs) / norm_rhs
-            print(f"Res {k}", block_res_new, block_res_old)
+            #print(block_res_new, np.linalg.cond(B))
+            #print(B)
             # residual damp check
-            if block_res_old / block_res_new < damp and block_res_new > real_tol:
-                if verbose:
-                    print('WARNING: residual increases. res_old %g, res_new %g, real_tol %g' % (
-                        block_res_old, block_res_new, real_tol))  # warning (from tt toolbox)
+            #if block_res_old / block_res_new < damp and block_res_new > real_tol:
+                #if verbose:
+                    #print(f"\r\tWARNING: residual increases. {block_res_old:10f}, {block_res_new:10f}", end='', flush=True)  # warning (from tt toolbox)
 
             max_res = max(max_res, block_res_old)
 
@@ -523,6 +525,7 @@ def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, solv
                     uz, sz, vz = scipy.linalg.svd(np.reshape(cz_new, (rz[k] * N[k], block_size * rz[k + 1])),
                                                   full_matrices=False, check_finite=False)
                     # truncate to kickrank
+                    print(kickrank, uz.shape[1])
                     trunc_r = min(kickrank, uz.shape[1])
                     cz_new = uz[:, :trunc_r]
                     cz_new = np.reshape(cz_new, (rz[k] * N[k], trunc_r))
@@ -539,12 +542,14 @@ def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, solv
                     z_cores[k] = np.reshape(cz_new, (rz[k], block_size, N[k], rz[k + 1]))
 
             if k < d - 1:
-                if not last: # FIXME: This creates an issue in prev_res calculations, it may has to be normalised or something
+                if not last:
                     # Enrichment
                     left_res = np.zeros((rx[k], N[k], block_size, rz[k + 1]))
                     local_core = np.reshape(u @ v, [rx[k], N[k], block_size, rx[k + 1]])
                     for (i, j) in block_A:
-                        left_res[:, :, i] += _local_product(ZAX[(i, j)][k + 1], XAX[(i, j)][k], block_A[(i, j)][k], local_core[:, :, j])
+                        s = _local_product(ZAX[(i, j)][k + 1], XAX[(i, j)][k], block_A[(i, j)][k], local_core[:, :, j])
+                        print(s.shape, left_res.shape)
+                        left_res[:, :, i] += s
                     left_b = np.zeros((rx[k], N[k], block_size, rz[k + 1]))
                     for i in block_b:
                         left_b[:, :, i] = einsum('br,bmB,BR->rmR', Xb[i][k], nrmsc[i] * block_b[i][k], Zb[i][k + 1])
@@ -605,7 +610,7 @@ def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, solv
             last = True
 
     if verbose:
-        print("\t---Results---")
+        print("\n\t---Results---")
         print('\tSolution rank is', rx[1:-1])
         print('\tResidual ', max_res)
         print('\tNumber of sweeps', swp+1)
