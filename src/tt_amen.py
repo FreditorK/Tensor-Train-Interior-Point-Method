@@ -355,18 +355,10 @@ def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, solv
     z_cores = tt_rl_orthogonalise(z_cores)
     rz = [1] + tt_ranks(z_cores) + [1]
 
-    ZAX = {}
-    Zb = {}
-    XAX = {}
-    Xb = {}
-
-    for i in range(block_size):
-        Zb[i] = [np.ones((1, 1))] + [None] * (d - 1) + [np.ones((1, 1))]  # size is rzk x rzbk
-        Xb[i] = [np.ones((1, 1))] + [None] * (d - 1) + [np.ones((1, 1))]  # size is rk x rbk
-        for j in range(block_size):
-            if (i, j) in block_A:
-                ZAX[(i, j)] = [np.ones((1, 1, 1))] + [None] * (d - 1) + [np.ones((1, 1, 1))]  # size is rzk x Rk x rxk
-                XAX[(i, j)] = [np.ones((1, 1, 1))] + [None] * (d - 1) + [np.ones((1, 1, 1))]  # size is rk x Rk x rk
+    XAX = {key: [np.ones((1, 1, 1))] + [None] * (d - 1) + [np.ones((1, 1, 1))] for key in block_A} # size is rk x Rk x rk
+    Xb = {key: [np.ones((1, 1))] + [None] * (d - 1) + [np.ones((1, 1))] for key in block_b}  # size is rk x rbk
+    ZAX = copy.deepcopy(XAX) # size is rzk x Rk x rxk
+    Zb = copy.deepcopy(Xb) # size is rzk x rzbk
 
     last = False
 
@@ -378,8 +370,8 @@ def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, solv
         b_ranks = {key: tt_ranks(block) for key, block in block_b.items()}
         print(f"\tTT-bias rank: {b_ranks}")
 
-    normA = np.ones((block_size, d - 1))
-    normb = np.ones((block_size, d - 1))
+    normA = np.ones((block_size, d - 1)) # norm of each row in the block matrix
+    normb = np.ones((block_size, d - 1)) # norm of each row of the rhs
     normx = np.ones((d - 1))
     nrmsc = np.ones(block_size)
 
@@ -622,9 +614,6 @@ def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, solv
 
     normx = np.exp(np.sum(np.log(normx)) / d)
 
-    for k in range(d):
-        x_cores[k] = x_cores[k] * normx
-
-    return x_cores, max_res
+    return [normx * core for core in x_cores], max_res
 
 

@@ -317,12 +317,12 @@ def tt_ipm(
     op_tt = IDX_11 + tt_op_to_mat(tt_scale(-1, lin_op_tt))
     I_mat_tt = tt_op_to_mat(tt_op_right_from_tt_matrix(tt_identity(dim)))
     I_op_tt = IDX_03 + I_mat_tt
-    lhs_skeleton = tt_add(op_tt, op_tt_adjoint)
-    lhs_skeleton = tt_add(lhs_skeleton, I_op_tt)
+    lhs = tt_add(op_tt, op_tt_adjoint)
+    lhs = tt_add(lhs, I_op_tt)
     if active_ineq:
         op_tt_ineq_adjoint = IDX_02 + tt_op_to_mat(tt_scale(-1, lin_op_tt_ineq_adj))
-        lhs_skeleton = tt_add(lhs_skeleton, op_tt_ineq_adjoint)
-    lhs_skeleton = tt_rank_reduce(lhs_skeleton, err_bound=0.1*feasibility_tol)
+        lhs = tt_add(lhs, op_tt_ineq_adjoint)
+    lhs = tt_rank_reduce(lhs, err_bound=0.1*feasibility_tol)
     X_tt = tt_identity(dim)
     Y_tt = tt_zero_matrix(dim)
     T_tt = tt_one_matrix(dim)
@@ -332,7 +332,7 @@ def tt_ipm(
     for iter in range(max_iter):
         X_tt, Y_tt, T_tt, Z_tt, pd_error, mu = _tt_ipm_newton_step(
             obj_tt,
-            lhs_skeleton,
+            lhs,
             lin_op_tt,
             lin_op_tt_adj,
             bias_tt,
