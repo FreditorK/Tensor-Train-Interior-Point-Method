@@ -332,7 +332,7 @@ def tt_inv_precond(matrix_tt, target_ranks, tol=1e-10, max_iter=100, verbose=Fal
     return inv_tt
 
 
-def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, solver_limit=500, kickrank=4, verbose=False):
+def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, kickrank=4, verbose=False):
 
     damp = 2
     block_size = np.max(list(block_b.keys())) + 1
@@ -471,31 +471,20 @@ def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, solv
                 local_B = einsum('lsr,smnS,LSR->lmLrnR', XAX[(i, j)][k], block_A[(i, j)][k], XAX[(i, j)][k + 1])
                 B[m*i:m*(i+1), m*j:m*(j+1)] = local_B.reshape(m, m)
 
-            #B = B + (1e-12)*np.eye(B.shape[0])
             # Solve block system
             u, s, v = scip.linalg.svd(B, full_matrices=False, check_finite=False)
             s = s[s > real_tol]
             r = len(s)
-            pinv_B = v[:r].T @ np.diag(np.divide(1, s)) @ u[:, :r].T
-            solution_now = pinv_B @ rhs
+            solution_now = v[:r].T @ np.diag(np.divide(1, s)) @ u[:, :r].T @ rhs
 
             block_res_new = np.linalg.norm(B @ solution_now - rhs) / norm_rhs
             block_res_old = np.linalg.norm(B @ previous_solution - rhs) / norm_rhs
-            #print("---", block_res_new, np.linalg.cond(B[m * 1: m * 2, m * 1: m * 2]))
-            #B_sol = B[m * 1: m * 2, m * 1: m * 2] @ solution_now[m * 1: m * 2]
-            #print(B[m * 1: m * 2, m * 1: m * 2])
-            #print(sol[m*0: m*1].flatten())
-            #print(rhs[m * 0: m * 1].flatten())
-            #print(np.linalg.svd(B[m * 1: m * 2, m * 1: m * 2])[1])
-            #print(B_sol.flatten())
-            #print(rhs[m * 1: m * 2].flatten())
-            #print(sol[m * 2: m * 3].flatten())
-            #print(rhs[m * 2: m * 3].flatten())
+
 
             # residual damp check
-            #if block_res_old / block_res_new < damp and block_res_new > real_tol:
-            #    if verbose:
-            #        print(f"\r\tWARNING: residual increases. {block_res_old:10f}, {block_res_new:10f}", end='', flush=True)  # warning (from tt toolbox)
+            if block_res_old / block_res_new < damp and block_res_new > real_tol:
+                if verbose:
+                    print(f"\r\tWARNING: residual increases. {block_res_old:10f}, {block_res_new:10f}", end='', flush=True)  # warning (from tt toolbox)
 
             max_res = max(max_res, block_res_old)
 
