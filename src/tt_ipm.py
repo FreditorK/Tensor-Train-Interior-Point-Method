@@ -30,7 +30,8 @@ def tt_infeasible_feas_rhs(
     idx_add = int(active_ineq)
     dual_feas = tt_sub(tt_matrix_vec_mul(mat_lin_op_tt_adj, vec_Y_tt), tt_add(vec_obj_tt, tt_vec(Z_tt)))
     primal_feas = tt_rank_reduce(tt_sub(tt_matrix_vec_mul(mat_lin_op_tt, tt_vec(X_tt)), vec_bias_tt), err_bound=tol) # primal feasibility
-    primal_dual_error = tt_inner_prod(dual_feas, dual_feas) + tt_inner_prod(primal_feas, primal_feas)
+    dual_error = tt_inner_prod(dual_feas, dual_feas)
+    primal_error = tt_inner_prod(primal_feas, primal_feas)
     #if active_ineq:
     #    vec_T_tt = tt_vec(T_tt)
     #    dual_feas = tt_sub(dual_feas, tt_matrix_vec_mul(mat_lin_op_tt_ineq_adj, vec_T_tt))
@@ -41,10 +42,12 @@ def tt_infeasible_feas_rhs(
     XZ_term = tt_mat_mat_mul(X_tt, Z_tt)
     centrality = tt_rank_reduce(tt_vec(tt_add(XZ_term, tt_transpose(XZ_term))), err_bound=tol)
     centrality = tt_sub(tt_scale(2 * mu, tt_vec(tt_identity(len(X_tt)))), centrality)
-    rhs[0] = dual_feas
-    rhs[1] = primal_feas
+    if dual_error > tol:
+        rhs[0] = dual_feas
+    if primal_error > tol:
+        rhs[1] = primal_feas
     rhs[2 + idx_add] = centrality
-    return rhs, primal_dual_error
+    return rhs, primal_error + dual_error
 
 
 def tt_infeasible_newton_system_lhs(

@@ -1,6 +1,8 @@
 import sys
 import os
 
+import numpy as np
+
 sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
@@ -333,11 +335,12 @@ def tt_inv_precond(matrix_tt, target_ranks, tol=1e-10, max_iter=100, verbose=Fal
 def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, solver_limit=500, kickrank=4, verbose=False):
 
     damp = 2
-    block_size = len(block_b)
-    x_shape = block_b[0][0].shape[1:-1]
+    block_size = np.max(list(block_b.keys())) + 1
+    model_entry = next(iter(block_b.values()))
+    x_shape = model_entry[0].shape[1:-1]
 
     if x0 == None:
-        x = [np.ones((1, *c.shape[1:-1], 1)) for c in block_b[0][:-1]] + [np.ones((1, block_size, *x_shape, 1))]
+        x = [np.ones((1, *c.shape[1:-1], 1)) for c in model_entry[:-1]] + [np.ones((1, block_size, *x_shape, 1))]
     else:
         x = x0
 
@@ -348,7 +351,7 @@ def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, solv
     rmax = [1] + (d - 1) * [rmax] + [1]
 
     # z cores
-    z_cores = [np.random.randn(1, block_size, *x_shape, kickrank)] + [np.random.randn(kickrank, *c.shape[1:-1], kickrank) for c in block_b[0][1:-1]] + [np.random.randn(kickrank, *x_shape, 1)]
+    z_cores = [np.random.randn(1, block_size, *x_shape, kickrank)] + [np.random.randn(kickrank, *c.shape[1:-1], kickrank) for c in model_entry[1:-1]] + [np.random.randn(kickrank, *x_shape, 1)]
     z_cores = tt_rl_orthogonalise(z_cores)
     rz = [1] + tt_ranks(z_cores) + [1]
 
@@ -473,18 +476,21 @@ def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, solv
             u, s, v = scip.linalg.svd(B, full_matrices=False, check_finite=False)
             s = s[s > real_tol]
             r = len(s)
-            solution_now = v[:r].T @ np.diag(np.divide(1, s)) @ u[:, :r].T @ rhs
+            pinv_B = v[:r].T @ np.diag(np.divide(1, s)) @ u[:, :r].T
+            solution_now = pinv_B @ rhs
 
-            block_res_old = np.linalg.norm(B @ previous_solution - rhs) / norm_rhs
             block_res_new = np.linalg.norm(B @ solution_now - rhs) / norm_rhs
-            print("---", block_res_new)
-            sol = B @ solution_now
-            print(sol[m*0: m*1].flatten())
-            print(rhs[m * 0: m * 1].flatten())
-            print(sol[m * 1: m * 2].flatten())
-            print(rhs[m * 1: m * 2].flatten())
-            print(sol[m * 2: m * 3].flatten())
-            print(rhs[m * 2: m * 3].flatten())
+            block_res_old = np.linalg.norm(B @ previous_solution - rhs) / norm_rhs
+            #print("---", block_res_new, np.linalg.cond(B[m * 1: m * 2, m * 1: m * 2]))
+            #B_sol = B[m * 1: m * 2, m * 1: m * 2] @ solution_now[m * 1: m * 2]
+            #print(B[m * 1: m * 2, m * 1: m * 2])
+            #print(sol[m*0: m*1].flatten())
+            #print(rhs[m * 0: m * 1].flatten())
+            #print(np.linalg.svd(B[m * 1: m * 2, m * 1: m * 2])[1])
+            #print(B_sol.flatten())
+            #print(rhs[m * 1: m * 2].flatten())
+            #print(sol[m * 2: m * 3].flatten())
+            #print(rhs[m * 2: m * 3].flatten())
 
             # residual damp check
             #if block_res_old / block_res_new < damp and block_res_new > real_tol:
