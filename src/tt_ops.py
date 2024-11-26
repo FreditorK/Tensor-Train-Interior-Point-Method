@@ -295,19 +295,7 @@ def _tt_mat_core_collapse(core_op: np.array, core: np.array) -> np.array:
 
 
 def tt_matrix_vec_mul(matrix_tt: List[np.array], vec_tt: List[np.array]) -> List[np.array]:
-    split_idx = np.argmax([len(c.shape) for c in matrix_tt])
-    op_length = len(matrix_tt) - split_idx
-    full_cores = [_tt_mat_core_collapse(core_op, core) for core_op, core in
-                  zip(matrix_tt[split_idx:], vec_tt[-op_length:])]
-    left_overs = len(vec_tt) - op_length
-    if left_overs > 0:
-        half_core = safe_multi_dot(
-            [_tt_core_collapse(core_op, core) for core_op, core in
-             zip(matrix_tt[split_idx - left_overs:split_idx], vec_tt[:-op_length])]
-        )
-        full_cores[0] = einsum("ab, bce -> ace", half_core, full_cores[0])
-    full_cores = matrix_tt[:split_idx - left_overs] + full_cores
-    return full_cores
+    return [_tt_mat_core_collapse(core_op, core) for core_op, core in zip(matrix_tt, vec_tt)]
 
 
 def _tt_mat_mat_collapse(mat_core_1, mat_core_2):
@@ -322,23 +310,6 @@ def tt_mat_mat_mul(matrix_tt_1, matrix_tt_2):
         _tt_mat_mat_collapse(core_op_1, core_op_2) for core_op_1, core_op_2 in
         zip(matrix_tt_1, matrix_tt_2)
     ]
-
-
-
-def _tt_op_op_collapse(op_1, op_2):
-    return sum([
-        np.kron(op_1[:, None, i], op_2[:, :, None, i])
-        for i in range(op_2.shape[2])
-    ])
-
-
-def tt_op_op_compose(op_tt_1, op_tt_2):
-    shapes = [c.shape for c in op_tt_1]
-    mat_tt_1 = [c.reshape(c.shape[0], c.shape[1], np.prod(c.shape[2:4]), *c.shape[4:]) for c in op_tt_1]
-    mat_tt_2 = [c.reshape(c.shape[0], c.shape[1], np.prod(c.shape[2:4]), *c.shape[4:]) for c in op_tt_2]
-    mat_mat_tt = tt_mat_mat_mul(mat_tt_1, mat_tt_2)
-    op_tt = [c.reshape(*shape) for shape, c in zip(shapes, mat_mat_tt)]
-    return op_tt
 
 
 def tt_kron(matrix_tt_1, matrix_tt_2):
@@ -402,26 +373,6 @@ def tt_matrix_to_matrix(matrix_tt):
 def tt_vec_to_vec(vec_tt):
     tensor = tt_to_tensor(vec_tt)
     return tensor.reshape(-1, 1)
-
-
-def _tt_op_core_collapse(op_core: np.array, core: np.array) -> np.array:
-    ises = list(range(core.shape[1]))
-    jses = list(range(core.shape[2]))
-    return sum([
-        np.kron(op_core[:, :, i, j], core[:, None, i, j])
-        for (i, j) in product(ises, jses)
-    ])
-
-
-def tt_linear_op(linear_op_tt, matrix_tt):
-    split_idx = np.argmax([len(c.shape) for c in linear_op_tt])
-    factor = safe_multi_dot(
-        [_tt_core_collapse(core_1, core_2) for core_1, core_2 in zip(linear_op_tt[:split_idx], matrix_tt[:split_idx])])
-    full_cores = [_tt_op_core_collapse(core_1, core_2) for core_1, core_2 in
-                  zip(linear_op_tt[split_idx:], matrix_tt[split_idx:])]
-    if len(factor) > 0:
-        full_cores[0] = einsum("ab, bcd -> acd", factor, full_cores[0])
-    return full_cores
 
 
 def tt_sketch_like(train_tt, target_ranks):

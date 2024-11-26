@@ -1,6 +1,8 @@
 import sys
 import os
 
+import numpy as np
+
 sys.path.append(os.getcwd() + '/../')
 
 
@@ -10,11 +12,11 @@ from cy_src.ops_cy import *
 from opt_einsum import contract as einsum
 
 
-def tt_max_eig(matrix_tt, nswp=5, x0=None, eps=1e-10, verbose=False):
+def tt_max_eig(matrix_tt, nswp=10, x0=None, eps=1e-10, verbose=False):
     return _tt_eig(matrix_tt, min_eig=False, nswp=nswp, x0=x0, eps=eps, verbose=verbose)
 
 
-def tt_min_eig(matrix_tt, nswp=5, x0=None, eps=1e-10, verbose=False):
+def tt_min_eig(matrix_tt, nswp=10, x0=None, eps=1e-10, verbose=False):
     return _tt_eig(matrix_tt, min_eig=True, nswp=nswp, x0=x0, eps=eps, verbose=verbose)
 
 
@@ -48,7 +50,7 @@ def _tt_eig(A, min_eig, nswp, x0, eps, verbose):
         max_res = 0
 
         for k in range(d):
-
+            previous_solution = np.reshape(x_cores[k], (-1, 1))
             # residuals
             real_tol = (eps / np.sqrt(d)) / damp
 
@@ -58,25 +60,34 @@ def _tt_eig(A, min_eig, nswp, x0, eps, verbose):
             B = np.reshape(B, [rx[k] * N[k] * rx[k + 1], rx[k] * N[k] * rx[k + 1]])
 
             eig_val, solution_now = scip.sparse.linalg.eigsh(B, k=1, which=min_or_max)
-            rhs = eig_val * solution_now
 
-            res_new = np.linalg.norm(B @ solution_now - rhs)
+            res_new = np.linalg.norm(B @ solution_now - eig_val * solution_now)
+            res_old = np.linalg.norm(B @ previous_solution - eig_val * previous_solution)
 
-            max_res = max(max_res, res_new)
+            max_res = max(res_old, res_new)
 
             solution_now = np.reshape(solution_now, (rx[k] * N[k], rx[k + 1]))
             # truncation
             if k < d - 1:
-                u, s, v = scip.linalg.svd(solution_now, full_matrices=False)
-                v = np.diag(s) @ v
-                non_sing_eig_idxs = np.asarray(s >= min(np.max(s), eps)).nonzero()[0]
-                u = u[:, non_sing_eig_idxs]
-                v = v[non_sing_eig_idxs, :].T
+                u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False)
+                r = 0
+                for r in range(u.shape[1] - 1, 0, -1):
+                    # solution has the same size
+                    solution = np.reshape(u[:, :r] @ np.diag(s[:r]) @ v[:r, :], [-1, 1])
+                    res = np.linalg.norm(B @ solution - eig_val * solution) / np.linalg.norm(solution)
+                    if res > max(real_tol * damp, res_new):
+                        break
+                r += 1
+
+                r = min(r, np.size(s))
             else:
                 u, v = np.linalg.qr(solution_now)
-                v = v.T
+                r = u.shape[1]
+                s = np.ones(r, dtype=dtype)
 
-            r = u.shape[-1]
+            u = u[:, :r]
+            v = np.diag(s[:r]) @ v[:r, :]
+            v = v.T
 
 
             if k < d - 1:
@@ -101,10 +112,13 @@ def _tt_eig(A, min_eig, nswp, x0, eps, verbose):
 
         if max_res < eps:
             break
+
     if verbose:
         print("\t -----")
         print(f"\t Solution rank is {rx[1:-1]}")
         print(f"\t Residual {max_res}")
-        print(f"\t Time: {time.time() - t0:4f}s")
+        print('\t Number of sweeps', swp + 1)
+        print('\t Time: ', time.time() - t0)
+        print('\t Time per sweep: ', (time.time() - t0) / (swp + 1))
 
     return tt_inner_prod(x_cores, tt_matrix_vec_mul(A, x_cores)), x_cores, max_res

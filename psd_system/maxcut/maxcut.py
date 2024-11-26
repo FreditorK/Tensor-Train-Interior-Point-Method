@@ -12,9 +12,9 @@ from src.tt_ipm import tt_ipm
 
 @dataclass
 class Config:
-    seed = 9 #999: Very low rank solution, 9: Low rank solution, 3: Regular solution
-    max_rank = 3
-    dim = 2
+    seed = 3 #999: Very low rank solution, 9: Low rank solution, 3: Regular solution
+    max_rank = 4
+    dim = 3
 
 
 def tt_diag_op(dim):
@@ -37,14 +37,11 @@ if __name__ == "__main__":
     diag_tt_op = tt_diag_op(Config.dim)
     diag_tt_op_adjoint = tt_diag_op_adj(Config.dim)
     bias_tt = tt_identity(Config.dim)
-
-
-
     print("...Problem created!")
     print(f"Objective Ranks: {tt_ranks(G_tt)}")
     print(f"Constraint Ranks: As {tt_ranks(diag_tt_op)}, bias {tt_ranks(bias_tt)}")
     t0 = time.time()
-    X_tt, Y_tt, _, Z_tt = tt_ipm(G_tt, diag_tt_op, diag_tt_op_adjoint, bias_tt, max_iter=10, verbose=True)
+    X_tt, Y_tt, _, Z_tt = tt_ipm(G_tt, diag_tt_op, diag_tt_op_adjoint, bias_tt, max_iter=15, verbose=True)
     t1 = time.time()
     print("Solution: ")
     print(np.round(tt_matrix_to_matrix(X_tt), decimals=2))

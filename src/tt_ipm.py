@@ -28,8 +28,8 @@ def tt_infeasible_feas_rhs(
 ):
     rhs = {}
     idx_add = int(active_ineq)
-    dual_feas = tt_sub(tt_add(vec_obj_tt, tt_vec(Z_tt)), tt_matrix_vec_mul(mat_lin_op_tt_adj, vec_Y_tt))
-    primal_feas = tt_rank_reduce(tt_sub(vec_bias_tt, tt_matrix_vec_mul(mat_lin_op_tt, tt_vec(X_tt))), err_bound=0) # primal feasibility
+    dual_feas = tt_sub(tt_matrix_vec_mul(mat_lin_op_tt_adj, vec_Y_tt), tt_add(vec_obj_tt, tt_vec(Z_tt)))
+    primal_feas = tt_rank_reduce(tt_sub(tt_matrix_vec_mul(mat_lin_op_tt, tt_vec(X_tt)), vec_bias_tt), err_bound=tol) # primal feasibility
     primal_dual_error = tt_inner_prod(dual_feas, dual_feas) + tt_inner_prod(primal_feas, primal_feas)
     #if active_ineq:
     #    vec_T_tt = tt_vec(T_tt)
@@ -37,13 +37,13 @@ def tt_infeasible_feas_rhs(
     #    primal_feas_ineq = tt_rank_reduce(tt_hadamard(vec_T_tt, tt_sub(tt_matrix_vec_mul(mat_lin_op_tt_ineq, vec_X_tt), vec_bias_tt_ineq)), err_bound=0)
     #    primal_feas_ineq = tt_sub(primal_feas_ineq, tt_scale(mu, tt_one_matrix(len(vec_X_tt))))
     #    rhs[2] = tt_scale(-1, primal_feas_ineq)
-    dual_feas =  tt_rank_reduce(dual_feas, err_bound=0)
+    dual_feas =  tt_rank_reduce(dual_feas, err_bound=tol)
     XZ_term = tt_mat_mat_mul(X_tt, Z_tt)
-    centrality = tt_rank_reduce(tt_add(XZ_term, tt_transpose(XZ_term)), err_bound=0)
-    centrality = tt_vec(tt_sub(centrality, tt_scale(2 * mu, tt_identity(len(X_tt)))))
-    rhs[0] = tt_scale(-1, dual_feas)
-    rhs[1] = tt_scale(-1, primal_feas)
-    rhs[2 + idx_add] = tt_scale(-1, centrality)
+    centrality = tt_rank_reduce(tt_vec(tt_add(XZ_term, tt_transpose(XZ_term))), err_bound=tol)
+    centrality = tt_sub(tt_scale(2 * mu, tt_vec(tt_identity(len(X_tt)))), centrality)
+    rhs[0] = dual_feas
+    rhs[1] = primal_feas
+    rhs[2 + idx_add] = centrality
     return rhs, primal_dual_error
 
 
@@ -59,8 +59,8 @@ def tt_infeasible_newton_system_lhs(
 ):
     idx_add = int(active_ineq)
     identity = tt_identity(len(Z_tt))
-    lhs_skeleton[(2 + idx_add, 1)] = tt_rank_reduce(tt_add(tt_kron(identity, Z_tt), tt_kron(tt_transpose(Z_tt), identity)), err_bound=0)
-    lhs_skeleton[(2 + idx_add, 2 + idx_add)] = tt_rank_reduce(tt_add(tt_kron(tt_transpose(X_tt), identity), tt_kron(identity, X_tt)), err_bound=0)
+    lhs_skeleton[(2 + idx_add, 1)] = tt_rank_reduce(tt_add(tt_kron(identity, Z_tt), tt_kron(tt_transpose(Z_tt), identity)), err_bound=tol)
+    lhs_skeleton[(2 + idx_add, 2 + idx_add)] = tt_rank_reduce(tt_add(tt_kron(tt_transpose(X_tt), identity), tt_kron(identity, X_tt)), err_bound=tol)
     #if active_ineq:
     #    ineq_res_tt = tt_sub(tt_matrix_vec_mul(mat_lin_op_tt_ineq, tt_vec(X_tt)), vec_bias_tt_ineq)
     #    mat_ineq_res_op_tt = tt_mat(ineq_res_tt)
@@ -124,24 +124,23 @@ def _tt_ipm_newton_step(
         active_ineq
     )
     Delta_tt, res = tt_block_amen(lhs_matrix_tt, rhs_vec_tt, kickrank=4, verbose=verbose)
-    vec_Delta_Y_tt = tt_rank_reduce(_tt_get_block(0, Delta_tt), err_bound=0)
-    Delta_T_tt = tt_rank_reduce(tt_mat(_tt_get_block(2, Delta_tt)), err_bound=0) if active_ineq else None
-    Delta_X_tt = tt_rank_reduce(tt_mat(_tt_get_block(1, Delta_tt)), err_bound=0)
-    Delta_Z_tt = tt_rank_reduce(tt_mat(_tt_get_block(2+idx_add, Delta_tt)), err_bound=0)
+    vec_Delta_Y_tt = tt_rank_reduce(_tt_get_block(0, Delta_tt), err_bound=tol)
+    Delta_T_tt = tt_rank_reduce(tt_mat(_tt_get_block(2, Delta_tt)), err_bound=tol) if active_ineq else None
+    Delta_X_tt = tt_rank_reduce(tt_mat(_tt_get_block(1, Delta_tt)), err_bound=tol)
+    Delta_Z_tt = tt_rank_reduce(tt_mat(_tt_get_block(2+idx_add, Delta_tt)), err_bound=tol)
     if np.greater(res, tol):
         Delta_X_tt = _tt_symmetrise(Delta_X_tt, tol)
         Delta_Z_tt = _tt_symmetrise(Delta_Z_tt, tol)
     x_step_size, z_step_size = _tt_line_search(X_tt, T_tt, Z_tt, Delta_X_tt, Delta_T_tt, Delta_Z_tt, mat_lin_op_tt_ineq, vec_bias_tt_ineq, active_ineq)
-    X_tt = tt_rank_reduce(tt_add(X_tt, tt_scale(0.98 * x_step_size, Delta_X_tt)), err_bound=0)
-    vec_Y_tt = tt_rank_reduce(tt_add(vec_Y_tt, tt_scale(0.98 * z_step_size, vec_Delta_Y_tt)), err_bound=0)
-    Z_tt = tt_rank_reduce(tt_add(Z_tt, tt_scale(0.98 * z_step_size, Delta_Z_tt)), err_bound=0)
+    X_tt = tt_rank_reduce(tt_add(X_tt, tt_scale(0.98 * x_step_size, Delta_X_tt)), err_bound=0.1*tol)
+    vec_Y_tt = tt_rank_reduce(tt_add(vec_Y_tt, tt_scale(0.98 * z_step_size, vec_Delta_Y_tt)), err_bound=tol)
+    Z_tt = tt_rank_reduce(tt_add(Z_tt, tt_scale(0.98 * z_step_size, Delta_Z_tt)), err_bound=0.1*tol)
     if active_ineq:
-        T_tt = tt_rank_reduce(tt_add(T_tt, tt_scale(0.98 * z_step_size, Delta_T_tt)), err_bound=0)
+        T_tt = tt_rank_reduce(tt_add(T_tt, tt_scale(0.98 * z_step_size, Delta_T_tt)), err_bound=tol)
 
     if verbose:
         print(f"Step sizes: {x_step_size}, {z_step_size}")
 
-    # TODO: Mind the error bound here! May lead to inaccuracies and more iterations
     return X_tt, vec_Y_tt, T_tt, Z_tt, primal_dual_error, mu
 
 
@@ -219,18 +218,17 @@ def tt_ipm(
     verbose=False
 ):
     dim = len(obj_tt)
-    op_tol = 0.001*min(feasibility_tol, centrality_tol)
+    op_tol = 0.01*min(feasibility_tol, centrality_tol)
     active_ineq = lin_op_tt_ineq is not None or lin_op_tt_ineq_adj is not None or bias_tt_ineq is not None
-    vec_obj_tt = tt_vec(obj_tt)
-    vec_bias_tt = tt_vec(bias_tt)
+    obj_tt = tt_rank_reduce(tt_vec(obj_tt), err_bound=op_tol)
+    bias_tt = tt_rank_reduce(tt_vec(bias_tt), err_bound=op_tol)
     lhs_skeleton = {}
-    lhs_skeleton[(0, 0)] = tt_scale(-1, lin_op_tt_adj)
-    lhs_skeleton[(1, 1)] = tt_scale(-1, lin_op_tt)
+    lhs_skeleton[(0, 0)] = tt_rank_reduce(tt_scale(-1, lin_op_tt_adj), err_bound=op_tol)
+    lhs_skeleton[(1, 1)] = tt_rank_reduce(tt_scale(-1, lin_op_tt), err_bound=op_tol)
     lhs_skeleton[(0, 2 + int(active_ineq))] = tt_identity(2*dim)
-    vec_bias_tt_ineq = None
     if active_ineq:
-        lhs_skeleton[(0, 2)] = tt_scale(-1, lin_op_tt_ineq_adj)
-        vec_bias_tt_ineq = tt_vec(bias_tt_ineq)
+        lhs_skeleton[(0, 2)] = tt_rank_reduce(tt_scale(-1, lin_op_tt_ineq_adj), err_bound=op_tol)
+        bias_tt_ineq = tt_rank_reduce(tt_vec(bias_tt_ineq), err_bound=op_tol)
     X_tt = tt_identity(dim)
     vec_Y_tt = [np.zeros((1, 2, 1)) for _ in range(2*dim)]
     T_tt = tt_one_matrix(dim)
@@ -239,14 +237,14 @@ def tt_ipm(
     feasible = False
     for iter in range(1, max_iter):
         X_tt, vec_Y_tt, T_tt, Z_tt, pd_error, mu = _tt_ipm_newton_step(
-            vec_obj_tt,
+            obj_tt,
             lhs_skeleton,
             lin_op_tt,
             lin_op_tt_adj,
-            vec_bias_tt,
+            bias_tt,
             lin_op_tt_ineq,
             lin_op_tt_ineq_adj,
-            vec_bias_tt_ineq,
+            bias_tt_ineq,
             X_tt,
             vec_Y_tt,
             T_tt,

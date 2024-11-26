@@ -460,6 +460,7 @@ def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, solv
 
             # residuals
             real_tol = (eps / np.sqrt(d)) / damp
+            norm_rhs = norm_rhs if norm_rhs > real_tol else 1.0
 
             # assemble lhs
             B = np.zeros((block_size*m, block_size*m))
@@ -476,21 +477,19 @@ def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, solv
 
             block_res_old = np.linalg.norm(B @ previous_solution - rhs) / norm_rhs
             block_res_new = np.linalg.norm(B @ solution_now - rhs) / norm_rhs
-            #print("---")
-            #print(block_res_new)
-            #print("0", (B @ solution_now).flatten()[m*0: m*(1)])
-            #print("0", rhs.flatten()[m*0: m*(1)])
-            #print("1", (B @ solution_now).flatten()[m * 1: m * (2)])
-            #print("1", rhs.flatten()[m * 1: m * (2)])
-            #print("2", (B @ solution_now).flatten()[m * 2: m * (3)])
-            #print("2", rhs.flatten()[m * 2: m * (3)])
+            print("---", block_res_new)
+            sol = B @ solution_now
+            print(sol[m*0: m*1].flatten())
+            print(rhs[m * 0: m * 1].flatten())
+            print(sol[m * 1: m * 2].flatten())
+            print(rhs[m * 1: m * 2].flatten())
+            print(sol[m * 2: m * 3].flatten())
+            print(rhs[m * 2: m * 3].flatten())
 
-            #print(block_res_new, np.linalg.cond(B))
-            #print(B)
             # residual damp check
             #if block_res_old / block_res_new < damp and block_res_new > real_tol:
-                #if verbose:
-                    #print(f"\r\tWARNING: residual increases. {block_res_old:10f}, {block_res_new:10f}", end='', flush=True)  # warning (from tt toolbox)
+            #    if verbose:
+            #        print(f"\r\tWARNING: residual increases. {block_res_old:10f}, {block_res_new:10f}", end='', flush=True)  # warning (from tt toolbox)
 
             max_res = max(max_res, block_res_old)
 
