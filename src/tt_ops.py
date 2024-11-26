@@ -1,39 +1,11 @@
 import scipy as scp
-from numpy.ma.core import identity
 
 from src.ops import *
-import copy
 from cy_src.tt_ops_cy import *
 from opt_einsum import contract as einsum
 
-PHI = np.array([[1, 1],
-                [1, -1]], dtype=float).reshape(1, 2, 2, 1)
-
-PHI_INV = np.array([[1 / 2, 1 / 2],
-                    [1 / 2, -1 / 2]], dtype=float).reshape(1, 2, 2, 1)
-
 I = np.array([[1.0, 0],
               [0, 1.0]]).reshape(1, 2, 2, 1)
-
-
-def phi(num_bonds):
-    """ Bonds "num_bonds" PHI cores together """
-    tensor = PHI
-    new_PHI = PHI
-    for _ in range(2 ** (num_bonds) - 1):
-        new_PHI = np.expand_dims(new_PHI, (0, 1))
-        tensor = np.kron(np.expand_dims(tensor, (-1, -2)), new_PHI)
-    return tensor
-
-
-def phi_inv(num_bonds):
-    """ Bonds "num_bonds" PHI cores together """
-    tensor = PHI_INV
-    new_PHI = PHI_INV
-    for _ in range(2 ** (num_bonds) - 1):
-        new_PHI = np.expand_dims(new_PHI, (0, 1))
-        tensor = np.kron(np.expand_dims(tensor, (-1, -2)), new_PHI)
-    return tensor
 
 
 def tt_random_binary(target_ranks: List[int], shape=(2,)):
@@ -44,13 +16,11 @@ def tt_random_binary(target_ranks: List[int], shape=(2,)):
     return tt_normalise([np.random.randint(low=0, high=2, size=(l_n, *shape, l_np1)) for l_n, l_np1 in
                          zip(target_ranks[:-1], target_ranks[1:])])
 
-
 def tt_random_gaussian(target_ranks: List[int], shape=(2,)):
     target_ranks = [1] + target_ranks + [1]
     return tt_normalise(
         [np.divide(1, l_n * np.prod(shape) * l_np1) * np.random.randn(l_n, *shape, l_np1) for l_n, l_np1 in
          zip(target_ranks[:-1], target_ranks[1:])])
-
 
 def tt_rl_orthogonalise(train_tt: List[np.array]):
     dim = len(train_tt)
@@ -65,7 +35,6 @@ def tt_rl_orthogonalise(train_tt: List[np.array]):
                                                                                        train_tt[idx].shape[0])
     return train_tt
 
-
 def tt_orthogonalise_idx(train_tt: List[np.array], idx):
     if idx == 0:
         return tt_rl_orthogonalise(train_tt)
@@ -74,7 +43,6 @@ def tt_orthogonalise_idx(train_tt: List[np.array], idx):
     tt_train_fidx = tt_lr_orthogonalise(train_tt[:idx + 1])
     tt_train_uidx = tt_rl_orthogonalise([tt_train_fidx[-1]] + train_tt[idx + 1:])
     return tt_train_fidx[:-1] + tt_train_uidx
-
 
 def tt_lr_orthogonalise(train_tt: List[np.array]):
     train_tt = tt_swap_all(train_tt)
@@ -176,7 +144,7 @@ def tt_rank_reduce(train_tt: List[np.array], err_bound=1e-18):
         idx_shape = tt_core.shape
         next_idx_shape = train_tt[idx + 1].shape
         k = len(idx_shape) - 1
-        U, S, V_T = scip.linalg.svd(train_tt[idx].reshape(rank * np.prod(idx_shape[1:k], dtype=int), -1), full_matrices=False, check_finite=False)
+        U, S, V_T = scp.linalg.svd(train_tt[idx].reshape(rank * np.prod(idx_shape[1:k], dtype=int), -1), full_matrices=False, check_finite=False)
         non_sing_eig_idxs = np.asarray(S >= min(np.max(S), err_bound)).nonzero()
         S = S[non_sing_eig_idxs]
         next_rank = len(S)
@@ -317,55 +285,6 @@ def tt_normalise(train_tt, radius=1):
     return tt_scale(np.divide(radius, np.sqrt(tt_inner_prod(train_tt, train_tt))), train_tt)
 
 
-def tt_add_column(matrix_train_tt, column_tt, i):
-    binary_i = bin(i)[2:]
-    binary_i = '0' * (len(matrix_train_tt) - len(binary_i)) + binary_i
-    index = [(np.expand_dims(np.zeros_like(c), 1), np.expand_dims(c, 1)) if bool(int(b)) else (
-        np.expand_dims(c, 1), np.expand_dims(np.zeros_like(c), 1)) for
-             b, c in zip(binary_i, column_tt)]
-    column_tt = [np.concatenate(tup, axis=1) for tup in index]
-    return tt_add(matrix_train_tt, column_tt)
-
-
-def tt_conjugate_gradient(linear_op: List[np.array], tt_train: List[np.array], num_iter=10, tol=1e-7):
-    x = [np.zeros((1, 2, 1)) for _ in range(len(tt_train))]
-    r = p = tt_train
-    r_2 = tt_inner_prod(r, r)
-    for _ in range(num_iter):
-        prev_r_2 = r_2
-        l_op_p = tt_matrix_vec_mul(linear_op, p)
-        p_rest = tt_inner_prod(p, l_op_p)
-        alpha = np.divide(prev_r_2, p_rest)
-        r = tt_rl_orthogonalise(tt_add(r, tt_scale(-alpha, l_op_p, idx=np.random.randint(low=0, high=len(p)))))
-        r_2 = tt_inner_prod(r, r)
-        beta = np.divide(r_2, prev_r_2)
-        x = tt_rl_orthogonalise(tt_add(x, tt_scale(alpha, p, idx=np.random.randint(low=0, high=len(p)))))
-        if np.less_equal(r_2, tol):
-            break
-        p = tt_rl_orthogonalise(tt_add(r, tt_scale(beta, p, idx=np.random.randint(low=0, high=len(p)))))
-    return tt_rank_reduce(x)
-
-
-def tt_max_eigentensor(matrix_tt: List[np.array], num_iter=10, tol=1e-3):
-    normalisation = np.sqrt(tt_inner_prod(matrix_tt, matrix_tt))
-    matrix_tt = tt_scale(np.divide(1, normalisation), matrix_tt)
-    eig_vec_tt = tt_normalise([np.random.randn(1, 2, 1) for _ in range(len(matrix_tt))])
-    matrix_tt = tt_rank_reduce(matrix_tt)
-    target_ranks = tt_ranks(matrix_tt)
-    norm_2 = np.inf
-    for i in range(num_iter):
-        prev_norm_2 = norm_2
-        eig_vec_tt = tt_rank_retraction(tt_matrix_vec_mul(matrix_tt, eig_vec_tt), target_ranks)
-        norm_2 = tt_inner_prod(eig_vec_tt, eig_vec_tt)
-        eig_vec_tt = tt_scale(np.divide(1, np.sqrt(norm_2)), eig_vec_tt)
-        if np.less_equal(np.abs(norm_2 - prev_norm_2), tol):
-            break
-    prev_eig_vec = eig_vec_tt
-    eig_vec_tt = tt_matrix_vec_mul(matrix_tt, eig_vec_tt)
-    eig_val = tt_inner_prod(prev_eig_vec, eig_vec_tt)
-    return tt_normalise(eig_vec_tt), normalisation * eig_val
-
-
 def _tt_mat_core_collapse(core_op: np.array, core: np.array) -> np.array:
     indices_op = (slice(None),) * (len(core_op.shape) - 2)
     indices_core = (slice(None),) + (None,) * (len(core_op.shape) - len(core.shape))
@@ -393,24 +312,17 @@ def tt_matrix_vec_mul(matrix_tt: List[np.array], vec_tt: List[np.array]) -> List
 
 def _tt_mat_mat_collapse(mat_core_1, mat_core_2):
     return sum([
-        np.kron(mat_core_1[:, None, i], mat_core_2[:, :, None, i])
+        np.kron(mat_core_1[:, :, None, i], mat_core_2[:, None, i])
         for i in range(mat_core_2.shape[2])
     ])
 
 
 def tt_mat_mat_mul(matrix_tt_1, matrix_tt_2):
-    split_idx = np.argmax([len(c.shape) for c in matrix_tt_1])
-    half_core = safe_multi_dot([
-        _tt_core_collapse(core_op_1, core_op_2) for core_op_1, core_op_2 in
-        zip(matrix_tt_1[:split_idx], matrix_tt_2[:split_idx])
-    ])
-    full_cores = [
+    return [
         _tt_mat_mat_collapse(core_op_1, core_op_2) for core_op_1, core_op_2 in
-        zip(matrix_tt_1[split_idx:], matrix_tt_2[split_idx:])
+        zip(matrix_tt_1, matrix_tt_2)
     ]
-    if len(half_core) > 0:
-        full_cores[0] = einsum("ab, bcde -> acde", half_core, full_cores[0])
-    return full_cores
+
 
 
 def _tt_op_op_collapse(op_1, op_2):
@@ -429,8 +341,10 @@ def tt_op_op_compose(op_tt_1, op_tt_2):
     return op_tt
 
 
-def tt_kron(train_tt_1, train_tt_2):
-    return train_tt_1 + train_tt_2
+def tt_kron(matrix_tt_1, matrix_tt_2):
+    result_tt = [np.kron(c_1[:, None, None], c_2[:, :, :, None, None]) for c_1, c_2 in zip(matrix_tt_1, matrix_tt_2)]
+    result_tt = sum([break_core_bond(c) for c in result_tt], [])
+    return result_tt
 
 
 def tt_gram(matrix_tt):
@@ -444,117 +358,6 @@ def tt_gram(matrix_tt):
 def tt_trace(matrix_tt):
     I = tt_identity(len(matrix_tt))
     return tt_inner_prod(matrix_tt, I)
-
-
-def tt_min_eigentensor(matrix_tt: List[np.array], num_iter=10, tol=1e-5):
-    """
-    Only for symmetric matrices
-    """
-    n = len(matrix_tt)
-    normalisation = np.sqrt(tt_inner_prod(matrix_tt, matrix_tt))
-    matrix_tt[0] *= -1
-    identity = tt_identity(n)
-    identity = tt_scale(2 * normalisation, identity)
-    matrix_tt = tt_add(identity, matrix_tt)
-    matrix_tt = tt_rank_reduce(matrix_tt, err_bound=0)
-    target_ranks = tt_ranks(matrix_tt)
-    eig_vec_tt = tt_normalise([np.random.randn(1, 2, 1) for _ in range(n)])
-    norm_2 = np.inf
-    for i in range(num_iter):
-        prev_norm_2 = norm_2
-        eig_vec_tt = tt_rank_retraction(tt_matrix_vec_mul(matrix_tt, eig_vec_tt), target_ranks)
-        norm_2 = tt_inner_prod(eig_vec_tt, eig_vec_tt)
-        eig_vec_tt = tt_scale(np.divide(1, np.sqrt(norm_2)), eig_vec_tt)
-        if np.less_equal(np.abs(norm_2 - prev_norm_2), tol):
-            break
-    prev_eig_vec = eig_vec_tt
-    eig_vec_tt = tt_matrix_vec_mul(matrix_tt, eig_vec_tt)
-    eig_val = tt_inner_prod(prev_eig_vec, eig_vec_tt)
-    return tt_normalise(tt_rank_reduce(eig_vec_tt, err_bound=0)), (2 * normalisation - eig_val)
-
-
-def tt_randomised_min_eigentensor(matrix_tt: List[np.array], num_iter=10, tol=1e-3):
-    # TODO: We can compress more here, the ranks of the eigenvector are actually dependent on the tt_matrix ranks
-    target_ranks = [1] + tt_ranks(matrix_tt) + [1]
-    gaussian_tt = [
-        np.divide(1, l_n * 2 * l_np1) * np.random.randn(l_n, 2, l_np1)
-        for i, (l_n, l_np1) in enumerate(zip(target_ranks[:-1], target_ranks[1:]))
-    ]
-    return _tt_randomised_min_eigentensor(matrix_tt, gaussian_tt, num_iter, tol)
-
-
-def _tt_randomised_min_eigentensor(matrix_tt: List[np.array], gaussian_tt, num_iter=10, tol=1e-3):
-    """
-    Only for symmetric matrices
-    """
-    n = len(matrix_tt)
-    normalisation = np.sqrt(tt_inner_prod(matrix_tt, matrix_tt))
-    matrix_tt = tt_scale(-np.divide(1, normalisation), matrix_tt)
-    identity = tt_identity(n)
-    identity = tt_scale(2, identity)
-    matrix_tt = tt_rank_reduce(tt_add(identity, matrix_tt), err_bound=tol)
-    eig_vec_tt = tt_normalise([np.random.randn(1, 2, 1) for _ in range(n)])
-    norm_2 = np.inf
-    for i in range(num_iter):
-        prev_norm_2 = norm_2
-        eig_vec_tt = _tt_lr_random_orthogonalise(tt_matrix_vec_mul(matrix_tt, eig_vec_tt), gaussian_tt)
-        norm_2 = tt_inner_prod(eig_vec_tt, eig_vec_tt)
-        eig_vec_tt[-1] *= np.divide(1, np.sqrt(norm_2))
-        if np.less_equal(np.abs(norm_2 - prev_norm_2), tol):
-            break
-    prev_eig_vec = eig_vec_tt
-    eig_vec_tt = _tt_lr_random_orthogonalise(tt_matrix_vec_mul(matrix_tt, eig_vec_tt), gaussian_tt)
-    eig_val = tt_inner_prod(prev_eig_vec, eig_vec_tt)
-    return tt_normalise(eig_vec_tt), normalisation * (2 - eig_val)
-
-
-def tt_outer_product(train_1_tt, train_2_tt):
-    outer = [np.kron(np.expand_dims(c_1, 1), np.expand_dims(c_2, 2)) for c_1, c_2 in zip(train_1_tt, train_2_tt)]
-    return outer
-
-
-def _tt_phi_core(core: np.array):
-    return sum([
-        np.kron(
-            np.expand_dims(core[(slice(None),) + i], list(range(1, 1 + len(i)))),
-            phi(len(i) - 1)[(slice(None),) + sum(zip(i, [slice(None)] * len(i)), ())]
-        ) for i in product(*([[0, 1]] * (len(core.shape) - 2)))])
-
-
-def tt_walsh_op(train_tt: List[np.array]) -> List[np.array]:
-    """
-    Produces the -1, 1 binary tensor from a Fourier representation
-    """
-    return [_tt_phi_core(core) for core in train_tt]
-
-
-def _tt_phi_core_inv(core: np.array):
-    return sum([
-        np.kron(
-            np.expand_dims(core[(slice(None),) + i], list(range(1, 1 + len(i)))),
-            phi_inv(len(i) - 1)[(slice(None),) + sum(zip(i, [slice(None)] * len(i)), ())]
-        ) for i in product(*([[0, 1]] * (len(core.shape) - 2)))])
-
-
-def tt_walsh_op_inv(train_tt: List[np.array]) -> List[np.array]:
-    """
-    Produces the Fourier representation of a binary -1, 1 tensor
-    """
-    return [_tt_phi_core_inv(core) for core in train_tt]
-
-
-def tt_binary_round(train_tt, num_iter=30, tol=1e-10):
-    # FIXME: Easier to just use ALS
-    for _ in range(num_iter):
-        tt_train_p2 = tt_rank_reduce(tt_hadamard(train_tt, train_tt))
-        boolean_poly = tt_walsh_op_inv(tt_train_p2)
-        if np.less_equal(np.abs(tt_inner_prod(boolean_poly, boolean_poly) - 1), tol):
-            break
-        tt_train_p3 = tt_rank_reduce(tt_hadamard(tt_train_p2, train_tt))
-        tt_update = tt_scale(-0.5, tt_train_p3)
-        next_tt_train = tt_scale(1.5, train_tt)
-        train_tt = tt_rank_reduce(tt_add(next_tt_train, tt_update))
-    return train_tt
 
 
 def tt_random_graph(dim, max_rank, max_iter=100):
@@ -636,87 +439,12 @@ def tt_sketch(shape, target_ranks):
     ]
 
 
-def _core_mask(core):
-    mask = np.zeros((core.shape[0], 4, *core.shape[1:]))
-    mask[:, 0, 0, 0] = core[:, 0, 0]
-    mask[:, 1, 0, 1] = core[:, 0, 1]
-    mask[:, 2, 1, 0] = core[:, 1, 0]
-    mask[:, 3, 1, 1] = core[:, 1, 1]
-    return mask
-
-
-def tt_mask_to_linear_op(train_tt):
-    """
-    Converts a matrix that serves as a mask via a Hadamard product to a linear operator
-    """
-    return [_core_mask(c) for c in train_tt]
-
-
-def _core_mask_adjoint(core):
-    mask = np.zeros((core.shape[0], 4, *core.shape[1:]))
-    mask[:, 0, 0, 0] = core[:, 0, 0]
-    mask[:, 1, 1, 0] = core[:, 0, 1]
-    mask[:, 2, 0, 1] = core[:, 1, 0]
-    mask[:, 3, 1, 1] = core[:, 1, 1]
-    return mask
-
-
-def tt_mask_to_linear_op_adjoint(train_tt):
-    return [_core_mask_adjoint(c) for c in train_tt]
-
-
-def _core_op_right_from_matrix(core):
-    op_core = np.zeros((core.shape[0], 4, *core.shape[1:]))
-    op_core[:, 0, 0, 0] = core[:, 0, 0]
-    op_core[:, 0, 0, 1] = core[:, 1, 0]
-    op_core[:, 1, 0, 0] = core[:, 0, 1]
-    op_core[:, 1, 0, 1] = core[:, 1, 1]
-    op_core[:, 2, 1, 0] = core[:, 0, 0]
-    op_core[:, 2, 1, 1] = core[:, 1, 0]
-    op_core[:, 3, 1, 0] = core[:, 0, 1]
-    op_core[:, 3, 1, 1] = core[:, 1, 1]
-    return op_core
-
-
-def tt_op_right_from_tt_matrix(matrix_tt):
-    """
-    Converts a matrix_tt for matrix multiplication into a linear_op_tt
-    """
-    return [_core_op_right_from_matrix(c) for c in matrix_tt]
-
-
-def _core_op_left_from_matrix(core):
-    op_core = np.zeros((core.shape[0], 4, *core.shape[1:]))
-    op_core[:, 0, 0, 0] = core[:, 0, 0]
-    op_core[:, 0, 1, 0] = core[:, 1, 0]
-    op_core[:, 2, 0, 0] = core[:, 0, 1]
-    op_core[:, 2, 1, 0] = core[:, 1, 1]
-    op_core[:, 1, 0, 1] = core[:, 0, 0]
-    op_core[:, 1, 1, 1] = core[:, 1, 0]
-    op_core[:, 3, 0, 1] = core[:, 0, 1]
-    op_core[:, 3, 1, 1] = core[:, 1, 1]
-    return op_core
-
-
-def tt_op_left_from_tt_matrix(matrix_tt):
-    """
-    Converts a matrix_tt for matrix multiplication into a linear_op_tt
-    """
-    return [_core_op_left_from_matrix(c) for c in matrix_tt]
-
-
 def tt_vec(matrix_tt):
     return sum([break_core_bond(c) for c in matrix_tt], [])
 
 
 def tt_mat(vec_tt):
-    return [einsum("abc, cde -> abde", c_1, c_2) for c_1, c_2 in zip(vec_tt[1::2], vec_tt[:-1:2])]
-
-
-def tt_op_to_mat(op_tt):
-    op_tt = [c.reshape(c.shape[0], 4, 4, c.shape[-1]) for c in op_tt]
-    op_tt = tt_vec(op_tt)
-    return [c.reshape(c.shape[0], 2, 2, c.shape[-1]) for c in op_tt]
+    return [einsum("abc, cde -> abde", c_1, c_2) for c_1, c_2 in zip(vec_tt[:-1:2], vec_tt[1::2])]
 
 
 def _tt_generalised_nystroem(tt_train, tt_gaussian_1, tt_gaussian_2):
@@ -747,7 +475,6 @@ def tt_generalised_nystroem(tt_train, target_ranks: List[int]) -> List[np.array]
         tt_gaussian_2 = tt_random_gaussian([r + 1 for r in target_ranks], shape=tt_train[0].shape[1:-1])
         return _tt_generalised_nystroem(tt_train, tt_gaussian_1, tt_gaussian_2)
     return tt_train
-
 
 def tt_l2_dist(train_tt_1, train_tt_2):
     diff_tt = tt_sub(train_tt_1, train_tt_2)
