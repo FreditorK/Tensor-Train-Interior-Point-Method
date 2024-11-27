@@ -40,8 +40,8 @@ def tt_infeasible_feas_rhs(
     #    rhs[2] = tt_scale(-1, primal_feas_ineq)
     dual_feas =  tt_rank_reduce(dual_feas, err_bound=tol)
     XZ_term = tt_mat_mat_mul(X_tt, Z_tt)
-    centrality = tt_rank_reduce(tt_vec(tt_add(XZ_term, tt_transpose(XZ_term))), err_bound=tol)
-    centrality = tt_sub(tt_scale(2 * mu, tt_vec(tt_identity(len(X_tt)))), centrality)
+    centrality = tt_vec(tt_add(XZ_term, tt_transpose(XZ_term)))
+    centrality = tt_rank_reduce(tt_sub(tt_scale(2 * mu, tt_vec(tt_identity(len(X_tt)))), centrality), err_bound=2*tol*mu)
     if dual_error > tol:
         rhs[0] = dual_feas
     if primal_error > tol:
@@ -126,7 +126,7 @@ def _tt_ipm_newton_step(
         tol,
         active_ineq
     )
-    Delta_tt, res = tt_block_amen(lhs_matrix_tt, rhs_vec_tt, kickrank=4, verbose=verbose)
+    Delta_tt, res = tt_block_amen(lhs_matrix_tt, rhs_vec_tt, kickrank=2, verbose=verbose)
     vec_Delta_Y_tt = tt_rank_reduce(_tt_get_block(0, Delta_tt), err_bound=tol)
     Delta_T_tt = tt_rank_reduce(tt_mat(_tt_get_block(2, Delta_tt)), err_bound=tol) if active_ineq else None
     Delta_X_tt = tt_rank_reduce(tt_mat(_tt_get_block(1, Delta_tt)), err_bound=tol)
@@ -221,7 +221,7 @@ def tt_ipm(
     verbose=False
 ):
     dim = len(obj_tt)
-    op_tol = 0.01*min(feasibility_tol, centrality_tol)
+    op_tol = 0.1*min(feasibility_tol, centrality_tol)
     active_ineq = lin_op_tt_ineq is not None or lin_op_tt_ineq_adj is not None or bias_tt_ineq is not None
     obj_tt = tt_rank_reduce(tt_vec(obj_tt), err_bound=op_tol)
     bias_tt = tt_rank_reduce(tt_vec(bias_tt), err_bound=op_tol)

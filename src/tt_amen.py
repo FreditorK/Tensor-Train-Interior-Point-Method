@@ -230,7 +230,7 @@ def tt_amen(A, b, nswp=50, x0=None, eps=1e-10, rmax=1024, solver_limit=500, kick
                 normx[k] = normx[k] * norm_now
 
                 x_cores[k] = np.reshape(u, [rx[k], N[k], r])
-                x_cores[k + 1] = np.reshape(v, [r, N[k + 1], rx[k + 2]])
+                x_cores[k + 1] = np.reshape(v, (r, N[k + 1], rx[k + 2]))
                 rx[k + 1] = r
                 # next phis with norm correction
                 XAX[k + 1] = _compute_phi_fwd_A(XAX[k], x_cores[k], A[k], x_cores[k])
@@ -447,6 +447,7 @@ def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, kick
 
         # start loop
         max_res = 0
+        max_dx = 0
 
         for k in range(d):
 
@@ -486,6 +487,8 @@ def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, kick
                     print(f"\r\tWARNING: residual increases. {block_res_old:10f}, {block_res_new:10f}", end='', flush=True)  # warning (from tt toolbox)
 
             max_res = max(max_res, block_res_old)
+            dx = np.linalg.norm(solution_now - previous_solution) / np.linalg.norm(solution_now)
+            max_dx = max(max_dx, dx)
 
             solution_now = np.reshape(solution_now, (block_size, rx[k], N[k], rx[k + 1]))
             solution_now = np.transpose(solution_now, (1, 2, 0, 3))
@@ -600,10 +603,10 @@ def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, kick
                 current_core = np.reshape(u @ v, (rx[k], N[k], block_size, rx[k + 1]))
                 x_cores[k] = np.transpose(current_core, (0, 2, 1, 3))
 
-        if last:
+        if last or swp > nswp - 2:
             break
 
-        if max_res < eps:
+        if max_res < eps or max_dx < eps:
             last = True
 
     if verbose:
