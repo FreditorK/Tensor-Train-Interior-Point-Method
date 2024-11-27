@@ -19,7 +19,7 @@ def _local_product(Phi_right, Phi_left, coreA, core):
     return w
 
 
-def tt_amen(A, b, nswp=50, x0=None, eps=1e-10, rmax=1024, solver_limit=500, kickrank=4, verbose=False):
+def tt_amen(A, b, nswp=50, x0=None, eps=1e-10, rmax=1024, solver_limit=500, kickrank=2, verbose=False):
 
     dtype = A[0].dtype
     damp = 2
@@ -332,7 +332,7 @@ def tt_inv_precond(matrix_tt, target_ranks, tol=1e-10, max_iter=100, verbose=Fal
     return inv_tt
 
 
-def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, kickrank=4, verbose=False):
+def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, kickrank=2, verbose=False):
 
     damp = 2
     block_size = np.max(list(block_b.keys())) + 1
@@ -479,7 +479,6 @@ def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, kick
 
             block_res_new = np.linalg.norm(B @ solution_now - rhs) / norm_rhs
             block_res_old = np.linalg.norm(B @ previous_solution - rhs) / norm_rhs
-
 
             # residual damp check
             if block_res_old / block_res_new < damp and block_res_new > real_tol:

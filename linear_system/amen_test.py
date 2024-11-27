@@ -3,8 +3,7 @@ import os
 
 sys.path.append(os.getcwd() + '/../')
 from src.tt_ops import *
-from src.tt_ops import _tt_core_collapse, _tt_lr_random_orthogonalise, \
-    tt_randomised_min_eigentensor, tt_rank_reduce, _tt_generalised_nystroem, _tt_mat_core_collapse, tt_matrix_vec_mul
+from src.tt_ops import tt_rank_reduce, tt_matrix_vec_mul
 from src.tt_amen import tt_amen
 
 np.random.seed(4)
