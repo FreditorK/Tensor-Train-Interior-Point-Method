@@ -17,52 +17,63 @@ import time
 
 def tt_partial_trace_op(block_size, dim):
     matrix_tt = [np.ones((1, 2, 2, 1)) for _ in range(dim-block_size)] + tt_identity(block_size)
-    matrix_tt = tt_rank_reduce(tt_sub(matrix_tt, tt_identity(dim)))
-    op_tt = tt_mask_to_linear_op(matrix_tt[:-block_size])
-    for c in  matrix_tt[-block_size:]:
-        core = np.zeros((c.shape[0], 4, *c.shape[1:]))
-        core[:, 1] = c
-        op_tt.append(core)
-    return op_tt
+    matrix_tt = tt_sub(matrix_tt, tt_identity(dim))
+    basis = []
+    for c in tt_vec(matrix_tt[:-block_size]):
+        core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
+        core[:, 0, 0] = c[:, 0]
+        core[:, 1, 1] = c[:, 1]
+        basis.append(core)
+    for c in matrix_tt[-block_size:]:
+        core = np.zeros((c.shape[0], 2, 2, 2, 2, c.shape[-1]))
+        core[:, 0, :, 1, :] = c # (0, 1) <-
+        basis.extend(break_core_bond(core))
+    return tt_rank_reduce(basis)
 
 def tt_partial_trace_op_adj(block_size, dim):
     matrix_tt = [np.ones((1, 2, 2, 1)) for _ in range(dim-block_size)]
-    matrix_tt = tt_rank_reduce(tt_sub(matrix_tt, tt_identity(dim-block_size) + [np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(block_size)]))
-    op_tt = tt_mask_to_linear_op(matrix_tt[:-block_size])
-    for c in matrix_tt[-block_size:]:
-        core = np.zeros((c.shape[0], 4, *c.shape[1:]))
-        core[:, 0, 0, 1] = c[:, 0, 1]
-        core[:, 3, 0, 1] = c[:, 0, 1]
-        op_tt.append(core)
-    return op_tt
+    matrix_tt = tt_sub(matrix_tt, tt_identity(dim-block_size))
+    basis = []
+    for c in tt_vec(matrix_tt):
+        core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
+        core[:, 0, 0] = c[:, 0]
+        core[:, 1, 1] = c[:, 1]
+        basis.append(core)
+    for _ in  range(block_size):
+        core = np.zeros((1, 2, 2, 2, 2, 1))
+        core[:, 0, 0, 0, 1] = 1 # (0, 0) <- (0, 1)
+        core[:, 1, 0, 1, 1] = 1 # (1, 1) <- (0, 1)
+        basis.extend(break_core_bond(core))
+    return tt_rank_reduce(basis)
 
 # ------------------------------------------------------------------------------
 # Constraint 5 -----------------------------------------------------------------
 
 def tt_partial_J_trace_op(block_size, dim):
     op_tt = []
-    core = np.zeros((1, 4, 2, 2, 2))
-    core[0, 1, 0, 0, 0] = 1
-    core[0, 2, 1, 0, 0] = 1
-    core[0, 1, 0, 1, 1] = 1
-    core[0, 2, 1, 1, 1] = 1
-    op_tt.append(core)
+    core = np.zeros((1, 2, 2, 2, 2, 2))
+    core[0, 0, 0, 1, 0, 0] = 1 # (0, 1) <- (0, 0)
+    core[0, 1, 1, 0, 0, 0] = 1 # (1, 0) <- (1, 0)
+    core[0, 0, 0, 1, 1, 1] = 1 # (0, 1) <- (0, 1)
+    core[0, 1, 1, 0, 1, 1] = 1 # (1, 0) <- (1, 1)
+    op_tt.extend(break_core_bond(core))
     for _ in range(dim-block_size-1):
-        core = np.zeros((2, 4, 2, 2, 2))
-        core[:, 0, 0, 0] = np.eye(2)
-        core[:, 1, 0, 1] = np.eye(2)
-        core[:, 2, 1, 0] = np.eye(2)
-        core[:, 3, 1, 1] = np.eye(2)
-        op_tt.append(core)
+        core = np.zeros((2, 2, 2, 2, 2, 2))
+        core[:, 0, 0, 0, 0] = np.eye(2) # (0, 0) <- (0, 0)
+        core[:, 0, 0, 1, 1] = np.eye(2) # (0, 1) <- (0, 1)
+        core[:, 1, 1, 0, 0] = np.eye(2) # (1, 0) <- (1, 0)
+        core[:, 1, 1, 1, 1] = np.eye(2) # (1, 1) <- (1, 1)
+        op_tt.extend(break_core_bond(core))
     for _ in range(block_size-1):
-        core = np.zeros((2, 4, 2, 2, 2))
-        core[0, 0, :, :, 0] = 1
-        core[1, 3, :, :, 1] = 1
-        op_tt.append(core)
-    core = np.zeros((2, 4, 2, 2, 1))
-    core[0, 0] = 1
-    core[1, 3] = 1
-    op_tt.append(core)
+        core = np.zeros((2, 2, 2, 2, 2, 2))
+        core[0, 0, :, 0, :, 0] = 1
+        core[1, 1, :, 1, :, 1] = 1
+        op_tt.extend(break_core_bond(core))
+    core = np.zeros((2, 2, 2, 2, 2, 1))
+    core[0, 0, :, 0] = 1
+    core[1, 1, :, 1] = 1
+    op_tt.extend(break_core_bond(core))
+    print([c.shape for c in op_tt])
     return op_tt
 
 def tt_partial_J_trace_op_adj(block_size, dim):
@@ -72,14 +83,14 @@ def tt_partial_J_trace_op_adj(block_size, dim):
     core[0, 2, 1, 0, 0] = 1
     core[0, 1, 0, 1, 1] = 1
     core[0, 3, 1, 0, 1] = 1
-    op_tt.append(core)
+    op_tt.extend(break_core_bond(core))
     for _ in range(dim - block_size - 1):
         core = np.zeros((2, 4, 2, 2, 2))
         core[:, 0, 0, 0] = np.eye(2)
         core[:, 1, 0, 1] = np.eye(2)
         core[:, 2, 1, 0] = np.eye(2)
         core[:, 3, 1, 1] = np.eye(2)
-        op_tt.append(core)
+        op_tt.extend(break_core_bond(core))
     for _ in range(block_size - 1):
         core = np.zeros((2, 4, 2, 2, 2))
         core[0, :, 0, 0, 0] = 1
@@ -88,7 +99,7 @@ def tt_partial_J_trace_op_adj(block_size, dim):
     core = np.zeros((2, 4, 2, 2, 1))
     core[0, :, 0, 0] = 1
     core[1, :, 1, 1] = 1
-    op_tt.append(core)
+    op_tt.extend(break_core_bond(core))
     return op_tt
 # ------------------------------------------------------------------------------
 # Constraint 6 -----------------------------------------------------------------
@@ -325,7 +336,7 @@ def tt_padding_op_adjoint(dim):
 
 @dataclass
 class Config:
-    seed = 4
+    seed = 5
     max_rank = 3
 
 if __name__ == "__main__":
@@ -361,16 +372,8 @@ if __name__ == "__main__":
     """
     np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=4, suppress=True)
     print("Creating Problem...")
-    q_op_prefix = np.zeros((1, 4, 2, 2, 1))
-    q_op_prefix[0, 0, 0, 0, 0] = 1
-    padding_op_prefix = np.zeros((1, 4, 2, 2, 1))
-    padding_op_prefix[0, 3, 1, 1, 0] = 1
-    q_bias_prefix = np.zeros((1, 2, 2, 1))
-    q_bias_prefix[0, 0, 0, 0] = 1
-    padding_bias_prefix = np.zeros((1, 2, 2, 1))
-    padding_bias_prefix[0, 1, 1, 0] = 1
 
-    n = 1
+    n = 2
 
     np.random.seed(Config.seed)
     G_A = tt_random_graph(n, Config.max_rank)
@@ -381,31 +384,38 @@ if __name__ == "__main__":
     print(np.round(tt_matrix_to_matrix(G_B), decimals=2))
     print(f"TT-Ranks: {tt_ranks(G_B)}")
 
-    C_tt = tt_rank_reduce([q_bias_prefix] + tt_kron(G_B, G_A))
-    n_sq = len(C_tt) - 1
+    C_tt = tt_random_gaussian([3]*(2*n - 1), shape=(2, 2))#tt_kron(G_B, G_A)
+
+    print(np.round(tt_matrix_to_matrix(C_tt), decimals=2))
 
 
     # Equality Operator
     # IV
-    partial_tr_op = [q_op_prefix] + tt_partial_trace_op(n, n_sq)
-    partial_tr_op_adj = [q_op_prefix] + tt_partial_trace_op_adj(n, n_sq)
-    partial_tr_op_bias = tt_zero_matrix(n_sq+1)
+    #partial_tr_op = tt_partial_trace_op(n, 2*n)
+    #partial_tr_op_adj = tt_partial_trace_op_adj(n, 2*n)
 
-    L_op_tt = partial_tr_op
-    L_op_tt_adj = partial_tr_op_adj
-    eq_bias_tt = partial_tr_op_bias
+    #L_op_tt = partial_tr_op
+    #L_op_tt_adj = partial_tr_op_adj
+    #eq_bias_tt = partial_tr_op_bias
     # ---
     # V
-    partial_tr_J_op = [q_op_prefix] + tt_partial_J_trace_op(n, n_sq)
-    partial_tr_J_op_adj = [q_op_prefix] + tt_partial_J_trace_op_adj(n, n_sq)
-    partial_tr_J_op_bias = [q_bias_prefix] + tt_add(
-        [np.array([[0.0, 1.0], [1.0, 0.0]]).reshape(1, 2, 2, 1)] + tt_one_matrix(n_sq-n-1) + [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)],
-        [np.array([[0.0, 1.0], [1.0, 0.0]]).reshape(1, 2, 2, 1)] + tt_one_matrix(n_sq - n - 1) + [np.array([[0.0, 0.0], [0.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(n)]
-    )
+    partial_tr_J_op = tt_partial_J_trace_op(n, 2*n)
+    #partial_tr_J_op_adj = tt_partial_J_trace_op_adj(n, n_sq)
+    #partial_tr_J_op_bias = tt_add(
+    #    [np.array([[0.0, 1.0], [1.0, 0.0]]).reshape(1, 2, 2, 1)] + tt_one_matrix(n_sq-n-1) + [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)],
+    #    [np.array([[0.0, 1.0], [1.0, 0.0]]).reshape(1, 2, 2, 1)] + tt_one_matrix(n_sq - n - 1) + [np.array([[0.0, 0.0], [0.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(n)]
+    #)
+    A = tt_matrix_to_matrix(C_tt)
+    print(np.sum(A[0:4, 0:4]), np.sum(A[0:4, 4:8]), np.sum(A[4:8, 0:4]), np.sum(A[4:8, 4:8]))
+    print([c.shape for c in partial_tr_J_op])
+    print([c.shape for c in tt_vec(C_tt)])
+    print(np.round(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(partial_tr_J_op, tt_vec(C_tt)))), decimals=5))
 
-    L_op_tt = tt_rank_reduce(tt_add(L_op_tt, partial_tr_J_op))
-    L_op_tt_adj = tt_rank_reduce(tt_add(L_op_tt_adj, partial_tr_J_op_adj))
-    eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, partial_tr_J_op_bias))
+    #L_op_tt = tt_rank_reduce(tt_add(L_op_tt, partial_tr_J_op))
+    #L_op_tt_adj = tt_rank_reduce(tt_add(L_op_tt_adj, partial_tr_J_op_adj))
+    #eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, partial_tr_J_op_bias))
+
+    """
     # ---
     # VI
     diag_block_sum_op = [q_op_prefix] + tt_diag_block_sum_linear_op(n, n_sq)
@@ -479,3 +489,4 @@ if __name__ == "__main__":
     print(f"Time: {t1 - t0}s")
     print(np.round(tt_matrix_to_matrix(tt_mat(tt_linear_op(L_op_tt, tt_one_matrix(len(L_op_tt))), shape=(2, 2))), decimals=2))
     print(tt_ranks(tt_rank_reduce(L_op_tt, err_bound=1e-8)))
+    """

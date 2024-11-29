@@ -28,16 +28,20 @@ def tt_infeasible_feas_rhs(
 ):
     rhs = {}
     idx_add = int(active_ineq)
+    vec_X_tt = tt_vec(X_tt)
     dual_feas = tt_sub(tt_matrix_vec_mul(mat_lin_op_tt_adj, vec_Y_tt), tt_add(vec_obj_tt, tt_vec(Z_tt)))
-    primal_feas = tt_rank_reduce(tt_sub(tt_matrix_vec_mul(mat_lin_op_tt, tt_vec(X_tt)), vec_bias_tt), err_bound=tol) # primal feasibility
+    primal_feas = tt_rank_reduce(tt_sub(tt_matrix_vec_mul(mat_lin_op_tt, vec_X_tt), vec_bias_tt), err_bound=tol) # primal feasibility
     dual_error = tt_inner_prod(dual_feas, dual_feas)
     primal_error = tt_inner_prod(primal_feas, primal_feas)
-    #if active_ineq:
-    #    vec_T_tt = tt_vec(T_tt)
-    #    dual_feas = tt_sub(dual_feas, tt_matrix_vec_mul(mat_lin_op_tt_ineq_adj, vec_T_tt))
-    #    primal_feas_ineq = tt_rank_reduce(tt_hadamard(vec_T_tt, tt_sub(tt_matrix_vec_mul(mat_lin_op_tt_ineq, vec_X_tt), vec_bias_tt_ineq)), err_bound=0)
-    #    primal_feas_ineq = tt_sub(primal_feas_ineq, tt_scale(mu, tt_one_matrix(len(vec_X_tt))))
-    #    rhs[2] = tt_scale(-1, primal_feas_ineq)
+
+    if active_ineq:
+        vec_T_tt = tt_vec(T_tt)
+        dual_feas = tt_sub(dual_feas, tt_matrix_vec_mul(mat_lin_op_tt_ineq_adj, vec_T_tt))
+        primal_feas_ineq = tt_hadamard(vec_T_tt, tt_sub(tt_matrix_vec_mul(mat_lin_op_tt_ineq, vec_X_tt), vec_bias_tt_ineq))
+        primal_feas_ineq = tt_rank_reduce(tt_add(primal_feas_ineq, tt_scale(mu, tt_one_matrix(len(vec_X_tt)))), err_bound=2*tol*mu)
+        if tt_inner_prod(primal_feas_ineq, primal_feas_ineq) > tol:
+            rhs[2] = primal_feas_ineq
+
     dual_feas =  tt_rank_reduce(dual_feas, err_bound=tol)
     XZ_term = tt_mat_mat_mul(X_tt, Z_tt)
     centrality = tt_vec(tt_add(XZ_term, tt_transpose(XZ_term)))
@@ -64,13 +68,13 @@ def tt_infeasible_newton_system_lhs(
     identity = tt_identity(len(Z_tt))
     lhs_skeleton[(2 + idx_add, 1)] = tt_rank_reduce(tt_add(tt_kron(identity, Z_tt), tt_kron(tt_transpose(Z_tt), identity)), err_bound=tol)
     lhs_skeleton[(2 + idx_add, 2 + idx_add)] = tt_rank_reduce(tt_add(tt_kron(tt_transpose(X_tt), identity), tt_kron(identity, X_tt)), err_bound=tol)
-    #if active_ineq:
-    #    ineq_res_tt = tt_sub(tt_matrix_vec_mul(mat_lin_op_tt_ineq, tt_vec(X_tt)), vec_bias_tt_ineq)
-    #    mat_ineq_res_op_tt = tt_mat(ineq_res_tt)
-    #    mat_T_op_tt = tt_op_to_mat(tt_scale(-1, tt_mask_to_linear_op(T_tt)))
-    #    mat_T_comp_linear_op_tt_ineq = tt_mat_mat_mul(mat_T_op_tt, mat_lin_op_tt_ineq)
-    #    lhs_skeleton[(2, 2)] = tt_rank_reduce(mat_ineq_res_op_tt, err_bound=0)
-    #    lhs_skeleton[(2, 1)] = tt_rank_reduce(mat_T_comp_linear_op_tt_ineq, err_bound=0)
+    if active_ineq:
+        ineq_res_tt = tt_sub(vec_bias_tt_ineq, tt_matrix_vec_mul(mat_lin_op_tt_ineq, tt_vec(X_tt)))
+        mat_ineq_res_op_tt = tt_kron(identity, tt_mat(ineq_res_tt))
+        mat_T_op_tt = tt_kron(identity, tt_scale(-1, T_tt))
+        mat_T_comp_linear_op_tt_ineq = tt_hadamard(mat_T_op_tt, mat_lin_op_tt_ineq)
+        lhs_skeleton[(2, 2)] = tt_rank_reduce(mat_ineq_res_op_tt, err_bound=tol)
+        lhs_skeleton[(2, 1)] = tt_rank_reduce(mat_T_comp_linear_op_tt_ineq, err_bound=tol)
     return lhs_skeleton
 
 
