@@ -73,32 +73,32 @@ def tt_partial_J_trace_op(block_size, dim):
     core[0, 0, :, 0] = 1
     core[1, 1, :, 1] = 1
     op_tt.extend(break_core_bond(core))
-    print([c.shape for c in op_tt])
     return op_tt
 
 def tt_partial_J_trace_op_adj(block_size, dim):
     op_tt = []
-    core = np.zeros((1, 4, 2, 2, 2))
-    core[0, 0, 0, 1, 0] = 1
-    core[0, 2, 1, 0, 0] = 1
-    core[0, 1, 0, 1, 1] = 1
-    core[0, 3, 1, 0, 1] = 1
+    core = np.zeros((1, 2, 2, 2, 2, 2))
+    core[0, 0, 0, 0, 1, 0] = 1 # (0, 0) <- (0, 1)
+    core[0, 1, 1, 0, 0, 0] = 1 # (1, 0) <- (1, 0)
+    core[0, 0, 0, 1, 1, 1] = 1 # (0, 1) <- (0, 1)
+    core[0, 1, 1, 1, 0, 1] = 1 # (1, 1) <- (1, 0)
     op_tt.extend(break_core_bond(core))
     for _ in range(dim - block_size - 1):
-        core = np.zeros((2, 4, 2, 2, 2))
-        core[:, 0, 0, 0] = np.eye(2)
-        core[:, 1, 0, 1] = np.eye(2)
-        core[:, 2, 1, 0] = np.eye(2)
-        core[:, 3, 1, 1] = np.eye(2)
+        core = np.zeros((2, 2, 2, 2, 2, 2))
+        core[:, 0, 0, 0, 0] = np.eye(2) # (0, 0) <- (0, 0)
+        core[:, 0, 0, 1, 1] = np.eye(2) # (0, 1) <- (0, 1)
+        core[:, 1, 1, 0, 0] = np.eye(2) # (1, 0) <- (1, 0)
+        core[:, 1, 1, 1, 1] = np.eye(2) # (1, 1) <- (1, 1)
         op_tt.extend(break_core_bond(core))
     for _ in range(block_size - 1):
-        core = np.zeros((2, 4, 2, 2, 2))
-        core[0, :, 0, 0, 0] = 1
-        core[1, :, 1, 1, 1] = 1
-        op_tt.append(core)
-    core = np.zeros((2, 4, 2, 2, 1))
-    core[0, :, 0, 0] = 1
-    core[1, :, 1, 1] = 1
+        core = np.zeros((2, 2, 2, 2, 2, 2))
+        core[0, :, 0, :, 0, 0] = 1  # (:, 0) <- (0, 0)
+        core[1, :, 1, :, 1, 1] = 1 # (:, 0) <- (1, 1)
+        op_tt.extend(break_core_bond(core))
+    core = np.zeros((2, 2, 2, 2, 2, 1))
+    core[0, :, 0, :, 0] = 1 # (:, 0) <- (0, 0)
+    core[1, :, 1, :, 1] = 1 # (:, 0) <- (1, 1)
+
     op_tt.extend(break_core_bond(core))
     return op_tt
 # ------------------------------------------------------------------------------
@@ -107,33 +107,33 @@ def tt_partial_J_trace_op_adj(block_size, dim):
 def tt_diag_block_sum_linear_op(block_size, dim):
     op_tt = []
     for _ in range(dim - block_size):
-        core = np.zeros((1, 4, 2, 2, 1))
-        core[0, 0, :, :, 0] = np.eye(2)
-        op_tt.append(core)
+        core = np.zeros((1, 2, 2, 2, 2, 1))
+        core[0, 0, :, 0, :, 0] = np.eye(2)
+        op_tt.extend(break_core_bond(core))
     for _ in range(block_size):
-        core = np.zeros((1, 4, 2, 2, 1))
-        core[0, 0, 0, 0] = 1
-        core[0, 1, 0, 1] = 1
-        core[0, 2, 1, 0] = 1
-        core[0, 3, 1, 1] = 1
-        op_tt.append(core)
+        core = np.zeros((1, 2, 2, 2, 2, 1))
+        core[:, 0, 0, 0, 0] = 1 # (0, 0) <- (0, 0)
+        core[:, 0, 0, 1, 1] = 1 # (0, 1) <- (0, 1)
+        core[:, 1, 1, 0, 0] = 1 # (1, 0) <- (1, 0)
+        core[:, 1, 1, 1, 1] = 1 # (1, 1) <- (1, 1)
+        op_tt.extend(break_core_bond(core))
     return op_tt
 
 
 def tt_diag_block_sum_linear_op_adj(block_size, dim):
     op_tt = []
     for _ in range(dim - block_size):
-        core = np.zeros((1, 4, 2, 2, 1))
-        core[0, 0, 0, 0] = 1
-        core[0, 3, 0, 0] = 1
-        op_tt.append(core)
+        core = np.zeros((1, 2, 2, 2, 2, 1))
+        core[:, 0, 0, 0, 0] = 1 # (0, 0) <- (0, 0)
+        core[:, 1, 0, 1, 0] = 1 # (1, 1) <- (0, 0)
+        op_tt.extend(break_core_bond(core))
     for _ in range(block_size):
-        core = np.zeros((1, 4, 2, 2, 1))
-        core[0, 0, 0, 0] = 1
-        core[0, 1, 0, 1] = 1
-        core[0, 2, 1, 0] = 1
-        core[0, 3, 1, 1] = 1
-        op_tt.append(core)
+        core = np.zeros((1, 2, 2, 2, 2, 1))
+        core[:, 0, 0, 0, 0] = 1 # (0, 0) <- (0, 0)
+        core[:, 0, 0, 1, 1] = 1 # (0, 1) <- (0, 1)
+        core[:, 1, 1, 0, 0] = 1 # (1, 0) <- (1, 0)
+        core[:, 1, 1, 1, 1] = 1 # (1, 1) <- (1, 1)
+        op_tt.extend(break_core_bond(core))
     return op_tt
 # ------------------------------------------------------------------------------
 # Constraint 7 -----------------------------------------------------------------
@@ -144,47 +144,47 @@ def tt_Q_m_P_op(dim):
         np.array([[1.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(dim)]
     matrix_tt = tt_add(v_matrix_1, v_matrix_2)
     op_tt = []
-    core = np.zeros((matrix_tt[0].shape[0], 4, *matrix_tt[0].shape[1:]))
-    core[:, 1] = matrix_tt[0]
-    op_tt.append(core)
+    core = np.zeros((1, 2, 2, 2, 2, matrix_tt[0].shape[-1]))
+    core[:, 0, :, 1] = matrix_tt[0]
+    op_tt.extend(break_core_bond(core))
     for c in matrix_tt[1:]:
-        core = np.zeros((c.shape[0], 4, *c.shape[1:]))
-        core[:, 0, 0, 0] = c[:, 0, 0]
-        core[:, 1, 0, 1] = c[:, 0, 1]
-        core[:, 2, 1, 0] = c[:, 1, 0]
-        core[:, 2, 1, 1] = c[:, 1, 1]
-        op_tt.append(core)
+        core = np.zeros((c.shape[0], 2, 2, 2, 2, c.shape[-1]))
+        core[:, 0, 0, 0, 0] = c[:, 0, 0] # (0, 0) <- (0, 0)
+        core[:, 0, 0, 1, 1] = c[:, 0, 1] # (0, 1) <- (0, 1)
+        core[:, 1, 1, 0, 0] = c[:, 1, 0] # (1, 0) <- (1, 0)
+        core[:, 1, 1, 0, 1] = c[:, 1, 1] # (1, 0) <- (1, 1)
+        op_tt.extend(break_core_bond(core))
     return tt_rank_reduce(op_tt)
 
 
 def tt_Q_m_P_op_adj(dim):
     op_part_1_tt = []
-    core = np.zeros((1, 4, 2, 2, 1))
-    core[:, 1, 0, 1] = -0.5
-    op_part_1_tt.append(core)
+    core = np.zeros((1, 2, 2, 2, 2, 1))
+    core[:, 0, 0, 1, 1] = -0.5 # (0, 1) <- (0, 1)
+    op_part_1_tt.extend(break_core_bond(core))
     for i in range(dim):
-        core = np.zeros((1, 4, 2, 2, 1))
-        core[:, 0, 0, 0] = 1
-        core[:, 2, 1, 0] = 1
-        op_part_1_tt.append(core)
+        core = np.zeros((1, 2, 2, 2, 2, 1))
+        core[:, 0, 0, 0, 0] = 1 # (0, 0) <- (0, 0)
+        core[:, 1, 1, 0, 0] = 1 # (1, 0) <- (1, 0)
+        op_part_1_tt.extend(break_core_bond(core))
     op_part_2_tt = []
-    core = np.zeros((1, 4, 2, 2, 1))
-    core[:, 2, 0, 1] = -0.5
-    op_part_2_tt.append(core)
+    core = np.zeros((1, 2, 2, 2, 2, 1))
+    core[:, 1, 0, 0, 1] = -0.5 # (1, 0) <- (0, 1)
+    op_part_2_tt.extend(break_core_bond(core))
     for i in range(dim):
-        core = np.zeros((1, 4, 2, 2, 1))
-        core[:, 0, 0, 0] = 1
-        core[:, 1, 1, 0] = 1
-        op_part_2_tt.append(core)
+        core = np.zeros((1, 2, 2, 2, 2, 1))
+        core[:, 0, 0, 0, 0] = 1 # (0, 0) <- (0, 0)
+        core[:, 0, 1, 1, 0] = 1 # (0, 1) <- (1, 0)
+        op_part_2_tt.extend(break_core_bond(core))
     op_part_3_tt = []
-    core = np.zeros((1, 4, 2, 2, 1))
-    core[:, 0, 0, 1] = 1
-    op_part_3_tt.append(core)
+    core = np.zeros((1, 2, 2, 2, 2, 1))
+    core[:, 0, 0, 0, 1] = 1 # (0, 0) <- (0, 1)
+    op_part_3_tt.extend(break_core_bond(core))
     for i in range(dim):
-        core = np.zeros((1, 4, 2, 2, 1))
-        core[:, 0, 0, 0] = 1
-        core[:, 3, 1, 0] = 1
-        op_part_3_tt.append(core)
+        core = np.zeros((1, 2, 2, 2, 2, 1))
+        core[:, 0, 0, 0, 0] = 1 # (0, 0) <- (0, 0)
+        core[:, 1, 1, 1, 0] = 1 # (1, 1) <- (1, 0)
+        op_part_3_tt.extend(break_core_bond(core))
 
     op_tt = tt_add(tt_add(op_part_1_tt, op_part_2_tt), op_part_3_tt)
     return tt_rank_reduce(op_tt)
@@ -195,105 +195,105 @@ def tt_Q_m_P_op_adj(dim):
 
 def tt_DS_op(block_size, dim):
     row_op = []
-    core = np.zeros((1, 4, 2, 2, 1))
-    core[:, 2, 1, 0] = 1
-    row_op.append(core)
+    core = np.zeros((1, 2, 2, 2, 2, 1))
+    core[:, 1, 1, 0, 0] = 1 # (1, 0) <- (1, 0)
+    row_op.extend(break_core_bond(core))
     for _ in range(dim-block_size):
-        core = np.zeros((1, 4, 2, 2, 1))
-        core[:, 0, 0, 0] = 1
-        core[:, 1, 0, 1] = 1
-        row_op.append(core)
+        core = np.zeros((1, 2, 2, 2, 2, 1))
+        core[:, 0, 0, 0, 0] = 1 # (0, 0) <- (0, 0)
+        core[:, 0, 0, 1, 1] = 1 # (0, 1) <- (0, 1)
+        row_op.extend(break_core_bond(core))
     for _ in range(block_size):
-        core = np.zeros((1, 4, 2, 2, 1))
-        core[:, 0, 0, 0] = 1
-        core[:, 0, 0, 1] = 1
-        row_op.append(core)
+        core = np.zeros((1, 2, 2, 2, 2, 1))
+        core[:, 0, 0, 0, 0] = 1 # (0, 0) <- (0, 0)
+        core[:, 0, 0, 0, 1] = 1 # (0, 0) <- (0, 1)
+        row_op.extend(break_core_bond(core))
     col_op = []
-    core = np.zeros((1, 4, 2, 2, 1))
-    core[:, 0, 1, 0] = 1
-    col_op.append(core)
+    core = np.zeros((1, 2, 2, 2, 2, 1))
+    core[:, 0, 1, 0, 0] = 1 # (0, 0) <- (1, 0)
+    col_op.extend(break_core_bond(core))
     for _ in range(dim - block_size):
-        core = np.zeros((1, 4, 2, 2, 1))
-        core[:, 3, 0, 0] = 1
-        core[:, 3, 0, 1] = 1
-        col_op.append(core)
+        core = np.zeros((1, 2, 2, 2, 2, 1))
+        core[:, 1, 0, 1, 0] = 1 # (1, 1) <- (0, 0)
+        core[:, 1, 0, 1, 1] = 1 # (1, 1) <- (0, 1)
+        col_op.extend(break_core_bond(core))
     for _ in range(block_size):
-        core = np.zeros((1, 4, 2, 2, 1))
-        core[:, 0, 0, 0] = 1
-        core[:, 3, 0, 1] = 1
-        col_op.append(core)
+        core = np.zeros((1, 2, 2, 2, 2, 1))
+        core[:, 0, 0, 0, 0] = 1 # (0, 0) <- (0, 0)
+        core[:, 1, 0, 1, 1] = 1 # (1, 1) <- (0, 1)
+        col_op.extend(break_core_bond(core))
     op_tt = tt_rank_reduce(tt_add(row_op, col_op))
     return op_tt
 
 
 def tt_DS_op_adj(block_size, dim):
     row_op_1 = []
-    core = np.zeros((1, 4, 2, 2, 1))
-    core[:, 2, 1, 0] = 1
-    row_op_1.append(core)
+    core = np.zeros((1, 2, 2, 2, 2, 1))
+    core[:, 1, 1, 0, 0] = 1 # (1, 0) <- (1, 0)
+    row_op_1.extend(break_core_bond(core))
     for _ in range(dim - block_size):
-        core = np.zeros((1, 4, 2, 2, 1))
-        core[:, 0, 0, 0] = 1
-        core[:, 1, 0, 1] = 1
-        row_op_1.append(core)
+        core = np.zeros((1, 2, 2, 2, 2, 1))
+        core[:, 0, 0, 0, 0] = 1 # (0, 0) <- (0, 0)
+        core[:, 0, 0, 1, 1] = 1 # (0, 1) <- (0, 1)
+        row_op_1.extend(break_core_bond(core))
     for _ in range(block_size):
-        core = np.zeros((1, 4, 2, 2, 1))
-        core[:, 0, 0, 0] = 1
-        core[:, 1, 0, 0] = 1
-        row_op_1.append(core)
+        core = np.zeros((1, 2, 2, 2, 2, 1))
+        core[:, 0, 0, 0, 0] = 1 # (0, 0) <- (0, 0)
+        core[:, 0, 0, 1, 0] = 1 # (0, 1) <- (0, 0)
+        row_op_1.extend(break_core_bond(core))
 
     row_op_2 = []
-    core = np.zeros((1, 4, 2, 2, 1))
-    core[:, 1, 1, 0] = 1
-    row_op_2.append(core)
+    core = np.zeros((1, 2, 2, 2, 2, 1))
+    core[:, 0, 1, 1, 0] = 1 # (0, 1) <- (1, 0)
+    row_op_2.extend(break_core_bond(core))
     for _ in range(dim - block_size):
-        core = np.zeros((1, 4, 2, 2, 1))
-        core[:, 0, 0, 0] = 1
-        core[:, 2, 0, 1] = 1
-        row_op_2.append(core)
+        core = np.zeros((1, 2, 2, 2, 2, 1))
+        core[:, 0, 0, 0, 0] = 1 # (0, 0) <- (0, 0)
+        core[:, 1, 0, 0, 1] = 1 # (1, 0) <- (0, 1)
+        row_op_2.extend(break_core_bond(core))
     for _ in range(block_size):
-        core = np.zeros((1, 4, 2, 2, 1))
-        core[:, 0, 0, 0] = 1
-        core[:, 2, 0, 0] = 1
-        row_op_2.append(core)
+        core = np.zeros((1, 2, 2, 2, 2, 1))
+        core[:, 0, 0, 0, 0] = 1 # (0, 0) <- (0, 0)
+        core[:, 1, 0, 0, 0] = 1 # (1, 0) <- (0, 0)
+        row_op_2.extend(break_core_bond(core))
     row_op = tt_add(row_op_1, row_op_2)
 
     col_op_1 = []
-    core = np.zeros((1, 4, 2, 2, 1))
-    core[:, 1, 1, 0] = 1
-    col_op_1.append(core)
+    core = np.zeros((1, 2, 2, 2, 2, 1))
+    core[:, 0, 1, 1, 0] = 1 # (0, 1) <- (1, 0)
+    col_op_1.extend(break_core_bond(core))
     for _ in range(dim - block_size):
-        core = np.zeros((1, 4, 2, 2, 1))
-        core[:, 0, 0, 0] = 1
-        core[:, 0, 0, 1] = 1
-        core[:, 2, 0, 0] = 1
-        core[:, 2, 0, 1] = 1
-        col_op_1.append(core)
+        core = np.zeros((1, 2, 2, 2, 2, 1))
+        core[:, 0, 0, 0, 0] = 1 # (0, 0) <- (0, 0)
+        core[:, 0, 0, 0, 1] = 1 # (0, 0) <- (0, 1)
+        core[:, 1, 0, 0, 0] = 1 # (1, 0) <- (0, 0)
+        core[:, 1, 0, 0, 1] = 1 # (1, 0) <- (0, 1)
+        col_op_1.extend(break_core_bond(core))
     for _ in range(block_size):
-        core = np.zeros((1, 4, 2, 2, 1))
-        core[:, 0, 0, 0] = 1
-        core[:, 2, 0, 1] = 1
-        col_op_1.append(core)
+        core = np.zeros((1, 2, 2, 2, 2, 1))
+        core[:, 0, 0, 0, 0] = 1 # (0, 0) <- (0, 0)
+        core[:, 1, 0, 0, 1] = 1 # (1, 0) <- (0, 1)
+        col_op_1.extend(break_core_bond(core))
 
     col_op_2 = []
-    core = np.zeros((1, 4, 2, 2, 1))
-    core[:, 2, 1, 0] = 1
-    col_op_2.append(core)
+    core = np.zeros((1, 2, 2, 2, 2, 1))
+    core[:, 1, 1, 0, 0] = 1 # (1, 0) <- (1, 0)
+    col_op_2.extend(break_core_bond(core))
     for _ in range(dim - block_size):
-        core = np.zeros((1, 4, 2, 2, 1))
-        core[:, 0, 0, 0] = 1
-        core[:, 0, 0, 1] = 1
-        core[:, 1, 0, 0] = 1
-        core[:, 1, 0, 1] = 1
-        col_op_2.append(core)
+        core = np.zeros((1, 2, 2, 2, 2, 1))
+        core[:, 0, 0, 0, 0] = 1 # (0, 0) <- (0, 0)
+        core[:, 0, 0, 0, 1] = 1 # (0, 0) <- (0, 1)
+        core[:, 0, 0, 1, 0] = 1 # (0, 1) <- (0, 0)
+        core[:, 0, 0, 1, 1] = 1 # (0, 1) <- (0, 1)
+        col_op_2.extend(break_core_bond(core))
     for _ in range(block_size):
-        core = np.zeros((1, 4, 2, 2, 1))
-        core[:, 0, 0, 0] = 1
-        core[:, 1, 0, 1] = 1
-        col_op_2.append(core)
+        core = np.zeros((1, 2, 2, 2, 2, 1))
+        core[:, 0, 0, 0, 0] = 1 # (0, 0) <- (0, 0)
+        core[:, 0, 0, 1, 1] = 1 # (0, 1) <- (0, 1)
+        col_op_2.extend(break_core_bond(core))
     col_op = tt_add(col_op_1, col_op_2)
 
-    op_tt = tt_rank_reduce(tt_add(row_op, col_op))
+    op_tt = col_op #tt_rank_reduce(tt_add(row_op, col_op))
     return op_tt
 
 def tt_DS_bias(block_size, dim):
@@ -373,7 +373,7 @@ if __name__ == "__main__":
     np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=4, suppress=True)
     print("Creating Problem...")
 
-    n = 2
+    n = 1
 
     np.random.seed(Config.seed)
     G_A = tt_random_graph(n, Config.max_rank)
@@ -386,7 +386,7 @@ if __name__ == "__main__":
 
     C_tt = tt_random_gaussian([3]*(2*n - 1), shape=(2, 2))#tt_kron(G_B, G_A)
 
-    print(np.round(tt_matrix_to_matrix(C_tt), decimals=2))
+    print(np.round(tt_matrix_to_matrix(C_tt), decimals=4))
 
 
     # Equality Operator
@@ -399,52 +399,59 @@ if __name__ == "__main__":
     #eq_bias_tt = partial_tr_op_bias
     # ---
     # V
-    partial_tr_J_op = tt_partial_J_trace_op(n, 2*n)
-    #partial_tr_J_op_adj = tt_partial_J_trace_op_adj(n, n_sq)
+    #partial_tr_J_op = tt_partial_J_trace_op(n, 2*n)
+    #partial_tr_J_op_adj = tt_partial_J_trace_op_adj(n, 2*n)
     #partial_tr_J_op_bias = tt_add(
     #    [np.array([[0.0, 1.0], [1.0, 0.0]]).reshape(1, 2, 2, 1)] + tt_one_matrix(n_sq-n-1) + [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)],
     #    [np.array([[0.0, 1.0], [1.0, 0.0]]).reshape(1, 2, 2, 1)] + tt_one_matrix(n_sq - n - 1) + [np.array([[0.0, 0.0], [0.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(n)]
     #)
-    A = tt_matrix_to_matrix(C_tt)
-    print(np.sum(A[0:4, 0:4]), np.sum(A[0:4, 4:8]), np.sum(A[4:8, 0:4]), np.sum(A[4:8, 4:8]))
-    print([c.shape for c in partial_tr_J_op])
-    print([c.shape for c in tt_vec(C_tt)])
-    print(np.round(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(partial_tr_J_op, tt_vec(C_tt)))), decimals=5))
+
 
     #L_op_tt = tt_rank_reduce(tt_add(L_op_tt, partial_tr_J_op))
     #L_op_tt_adj = tt_rank_reduce(tt_add(L_op_tt_adj, partial_tr_J_op_adj))
     #eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, partial_tr_J_op_bias))
 
-    """
     # ---
     # VI
-    diag_block_sum_op = [q_op_prefix] + tt_diag_block_sum_linear_op(n, n_sq)
-    diag_block_sum_op_adj = [q_op_prefix] + tt_diag_block_sum_linear_op_adj(n, n_sq)
-    diag_block_sum_op_bias = [q_bias_prefix] + [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n_sq-n)] + tt_identity(n)
+    #diag_block_sum_op = tt_diag_block_sum_linear_op(n, 2*n)
+    #diag_block_sum_op_adj = tt_diag_block_sum_linear_op_adj(n, 2*n)
+    #diag_block_sum_op_bias = [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n_sq-n)] + tt_identity(n)
 
-    L_op_tt = tt_rank_reduce(tt_add(L_op_tt, diag_block_sum_op))
-    L_op_tt_adj = tt_rank_reduce(tt_add(L_op_tt_adj, diag_block_sum_op_adj))
-    eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, diag_block_sum_op_bias))
+    #print(np.round(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(diag_block_sum_op, tt_vec(C_tt)))), decimals=4))
+    #print(np.round(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(diag_block_sum_op_adj, tt_vec(C_tt)))), decimals=4))
+
+    #L_op_tt = tt_rank_reduce(tt_add(L_op_tt, diag_block_sum_op))
+    #L_op_tt_adj = tt_rank_reduce(tt_add(L_op_tt_adj, diag_block_sum_op_adj))
+    #eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, diag_block_sum_op_bias))
+
     # ---
     # VII
-    # FIXME: AMeN error moderately high
-    Q_m_P_op = tt_Q_m_P_op(n_sq)
-    Q_m_P_op_adj = tt_Q_m_P_op_adj(n_sq)
-    Q_m_P_op_bias = tt_zero_matrix(n_sq+1)
+    #Q_m_P_op = tt_Q_m_P_op(2*n)
+    #Q_m_P_op_adj = tt_Q_m_P_op_adj(2*n)
+    #Q_m_P_op_bias = tt_zero_matrix(n_sq+1)
 
-    L_op_tt = tt_rank_reduce(tt_add(L_op_tt, Q_m_P_op))
-    L_op_tt_adj = tt_rank_reduce(tt_add(L_op_tt_adj, Q_m_P_op_adj))
-    eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, Q_m_P_op_bias))
+    #L_op_tt = tt_rank_reduce(tt_add(L_op_tt, Q_m_P_op))
+    #L_op_tt_adj = tt_rank_reduce(tt_add(L_op_tt_adj, Q_m_P_op_adj))
+    #eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, Q_m_P_op_bias))
+
     # ---
     # VIII
-    # FIXME: AMeN error very high
-    DS_op = tt_DS_op(n, n_sq)
-    DS_op_adj = tt_DS_op_adj(n, n_sq)
-    DS_op_bias = tt_DS_bias(n, n_sq)
+    #DS_op = tt_DS_op(n, 2*n)
+    DS_op_adj = tt_DS_op_adj(n, 2*n)
+    #DS_op_bias = tt_DS_bias(n, n_sq)
 
-    L_op_tt = tt_rank_reduce(tt_add(L_op_tt, DS_op))
-    L_op_tt_adj = tt_rank_reduce(tt_add(L_op_tt_adj, DS_op_adj))
-    eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, DS_op_bias))
+    print(np.round(tt_matrix_to_matrix([np.array([[1.0, 0.2], [0.3, 0.5]]).reshape(1, 2, 2, 1)] + C_tt), decimals=4))
+    print(np.round(tt_matrix_to_matrix(tt_mat(
+        tt_matrix_vec_mul(DS_op_adj, tt_vec([np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + C_tt)))),
+                   decimals=4))
+    # print(np.round(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(diag_block_sum_op_adj, tt_vec(C_tt)))), decimals=4))
+
+    #L_op_tt = tt_rank_reduce(tt_add(L_op_tt, DS_op))
+    #L_op_tt_adj = tt_rank_reduce(tt_add(L_op_tt_adj, DS_op_adj))
+    #eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, DS_op_bias))
+
+
+    """
     # ---
     # IX
     padding_op = tt_padding_op(n_sq+1)
