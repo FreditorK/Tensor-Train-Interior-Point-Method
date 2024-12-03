@@ -293,6 +293,7 @@ def tt_DS_op_adj(block_size, dim):
     col_op = tt_add(col_op_1, col_op_2)
 
     op_tt = tt_rank_reduce(tt_add(row_op, col_op))
+    # FIXME: row_op is col_op and col_op is row_op, doesn't change anything but out of principle
     return op_tt
 
 def tt_DS_bias(block_size, dim):
@@ -372,10 +373,10 @@ if __name__ == "__main__":
         [ 6  6  | 5  4  | 7 | P P P]
         [ 6  6  | 0  5  | 7 | P P P]
         [--------------------------]
-        [ 5  4  | 8c  0 | 7 | P P P]
-        [ 0  5  | 0  8c | 7 | P P P]
+        [ 5  4  | 8r  0 | 7 | P P P]
+        [ 0  5  | 0  8r | 7 | P P P]
     Y = [--------------------------]
-        [ 8r 0  | 8r 0  | P | P P P]
+        [ 8c 0  | 8c 0  | P | P P P]
         [--------------------------]
         [ P  P  | P  P  | P | P P P]
         [ P  P  | P  P  | P | P P P]
@@ -388,13 +389,16 @@ if __name__ == "__main__":
 
     np.random.seed(Config.seed)
     G_A = tt_random_graph(n, Config.max_rank)
+    print("Graph A: ")
     print(np.round(tt_matrix_to_matrix(G_A), decimals=2))
 
     G_B = tt_random_graph(n, Config.max_rank)
+    print("Graph B: ")
     print(np.round(tt_matrix_to_matrix(G_B), decimals=2))
 
-    C_tt = tt_kron(G_B, G_A)
-    print(f"TT-Ranks: {tt_ranks(C_tt)}")
+    print("Objective matrix: ")
+    C_tt = [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + tt_kron(G_B, G_A)
+    print(np.round(tt_matrix_to_matrix(C_tt), decimals=2))
 
     # Equality Operator
     # IV
@@ -562,9 +566,20 @@ if __name__ == "__main__":
     padding_op_adj = tt_padding_op_adj(2*n)
     padding_op_bias = [np.array([[0.0, 0.0], [0.0, 1.0]]).reshape(1, 2, 2, 1)] + tt_identity(2*n)
 
-    L_op_tt = tt_rank_reduce(tt_add(L_op_tt, padding_op))
-    L_op_tt_adj = tt_rank_reduce(tt_add(L_op_tt_adj, padding_op_adj))
-    eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, padding_op_bias))
+    def test_padding_op():
+        random_A = tt_random_gaussian([3] * (2 * n), shape=(2, 2))
+        M = tt_matrix_to_matrix(random_A)
+        print(np.round(M, decimals=4))
+        print(np.round(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(padding_op, tt_vec(random_A)))), decimals=4))
+
+
+    print(test_padding_op())
+
+    # FIXME: Block-AMeN not happy with this, Do we even need this? We initialise it and it stays psd
+    # FIXME: It is too many zeros as before, we get degenerate galerkin projections
+    #L_op_tt = tt_rank_reduce(tt_add(L_op_tt, padding_op))
+    #L_op_tt_adj = tt_rank_reduce(tt_add(L_op_tt_adj, padding_op_adj))
+    #eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, padding_op_bias))
 
     # ---
     # Inequality Operator
@@ -574,12 +589,11 @@ if __name__ == "__main__":
     Q_ineq_bias = tt_zero_matrix(2*n + 1)
 
 
-    """
     # ---
     print("...Problem created!")
     print(f"Objective TT-ranks: {tt_ranks(C_tt)}")
     print(f"Eq Op-rank: {tt_ranks(L_op_tt)}")
-    print(f"Eq Op-adjoint-rank: {tt_ranks(L_op_tt)}")
+    print(f"Eq Op-adjoint-rank: {tt_ranks(L_op_tt_adj)}")
     print(f"Eq Bias-rank: {tt_ranks(eq_bias_tt)}")
     print("-----------------------------------")
     print(f"Ineq Op-rank: {tt_ranks(Q_ineq_op)}")
@@ -591,7 +605,10 @@ if __name__ == "__main__":
         L_op_tt,
         L_op_tt_adj,
         eq_bias_tt,
-        max_iter=0,
+        #Q_ineq_op,
+        #Q_ineq_op_adj,
+        #Q_ineq_bias,
+        max_iter=8,
         verbose=True
     )
     t1 = time.time()
@@ -602,6 +619,3 @@ if __name__ == "__main__":
     print(f"Ranks X_tt: {tt_ranks(X_tt)}, Y_tt: {tt_ranks(Y_tt)}, \n "
           f"     T_tt: {tt_ranks(T_tt)}, Z_tt: {tt_ranks(Z_tt)} ")
     print(f"Time: {t1 - t0}s")
-    print(np.round(tt_matrix_to_matrix(tt_mat(tt_linear_op(L_op_tt, tt_one_matrix(len(L_op_tt))), shape=(2, 2))), decimals=2))
-    print(tt_ranks(tt_rank_reduce(L_op_tt, err_bound=1e-8)))
-    """

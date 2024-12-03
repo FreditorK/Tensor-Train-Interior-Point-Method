@@ -332,7 +332,7 @@ def tt_inv_precond(matrix_tt, target_ranks, tol=1e-10, max_iter=100, verbose=Fal
     return inv_tt
 
 
-def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, kickrank=2, verbose=False):
+def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kickrank=2, verbose=False):
 
     damp = 2
     block_size = np.max(list(block_b.keys())) + 1
@@ -340,7 +340,7 @@ def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, kick
     x_shape = model_entry[0].shape[1:-1]
 
     if x0 == None:
-        x = [np.ones((1, *c.shape[1:-1], 1)) for c in model_entry[:-1]] + [np.ones((1, block_size, *x_shape, 1))]
+        x = tt_normalise([np.random.randn(1, *c.shape[1:-1], 1) for c in model_entry[:-1]]) + [np.random.randn(1, block_size, *x_shape, 1)]
     else:
         x = x0
 
@@ -351,7 +351,7 @@ def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, kick
     rmax = [1] + (d - 1) * [rmax] + [1]
 
     # z cores
-    z_cores = [np.random.randn(1, block_size, *x_shape, kickrank)] + [np.random.randn(kickrank, *c.shape[1:-1], kickrank) for c in model_entry[1:-1]] + [np.random.randn(kickrank, *x_shape, 1)]
+    z_cores = [np.random.randn(1, block_size, *x_shape, kickrank)] + tt_normalise([np.random.randn(kickrank, *c.shape[1:-1], kickrank) for c in model_entry[1:-1]] + [np.random.randn(kickrank, *x_shape, 1)])
     z_cores = tt_rl_orthogonalise(z_cores)
     rz = [1] + tt_ranks(z_cores) + [1]
 
@@ -374,6 +374,7 @@ def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, kick
     normb = np.ones((block_size, d - 1)) # norm of each row of the rhs
     normx = np.ones((d - 1))
     nrmsc = np.ones(block_size)
+    real_tol = (eps / np.sqrt(d)) / damp
 
     for swp in range(nswp):
 
@@ -463,7 +464,6 @@ def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, kick
             norm_rhs = np.linalg.norm(rhs)
 
             # residuals
-            real_tol = (eps / np.sqrt(d)) / damp
             norm_rhs = norm_rhs if norm_rhs > real_tol else 1.0
 
             # assemble lhs
@@ -480,6 +480,15 @@ def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, kick
 
             block_res_new = np.linalg.norm(B @ solution_now - rhs) / norm_rhs
             block_res_old = np.linalg.norm(B @ previous_solution - rhs) / norm_rhs
+
+            #if k == 2:
+            #    print("---")
+            #    #print((B[:m] @ previous_solution).flatten())
+            #    #print((rhs[:m]).flatten())
+            #    print("1", np.linalg.norm(B[:m] @ previous_solution - rhs[:m]))
+            #    print("2", np.linalg.norm(B[m:2*m] @ previous_solution - rhs[m:2*m]))
+            #    print("3", np.linalg.norm(B[2*m:3*m] @ previous_solution - rhs[2*m:3*m]))
+
 
             # residual damp check
             if block_res_old / block_res_new < damp and block_res_new > real_tol:
@@ -603,10 +612,10 @@ def tt_block_amen(block_A, block_b, nswp=50, x0=None, eps=1e-10, rmax=1024, kick
                 current_core = np.reshape(u @ v, (rx[k], N[k], block_size, rx[k + 1]))
                 x_cores[k] = np.transpose(current_core, (0, 2, 1, 3))
 
-        if last or swp > nswp - 2:
+        if last:
             break
 
-        if max_res < eps or max_dx < eps:
+        if max_res < eps or max_dx < eps or swp >= nswp - 2:
             last = True
 
     if verbose:

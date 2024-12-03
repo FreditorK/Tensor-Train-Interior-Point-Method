@@ -135,7 +135,7 @@ def _tt_lr_random_orthogonalise(train_tt, gaussian_tt):
 def tt_rank_reduce(train_tt: List[np.array], err_bound=1e-18):
     """ Might reduce TT-rank """
     dim = len(train_tt)
-    if dim == 1:
+    if dim == 1 or np.all(np.array(tt_ranks(train_tt))==1):
         return train_tt
     train_tt = tt_rl_orthogonalise(train_tt)
     err_bound = err_bound*np.sqrt(np.divide(tt_inner_prod(train_tt, train_tt), dim-1))

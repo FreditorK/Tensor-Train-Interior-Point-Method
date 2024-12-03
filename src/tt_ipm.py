@@ -36,9 +36,9 @@ def tt_infeasible_feas_rhs(
 
     if active_ineq:
         vec_T_tt = tt_vec(T_tt)
-        dual_feas = tt_sub(dual_feas, tt_matrix_vec_mul(mat_lin_op_tt_ineq_adj, vec_T_tt))
+        dual_feas = tt_add(dual_feas, tt_matrix_vec_mul(mat_lin_op_tt_ineq_adj, vec_T_tt))
         primal_feas_ineq = tt_hadamard(vec_T_tt, tt_sub(tt_matrix_vec_mul(mat_lin_op_tt_ineq, vec_X_tt), vec_bias_tt_ineq))
-        primal_feas_ineq = tt_rank_reduce(tt_add(primal_feas_ineq, tt_scale(mu, tt_one_matrix(len(vec_X_tt)))), err_bound=2*tol*mu)
+        primal_feas_ineq = tt_rank_reduce(tt_add(primal_feas_ineq, tt_scale(mu, [np.ones((1, 2, 1)) for _ in vec_X_tt])), err_bound=2*tol*mu)
         if tt_inner_prod(primal_feas_ineq, primal_feas_ineq) > tol:
             rhs[2] = primal_feas_ineq
 
@@ -132,6 +132,7 @@ def _tt_ipm_newton_step(
     )
     Delta_tt, res = tt_block_amen(lhs_matrix_tt, rhs_vec_tt, kickrank=2, verbose=verbose)
     vec_Delta_Y_tt = tt_rank_reduce(_tt_get_block(0, Delta_tt), err_bound=tol)
+    print(np.round(tt_matrix_to_matrix(tt_mat(vec_Delta_Y_tt)), decimals=2))
     Delta_T_tt = tt_rank_reduce(tt_mat(_tt_get_block(2, Delta_tt)), err_bound=tol) if active_ineq else None
     Delta_X_tt = tt_rank_reduce(tt_mat(_tt_get_block(1, Delta_tt)), err_bound=tol)
     Delta_Z_tt = tt_rank_reduce(tt_mat(_tt_get_block(2+idx_add, Delta_tt)), err_bound=tol)
@@ -159,7 +160,7 @@ def _tt_line_search(
         Delta_T_tt,
         Delta_Z_tt,
         lin_op_tt_ineq,
-        bias_tt_ineq,
+        vec_bias_tt_ineq,
         active_ineq,
         iters=15,
         crit=1e-12
@@ -182,7 +183,7 @@ def _tt_line_search(
 
     if active_ineq:
         for iter in range(iters):
-            discount_x, val, _ = tt_is_geq(lin_op_tt_ineq, new_X_tt, bias_tt_ineq, crit=crit)
+            discount_x, val, _ = tt_is_geq(lin_op_tt_ineq, new_X_tt, vec_bias_tt_ineq, crit=crit)
             if discount_x:
                 break
             else:
@@ -278,5 +279,6 @@ def tt_ipm(
             if np.less(np.abs(mu), centrality_tol):
                 break
     if verbose:
+        print(f"---Terminated ---")
         print(f"Converged in {iter} iterations.")
     return X_tt, tt_mat(vec_Y_tt), T_tt, Z_tt
