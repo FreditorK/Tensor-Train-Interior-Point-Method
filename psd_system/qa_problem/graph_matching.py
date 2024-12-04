@@ -313,13 +313,7 @@ def tt_DS_bias(block_size, dim):
 # Constraint 9 -----------------------------------------------------------------
 
 def tt_padding_op(dim):
-    matrix_tt_1 = [np.array([[0.0, 1.0], [1.0, 1.0]]).reshape(1, 2, 2, 1)] + [np.ones((1, 2, 2, 1)) for _ in range(dim)]
-    matrix_tt_2 = [np.array([[0.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1)] +  [np.array([[1.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in
-                                                                              range(dim)]
-    matrix_tt_3 = [np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [
-        np.array([[1.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1) for _ in
-        range(dim)]
-    matrix_tt = tt_rank_reduce(tt_sub(tt_sub(matrix_tt_1, matrix_tt_2), matrix_tt_3))
+    matrix_tt = [np.array([[0.0, 0.0], [0.0, 1.0]]).reshape(1, 2, 2, 1)] + [np.eye(2).reshape(1, 2, 2, 1) for _ in range(dim)]
     basis = []
     for c in tt_vec(matrix_tt):
         core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
@@ -334,13 +328,10 @@ def tt_padding_op_adj(dim):
 # ------------------------------------------------------------------------------
 # Constraint 10 ----------------------------------------------------------------
 def tt_ineq_op(dim):
-    matrix_tt = [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [np.ones((1, 2, 2, 1)) for _ in range(dim)]
-    basis = []
-    for c in tt_vec(matrix_tt):
-        core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
-        core[:, 0, 0] = c[:, 0]
-        core[:, 1, 1] = c[:, 1]
-        basis.append(core)
+    matrix_tt = [np.array([[0.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [np.array([[0.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(dim)]
+    #matrix_tt = tt_add(matrix_tt, [np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [np.array([[1.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(dim)])
+    #matrix_tt = tt_add(matrix_tt, [np.array([[0.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1)] + [np.array([[1.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(dim)])
+    basis = tt_matrix_to_mask_op(matrix_tt)
     return tt_rank_reduce(basis)
 
 def tt_ineq_op_adj(dim):
@@ -404,7 +395,7 @@ if __name__ == "__main__":
     # IV
     partial_tr_op = tt_partial_trace_op(n, 2*n)
     partial_tr_op_adj = tt_partial_trace_op_adj(n, 2*n)
-    partial_tr_op_bias =  tt_zero_matrix(2 * n + 1)
+    partial_tr_op_bias =  tt_one_matrix(2 * n + 1)
 
     def test_partial_tr_op():
         random_A = tt_random_gaussian([3] * (2 * n), shape=(2, 2))
@@ -572,21 +563,25 @@ if __name__ == "__main__":
         print(np.round(M, decimals=4))
         print(np.round(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(padding_op, tt_vec(random_A)))), decimals=4))
 
-
-    print(test_padding_op())
-
     # FIXME: Block-AMeN not happy with this, Do we even need this? We initialise it and it stays psd
     # FIXME: It is too many zeros as before, we get degenerate galerkin projections
     #L_op_tt = tt_rank_reduce(tt_add(L_op_tt, padding_op))
     #L_op_tt_adj = tt_rank_reduce(tt_add(L_op_tt_adj, padding_op_adj))
     #eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, padding_op_bias))
 
+
     # ---
     # Inequality Operator
     # X
     Q_ineq_op = tt_ineq_op(2*n)
     Q_ineq_op_adj = tt_ineq_op_adj(2*n)
-    Q_ineq_bias = tt_zero_matrix(2*n + 1)
+    Q_ineq_bias = [np.array([[10.0, 10.0], [10.0, 10.0]]).reshape(1, 2, 2, 1)] + tt_one_matrix(2 * n)
+
+    def test_Q_ineq_op():
+        random_A = tt_random_gaussian([3] * (2 * n), shape=(2, 2))
+        M = tt_matrix_to_matrix(random_A)
+        print(np.round(M, decimals=4))
+        print(np.round(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(Q_ineq_op, tt_vec(random_A)))), decimals=4))
 
 
     # ---
@@ -608,7 +603,7 @@ if __name__ == "__main__":
         #Q_ineq_op,
         #Q_ineq_op_adj,
         #Q_ineq_bias,
-        max_iter=8,
+        max_iter=2,
         verbose=True
     )
     t1 = time.time()

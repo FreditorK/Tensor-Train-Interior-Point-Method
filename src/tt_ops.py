@@ -440,3 +440,8 @@ def tt_diag(vec_tt):
         mat_core[:, 1, 1] = core[:, 1]
         mat_tt.append(mat_core)
     return mat_tt
+
+def tt_matrix_to_mask_op(matrix_tt):
+    identity = np.eye(2)
+    basis = [einsum("ij, rjR -> rijR", identity, c) for c in tt_vec(matrix_tt)]
+    return tt_rank_reduce(basis)

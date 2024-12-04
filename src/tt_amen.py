@@ -540,10 +540,10 @@ def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kick
                     cz_new = np.reshape(cz_new, (rz[k] * N[k], trunc_r))
 
                     # lr orthogonalise and shift block to right
-                    Qz, _ = np.linalg.qr(cz_new)
+                    Qz, Rz = np.linalg.qr(cz_new)
                     z_cores[k] = np.reshape(Qz, (rz[k], N[k], trunc_r))
                     z_cores[k + 1] = einsum('rdc,cbR->rbdR',
-                                            (np.diag(sz[:trunc_r]) @ vz[:trunc_r]).reshape(trunc_r, block_size, rz[k + 1]),
+                                            (Rz @ np.diag(sz[:trunc_r]) @ vz[:trunc_r]).reshape(trunc_r, block_size, rz[k + 1]),
                                             z_cores[k + 1])
                     legacy_rz_kp1 = rz[k+1]
                     rz[k + 1] = trunc_r
