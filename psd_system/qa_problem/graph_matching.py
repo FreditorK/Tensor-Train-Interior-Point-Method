@@ -395,7 +395,7 @@ if __name__ == "__main__":
     # IV
     partial_tr_op = tt_partial_trace_op(n, 2*n)
     partial_tr_op_adj = tt_partial_trace_op_adj(n, 2*n)
-    partial_tr_op_bias =  tt_one_matrix(2 * n + 1)
+    partial_tr_op_bias = tt_zero_matrix(2 * n + 1)
 
     def test_partial_tr_op():
         random_A = tt_random_gaussian([3] * (2 * n), shape=(2, 2))
@@ -600,9 +600,9 @@ if __name__ == "__main__":
         L_op_tt,
         L_op_tt_adj,
         eq_bias_tt,
-        #Q_ineq_op,
-        #Q_ineq_op_adj,
-        #Q_ineq_bias,
+        Q_ineq_op,
+        Q_ineq_op_adj,
+        Q_ineq_bias,
         max_iter=2,
         verbose=True
     )
