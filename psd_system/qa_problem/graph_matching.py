@@ -575,7 +575,7 @@ if __name__ == "__main__":
     # X
     Q_ineq_op = tt_ineq_op(2*n)
     Q_ineq_op_adj = tt_ineq_op_adj(2*n)
-    Q_ineq_bias = [-np.array([[2.0, 2.0], [2.0, 2.0]]).reshape(1, 2, 2, 1)] + tt_one_matrix(2 * n)
+    Q_ineq_bias = [(1e-2)*np.ones((1, 2, 2, 1))] + tt_one_matrix(2 * n)
 
     def test_Q_ineq_op():
         random_A = tt_random_gaussian([3] * (2 * n), shape=(2, 2))
