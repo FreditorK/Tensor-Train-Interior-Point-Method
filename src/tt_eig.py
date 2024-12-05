@@ -38,13 +38,13 @@ def _tt_eig(A, min_eig, nswp, x0, eps, verbose):
     rx = np.array([1] + tt_ranks(x_cores) + [1])
     N = np.array([c.shape[1] for c in x_cores])
 
-    Phis = [np.ones((1, 1, 1), dtype=dtype)] + [None] * (d - 1) + [np.ones((1, 1, 1), dtype=dtype)]  # size is rk x Rk x rk
+    XAX = [np.ones((1, 1, 1), dtype=dtype)] + [None] * (d - 1) + [np.ones((1, 1, 1), dtype=dtype)]  # size is rk x Rk x rk
 
     max_res = 0
     for swp in range(nswp):
         x_cores = tt_rl_orthogonalise(x_cores)
         rx[1:-1] = np.array(tt_ranks(x_cores))
-        Phis, _ = compute_phi_bcks_A(Phis, x_cores, A, x_cores, d=d)
+        XAX, _ = compute_phi_bcks_A(XAX, x_cores, A, x_cores, d=d)
 
         # start loop
         max_res = 0
@@ -55,8 +55,8 @@ def _tt_eig(A, min_eig, nswp, x0, eps, verbose):
             real_tol = (eps / np.sqrt(d)) / damp
 
             # solve the local system
-            Bp = einsum("smnS,LSR->smnRL", A[k], Phis[k + 1], optimize=True)
-            B = einsum("lsr,smnRL->lmLrnR", Phis[k], Bp, optimize=True)
+            Bp = einsum("smnS,LSR->smnRL", A[k], XAX[k + 1], optimize=True)
+            B = einsum("lsr,smnRL->lmLrnR", XAX[k], Bp, optimize=True)
             B = np.reshape(B, [rx[k] * N[k] * rx[k + 1], rx[k] * N[k] * rx[k + 1]])
 
             eig_val, solution_now = scip.sparse.linalg.eigsh(B, k=1, which=min_or_max)
@@ -74,7 +74,7 @@ def _tt_eig(A, min_eig, nswp, x0, eps, verbose):
                 for r in range(u.shape[1] - 1, 0, -1):
                     # solution has the same size
                     solution = np.reshape(u[:, :r] @ np.diag(s[:r]) @ v[:r, :], [-1, 1])
-                    res = np.linalg.norm(B @ solution - eig_val * solution) / np.linalg.norm(solution)
+                    res = np.linalg.norm(B @ solution - eig_val * solution) / eig_val
                     if res > max(real_tol * damp, res_new):
                         break
                 r += 1
@@ -98,12 +98,12 @@ def _tt_eig(A, min_eig, nswp, x0, eps, verbose):
                 rx[k + 1] = r
 
                 # next phis with norm correction
-                Phis[k + 1] = compute_phi_fwd_A(Phis[k], x_cores[k], A[k], x_cores[k])
+                XAX[k + 1] = compute_phi_fwd_A(XAX[k], x_cores[k], A[k], x_cores[k])
 
                 # ... and norms
-                norm = np.linalg.norm(Phis[k + 1])
+                norm = np.linalg.norm(XAX[k + 1])
                 norm = norm if np.greater(norm, 0) else 1.0
-                Phis[k + 1] = np.divide(Phis[k + 1], norm)
+                XAX[k + 1] = np.divide(XAX[k + 1], norm)
 
             else:
                 x_cores[k] = np.reshape(u @ v.T, (rx[k], N[k], rx[k + 1]))

@@ -335,7 +335,7 @@ def tt_ineq_op(dim):
     return tt_rank_reduce(basis)
 
 def tt_ineq_op_adj(dim):
-    return tt_ineq_op(dim)
+    return tt_scale(-1, tt_ineq_op(dim))
 # ------------------------------------------------------------------------------
 
 @dataclass
@@ -388,7 +388,7 @@ if __name__ == "__main__":
     print(np.round(tt_matrix_to_matrix(G_B), decimals=2))
 
     print("Objective matrix: ")
-    C_tt = [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + tt_kron(G_B, G_A)
+    C_tt = [np.array([[-1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + tt_kron(G_B, G_A)
     print(np.round(tt_matrix_to_matrix(C_tt), decimals=2))
 
     # Equality Operator
@@ -575,7 +575,7 @@ if __name__ == "__main__":
     # X
     Q_ineq_op = tt_ineq_op(2*n)
     Q_ineq_op_adj = tt_ineq_op_adj(2*n)
-    Q_ineq_bias = [(1e-2)*np.ones((1, 2, 2, 1))] + tt_one_matrix(2 * n)
+    Q_ineq_bias = tt_scale((1e-1), tt_rank_reduce(tt_mat(tt_matrix_vec_mul(Q_ineq_op_adj, [np.ones((1, 2, 1)) for _ in range(2*(2*n+1))]))))
 
     def test_Q_ineq_op():
         random_A = tt_random_gaussian([3] * (2 * n), shape=(2, 2))
@@ -603,7 +603,7 @@ if __name__ == "__main__":
         Q_ineq_op,
         Q_ineq_op_adj,
         Q_ineq_bias,
-        max_iter=2,
+        max_iter=10,
         verbose=True
     )
     t1 = time.time()

@@ -340,7 +340,7 @@ def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kick
     x_shape = model_entry[0].shape[1:-1]
 
     if x0 == None:
-        x = tt_normalise([np.random.randn(1, *c.shape[1:-1], 1) for c in model_entry[:-1]]) + [np.random.randn(1, block_size, *x_shape, 1)]
+        x = tt_normalise([np.random.randn(1, *c.shape[1:-1], 1) for c in model_entry[:-1]] + [np.random.randn(1, block_size, *x_shape, 1)])
     else:
         x = x0
 
@@ -351,7 +351,7 @@ def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kick
     rmax = [1] + (d - 1) * [rmax] + [1]
 
     # z cores
-    z_cores = [np.random.randn(1, block_size, *x_shape, kickrank)] + tt_normalise([np.random.randn(kickrank, *c.shape[1:-1], kickrank) for c in model_entry[1:-1]] + [np.random.randn(kickrank, *x_shape, 1)])
+    z_cores = tt_normalise([np.random.randn(1, block_size, *x_shape, kickrank)] + [np.random.randn(kickrank, *c.shape[1:-1], kickrank) for c in model_entry[1:-1]] + [np.random.randn(kickrank, *x_shape, 1)])
     z_cores = tt_rl_orthogonalise(z_cores)
     rz = [1] + tt_ranks(z_cores) + [1]
 
@@ -480,15 +480,6 @@ def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kick
 
             block_res_new = np.linalg.norm(B @ solution_now - rhs) / norm_rhs
             block_res_old = np.linalg.norm(B @ previous_solution - rhs) / norm_rhs
-
-            #if k == 2:
-            #    print("---")
-            #    #print((B[:m] @ previous_solution).flatten())
-            #    #print((rhs[:m]).flatten())
-            #    print("1", np.linalg.norm(B[:m] @ previous_solution - rhs[:m]))
-            #    print("2", np.linalg.norm(B[m:2*m] @ previous_solution - rhs[m:2*m]))
-            #    print("3", np.linalg.norm(B[2*m:3*m] @ previous_solution - rhs[2*m:3*m]))
-
 
             # residual damp check
             if block_res_old / block_res_new < damp and block_res_new > real_tol:
