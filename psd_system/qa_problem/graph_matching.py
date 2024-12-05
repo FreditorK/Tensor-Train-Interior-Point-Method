@@ -328,9 +328,9 @@ def tt_padding_op_adj(dim):
 # ------------------------------------------------------------------------------
 # Constraint 10 ----------------------------------------------------------------
 def tt_ineq_op(dim):
-    matrix_tt = [np.array([[0.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [np.array([[0.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(dim)]
-    #matrix_tt = tt_add(matrix_tt, [np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [np.array([[1.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(dim)])
-    #matrix_tt = tt_add(matrix_tt, [np.array([[0.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1)] + [np.array([[1.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(dim)])
+    matrix_tt = [-np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [np.array([[1.0, 1.0], [1.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(dim)]
+    matrix_tt = tt_add(matrix_tt, [-np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [np.array([[1.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(dim)])
+    matrix_tt = tt_add(matrix_tt, [-np.array([[0.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1)] + [np.array([[1.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(dim)])
     basis = tt_matrix_to_mask_op(matrix_tt)
     return tt_rank_reduce(basis)
 
@@ -565,9 +565,9 @@ if __name__ == "__main__":
 
     # FIXME: Block-AMeN not happy with this, Do we even need this? We initialise it and it stays psd
     # FIXME: It is too many zeros as before, we get degenerate galerkin projections
-    #L_op_tt = tt_rank_reduce(tt_add(L_op_tt, padding_op))
-    #L_op_tt_adj = tt_rank_reduce(tt_add(L_op_tt_adj, padding_op_adj))
-    #eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, padding_op_bias))
+    L_op_tt = tt_rank_reduce(tt_add(L_op_tt, padding_op))
+    L_op_tt_adj = tt_rank_reduce(tt_add(L_op_tt_adj, padding_op_adj))
+    eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, padding_op_bias))
 
 
     # ---
@@ -575,7 +575,7 @@ if __name__ == "__main__":
     # X
     Q_ineq_op = tt_ineq_op(2*n)
     Q_ineq_op_adj = tt_ineq_op_adj(2*n)
-    Q_ineq_bias = [np.array([[10.0, 10.0], [10.0, 10.0]]).reshape(1, 2, 2, 1)] + tt_one_matrix(2 * n)
+    Q_ineq_bias = [-np.array([[2.0, 2.0], [2.0, 2.0]]).reshape(1, 2, 2, 1)] + tt_one_matrix(2 * n)
 
     def test_Q_ineq_op():
         random_A = tt_random_gaussian([3] * (2 * n), shape=(2, 2))
