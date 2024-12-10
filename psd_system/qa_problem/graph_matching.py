@@ -19,281 +19,160 @@ Q_PREFIX = [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1), np.array([[1
 # Constraint 4 -----------------------------------------------------------------
 
 def tt_partial_trace_op(block_size, dim):
-    matrix_tt = [np.ones((1, 2, 2, 1)) for _ in range(dim-block_size)] + tt_identity(block_size)
-    matrix_tt = tt_sub(matrix_tt, tt_identity(dim))
-    basis = []
-    for c in tt_vec(matrix_tt[:-block_size]):
+    matrix_tt = tt_sub(tt_one_matrix(dim - block_size), tt_identity(dim - block_size))
+    block_op = []
+    for i, c in enumerate(tt_vec(tt_identity(block_size))):
         core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
-        core[:, 0, 0] = c[:, 0]
-        core[:, 1, 1] = c[:, 1]
-        basis.append(core)
-    for c in matrix_tt[-block_size:]:
-        core = np.zeros((c.shape[0], 2, 2, 2, 2, c.shape[-1]))
-        core[:, 0, :, 1, :] = c # (0, 1) <-
-        basis.extend(break_core_bond(core))
-    return Q_PREFIX + tt_rank_reduce(basis)
+        core[:, i % 2] = c
+        block_op.append(core)
+    return tt_rank_reduce(Q_PREFIX + tt_diag(tt_vec(matrix_tt)) + block_op)
 
 def tt_partial_trace_op_adj(block_size, dim):
-    matrix_tt = [np.ones((1, 2, 2, 1)) for _ in range(dim-block_size)]
-    matrix_tt = tt_sub(matrix_tt, tt_identity(dim-block_size))
-    basis = []
-    for c in tt_vec(matrix_tt):
-        core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
-        core[:, 0, 0] = c[:, 0]
-        core[:, 1, 1] = c[:, 1]
-        basis.append(core)
-    for _ in  range(block_size):
-        core = np.zeros((1, 2, 2, 2, 2, 1))
-        core[:, 0, 0, 0, 1] = 1 # (0, 0) <- (0, 1)
-        core[:, 1, 0, 1, 1] = 1 # (1, 1) <- (0, 1)
-        basis.extend(break_core_bond(core))
-    return Q_PREFIX + tt_rank_reduce(basis)
+    return tt_transpose(tt_partial_trace_op(block_size, dim))
 
 # ------------------------------------------------------------------------------
 # Constraint 5 -----------------------------------------------------------------
 
 def tt_partial_J_trace_op(block_size, dim):
-    op_tt = []
-    core = np.zeros((1, 2, 2, 2, 2, 2))
-    core[0, 0, 0, 1, 0, 0] = 1 # (0, 1) <- (0, 0)
-    core[0, 1, 1, 0, 0, 0] = 1 # (1, 0) <- (1, 0)
-    core[0, 0, 0, 1, 1, 1] = 1 # (0, 1) <- (0, 1)
-    core[0, 1, 1, 0, 1, 1] = 1 # (1, 0) <- (1, 1)
-    op_tt.extend(break_core_bond(core))
-    for _ in range(dim-block_size-1):
-        core = np.zeros((2, 2, 2, 2, 2, 2))
-        core[:, 0, 0, 0, 0] = np.eye(2) # (0, 0) <- (0, 0)
-        core[:, 0, 0, 1, 1] = np.eye(2) # (0, 1) <- (0, 1)
-        core[:, 1, 1, 0, 0] = np.eye(2) # (1, 0) <- (1, 0)
-        core[:, 1, 1, 1, 1] = np.eye(2) # (1, 1) <- (1, 1)
-        op_tt.extend(break_core_bond(core))
-    for _ in range(block_size-1):
-        core = np.zeros((2, 2, 2, 2, 2, 2))
-        core[0, 0, :, 0, :, 0] = 1
-        core[1, 1, :, 1, :, 1] = 1
-        op_tt.extend(break_core_bond(core))
-    core = np.zeros((2, 2, 2, 2, 2, 1))
-    core[0, 0, :, 0] = 1
-    core[1, 1, :, 1] = 1
-    op_tt.extend(break_core_bond(core))
-    return Q_PREFIX + tt_rank_reduce(op_tt)
+    matrix_tt = tt_sub(tt_one_matrix(dim-block_size), tt_identity(dim-block_size))
+    block_op_1 = []
+    for _ in range(2 * block_size):
+        core = np.zeros((1, 2, 2, 1))
+        core[:, 0, :] = 1
+        block_op_1.append(core)
+    op_tt_1 = tt_diag(tt_vec(matrix_tt)) + block_op_1
+    op_tt_2 = []
+    for i, c in enumerate(tt_vec(tt_identity(block_size))):
+        core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
+        core[:, i % 2, 0] = c[:, 0]
+        core[:, (i+1) % 2, 1] = c[:, 1]
+        op_tt_2.append(core)
+    block_op_2 = []
+    for _ in range(2*block_size):
+        core = np.zeros((1, 2, 2, 1))
+        core[:, 1] = 1
+        block_op_2.append(core)
+    op_tt_2 += block_op_2
+    return tt_rank_reduce(Q_PREFIX + tt_add(op_tt_1, op_tt_2))
 
 def tt_partial_J_trace_op_adj(block_size, dim):
-    op_tt = []
-    core = np.zeros((1, 2, 2, 2, 2, 2))
-    core[0, 0, 0, 0, 1, 0] = 1 # (0, 0) <- (0, 1)
-    core[0, 1, 1, 0, 0, 0] = 1 # (1, 0) <- (1, 0)
-    core[0, 0, 0, 1, 1, 1] = 1 # (0, 1) <- (0, 1)
-    core[0, 1, 1, 1, 0, 1] = 1 # (1, 1) <- (1, 0)
-    op_tt.extend(break_core_bond(core))
-    for _ in range(dim - block_size - 1):
-        core = np.zeros((2, 2, 2, 2, 2, 2))
-        core[:, 0, 0, 0, 0] = np.eye(2) # (0, 0) <- (0, 0)
-        core[:, 0, 0, 1, 1] = np.eye(2) # (0, 1) <- (0, 1)
-        core[:, 1, 1, 0, 0] = np.eye(2) # (1, 0) <- (1, 0)
-        core[:, 1, 1, 1, 1] = np.eye(2) # (1, 1) <- (1, 1)
-        op_tt.extend(break_core_bond(core))
-    for _ in range(block_size - 1):
-        core = np.zeros((2, 2, 2, 2, 2, 2))
-        core[0, :, 0, :, 0, 0] = 1  # (:, 0) <- (0, 0)
-        core[1, :, 1, :, 1, 1] = 1 # (:, 0) <- (1, 1)
-        op_tt.extend(break_core_bond(core))
-    core = np.zeros((2, 2, 2, 2, 2, 1))
-    core[0, :, 0, :, 0] = 1 # (:, 0) <- (0, 0)
-    core[1, :, 1, :, 1] = 1 # (:, 0) <- (1, 1)
-
-    op_tt.extend(break_core_bond(core))
-    return Q_PREFIX + tt_rank_reduce(op_tt)
+    return tt_transpose(tt_partial_J_trace_op(block_size, dim))
 # ------------------------------------------------------------------------------
 # Constraint 6 -----------------------------------------------------------------
 
 def tt_diag_block_sum_linear_op(block_size, dim):
     op_tt = []
-    for _ in range(dim - block_size):
-        core = np.zeros((1, 2, 2, 2, 2, 1))
-        core[0, 0, :, 0, :, 0] = np.eye(2)
-        op_tt.extend(break_core_bond(core))
-    for _ in range(block_size):
-        core = np.zeros((1, 2, 2, 2, 2, 1))
-        core[:, 0, 0, 0, 0] = 1 # (0, 0) <- (0, 0)
-        core[:, 0, 0, 1, 1] = 1 # (0, 1) <- (0, 1)
-        core[:, 1, 1, 0, 0] = 1 # (1, 0) <- (1, 0)
-        core[:, 1, 1, 1, 1] = 1 # (1, 1) <- (1, 1)
-        op_tt.extend(break_core_bond(core))
-    return Q_PREFIX + tt_rank_reduce(op_tt)
+    for c in tt_vec(tt_identity(dim-block_size)):
+        core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
+        core[:, 0, :] = c
+        op_tt.append(core)
+    return tt_rank_reduce(Q_PREFIX + op_tt + tt_identity(2*block_size))
 
 
 def tt_diag_block_sum_linear_op_adj(block_size, dim):
-    op_tt = []
-    for _ in range(dim - block_size):
-        core = np.zeros((1, 2, 2, 2, 2, 1))
-        core[:, 0, 0, 0, 0] = 1 # (0, 0) <- (0, 0)
-        core[:, 1, 0, 1, 0] = 1 # (1, 1) <- (0, 0)
-        op_tt.extend(break_core_bond(core))
-    for _ in range(block_size):
-        core = np.zeros((1, 2, 2, 2, 2, 1))
-        core[:, 0, 0, 0, 0] = 1 # (0, 0) <- (0, 0)
-        core[:, 0, 0, 1, 1] = 1 # (0, 1) <- (0, 1)
-        core[:, 1, 1, 0, 0] = 1 # (1, 0) <- (1, 0)
-        core[:, 1, 1, 1, 1] = 1 # (1, 1) <- (1, 1)
-        op_tt.extend(break_core_bond(core))
-    return Q_PREFIX + tt_rank_reduce(op_tt)
+    return tt_transpose(tt_diag_block_sum_linear_op(block_size, dim))
 # ------------------------------------------------------------------------------
 # Constraint 7 -----------------------------------------------------------------
 
 def tt_Q_m_P_op(dim):
-    v_matrix_1 = [np.array([[1, 0], [0, 0]]).reshape(1, 2, 2, 1)] + tt_identity(dim)
-    v_matrix_2 = [np.array([[0.0, -1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [
-        np.array([[1.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(dim)]
-    matrix_tt = tt_add(v_matrix_1, v_matrix_2)
-    op_tt = []
-    core = np.zeros((1, 2, 2, 2, 2, matrix_tt[0].shape[-1]))
-    core[:, 0, :, 1] = matrix_tt[0]
-    op_tt.extend(break_core_bond(core))
-    for c in matrix_tt[1:]:
-        core = np.zeros((c.shape[0], 2, 2, 2, 2, c.shape[-1]))
-        core[:, 0, 0, 0, 0] = c[:, 0, 0] # (0, 0) <- (0, 0)
-        core[:, 0, 0, 1, 1] = c[:, 0, 1] # (0, 1) <- (0, 1)
-        core[:, 1, 1, 0, 0] = c[:, 1, 0] # (1, 0) <- (1, 0)
-        core[:, 1, 1, 0, 1] = c[:, 1, 1] # (1, 0) <- (1, 1)
-        op_tt.extend(break_core_bond(core))
-    return tt_rank_reduce(op_tt)
+    Q_part = [np.array([[1, 0], [0, 0]]).reshape(1, 2, 2, 1), np.array([[0, 0], [1, 0]]).reshape(1, 2, 2, 1)]
+    for i in range(2*dim-2):
+        core_1 = np.concatenate((
+            np.array([[1, 0], [0, 0]]).reshape(1, 2, 2, 1),
+            np.array([[0, 0], [0, 1]]).reshape(1, 2, 2, 1)
+        ), axis=-1)
+        core_2 = np.concatenate((
+            np.array([[1, 0], [0, 0]]).reshape(1, 2, 2, 1),
+            np.array([[0, 1], [0, 0]]).reshape(1, 2, 2, 1)
+        ), axis=0)
+        Q_part.extend([core_1, core_2])
+    P_part = [np.array([[-1, 0], [0, 0]]).reshape(1, 2, 2, 1), np.array([[0, 0], [0, 1]]).reshape(1, 2, 2, 1)] + tt_diag(tt_vec([np.array([[1.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(dim)]))
+    return tt_rank_reduce(tt_add(P_part, Q_part))
 
 
 def tt_Q_m_P_op_adj(dim):
-    op_part_1_tt = []
-    core = np.zeros((1, 2, 2, 2, 2, 1))
-    core[:, 0, 0, 1, 1] = -0.5 # (0, 1) <- (0, 1)
-    op_part_1_tt.extend(break_core_bond(core))
-    for i in range(dim):
-        core = np.zeros((1, 2, 2, 2, 2, 1))
-        core[:, 0, 0, 0, 0] = 1 # (0, 0) <- (0, 0)
-        core[:, 1, 1, 0, 0] = 1 # (1, 0) <- (1, 0)
-        op_part_1_tt.extend(break_core_bond(core))
-    op_part_2_tt = []
-    core = np.zeros((1, 2, 2, 2, 2, 1))
-    core[:, 1, 0, 0, 1] = -0.5 # (1, 0) <- (0, 1)
-    op_part_2_tt.extend(break_core_bond(core))
-    for i in range(dim):
-        core = np.zeros((1, 2, 2, 2, 2, 1))
-        core[:, 0, 0, 0, 0] = 1 # (0, 0) <- (0, 0)
-        core[:, 0, 1, 1, 0] = 1 # (0, 1) <- (1, 0)
-        op_part_2_tt.extend(break_core_bond(core))
-    op_part_3_tt = []
-    core = np.zeros((1, 2, 2, 2, 2, 1))
-    core[:, 0, 0, 0, 1] = 1 # (0, 0) <- (0, 1)
-    op_part_3_tt.extend(break_core_bond(core))
-    for i in range(dim):
-        core = np.zeros((1, 2, 2, 2, 2, 1))
-        core[:, 0, 0, 0, 0] = 1 # (0, 0) <- (0, 0)
-        core[:, 1, 1, 1, 0] = 1 # (1, 1) <- (1, 0)
-        op_part_3_tt.extend(break_core_bond(core))
-
-    op_tt = tt_add(tt_add(op_part_1_tt, op_part_2_tt), op_part_3_tt)
-    return tt_rank_reduce(op_tt)
+    Q_part = [np.array([[1, 0], [0, 0]]).reshape(1, 2, 2, 1), np.array([[0, 0], [1, 0]]).reshape(1, 2, 2, 1)]
+    for i in range(2 * dim - 2):
+        core_1 = np.concatenate((
+            np.array([[1, 0], [0, 0]]).reshape(1, 2, 2, 1),
+            np.array([[0, 0], [0, 1]]).reshape(1, 2, 2, 1)
+        ), axis=-1)
+        core_2 = np.concatenate((
+            np.array([[1, 0], [0, 0]]).reshape(1, 2, 2, 1),
+            np.array([[0, 1], [0, 0]]).reshape(1, 2, 2, 1)
+        ), axis=0)
+        Q_part.extend([core_1, core_2])
+    P_part_1 = [np.array([[-1, 0.], [0, 0]]).reshape(1, 2, 2, 1),
+              np.array([[0, 0.], [0, 1]]).reshape(1, 2, 2, 1)] + tt_diag(
+        tt_vec([np.array([[1.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(dim)]))
+    P_part_2 = [np.array([[0, -1], [0, 0]]).reshape(1, 2, 2, 1), np.array([[0, 0], [1, 0]]).reshape(1, 2, 2, 1)]
+    for i in range(2 * dim - 2):
+        core_1 = np.concatenate((
+            np.array([[1, 0], [0, 0]]).reshape(1, 2, 2, 1),
+            np.array([[0, 0], [1, 0]]).reshape(1, 2, 2, 1)
+        ), axis=-1)
+        core_2 = np.concatenate((
+            np.array([[1, 0], [0, 0]]).reshape(1, 2, 2, 1),
+            np.array([[0, 1], [0, 0]]).reshape(1, 2, 2, 1)
+        ), axis=0)
+        P_part_2.extend([core_1, core_2])
+    P_part = tt_add(P_part_1, P_part_2)
+    return tt_transpose(tt_rank_reduce(tt_add(P_part, Q_part)))
 
 # ------------------------------------------------------------------------------
 # Constraint 8 -----------------------------------------------------------------
 
 
 def tt_DS_op(block_size, dim):
-    row_op = []
-    core = np.zeros((1, 2, 2, 2, 2, 1))
-    core[:, 1, 1, 0, 0] = 1 # (1, 0) <- (1, 0)
-    row_op.extend(break_core_bond(core))
+    row_op = [np.array([[0, 0], [0, 1]]).reshape(1, 2, 2, 1), np.array([[1, 0], [0, 0]]).reshape(1, 2, 2, 1)]
     for _ in range(dim-block_size):
-        core = np.zeros((1, 2, 2, 2, 2, 1))
-        core[:, 0, 0, 0, 0] = 1 # (0, 0) <- (0, 0)
-        core[:, 0, 0, 1, 1] = 1 # (0, 1) <- (0, 1)
-        row_op.extend(break_core_bond(core))
+        row_op.extend([np.array([[1, 0], [0, 0]]).reshape(1, 2, 2, 1), np.array([[1, 0], [0, 1]]).reshape(1, 2, 2, 1)])
     for _ in range(block_size):
-        core = np.zeros((1, 2, 2, 2, 2, 1))
-        core[:, 0, 0, 0, 0] = 1 # (0, 0) <- (0, 0)
-        core[:, 0, 0, 0, 1] = 1 # (0, 0) <- (0, 1)
-        row_op.extend(break_core_bond(core))
-    col_op = []
-    core = np.zeros((1, 2, 2, 2, 2, 1))
-    core[:, 0, 1, 0, 0] = 1 # (0, 0) <- (1, 0)
-    col_op.extend(break_core_bond(core))
+        row_op.extend([np.array([[1, 0], [0, 0]]).reshape(1, 2, 2, 1), np.array([[1, 1], [0, 0]]).reshape(1, 2, 2, 1)])
+    col_op = [np.array([[0, 1], [0, 0]]).reshape(1, 2, 2, 1), np.array([[1, 0], [0, 0]]).reshape(1, 2, 2, 1)]
     for _ in range(dim - block_size):
-        core = np.zeros((1, 2, 2, 2, 2, 1))
-        core[:, 1, 0, 1, 0] = 1 # (1, 1) <- (0, 0)
-        core[:, 1, 0, 1, 1] = 1 # (1, 1) <- (0, 1)
-        col_op.extend(break_core_bond(core))
+        col_op.extend([np.array([[0, 0], [1, 0]]).reshape(1, 2, 2, 1), np.array([[0, 0], [1, 1]]).reshape(1, 2, 2, 1)])
     for _ in range(block_size):
-        core = np.zeros((1, 2, 2, 2, 2, 1))
-        core[:, 0, 0, 0, 0] = 1 # (0, 0) <- (0, 0)
-        core[:, 1, 0, 1, 1] = 1 # (1, 1) <- (0, 1)
-        col_op.extend(break_core_bond(core))
+        col_op.extend([
+            np.array([[[1., 0.], [0., 0.]], [[0., 1.],[0., 0.]]]).reshape(1, 2, 2, 2),
+            np.array([[[1., 0.], [0., 0.]], [[0., 0.], [0., 1.]]]).reshape(2, 2, 2, 1),
+        ])
     op_tt = tt_rank_reduce(tt_add(row_op, col_op))
     return op_tt
 
 
 def tt_DS_op_adj(block_size, dim):
-    row_op_1 = []
-    core = np.zeros((1, 2, 2, 2, 2, 1))
-    core[:, 1, 1, 0, 0] = 1 # (1, 0) <- (1, 0)
-    row_op_1.extend(break_core_bond(core))
+    row_op = [
+        np.array([[0, 1], [0, 0]]).reshape(1, 2, 2, 1),
+        np.array([[0, 0], [1, 0]]).reshape(1, 2, 2, 1)
+    ]
     for _ in range(dim - block_size):
-        core = np.zeros((1, 2, 2, 2, 2, 1))
-        core[:, 0, 0, 0, 0] = 1 # (0, 0) <- (0, 0)
-        core[:, 0, 0, 1, 1] = 1 # (0, 1) <- (0, 1)
-        row_op_1.extend(break_core_bond(core))
+        row_op.extend([
+            np.array([[[1., 0.], [0., 0.]], [[0., 1.], [0., 0.]]]).reshape(1, 2, 2, 2),
+            np.array([[[1., 0.], [0., 0.]], [[0., 1.], [0., 0.]]]).reshape(2, 2, 2, 1)
+        ])
     for _ in range(block_size):
-        core = np.zeros((1, 2, 2, 2, 2, 1))
-        core[:, 0, 0, 0, 0] = 1 # (0, 0) <- (0, 0)
-        core[:, 0, 0, 1, 0] = 1 # (0, 1) <- (0, 0)
-        row_op_1.extend(break_core_bond(core))
+        row_op.extend([
+            np.array([[1., 0.], [1., 0.]]).reshape(1, 2, 2, 1),
+            np.array([[1., 0.], [0., 0.]]).reshape(1, 2, 2, 1)
+        ])
 
-    row_op_2 = []
-    core = np.zeros((1, 2, 2, 2, 2, 1))
-    core[:, 0, 1, 1, 0] = 1 # (0, 1) <- (1, 0)
-    row_op_2.extend(break_core_bond(core))
+    col_op = [
+            np.array([[1., 0.], [0., 0.]]).reshape(1, 2, 2, 1),
+            np.array([[0., 0.], [1., 0.]]).reshape(1, 2, 2, 1)
+        ]
     for _ in range(dim - block_size):
-        core = np.zeros((1, 2, 2, 2, 2, 1))
-        core[:, 0, 0, 0, 0] = 1 # (0, 0) <- (0, 0)
-        core[:, 1, 0, 0, 1] = 1 # (1, 0) <- (0, 1)
-        row_op_2.extend(break_core_bond(core))
+        col_op.extend([
+            np.array([[0., 1.], [0., 1.]]).reshape(1, 2, 2, 1),
+            np.array([[0., 1.], [0., 0.]]).reshape(1, 2, 2, 1)
+        ])
     for _ in range(block_size):
-        core = np.zeros((1, 2, 2, 2, 2, 1))
-        core[:, 0, 0, 0, 0] = 1 # (0, 0) <- (0, 0)
-        core[:, 1, 0, 0, 0] = 1 # (1, 0) <- (0, 0)
-        row_op_2.extend(break_core_bond(core))
-    row_op = tt_add(row_op_1, row_op_2)
+        col_op.extend([
+            np.array([[[1., 0.], [0., 0.]], [[0., 0.], [0., 1.]]]).reshape(1, 2, 2, 2),
+            np.array([[[1., 0.], [0., 0.]], [[0., 1.], [0., 0.]]]).reshape(2, 2, 2, 1)
+        ])
 
-    col_op_1 = []
-    core = np.zeros((1, 2, 2, 2, 2, 1))
-    core[:, 0, 0, 1, 0] = 1 # (0, 1) <- (0, 0)
-    col_op_1.extend(break_core_bond(core))
-    for _ in range(dim - block_size):
-        core = np.zeros((1, 2, 2, 2, 2, 1))
-        core[:, 0, 1, 0, 1] = 1 # (0, 0) <- (1, 1)
-        core[:, 1, 1, 0, 1] = 1 # (1, 0) <- (1, 1)
-        col_op_1.extend(break_core_bond(core))
-    for _ in range(block_size):
-        core = np.zeros((1, 2, 2, 2, 2, 1))
-        core[:, 0, 0, 0, 0] = 1 # (0, 0) <- (0, 0)
-        core[:, 1, 1, 0, 1] = 1 # (1, 0) <- (1, 1)
-        col_op_1.extend(break_core_bond(core))
-
-    col_op_2 = []
-    core = np.zeros((1, 2, 2, 2, 2, 1))
-    core[:, 1, 0, 0, 0] = 1 # (1, 0) <- (0, 0)
-    col_op_2.extend(break_core_bond(core))
-    for _ in range(dim - block_size):
-        core = np.zeros((1, 2, 2, 2, 2, 1))
-        core[:, 0, 1, 0, 1] = 1  # (0, 0) <- (1, 1)
-        core[:, 0, 1, 1, 1] = 1  # (0, 1) <- (1, 1)
-        col_op_2.extend(break_core_bond(core))
-    for _ in range(block_size):
-        core = np.zeros((1, 2, 2, 2, 2, 1))
-        core[:, 0, 0, 0, 0] = 1 # (0, 0) <- (0, 0)
-        core[:, 0, 1, 1, 1] = 1 # (0, 1) <- (1, 1)
-        col_op_2.extend(break_core_bond(core))
-    col_op = tt_add(col_op_1, col_op_2)
-
-    op_tt = tt_rank_reduce(tt_add(row_op, col_op))
-    # FIXME: row_op is col_op and col_op is row_op, doesn't change anything but out of principle
+    op_tt = tt_rank_reduce(tt_add(tt_transpose(tt_DS_op(block_size, dim)), tt_add(row_op, col_op)))
     return op_tt
 
 def tt_DS_bias(block_size, dim):
@@ -331,7 +210,7 @@ def tt_ineq_op(dim):
     matrix_tt = [-np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [np.array([[1.0, 1.0], [1.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(dim)]
     matrix_tt = tt_add(matrix_tt, [-np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [np.array([[1.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(dim)])
     matrix_tt = tt_add(matrix_tt, [-np.array([[0.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1)] + [np.array([[1.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(dim)])
-    basis = tt_matrix_to_mask_op(matrix_tt)
+    basis = tt_diag(tt_vec(matrix_tt))
     return tt_rank_reduce(basis)
 
 def tt_ineq_op_adj(dim):
@@ -456,7 +335,6 @@ if __name__ == "__main__":
                 partial_traces[(i, j)] = [M[m*i:m*(i+1), m*j: m*(j+1)][0, 0], M[m*i:m*(i+1), m*j: m*(j+1)][-1, -1]]
         print(partial_traces)
 
-
     L_op_tt = tt_rank_reduce(tt_add(L_op_tt, partial_tr_J_op))
     L_op_tt_adj = tt_rank_reduce(tt_add(L_op_tt_adj, partial_tr_J_op_adj))
     eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, partial_tr_J_op_bias))
@@ -516,6 +394,7 @@ if __name__ == "__main__":
         P = M[:m, m]
         partial_traces = P
         print(partial_traces)
+
 
     L_op_tt = tt_rank_reduce(tt_add(L_op_tt, Q_m_P_op))
     L_op_tt_adj = tt_rank_reduce(tt_add(L_op_tt_adj, Q_m_P_op_adj))

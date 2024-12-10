@@ -432,16 +432,6 @@ def tt_l2_dist(train_tt_1, train_tt_2):
     return np.sqrt(tt_inner_prod(diff_tt, diff_tt))
 
 def tt_diag(vec_tt):
-    mat_tt = []
-    for core in vec_tt:
-        shape = core.shape
-        mat_core = np.zeros((shape[0], shape[1], shape[1], shape[2]))
-        mat_core[:, 0, 0] = core[:, 0]
-        mat_core[:, 1, 1] = core[:, 1]
-        mat_tt.append(mat_core)
-    return mat_tt
-
-def tt_matrix_to_mask_op(matrix_tt):
     identity = np.eye(2)
-    basis = [einsum("ij, rjR -> rijR", identity, c) for c in tt_vec(matrix_tt)]
+    basis = [einsum("ij, rjR -> rijR", identity, c) for c in vec_tt]
     return tt_rank_reduce(basis)

@@ -18,13 +18,9 @@ class Config:
 
 
 def tt_diag_op(dim):
-    core = np.zeros((1, 4, 4, 1))
-    core[:, 0, 0] = 1
-    core[:, -1, -1] = 1
-    basis = [core for _ in range(dim)]
-    basis = sum([break_core_bond(c) for c in basis], [])
-    basis = [c.reshape(c.shape[0], 2, 2, c.shape[-1]) for c in basis]
-    return tt_rank_reduce(basis)
+    identity = tt_identity(dim)
+    basis = tt_diag(tt_vec(identity))
+    return basis
 
 def tt_diag_op_adj(dim):
     return tt_diag_op(dim)

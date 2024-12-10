@@ -74,8 +74,8 @@ def tt_infeasible_newton_system_lhs(
     lhs_skeleton[(2 + idx_add, 2 + idx_add)] = tt_rank_reduce(tt_add(tt_kron(tt_transpose(X_tt), identity), tt_kron(identity, X_tt)), err_bound=tol)
     if active_ineq:
         ineq_res_tt = tt_sub(vec_bias_tt_ineq, tt_matrix_vec_mul(mat_lin_op_tt_ineq, tt_vec(X_tt)))
-        mat_ineq_res_op_tt = tt_matrix_to_mask_op(tt_mat(ineq_res_tt))
-        mat_T_op_tt = tt_matrix_to_mask_op(T_tt)
+        mat_ineq_res_op_tt = tt_diag(ineq_res_tt)
+        mat_T_op_tt = tt_diag(tt_vec(T_tt))
         mat_T_comp_linear_op_tt_ineq = tt_mat_mat_mul(mat_T_op_tt, tt_scale(-1, mat_lin_op_tt_ineq))
         lhs_skeleton[(2, 2)] = tt_rank_reduce(mat_ineq_res_op_tt, err_bound=tol)
         lhs_skeleton[(2, 1)] = tt_rank_reduce(mat_T_comp_linear_op_tt_ineq, err_bound=tol)
