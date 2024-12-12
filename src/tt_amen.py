@@ -474,9 +474,8 @@ def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kick
 
             # Solve block system
             u, s, v = scip.linalg.svd(B, full_matrices=False, check_finite=False)
-            s = s[s > real_tol]
-            r = len(s)
-            solution_now = v[:r].T @ np.diag(np.divide(1, s)) @ u[:, :r].T @ rhs
+            r = np.sum([s > damp*real_tol])
+            solution_now = v[:r, :].T @ (np.diag(np.divide(1, s[:r])) @ u[:, :r].T @ rhs)
 
             block_res_new = np.linalg.norm(B @ solution_now - rhs) / norm_rhs
             block_res_old = np.linalg.norm(B @ previous_solution - rhs) / norm_rhs

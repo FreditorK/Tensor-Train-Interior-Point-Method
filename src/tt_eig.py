@@ -67,6 +67,7 @@ def _tt_eig(A, min_eig, nswp, x0, eps, verbose):
             max_res = max(res_old, res_new)
 
             solution_now = np.reshape(solution_now, (rx[k] * N[k], rx[k + 1]))
+            norm_rhs = eig_val if abs(eig_val) > real_tol else 1.0
             # truncation
             if k < d - 1:
                 u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False)
@@ -74,7 +75,7 @@ def _tt_eig(A, min_eig, nswp, x0, eps, verbose):
                 for r in range(u.shape[1] - 1, 0, -1):
                     # solution has the same size
                     solution = np.reshape(u[:, :r] @ np.diag(s[:r]) @ v[:r, :], [-1, 1])
-                    res = np.linalg.norm(B @ solution - eig_val * solution) / eig_val
+                    res = np.linalg.norm(B @ solution - eig_val * solution) / norm_rhs
                     if res > max(real_tol * damp, res_new):
                         break
                 r += 1

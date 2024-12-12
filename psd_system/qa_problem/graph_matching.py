@@ -76,7 +76,7 @@ def tt_diag_block_sum_linear_op_adj(block_size, dim):
 
 def tt_Q_m_P_op(dim):
     Q_part = [np.array([[1, 0], [0, 0]]).reshape(1, 2, 2, 1), np.array([[0, 0], [1, 0]]).reshape(1, 2, 2, 1)]
-    for i in range(2*dim-2):
+    for i in range(dim):
         core_1 = np.concatenate((
             np.array([[1, 0], [0, 0]]).reshape(1, 2, 2, 1),
             np.array([[0, 0], [0, 1]]).reshape(1, 2, 2, 1)
@@ -91,33 +91,18 @@ def tt_Q_m_P_op(dim):
 
 
 def tt_Q_m_P_op_adj(dim):
-    Q_part = [np.array([[1, 0], [0, 0]]).reshape(1, 2, 2, 1), np.array([[0, 0], [1, 0]]).reshape(1, 2, 2, 1)]
-    for i in range(2 * dim - 2):
+    P_supplement = [np.array([[0, 0], [-1, 0.]]).reshape(1, 2, 2, 1), np.array([[0, 1.], [0, 0]]).reshape(1, 2, 2, 1)]
+    for i in range(dim):
         core_1 = np.concatenate((
-            np.array([[1, 0], [0, 0]]).reshape(1, 2, 2, 1),
-            np.array([[0, 0], [0, 1]]).reshape(1, 2, 2, 1)
+            np.array([[1, 0.], [0, 0]]).reshape(1, 2, 2, 1),
+            np.array([[0, 1.], [0, 0]]).reshape(1, 2, 2, 1)
         ), axis=-1)
         core_2 = np.concatenate((
-            np.array([[1, 0], [0, 0]]).reshape(1, 2, 2, 1),
-            np.array([[0, 1], [0, 0]]).reshape(1, 2, 2, 1)
+            np.array([[1, 0.], [0, 0]]).reshape(1, 2, 2, 1),
+            np.array([[0, 0.], [1, 0]]).reshape(1, 2, 2, 1)
         ), axis=0)
-        Q_part.extend([core_1, core_2])
-    P_part_1 = [np.array([[-1, 0.], [0, 0]]).reshape(1, 2, 2, 1),
-              np.array([[0, 0.], [0, 1]]).reshape(1, 2, 2, 1)] + tt_diag(
-        tt_vec([np.array([[1.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(dim)]))
-    P_part_2 = [np.array([[0, -1], [0, 0]]).reshape(1, 2, 2, 1), np.array([[0, 0], [1, 0]]).reshape(1, 2, 2, 1)]
-    for i in range(2 * dim - 2):
-        core_1 = np.concatenate((
-            np.array([[1, 0], [0, 0]]).reshape(1, 2, 2, 1),
-            np.array([[0, 0], [1, 0]]).reshape(1, 2, 2, 1)
-        ), axis=-1)
-        core_2 = np.concatenate((
-            np.array([[1, 0], [0, 0]]).reshape(1, 2, 2, 1),
-            np.array([[0, 1], [0, 0]]).reshape(1, 2, 2, 1)
-        ), axis=0)
-        P_part_2.extend([core_1, core_2])
-    P_part = tt_add(P_part_1, P_part_2)
-    return tt_transpose(tt_rank_reduce(tt_add(P_part, Q_part)))
+        P_supplement.extend([core_1, core_2])
+    return tt_rank_reduce(tt_add(tt_transpose(tt_Q_m_P_op(dim)), P_supplement))
 
 # ------------------------------------------------------------------------------
 # Constraint 8 -----------------------------------------------------------------
@@ -442,8 +427,6 @@ if __name__ == "__main__":
         print(np.round(M, decimals=4))
         print(np.round(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(padding_op, tt_vec(random_A)))), decimals=4))
 
-    # FIXME: Block-AMeN not happy with this, Do we even need this? We initialise it and it stays psd
-    # FIXME: It is too many zeros as before, we get degenerate galerkin projections
     L_op_tt = tt_rank_reduce(tt_add(L_op_tt, padding_op))
     L_op_tt_adj = tt_rank_reduce(tt_add(L_op_tt_adj, padding_op_adj))
     eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, padding_op_bias))
@@ -482,7 +465,7 @@ if __name__ == "__main__":
         Q_ineq_op,
         Q_ineq_op_adj,
         Q_ineq_bias,
-        max_iter=10,
+        max_iter=7,
         verbose=True
     )
     t1 = time.time()
