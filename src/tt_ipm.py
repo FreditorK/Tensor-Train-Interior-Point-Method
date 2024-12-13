@@ -39,7 +39,7 @@ def tt_infeasible_feas_rhs(
         primal_feas_ineq = tt_hadamard(vec_T_tt, tt_sub(tt_matrix_vec_mul(mat_lin_op_tt_ineq, vec_X_tt), vec_bias_tt_ineq))
         # TODO: Does mu 1 not also be under mat_lin_op_tt_ineq, need to adjust mu 1 to have zeros where L(X) has zeros
         one = tt_matrix_vec_mul(mat_lin_op_tt_ineq_adj, [np.ones((1, 2, 1)).reshape(1, 2, 1) for _ in vec_X_tt])
-        primal_feas_ineq = tt_rank_reduce(tt_add(primal_feas_ineq, tt_scale(mu, one)), err_bound=tol*mu)
+        primal_feas_ineq = tt_rank_reduce(tt_add(primal_feas_ineq, tt_scale(mu, one)), err_bound=min(tol, 0.5*mu))
         primal_ineq_error  = tt_inner_prod(primal_feas_ineq, primal_feas_ineq)
         if primal_ineq_error > 2*tol:
             rhs[2] = primal_feas_ineq
@@ -49,7 +49,7 @@ def tt_infeasible_feas_rhs(
     dual_error = tt_inner_prod(dual_feas, dual_feas)
     XZ_term = tt_mat_mat_mul(X_tt, Z_tt)
     centrality = tt_vec(tt_add(XZ_term, tt_transpose(XZ_term)))
-    centrality = tt_rank_reduce(tt_sub(tt_scale(2 * mu, tt_vec(tt_identity(len(X_tt)))), centrality), err_bound=2*tol*mu)
+    centrality = tt_rank_reduce(tt_sub(tt_scale(2 * mu, tt_vec(tt_identity(len(X_tt)))), centrality), err_bound=min(tol, mu))
     if dual_error > tol:
         rhs[0] = dual_feas
     if primal_error > tol:
@@ -153,12 +153,16 @@ def _tt_ipm_newton_step(
     if verbose:
         print(f"Step sizes: {x_step_size}, {z_step_size}")
 
-    #print("Report ---")
-    #print(np.round(tt_matrix_to_matrix(tt_mat(vec_Y_tt)), decimals=3))
-    #if active_ineq:
-    #    print(np.round(tt_matrix_to_matrix(T_tt), decimals=3))
-    #print(np.round(tt_matrix_to_matrix(X_tt), decimals=3))
-    #print(np.round(tt_matrix_to_matrix(Z_tt), decimals=3))
+    print("Report ---")
+    print("Y")
+    print(np.round(tt_matrix_to_matrix(tt_mat(vec_Y_tt)), decimals=3))
+    if active_ineq:
+        print("T")
+        print(np.round(tt_matrix_to_matrix(T_tt), decimals=3))
+    print("X")
+    print(np.round(tt_matrix_to_matrix(X_tt), decimals=3))
+    print("Z")
+    print(np.round(tt_matrix_to_matrix(Z_tt), decimals=3))
 
     return X_tt, vec_Y_tt, T_tt, Z_tt, primal_dual_error, mu
 
@@ -203,7 +207,7 @@ def _tt_line_search(
 
     r = Z_tt[0].shape[-1]
     new_Z_tt = tt_add(Z_tt, Delta_Z_tt)
-    for iter in range(15):
+    for iter in range(iters):
         val_z, _, _ = tt_min_eig(new_Z_tt)
         discount_z = np.greater(val_z, crit)
         if discount_z:
