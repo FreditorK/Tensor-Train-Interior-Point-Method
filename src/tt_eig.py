@@ -8,8 +8,10 @@ sys.path.append(os.getcwd() + '/../')
 
 import time
 from src.tt_ops import tt_ranks, tt_normalise, tt_inner_prod, tt_matrix_vec_mul, tt_rl_orthogonalise
-from cy_src.ops_cy import *
+import copy
 from opt_einsum import contract as einsum
+from cy_src.ops_cy import *
+from scipy.sparse import csr_matrix
 
 
 def tt_max_eig(matrix_tt, nswp=10, x0=None, eps=1e-10, verbose=False):
@@ -44,7 +46,8 @@ def _tt_eig(A, min_eig, nswp, x0, eps, verbose):
     for swp in range(nswp):
         x_cores = tt_rl_orthogonalise(x_cores)
         rx[1:-1] = np.array(tt_ranks(x_cores))
-        XAX, _ = compute_phi_bcks_A(XAX, x_cores, A, x_cores, d=d)
+        XAX, no = compute_phi_bcks_A(XAX, x_cores, A, x_cores, d=d)
+        print("abc", swp, no, d, len(x_cores))
 
         # start loop
         max_res = 0
@@ -59,15 +62,17 @@ def _tt_eig(A, min_eig, nswp, x0, eps, verbose):
             B = einsum("lsr,smnRL->lmLrnR", XAX[k], Bp, optimize=True)
             B = np.reshape(B, [rx[k] * N[k] * rx[k + 1], rx[k] * N[k] * rx[k + 1]])
 
-            eig_val, solution_now = scip.sparse.linalg.eigsh(B, k=1, which=min_or_max)
+            print(k, previous_solution.flatten())
+            #TODO: Need to normalise x_cores
+            eig_val, solution_now = scip.sparse.linalg.eigsh(B, k=1, which=min_or_max, v0=previous_solution)
 
-            res_new = np.linalg.norm(B @ solution_now - eig_val * solution_now)
-            res_old = np.linalg.norm(B @ previous_solution - eig_val * previous_solution)
+            norm_rhs = eig_val if abs(eig_val) > real_tol else 1.0
+            res_new = np.linalg.norm(B @ solution_now - eig_val * solution_now) / norm_rhs
+            res_old = np.linalg.norm(B @ previous_solution - eig_val * previous_solution) / norm_rhs
 
             max_res = max(res_old, res_new)
 
             solution_now = np.reshape(solution_now, (rx[k] * N[k], rx[k + 1]))
-            norm_rhs = eig_val if abs(eig_val) > real_tol else 1.0
             # truncation
             if k < d - 1:
                 u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False)
