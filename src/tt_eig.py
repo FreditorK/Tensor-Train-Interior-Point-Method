@@ -47,7 +47,6 @@ def _tt_eig(A, min_eig, nswp, x0, eps, verbose):
         x_cores = tt_rl_orthogonalise(x_cores)
         rx[1:-1] = np.array(tt_ranks(x_cores))
         XAX, no = compute_phi_bcks_A(XAX, x_cores, A, x_cores, d=d)
-        print("abc", swp, no, d, len(x_cores))
 
         # start loop
         max_res = 0
@@ -62,8 +61,7 @@ def _tt_eig(A, min_eig, nswp, x0, eps, verbose):
             B = einsum("lsr,smnRL->lmLrnR", XAX[k], Bp, optimize=True)
             B = np.reshape(B, [rx[k] * N[k] * rx[k + 1], rx[k] * N[k] * rx[k + 1]])
 
-            print(k, previous_solution.flatten())
-            #TODO: Need to normalise x_cores
+            #TODO: Need to normalise x_cores ?
             eig_val, solution_now = scip.sparse.linalg.eigsh(B, k=1, which=min_or_max, v0=previous_solution)
 
             norm_rhs = eig_val if abs(eig_val) > real_tol else 1.0

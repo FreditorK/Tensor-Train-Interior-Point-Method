@@ -14,7 +14,7 @@ from src.tt_ipm import tt_ipm
 class Config:
     seed = 3 #999: Very low rank solution, 9: Low rank solution, 3: Regular solution
     max_rank = 4
-    dim = 3
+    dim = 4
 
 
 def tt_diag_op(dim):

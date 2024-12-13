@@ -153,12 +153,12 @@ def _tt_ipm_newton_step(
     if verbose:
         print(f"Step sizes: {x_step_size}, {z_step_size}")
 
-    print("Report ---")
-    print(np.round(tt_matrix_to_matrix(tt_mat(vec_Y_tt)), decimals=3))
-    if active_ineq:
-        print(np.round(tt_matrix_to_matrix(T_tt), decimals=3))
-    print(np.round(tt_matrix_to_matrix(X_tt), decimals=3))
-    print(np.round(tt_matrix_to_matrix(Z_tt), decimals=3))
+    #print("Report ---")
+    #print(np.round(tt_matrix_to_matrix(tt_mat(vec_Y_tt)), decimals=3))
+    #if active_ineq:
+    #    print(np.round(tt_matrix_to_matrix(T_tt), decimals=3))
+    #print(np.round(tt_matrix_to_matrix(X_tt), decimals=3))
+    #print(np.round(tt_matrix_to_matrix(Z_tt), decimals=3))
 
     return X_tt, vec_Y_tt, T_tt, Z_tt, primal_dual_error, mu
 
