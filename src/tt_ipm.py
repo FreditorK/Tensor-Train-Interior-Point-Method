@@ -5,9 +5,9 @@ sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
 from src.tt_ops import tt_rank_reduce
-from src.tt_amen import tt_amen, tt_block_amen
+from src.tt_amen import tt_block_amen
 from src.tt_eig import tt_min_eig
-from src.tt_ineq_check import tt_is_geq, tt_is_geq_, tt_is_leq
+from src.tt_ineq_check import tt_is_geq, tt_is_geq_
 
 
 def tt_infeasible_feas_rhs(
@@ -146,9 +146,9 @@ def _tt_ipm_newton_step(
         Delta_X_tt = _tt_symmetrise(Delta_X_tt, tol)
         Delta_Z_tt = _tt_symmetrise(Delta_Z_tt, tol)
     x_step_size, z_step_size = _tt_line_search(X_tt, T_tt, Z_tt, Delta_X_tt, Delta_T_tt, Delta_Z_tt, mat_lin_op_tt_ineq, vec_bias_tt_ineq, active_ineq)
-    X_tt = tt_rank_reduce(tt_add(X_tt, tt_scale(0.98 * x_step_size, Delta_X_tt)), err_bound=0.1*tol)
+    X_tt = tt_rank_reduce(tt_add(X_tt, tt_scale(0.98 * x_step_size, Delta_X_tt)), err_bound=0.5*tol)
     vec_Y_tt = tt_rank_reduce(tt_add(vec_Y_tt, tt_scale(0.98 * z_step_size, vec_Delta_Y_tt)), err_bound=tol)
-    Z_tt = tt_rank_reduce(tt_add(Z_tt, tt_scale(0.98 * z_step_size, Delta_Z_tt)), err_bound=0.1*tol)
+    Z_tt = tt_rank_reduce(tt_add(Z_tt, tt_scale(0.98 * z_step_size, Delta_Z_tt)), err_bound=0.5*tol)
     if active_ineq:
         # FIXME: Note that T_tt should grow large on the zeros of b - L_ineq(X_tt)
         T_tt = tt_rank_reduce(tt_add(T_tt, tt_scale(0.98 * z_step_size, Delta_T_tt)), err_bound=tol)
@@ -248,7 +248,7 @@ def tt_ipm(
     dim = len(obj_tt)
     feasibility_tol = feasibility_tol / np.sqrt(dim)
     centrality_tol = centrality_tol / np.sqrt(dim)
-    op_tol = 0.1*min(feasibility_tol, centrality_tol)
+    op_tol = 0.5*min(feasibility_tol, centrality_tol)
     active_ineq = lin_op_tt_ineq is not None or lin_op_tt_ineq_adj is not None or bias_tt_ineq is not None
     obj_tt = tt_rank_reduce(tt_vec(obj_tt), err_bound=op_tol)
     bias_tt = tt_rank_reduce(tt_vec(bias_tt), err_bound=op_tol)
@@ -266,7 +266,6 @@ def tt_ipm(
         T_tt = tt_mat(tt_matrix_vec_mul(lin_op_tt_ineq_adj, tt_vec(T_tt)))
     Z_tt = tt_identity(dim)
     iter = 0
-    feasible = False
     for iter in range(1, max_iter):
         X_tt, vec_Y_tt, T_tt, Z_tt, pd_error, mu = _tt_ipm_newton_step(
             obj_tt,
@@ -295,13 +294,7 @@ def tt_ipm(
                 f"      vec(Y_tt): {tt_ranks(vec_Y_tt)}, T_tt: {tt_ranks(T_tt)} \n"
             )
 
-        if np.less(pd_error, feasibility_tol):
-            if not feasible and verbose:
-                print("-------------------------")
-                print(f"IPM reached feasibility!")
-                print("-------------------------")
-            feasible = True
-            if np.less(np.abs(mu), centrality_tol):
+        if np.less(pd_error, feasibility_tol) and np.less(np.abs(mu), centrality_tol):
                 break
     if verbose:
         print(f"---Terminated---")

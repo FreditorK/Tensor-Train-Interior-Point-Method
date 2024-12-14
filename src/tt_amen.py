@@ -332,7 +332,7 @@ def tt_inv_precond(matrix_tt, target_ranks, tol=1e-10, max_iter=100, verbose=Fal
     return inv_tt
 
 
-def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kickrank=2, verbose=False):
+def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kickrank=2, amen=False, verbose=False):
 
     damp = 2
     block_size = np.max(list(block_b.keys())) + 1
@@ -350,15 +350,17 @@ def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kick
     rx = [1] + tt_ranks(x) + [1]
     rmax = [1] + (d - 1) * [rmax] + [1]
 
-    # z cores
-    z_cores = tt_normalise([np.random.randn(1, block_size, *x_shape, kickrank)] + [np.random.randn(kickrank, *c.shape[1:-1], kickrank) for c in model_entry[1:-1]] + [np.random.randn(kickrank, *x_shape, 1)])
-    z_cores = tt_rl_orthogonalise(z_cores)
-    rz = [1] + tt_ranks(z_cores) + [1]
+    if amen:
+        # z cores
+        z_cores = tt_normalise([np.random.randn(1, block_size, *x_shape, kickrank)] + [np.random.randn(kickrank, *c.shape[1:-1], kickrank) for c in model_entry[1:-1]] + [np.random.randn(kickrank, *x_shape, 1)])
+        z_cores = tt_rl_orthogonalise(z_cores)
+        rz = [1] + tt_ranks(z_cores) + [1]
 
     XAX = {key: [np.ones((1, 1, 1))] + [None] * (d - 1) + [np.ones((1, 1, 1))] for key in block_A} # size is rk x Rk x rk
     Xb = {key: [np.ones((1, 1))] + [None] * (d - 1) + [np.ones((1, 1))] for key in block_b}  # size is rk x rbk
-    ZAX = copy.deepcopy(XAX) # size is rzk x Rk x rxk
-    Zb = copy.deepcopy(Xb) # size is rzk x rzbk
+    if amen:
+        ZAX = copy.deepcopy(XAX) # size is rzk x Rk x rxk
+        Zb = copy.deepcopy(Xb) # size is rzk x rzbk
 
     last = False
 
@@ -380,7 +382,7 @@ def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kick
 
         for k in range(d - 1, 0, -1):
             # update the z part (ALS) update
-            if not last:
+            if not last and amen:
                 if swp > 0:
                     czA = np.zeros((rz[k], block_size, N[k], rz[k + 1]))
                     for (i, j) in block_A:
@@ -426,13 +428,13 @@ def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kick
                 XAX_ij_k = _compute_phi_bck_A(XAX[(i, j)][k + 1], x_cores[k], block_A[(i, j)][k], x_cores[k]) # rx[k] x rA[k] x rx[k]
                 row_A[i] += np.linalg.norm(XAX_ij_k)**2
                 XAX[(i, j)][k] = XAX_ij_k
-                if not last:
+                if not last and amen:
                     ZAX[(i, j)][k] = _compute_phi_bck_A(ZAX[(i, j)][k + 1], z_cores[k], block_A[(i, j)][k], x_cores[k]) # rz[k] x rA[k] x rx[k]
             row_A += (row_A < real_tol)
             normA[:, k - 1] = np.sqrt(row_A)
             for (i, j) in block_A:
                 XAX[(i, j)][k] /= normA[i, k - 1]
-                if not last:
+                if not last and amen:
                     ZAX[(i, j)][k] /= normA[i, k - 1]
 
             for i in block_b:
@@ -441,7 +443,7 @@ def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kick
                 norm = norm if norm > real_tol else 1.0
                 normb[i, k - 1] = norm
                 Xb[i][k] = Xb_i_k / norm
-                if not last:
+                if not last and amen:
                     Zb[i][k] = _compute_phi_bck_rhs(Zb[i][k + 1], block_b[i][k], z_cores[k]) / norm # rb[k] x rz[k]
             nrmsc = nrmsc * normb[:, k - 1] / (normA[:, k - 1] * normx[k - 1])
 
@@ -514,7 +516,7 @@ def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kick
             else:
                 u, v = np.linalg.qr(solution_now)
 
-            if not last:
+            if not last and amen:
                 # Computing local residuals
                 czA = np.zeros((rz[k], block_size, N[k], rz[k + 1]))
                 local_core = np.reshape(u @ v, [rx[k], N[k], block_size, rx[k + 1]])
@@ -547,7 +549,7 @@ def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kick
                     legacy_rz_kp1 = rz[k + 1]
 
             if k < d - 1:
-                if not last:
+                if not last and amen:
                     # Enrichment
                     left_res = np.zeros((rx[k], N[k], block_size, legacy_rz_kp1))
                     local_core = np.reshape(u @ v, [rx[k], N[k], block_size, rx[k + 1]])
@@ -582,13 +584,13 @@ def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kick
                     XAX_ij_k = _compute_phi_fwd_A(XAX[(i, j)][k], x_cores[k], block_A[(i, j)][k], x_cores[k])
                     row_A[i] += np.linalg.norm(XAX_ij_k)**2
                     XAX[(i, j)][k + 1] = XAX_ij_k
-                    if not last:
+                    if not last and amen:
                         ZAX[(i, j)][k + 1] = _compute_phi_fwd_A(ZAX[(i, j)][k], z_cores[k], block_A[(i, j)][k], x_cores[k])
                 row_A += (row_A < real_tol)
                 normA[:, k] = np.sqrt(row_A)
                 for (i, j) in block_A:
                     XAX[(i, j)][k + 1] /= normA[i, k]
-                    if not last:
+                    if not last and amen:
                         ZAX[(i, j)][k + 1] /= normA[i, k]
                 for i in block_b:
                     Xb_i_k = _compute_phi_fwd_rhs(Xb[i][k], block_b[i][k], x_cores[k])
@@ -596,7 +598,7 @@ def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kick
                     norm = norm if norm > real_tol else 1.0
                     normb[i, k] = norm
                     Xb[i][k + 1] = Xb_i_k / norm
-                    if not last:
+                    if not last and amen:
                         Zb[i][k + 1] = _compute_phi_fwd_rhs(Zb[i][k], block_b[i][k], z_cores[k]) / norm
 
                 nrmsc = nrmsc * normb[:, k] / (normA[:, k] * normx[k])
@@ -610,6 +612,8 @@ def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kick
 
         if max_res < eps or max_dx < eps or swp >= nswp - 2:
             last = True
+            if not amen:
+                break
 
     if verbose:
         print("\n\t---Results---")
