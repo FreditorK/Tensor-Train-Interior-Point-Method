@@ -24,6 +24,7 @@ def tt_infeasible_feas_rhs(
     Z_tt,
     mu,
     tol,
+    feasibility_tol,
     active_ineq
 ):
     rhs = {}
@@ -32,6 +33,8 @@ def tt_infeasible_feas_rhs(
     dual_feas = tt_sub(tt_matrix_vec_mul(mat_lin_op_tt_adj, vec_Y_tt), tt_add(tt_vec(Z_tt), vec_obj_tt))
     primal_feas = tt_rank_reduce(tt_sub(tt_matrix_vec_mul(mat_lin_op_tt, vec_X_tt), vec_bias_tt), err_bound=tol) # primal feasibility
     primal_error = tt_inner_prod(primal_feas, primal_feas)
+    if primal_error > feasibility_tol:
+        rhs[1] = primal_feas
 
     if active_ineq:
         vec_T_tt = tt_vec(T_tt)
@@ -50,10 +53,8 @@ def tt_infeasible_feas_rhs(
     XZ_term = tt_mat_mat_mul(X_tt, Z_tt)
     centrality = tt_vec(tt_add(XZ_term, tt_transpose(XZ_term)))
     centrality = tt_rank_reduce(tt_sub(tt_scale(2 * mu, tt_vec(tt_identity(len(X_tt)))), centrality), err_bound=min(tol, mu))
-    if dual_error > tol:
+    if dual_error > feasibility_tol:
         rhs[0] = dual_feas
-    if primal_error > tol:
-        rhs[1] = primal_feas
     rhs[2 + idx_add] = centrality
     return rhs, primal_error + dual_error
 
@@ -103,6 +104,7 @@ def _tt_ipm_newton_step(
         T_tt,
         Z_tt,
         tol,
+        feasibility_tol,
         active_ineq,
         verbose
 ):
@@ -132,6 +134,7 @@ def _tt_ipm_newton_step(
         Z_tt,
         0.5 * mu,
         tol,
+        feasibility_tol,
         active_ineq
     )
     Delta_tt, res = tt_block_amen(lhs_matrix_tt, rhs_vec_tt, kickrank=2, verbose=verbose)
@@ -238,11 +241,13 @@ def tt_ipm(
     lin_op_tt_ineq_adj=None,
     bias_tt_ineq=None,
     max_iter=100,
-    feasibility_tol=1e-4,
+    feasibility_tol=1e-5,
     centrality_tol=1e-3,
     verbose=False
 ):
     dim = len(obj_tt)
+    feasibility_tol = feasibility_tol / np.sqrt(dim)
+    centrality_tol = centrality_tol / np.sqrt(dim)
     op_tol = 0.1*min(feasibility_tol, centrality_tol)
     active_ineq = lin_op_tt_ineq is not None or lin_op_tt_ineq_adj is not None or bias_tt_ineq is not None
     obj_tt = tt_rank_reduce(tt_vec(obj_tt), err_bound=op_tol)
@@ -277,6 +282,7 @@ def tt_ipm(
             T_tt,
             Z_tt,
             op_tol,
+            feasibility_tol,
             active_ineq,
             verbose
         )
