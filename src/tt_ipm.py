@@ -84,7 +84,7 @@ def tt_infeasible_newton_system_lhs(
 
 
 def _tt_symmetrise(matrix_tt, err_bound):
-    return tt_rank_reduce(tt_add(matrix_tt, tt_transpose(matrix_tt)), err_bound=err_bound)
+    return tt_rank_reduce(tt_scale(0.5, tt_add(matrix_tt, tt_transpose(matrix_tt))), err_bound=err_bound)
 
 
 def _tt_get_block(i, block_matrix_tt):
@@ -106,7 +106,8 @@ def _tt_ipm_newton_step(
         tol,
         feasibility_tol,
         active_ineq,
-        verbose
+        verbose,
+        eps = 1e-10,
 ):
     mu = tt_inner_prod(Z_tt, [0.5 * c for c in X_tt])
     idx_add = int(active_ineq)
@@ -137,12 +138,12 @@ def _tt_ipm_newton_step(
         feasibility_tol,
         active_ineq
     )
-    Delta_tt, res = tt_block_amen(lhs_matrix_tt, rhs_vec_tt, kickrank=2, verbose=verbose)
+    Delta_tt, res = tt_block_amen(lhs_matrix_tt, rhs_vec_tt, kickrank=2, eps=eps, verbose=verbose)
     vec_Delta_Y_tt = tt_rank_reduce(_tt_get_block(0, Delta_tt), err_bound=tol)
     Delta_T_tt = tt_rank_reduce(tt_mat(_tt_get_block(2, Delta_tt)), err_bound=tol) if active_ineq else None
     Delta_X_tt = tt_rank_reduce(tt_mat(_tt_get_block(1, Delta_tt)), err_bound=tol)
     Delta_Z_tt = tt_rank_reduce(tt_mat(_tt_get_block(2+idx_add, Delta_tt)), err_bound=tol)
-    if np.greater(res, tol):
+    if np.greater(res, eps):
         Delta_X_tt = _tt_symmetrise(Delta_X_tt, tol)
         Delta_Z_tt = _tt_symmetrise(Delta_Z_tt, tol)
     x_step_size, z_step_size = _tt_line_search(X_tt, T_tt, Z_tt, Delta_X_tt, Delta_T_tt, Delta_Z_tt, mat_lin_op_tt_ineq, vec_bias_tt_ineq, active_ineq)
@@ -199,7 +200,7 @@ def _tt_line_search(
             new_X_tt[0][:, :, :, r:] *= discount
             x_step_size *= discount
 
-    if active_ineq:
+    if active_ineq and discount_x:
         for iter in range(iters):
             discount_x, val, _ = tt_is_geq(lin_op_tt_ineq, new_X_tt, vec_bias_tt_ineq, crit=crit)
             if discount_x:
@@ -219,7 +220,7 @@ def _tt_line_search(
             new_Z_tt[0][:, :, :, r:] *= discount
             z_step_size *= discount
 
-    if active_ineq:
+    if active_ineq and discount_z:
         r = T_tt[0].shape[-1]
         new_T_tt = tt_add(T_tt, tt_scale(z_step_size, Delta_T_tt))
         for iter in range(iters):

@@ -509,7 +509,6 @@ def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kick
                     if res > max(real_tol * damp, block_res_new):
                         break
                 r += 1
-
                 r = min([r, np.size(s), rmax[k + 1]])
                 u = u[:, :r]
                 v = v[:r, :]
@@ -610,7 +609,10 @@ def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kick
         if last:
             break
 
-        if max_res < eps or max_dx < eps or swp >= nswp - 2:
+        if swp >= nswp - 2:
+            last = True
+
+        if max_res < eps or max_dx < eps:
             last = True
             if not amen:
                 break
