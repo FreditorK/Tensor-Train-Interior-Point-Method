@@ -428,7 +428,7 @@ def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kick
                 XAX[(i, j)][k] = XAX_ij_k
                 if not last:
                     ZAX[(i, j)][k] = _compute_phi_bck_A(ZAX[(i, j)][k + 1], z_cores[k], block_A[(i, j)][k], x_cores[k]) # rz[k] x rA[k] x rx[k]
-            row_A += (row_A == 0)
+            row_A += (row_A < real_tol)
             normA[:, k - 1] = np.sqrt(row_A)
             for (i, j) in block_A:
                 XAX[(i, j)][k] /= normA[i, k - 1]
@@ -438,7 +438,7 @@ def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kick
             for i in block_b:
                 Xb_i_k = _compute_phi_bck_rhs(Xb[i][k + 1], block_b[i][k], x_cores[k]) # rb[k] x rx[k]
                 norm = np.linalg.norm(Xb_i_k)
-                norm = norm if norm > 0 else 1.0
+                norm = norm if norm > real_tol else 1.0
                 normb[i, k - 1] = norm
                 Xb[i][k] = Xb_i_k / norm
                 if not last:
@@ -474,7 +474,8 @@ def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kick
 
             # Solve block system
             u, s, v = scip.linalg.svd(B, full_matrices=False, check_finite=False)
-            r = np.sum([s > damp*real_tol])
+            # small singular values cause  numerical instabilities
+            r = np.sum([s > eps])
             solution_now = v[:r, :].T @ (np.diag(np.divide(1, s[:r])) @ (u[:, :r].T @ rhs))
 
             block_res_new = np.linalg.norm(B @ solution_now - rhs) / norm_rhs
@@ -486,7 +487,7 @@ def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kick
                     print(f"\r\tWARNING: residual increases. {block_res_old:10f}, {block_res_new:10f}", end='', flush=True)  # warning (from tt toolbox)
 
             max_res = max(max_res, block_res_old)
-            #print(k, block_res_old, block_res_new, block_res_old / block_res_new)
+            #print(k, block_res_old, block_res_new, block_res_old / block_res_new, np.linalg.norm(B @ v.T @ (np.diag(np.divide(1, s)) @ (u.T @ rhs)) - rhs) / norm_rhs)
 
             dx = np.linalg.norm(solution_now - previous_solution) / np.linalg.norm(solution_now)
             max_dx = max(max_dx, dx)
@@ -498,9 +499,10 @@ def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kick
             # solution truncation
             if k < d - 1:
                 u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False)
+                v = np.diag(s) @ v
                 r = 0
                 for r in range(u.shape[1] - 1, 0, -1):
-                    solution = np.reshape(u[:, :r] @ np.diag(s[:r]) @ v[:r, :], (rx[k], N[k], block_size, rx[k + 1]))
+                    solution = np.reshape(u[:, :r] @ v[:r, :], (rx[k], N[k], block_size, rx[k + 1]))
                     res = np.linalg.norm(B @ np.reshape(np.transpose(solution, (2, 0, 1, 3)), (-1, 1)) - rhs) / norm_rhs
                     if res > max(real_tol * damp, block_res_new):
                         break
@@ -508,7 +510,7 @@ def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kick
 
                 r = min([r, np.size(s), rmax[k + 1]])
                 u = u[:, :r]
-                v = np.diag(s[:r]) @ v[:r, :]
+                v = v[:r, :]
             else:
                 u, v = np.linalg.qr(solution_now)
 
@@ -535,7 +537,7 @@ def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kick
                     Qz, Rz = np.linalg.qr(cz_new)
                     z_cores[k] = np.reshape(Qz, (rz[k], N[k], trunc_r))
                     z_cores[k + 1] = einsum('rdc,cbR->rbdR',
-                                            (Rz @ np.diag(sz[:trunc_r]) @ vz[:trunc_r]).reshape(trunc_r, block_size, rz[k + 1]),
+                                            (Rz @ (np.diag(sz[:trunc_r]) @ vz[:trunc_r])).reshape(trunc_r, block_size, rz[k + 1]),
                                             z_cores[k + 1])
                     legacy_rz_kp1 = rz[k+1]
                     rz[k + 1] = trunc_r
@@ -565,8 +567,7 @@ def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kick
                 u, Rmat = np.linalg.qr(u)
                 r = u.shape[1]
                 Rtens = Rmat.reshape(r, block_size, -1)
-                v = einsum("rbi, iR -> rbR", Rtens, v) #  enriched_r x b x rx[k+1]
-                v = einsum('rbj, jdR->rbdR', v, x_cores[k + 1]) # enriched_r x b x N_k+1 rx[k+2]
+                v = einsum("rbi, iR, Rdk -> rbdk", Rtens, v, x_cores[k + 1]) #  enriched_r x b x d x rx[k+1]
 
                 nrmsc = nrmsc * normA[:, k] * normx[k] / normb[:, k]
                 norm_now = np.linalg.norm(v)
@@ -583,7 +584,7 @@ def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kick
                     XAX[(i, j)][k + 1] = XAX_ij_k
                     if not last:
                         ZAX[(i, j)][k + 1] = _compute_phi_fwd_A(ZAX[(i, j)][k], z_cores[k], block_A[(i, j)][k], x_cores[k])
-                row_A += (row_A == 0)
+                row_A += (row_A < real_tol)
                 normA[:, k] = np.sqrt(row_A)
                 for (i, j) in block_A:
                     XAX[(i, j)][k + 1] /= normA[i, k]
@@ -592,7 +593,7 @@ def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kick
                 for i in block_b:
                     Xb_i_k = _compute_phi_fwd_rhs(Xb[i][k], block_b[i][k], x_cores[k])
                     norm = np.linalg.norm(Xb_i_k)
-                    norm = norm if norm > 0 else 1.0
+                    norm = norm if norm > real_tol else 1.0
                     normb[i, k] = norm
                     Xb[i][k + 1] = Xb_i_k / norm
                     if not last:
