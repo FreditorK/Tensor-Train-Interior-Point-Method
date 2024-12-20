@@ -10,17 +10,16 @@ from src.tt_ops import tt_rank_reduce, tt_rl_orthogonalise
 from src.tt_eig import tt_max_eig, tt_min_eig
 
 
-s_matrix_tt = tt_random_gaussian([4, 4], shape=(2, 2))
-s_matrix_tt = tt_rl_orthogonalise(tt_rank_reduce(tt_add(s_matrix_tt, tt_transpose(s_matrix_tt)), err_bound=0))
+s_matrix_tt = tt_scale(5, tt_random_gaussian([4, 4], shape=(2, 2)))
+s_matrix_tt = tt_rl_orthogonalise(tt_rank_reduce(tt_mat_mat_mul(s_matrix_tt, tt_transpose(s_matrix_tt)), err_bound=0))
 
-k_matrix_tt = tt_random_gaussian([4, 4], shape=(2, 2))
-k_matrix_tt = tt_rl_orthogonalise(tt_rank_reduce(tt_add(s_matrix_tt, tt_transpose(s_matrix_tt)), err_bound=0))
+k_matrix_tt = tt_scale(-0.016, tt_identity(3))
 
-s_matrix_tt = tt_scale(0.001, tt_add(s_matrix_tt, k_matrix_tt))
+s_matrix_tt = tt_rank_reduce(tt_add(s_matrix_tt, k_matrix_tt), 1e-18)
 
 
-print("Real eig: ", np.max(np.linalg.eigvals(tt_matrix_to_matrix(copy.deepcopy(s_matrix_tt)))))
-print("Real eig: ", np.min(np.linalg.eigvals(tt_matrix_to_matrix(copy.deepcopy(s_matrix_tt)))))
+print("Real max eig: ", np.max(np.linalg.eigvals(tt_matrix_to_matrix(copy.deepcopy(s_matrix_tt)))))
+print("Real min eig: ", np.min(np.linalg.eigvals(tt_matrix_to_matrix(copy.deepcopy(s_matrix_tt)))))
 
 eig_val, eig_vec, res = tt_max_eig(copy.deepcopy(s_matrix_tt), verbose=True)
 print("Res: ", res)

@@ -1,3 +1,4 @@
+import numpy as np
 import scipy as scp
 
 from src.ops import *
@@ -181,15 +182,17 @@ def tt_rank_retraction(train_tt: List[np.array], upper_ranks: List[int]):
     return train_tt
 
 
-def tt_svd(tensor: np.array) -> List[np.array]:
+def tt_svd(tensor: np.array, err_bound=1e-18) -> List[np.array]:
     """ Converts a tensor into a tensor train """
     shape = tensor.shape
+    err_bound = err_bound * np.sqrt(np.divide(tensor.reshape(1, -1) @ tensor.reshape(-1, 1), len(shape) - 1))
     rank = 1
     cores = []
     for i in range(len(shape) - 1):
         A = tensor.reshape(rank * shape[i], -1)
-        U, S, V_T = np.linalg.svd(A)
-        non_sing_eig_idxs = np.asarray(np.abs(S) > 1e-5).nonzero()
+        U, S, V_T = scip.linalg.svd(A, full_matrices=False, check_finite=False)
+        S = S.flatten()
+        _, non_sing_eig_idxs = np.asarray(S >= min(np.max(S), err_bound)).nonzero()
         S = S[non_sing_eig_idxs]
         next_rank = len(S)
         U = U[:, non_sing_eig_idxs]
@@ -368,6 +371,13 @@ def tt_matrix_to_matrix(matrix_tt):
     n = len(tensor.shape)
     axes = [i for i in range(0, n - 1, 2)] + [i for i in range(1, n, 2)]
     return np.transpose(tensor, axes).reshape(np.prod(tensor.shape[:n // 2]), -1)
+
+def tt_matrix_svd(matrix, err_bound=1e-18):
+    tensor  = np.reshape(matrix, [2]*int(np.log2(np.prod(matrix.shape))))
+    n = len(tensor.shape)
+    axes = sum([list(t) for t in zip([i for i in range(n // 2)], [i for i in range(n // 2, n)])], [])
+    tensor = np.transpose(tensor, axes=axes)
+    return tt_mat(tt_svd(tensor, err_bound))
 
 
 def tt_vec_to_vec(vec_tt):

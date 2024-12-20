@@ -13,7 +13,7 @@ from src.tt_ipm import tt_ipm
 @dataclass
 class Config:
     seed = 3 #999: Very low rank solution, 9: Low rank solution, 3: Regular solution
-    max_rank = 4
+    max_rank = 2
     dim = 4
 
 

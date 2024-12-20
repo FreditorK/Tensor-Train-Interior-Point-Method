@@ -193,6 +193,8 @@ def _tt_line_search(
     new_X_tt = tt_add(X_tt, Delta_X_tt)
     for iter in range(iters):
         val_x, _, _ = tt_min_eig(new_X_tt)
+        # FIXME: The eigenvalue could give an upper bound on error bound to round with
+        # FIXME: Can we use tt_eig somehow to round while maintaining psdness?
         discount_x = np.greater(val_x, crit)
         if discount_x:
             break

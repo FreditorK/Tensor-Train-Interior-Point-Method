@@ -195,7 +195,7 @@ def tt_ineq_op(dim):
     matrix_tt = [-np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [np.array([[1.0, 1.0], [1.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(dim)]
     #matrix_tt = tt_add(matrix_tt, [-np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [np.array([[1.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(dim)])
     #matrix_tt = tt_add(matrix_tt, [-np.array([[0.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1)] + [np.array([[1.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(dim)])
-    #matrix_tt = tt_add(matrix_tt, [-np.array([[0.0, 0.0], [0.0, 1.0]]).reshape(1, 2, 2, 1)] + [np.array([[1.0, 0.0], [0.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(dim)])
+    matrix_tt = tt_add(matrix_tt, [-np.array([[0.0, 0.0], [0.0, 1.0]]).reshape(1, 2, 2, 1)] + [np.array([[1.0, 0.0], [0.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(dim)])
     basis = tt_diag(tt_vec(matrix_tt))
     return tt_rank_reduce(basis)
 
@@ -438,7 +438,7 @@ if __name__ == "__main__":
     # X
     Q_ineq_op = tt_ineq_op(2*n)
     Q_ineq_op_adj = tt_ineq_op_adj(2*n)
-    Q_ineq_bias = tt_rank_reduce(tt_scale(0.02, tt_mat(tt_matrix_vec_mul(Q_ineq_op_adj, [np.ones((1, 2, 1)) for _ in range(2*(2*n+1))]))))
+    Q_ineq_bias = tt_rank_reduce(tt_scale(0.05, tt_mat(tt_matrix_vec_mul(Q_ineq_op_adj, [np.ones((1, 2, 1)) for _ in range(2*(2*n+1))]))))
 
     def test_Q_ineq_op():
         random_A = tt_random_gaussian([3] * (2 * n), shape=(2, 2))
@@ -446,6 +446,7 @@ if __name__ == "__main__":
         print(np.round(M, decimals=4))
         print(np.round(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(Q_ineq_op, tt_vec(random_A)))), decimals=4))
 
+    test_Q_ineq_op()
 
     # ---
     print("...Problem created!")

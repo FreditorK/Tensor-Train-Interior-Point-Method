@@ -475,10 +475,7 @@ def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kick
                 B[m*i:m*(i+1), m*j:m*(j+1)] = local_B.reshape(m, m)
 
             # Solve block system
-            u, s, v = scip.linalg.svd(B, full_matrices=False, check_finite=False)
-            # small singular values cause  numerical instabilities
-            r = np.sum([s > eps])
-            solution_now = v[:r, :].T @ (np.diag(np.divide(1, s[:r])) @ (u[:, :r].T @ rhs))
+            solution_now = schur_solve_local_system(B, rhs, m, block_size, eps)
 
             block_res_new = np.linalg.norm(B @ solution_now - rhs) / norm_rhs
             block_res_old = np.linalg.norm(B @ previous_solution - rhs) / norm_rhs
@@ -489,7 +486,7 @@ def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kick
                     print(f"\r\tWARNING: residual increases. {block_res_old:10f}, {block_res_new:10f}", end='', flush=True)  # warning (from tt toolbox)
 
             max_res = max(max_res, block_res_old)
-            #print(k, block_res_old, block_res_new, block_res_old / block_res_new, np.linalg.norm(B @ v.T @ (np.diag(np.divide(1, s)) @ (u.T @ rhs)) - rhs) / norm_rhs)
+            #print(k, block_res_old, block_res_new, block_res_old / block_res_new)
 
             dx = np.linalg.norm(solution_now - previous_solution) / np.linalg.norm(solution_now)
             max_dx = max(max_dx, dx)
@@ -628,5 +625,45 @@ def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kick
     normx = np.exp(np.sum(np.log(normx)) / d)
 
     return [normx * core for core in x_cores], max_res
+
+
+def svd_solve_local_system(B, rhs, eps):
+    u, s, v = scip.linalg.svd(B, full_matrices=False, check_finite=False)
+    # small singular values cause  numerical instabilities
+    r = np.sum([s > eps])
+    solution_now = v[:r, :].T @ (np.diag(np.divide(1, s[:r])) @ (u[:, :r].T @ rhs))
+    return solution_now
+
+def schur_solve_local_system(lhs, rhs, block_dim, num_blocks, eps):
+    k =  num_blocks - 1
+    A = lhs[:k * block_dim, :k * block_dim]
+    B = lhs[:k * block_dim, k * block_dim:]
+    C = lhs[k * block_dim:, :k * block_dim]
+    D = lhs[k * block_dim:, k * block_dim:]
+    u = rhs[:k * block_dim]
+    v = rhs[k * block_dim:]
+    #print("R cond:", np.linalg.diagonal(lhs[2 * block_dim:3 * block_dim, 2 * block_dim:3 * block_dim]))
+    #print("I ", lhs[:block_dim, 3 * block_dim:])
+    # FIXME: D might be singular when you have inequalities because of R
+    inv_D = np.linalg.inv(D)
+    schur_complement = A - B @ inv_D @ C
+    x, _, _, _ = scip.linalg.lstsq(schur_complement, u-B @ (inv_D @ v), cond=eps, check_finite=False) # l1_lstq(schur_complement, u-B @ (inv_D @ v))
+    y = inv_D @ (v - C @ x)
+    return np.vstack((x, y))
+
+# L1-regularized least squares cost function
+def l1_regularized_least_squares(w, X, y, lam):
+    residual = y - X @ w
+    return np.linalg.norm(residual) + lam * np.sum(np.abs(w))
+
+def l1_lstq(lhs, rhs):
+    # Initial guess
+    w0 = np.zeros(lhs.shape[1])
+    lam = 0.01  # Regularization parameter
+    # Solve using L-BFGS-B (or try other methods like 'trust-constr')
+    result = scip.optimize.minimize(l1_regularized_least_squares, w0, args=(lhs, rhs, lam))
+    return result.x.reshape(-1,  1)
+
+
 
 
