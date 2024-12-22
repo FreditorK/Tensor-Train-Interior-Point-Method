@@ -86,79 +86,79 @@ def tt_Q_m_P_op(dim):
             np.array([[0, 1], [0, 0]]).reshape(1, 2, 2, 1)
         ), axis=0)
         Q_part.extend([core_1, core_2])
-    P_part = [np.array([[-1, 0], [0, 0]]).reshape(1, 2, 2, 1), np.array([[0, 0], [0, 1]]).reshape(1, 2, 2, 1)] + tt_diag(tt_vec([np.array([[1.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(dim)]))
-    return tt_rank_reduce(tt_add(P_part, Q_part))
-
-
-def tt_Q_m_P_op_adj(dim):
-    P_supplement = [np.array([[0, 0], [-1, 0.]]).reshape(1, 2, 2, 1), np.array([[0, 1.], [0, 0]]).reshape(1, 2, 2, 1)]
+    P_part = [np.array([[-0.5, 0], [0, 0]]).reshape(1, 2, 2, 1), np.array([[0, 0], [0, 1]]).reshape(1, 2, 2, 1)] + tt_diag(tt_vec([np.array([[1.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(dim)]))
+    P_supplement = [np.array([[0, -0.5], [0, 0.]]).reshape(1, 2, 2, 1), np.array([[0, 0.], [1., 0]]).reshape(1, 2, 2, 1)]
     for i in range(dim):
         core_1 = np.concatenate((
             np.array([[1, 0.], [0, 0]]).reshape(1, 2, 2, 1),
-            np.array([[0, 1.], [0, 0]]).reshape(1, 2, 2, 1)
+            np.array([[0, 0.], [1, 0]]).reshape(1, 2, 2, 1)
         ), axis=-1)
         core_2 = np.concatenate((
             np.array([[1, 0.], [0, 0]]).reshape(1, 2, 2, 1),
-            np.array([[0, 0.], [1, 0]]).reshape(1, 2, 2, 1)
+            np.array([[0, 1.], [0, 0]]).reshape(1, 2, 2, 1)
         ), axis=0)
         P_supplement.extend([core_1, core_2])
-    return tt_rank_reduce(tt_add(tt_transpose(tt_Q_m_P_op(dim)), P_supplement))
+    return tt_rank_reduce(tt_add(Q_part, tt_add(P_supplement, P_part)))
+
+
+def tt_Q_m_P_op_adj(dim):
+    return tt_transpose(tt_Q_m_P_op(dim))
 
 # ------------------------------------------------------------------------------
 # Constraint 8 -----------------------------------------------------------------
 
 
 def tt_DS_op(block_size, dim):
-    row_op = [np.array([[0, 0], [0, 1]]).reshape(1, 2, 2, 1), np.array([[1, 0], [0, 0]]).reshape(1, 2, 2, 1)]
+    row_op_1 = [np.array([[0, 0], [0, 1.0]]).reshape(1, 2, 2, 1), np.array([[1, 0.0], [0, 0]]).reshape(1, 2, 2, 1)]
     for _ in range(dim-block_size):
-        row_op.extend([np.array([[1, 0], [0, 0]]).reshape(1, 2, 2, 1), np.array([[1, 0], [0, 1]]).reshape(1, 2, 2, 1)])
+        row_op_1.extend([np.array([[1, 0], [0., 0]]).reshape(1, 2, 2, 1), np.array([[1, 0.], [0, 1]]).reshape(1, 2, 2, 1)])
     for _ in range(block_size):
-        row_op.extend([np.array([[1, 0], [0, 0]]).reshape(1, 2, 2, 1), np.array([[1, 1], [0, 0]]).reshape(1, 2, 2, 1)])
-    col_op = [np.array([[0, 1], [0, 0]]).reshape(1, 2, 2, 1), np.array([[1, 0], [0, 0]]).reshape(1, 2, 2, 1)]
+        row_op_1.extend([np.array([[1, 0], [0., 0]]).reshape(1, 2, 2, 1), np.array([[1, 1.], [0, 0]]).reshape(1, 2, 2, 1)])
+    col_op_1 = [np.array([[0, 1], [0., 0]]).reshape(1, 2, 2, 1), np.array([[1, 0], [0., 0]]).reshape(1, 2, 2, 1)]
     for _ in range(dim - block_size):
-        col_op.extend([np.array([[0, 0], [1, 0]]).reshape(1, 2, 2, 1), np.array([[0, 0], [1, 1]]).reshape(1, 2, 2, 1)])
+        col_op_1.extend([np.array([[0, 0], [1., 0]]).reshape(1, 2, 2, 1), np.array([[0, 0], [1., 1]]).reshape(1, 2, 2, 1)])
     for _ in range(block_size):
-        col_op.extend([
+        col_op_1.extend([
             np.array([[[1., 0.], [0., 0.]], [[0., 1.],[0., 0.]]]).reshape(1, 2, 2, 2),
             np.array([[[1., 0.], [0., 0.]], [[0., 0.], [0., 1.]]]).reshape(2, 2, 2, 1),
         ])
-    op_tt = tt_rank_reduce(tt_add(row_op, col_op))
+    op_tt_1 = tt_add(row_op_1, col_op_1)
+    row_op_2 = [
+        np.array([[0, 0.0], [1, 0]]).reshape(1, 2, 2, 1),
+        np.array([[0, 1], [0.0, 0]]).reshape(1, 2, 2, 1)
+    ]
+    for _ in range(dim - block_size):
+        row_op_2.extend([
+            np.array([[[1., 0.], [0., 1.]], [[0., 0.], [0., 0.]]]).reshape(1, 2, 2, 2),
+            np.array([[[1., 0.], [0., 0.]], [[0., 0.], [1., 0.]]]).reshape(2, 2, 2, 1)
+        ])
+    for _ in range(block_size):
+        row_op_2.extend([
+            np.array([[1., 1.], [0., 0.]]).reshape(1, 2, 2, 1),
+            np.array([[1., 0.], [0., 0.]]).reshape(1, 2, 2, 1)
+        ])
+
+    col_op_2 = [
+        np.array([[1., 0.], [0., 0.]]).reshape(1, 2, 2, 1),
+        np.array([[0., 1.], [0., 0.]]).reshape(1, 2, 2, 1)
+    ]
+    for _ in range(dim - block_size):
+        col_op_2.extend([
+            np.array([[0., 0.], [1., 1.]]).reshape(1, 2, 2, 1),
+            np.array([[0., 0.], [1., 0.]]).reshape(1, 2, 2, 1)
+        ])
+    for _ in range(block_size):
+        col_op_2.extend([
+            np.array([[[1., 0.], [0., 0.]], [[0., 0.], [0., 1.]]]).reshape(1, 2, 2, 2),
+            np.array([[[1., 0.], [0., 0.]], [[0., 0.], [1., 0.]]]).reshape(2, 2, 2, 1)
+        ])
+    op_tt_2 =  tt_add(row_op_2, col_op_2)
+    op_tt = tt_rank_reduce(tt_add(tt_scale(0.5, op_tt_1), tt_scale(0.5, op_tt_2)))
     return op_tt
 
 
 def tt_DS_op_adj(block_size, dim):
-    row_op = [
-        np.array([[0, 1], [0, 0]]).reshape(1, 2, 2, 1),
-        np.array([[0, 0], [1, 0]]).reshape(1, 2, 2, 1)
-    ]
-    for _ in range(dim - block_size):
-        row_op.extend([
-            np.array([[[1., 0.], [0., 0.]], [[0., 1.], [0., 0.]]]).reshape(1, 2, 2, 2),
-            np.array([[[1., 0.], [0., 0.]], [[0., 1.], [0., 0.]]]).reshape(2, 2, 2, 1)
-        ])
-    for _ in range(block_size):
-        row_op.extend([
-            np.array([[1., 0.], [1., 0.]]).reshape(1, 2, 2, 1),
-            np.array([[1., 0.], [0., 0.]]).reshape(1, 2, 2, 1)
-        ])
-
-    col_op = [
-            np.array([[1., 0.], [0., 0.]]).reshape(1, 2, 2, 1),
-            np.array([[0., 0.], [1., 0.]]).reshape(1, 2, 2, 1)
-        ]
-    for _ in range(dim - block_size):
-        col_op.extend([
-            np.array([[0., 1.], [0., 1.]]).reshape(1, 2, 2, 1),
-            np.array([[0., 1.], [0., 0.]]).reshape(1, 2, 2, 1)
-        ])
-    for _ in range(block_size):
-        col_op.extend([
-            np.array([[[1., 0.], [0., 0.]], [[0., 0.], [0., 1.]]]).reshape(1, 2, 2, 2),
-            np.array([[[1., 0.], [0., 0.]], [[0., 1.], [0., 0.]]]).reshape(2, 2, 2, 1)
-        ])
-
-    op_tt = tt_rank_reduce(tt_add(tt_transpose(tt_DS_op(block_size, dim)), tt_add(row_op, col_op)))
-    return op_tt
+    return tt_transpose(tt_DS_op(block_size, dim))
 
 def tt_DS_bias(block_size, dim):
     matrix_tt_1 = (
@@ -195,7 +195,7 @@ def tt_ineq_op(dim):
     matrix_tt = [-np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [np.array([[1.0, 1.0], [1.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(dim)]
     #matrix_tt = tt_add(matrix_tt, [-np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [np.array([[1.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(dim)])
     #matrix_tt = tt_add(matrix_tt, [-np.array([[0.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1)] + [np.array([[1.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(dim)])
-    matrix_tt = tt_add(matrix_tt, [-np.array([[0.0, 0.0], [0.0, 1.0]]).reshape(1, 2, 2, 1)] + [np.array([[1.0, 0.0], [0.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(dim)])
+    #matrix_tt = tt_add(matrix_tt, [-np.array([[0.0, 0.0], [0.0, 1.0]]).reshape(1, 2, 2, 1)] + [np.array([[1.0, 0.0], [0.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(dim)])
     basis = tt_diag(tt_vec(matrix_tt))
     return tt_rank_reduce(basis)
 
@@ -445,8 +445,6 @@ if __name__ == "__main__":
         M = tt_matrix_to_matrix(random_A)
         print(np.round(M, decimals=4))
         print(np.round(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(Q_ineq_op, tt_vec(random_A)))), decimals=4))
-
-    test_Q_ineq_op()
 
     # ---
     print("...Problem created!")

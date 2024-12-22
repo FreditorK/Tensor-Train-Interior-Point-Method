@@ -350,15 +350,17 @@ def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kick
     rx = [1] + tt_ranks(x) + [1]
     rmax = [1] + (d - 1) * [rmax] + [1]
 
-    if amen:
-        # z cores
-        z_cores = tt_normalise([np.random.randn(1, block_size, *x_shape, kickrank)] + [np.random.randn(kickrank, *c.shape[1:-1], kickrank) for c in model_entry[1:-1]] + [np.random.randn(kickrank, *x_shape, 1)])
-        z_cores = tt_rl_orthogonalise(z_cores)
-        rz = [1] + tt_ranks(z_cores) + [1]
-
     XAX = {key: [np.ones((1, 1, 1))] + [None] * (d - 1) + [np.ones((1, 1, 1))] for key in block_A} # size is rk x Rk x rk
     Xb = {key: [np.ones((1, 1))] + [None] * (d - 1) + [np.ones((1, 1))] for key in block_b}  # size is rk x rbk
     if amen:
+        # z cores
+        z_cores = tt_normalise(
+            [np.random.randn(1, block_size, *x_shape, kickrank)]
+            + [np.random.randn(kickrank, *c.shape[1:-1], kickrank) for c in model_entry[1:-1]]
+            + [np.random.randn(kickrank, *x_shape, 1)]
+        )
+        z_cores = tt_rl_orthogonalise(z_cores)
+        rz = [1] + tt_ranks(z_cores) + [1]
         ZAX = copy.deepcopy(XAX) # size is rzk x Rk x rxk
         Zb = copy.deepcopy(Xb) # size is rzk x rzbk
 
@@ -374,13 +376,14 @@ def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kick
 
     normA = np.ones((block_size, d - 1)) # norm of each row in the block matrix
     normb = np.ones((block_size, d - 1)) # norm of each row of the rhs
-    normx = np.ones((d - 1))
     nrmsc = np.ones(block_size)
+    normx = np.ones((d - 1))
     real_tol = (eps / np.sqrt(d)) / damp
 
     for swp in range(nswp):
-
         for k in range(d - 1, 0, -1):
+            if swp > 0:
+                nrmsc *= (normA[:, k - 1] * normx[k - 1]) / normb[:, k - 1]
             # update the z part (ALS) update
             if not last and amen:
                 if swp > 0:
@@ -406,9 +409,6 @@ def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kick
                 Qz, _ = np.linalg.qr(cz_new)
                 z_cores[k] = np.reshape(Qz.T, (trunc_r, N[k], rz[k+1]))
                 rz[k] = trunc_r
-
-            if swp > 0:
-                nrmsc = nrmsc * normA[:, k-1] * normx[k-1] / normb[:, k-1]
 
             # right to left orthogonalisation of x_cores
             core = np.reshape(x_cores[k], [rx[k]*block_size, N[k]*rx[k + 1]]).T
@@ -445,8 +445,7 @@ def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kick
                 Xb[i][k] = Xb_i_k / norm
                 if not last and amen:
                     Zb[i][k] = _compute_phi_bck_rhs(Zb[i][k + 1], block_b[i][k], z_cores[k]) / norm # rb[k] x rz[k]
-            nrmsc = nrmsc * normb[:, k - 1] / (normA[:, k - 1] * normx[k - 1])
-
+            nrmsc *= normb[:, k - 1] / (normA[:, k - 1] * normx[k - 1])
 
         # start loop
         max_res = 0
@@ -643,7 +642,7 @@ def schur_solve_local_system(lhs, rhs, block_dim, num_blocks, eps):
     u = rhs[:k * block_dim]
     v = rhs[k * block_dim:]
     #print("R cond:", np.linalg.diagonal(lhs[2 * block_dim:3 * block_dim, 2 * block_dim:3 * block_dim]))
-    #print("I ", lhs[:block_dim, 3 * block_dim:])
+    #print("I ", np.linalg.norm(lhs[:block_dim, :block_dim] - lhs[block_dim:2*block_dim, block_dim:2*block_dim]))
     # FIXME: D might be singular when you have inequalities because of R
     inv_D = np.linalg.inv(D)
     schur_complement = A - B @ inv_D @ C
