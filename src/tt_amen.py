@@ -474,7 +474,7 @@ def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kick
                 B[m*i:m*(i+1), m*j:m*(j+1)] = local_B.reshape(m, m)
 
             # Solve block system
-            solution_now = schur_solve_local_system(B, rhs, m, block_size, eps)
+            solution_now = svd_solve_local_system(B, rhs, eps)
 
             block_res_new = np.linalg.norm(B @ solution_now - rhs) / norm_rhs
             block_res_old = np.linalg.norm(B @ previous_solution - rhs) / norm_rhs
@@ -633,6 +633,9 @@ def svd_solve_local_system(B, rhs, eps):
     solution_now = v[:r, :].T @ (np.diag(np.divide(1, s[:r])) @ (u[:, :r].T @ rhs))
     return solution_now
 
+def  ipm_solve_local_system(B, rhs, eps):
+    pass
+
 def schur_solve_local_system(lhs, rhs, block_dim, num_blocks, eps):
     k =  num_blocks - 1
     A = lhs[:k * block_dim, :k * block_dim]
@@ -641,9 +644,6 @@ def schur_solve_local_system(lhs, rhs, block_dim, num_blocks, eps):
     D = lhs[k * block_dim:, k * block_dim:]
     u = rhs[:k * block_dim]
     v = rhs[k * block_dim:]
-    #print("R cond:", np.linalg.diagonal(lhs[2 * block_dim:3 * block_dim, 2 * block_dim:3 * block_dim]))
-    #print("I ", np.linalg.norm(lhs[:block_dim, :block_dim] - lhs[block_dim:2*block_dim, block_dim:2*block_dim]))
-    # FIXME: D might be singular when you have inequalities because of R
     inv_D = np.linalg.inv(D)
     schur_complement = A - B @ inv_D @ C
     x, _, _, _ = scip.linalg.lstsq(schur_complement, u-B @ (inv_D @ v), cond=eps, check_finite=False) # l1_lstq(schur_complement, u-B @ (inv_D @ v))
