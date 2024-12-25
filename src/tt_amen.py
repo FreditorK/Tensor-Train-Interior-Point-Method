@@ -474,7 +474,8 @@ def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kick
                 B[m*i:m*(i+1), m*j:m*(j+1)] = local_B.reshape(m, m)
 
             # Solve block system
-            solution_now = svd_solve_local_system(B, rhs, eps)
+            #solution_now = svd_solve_local_system(B, rhs, eps)
+            solution_now =  ipm_solve_local_system(B, rhs, m,  block_size, eps)
 
             block_res_new = np.linalg.norm(B @ solution_now - rhs) / norm_rhs
             block_res_old = np.linalg.norm(B @ previous_solution - rhs) / norm_rhs
@@ -633,8 +634,51 @@ def svd_solve_local_system(B, rhs, eps):
     solution_now = v[:r, :].T @ (np.diag(np.divide(1, s[:r])) @ (u[:, :r].T @ rhs))
     return solution_now
 
-def  ipm_solve_local_system(B, rhs, eps):
-    pass
+def pd_inv(a):
+    return scip.linalg.solve(a, np.identity(a.shape[0]), assume_a="pos", overwrite_b=True)
+
+def  ipm_solve_local_system(lhs, rhs, block_dim, num_blocks, eps):
+    k =  num_blocks - 1
+    L_eq = -lhs[block_dim:2*block_dim, :block_dim]
+    L_Z = lhs[k*block_dim:, :block_dim]
+    inv_L_Z = pd_inv(L_Z)
+    L_eq_adj = -lhs[:block_dim, block_dim:2*block_dim]
+    #I = lhs[:block_dim, k*block_dim:]
+    inv_I = np.diag(np.divide(1, np.diagonal(lhs[:block_dim, k*block_dim:])))
+    L_X = lhs[k * block_dim:, k * block_dim:]
+    R_d = -rhs[:block_dim]
+    R_p = -rhs[block_dim:2*block_dim]
+    R_c = -rhs[k * block_dim:]
+    if num_blocks > 3:
+        TL_ineq = -lhs[2 * block_dim:3 * block_dim, :block_dim]
+        L_ineq_adj = -lhs[:block_dim, 2 * block_dim:3 * block_dim]
+        R_ineq = lhs[2 * block_dim:3 * block_dim, 2 * block_dim:3 * block_dim]
+        R_t = -rhs[2 * block_dim:3 * block_dim]
+        A = np.block([
+            [L_eq @ inv_L_Z @ L_X @ inv_I @ L_eq_adj, L_eq @ inv_L_Z @ L_X @ inv_I @ L_ineq_adj],
+            [TL_ineq @ inv_L_Z @ L_X @ inv_I @ L_eq_adj, R_ineq + TL_ineq @ inv_L_Z @ L_X @ inv_I @ L_ineq_adj]
+        ])
+        b = np.block([
+            [L_eq @ inv_L_Z @ (L_X @ inv_I @ R_d - R_c) - R_p],
+            [TL_ineq @ inv_L_Z @ (L_X @ inv_I @ R_d - R_c) - R_t]
+        ])
+        yt, _, _, _ = scip.linalg.lstsq(A, b, cond=eps, check_finite=False)
+        y = yt[:block_dim]
+        t = yt[block_dim:]
+        x = inv_L_Z @ (L_X @ inv_I @ (R_d - L_eq_adj @ y - L_ineq_adj @ t) - R_c)
+        z = inv_I @ (L_eq_adj @ y + L_ineq_adj @ t - R_d)
+        return np.vstack((x, y, t, z))
+    #print(inv_L_Z)
+    y, _, _, _ = scip.linalg.lstsq(L_eq @ inv_L_Z @ L_X @ inv_I @ L_eq_adj, L_eq @ inv_L_Z @ (L_X @ inv_I @ R_d - R_c) - R_p, cond=eps, check_finite=False)
+    x = inv_L_Z @ (L_X @ inv_I @ (R_d - L_eq_adj @ y) - R_c)
+    z = inv_I @ (L_eq_adj @ y - R_d)
+    #print("---")
+    #print(np.linalg.norm(- L_eq_adj @ y + I @ z + R_d))
+    #print(np.linalg.norm(- L_eq @  x + R_p))
+    #print(np.linalg.norm(L_Z @ x + L_X @ z + R_c))
+    #print("---")
+    return np.vstack((x, y, z))
+
 
 def schur_solve_local_system(lhs, rhs, block_dim, num_blocks, eps):
     k =  num_blocks - 1

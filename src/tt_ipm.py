@@ -71,7 +71,7 @@ def tt_infeasible_newton_system_lhs(
 ):
     idx_add = int(active_ineq)
     identity = tt_identity(len(Z_tt))
-    lhs_skeleton[(2 + idx_add, 1)] = tt_rank_reduce(tt_add(tt_kron(identity, Z_tt), tt_kron(tt_transpose(Z_tt), identity)), err_bound=tol)
+    lhs_skeleton[(2 + idx_add, 0)] = tt_rank_reduce(tt_add(tt_kron(identity, Z_tt), tt_kron(tt_transpose(Z_tt), identity)), err_bound=tol)
     lhs_skeleton[(2 + idx_add, 2 + idx_add)] = tt_rank_reduce(tt_add(tt_kron(tt_transpose(X_tt), identity), tt_kron(identity, X_tt)), err_bound=tol)
     if active_ineq:
         ineq_res_tt = tt_sub(vec_bias_tt_ineq, tt_matrix_vec_mul(mat_lin_op_tt_ineq, tt_vec(X_tt)))
@@ -79,7 +79,7 @@ def tt_infeasible_newton_system_lhs(
         mat_T_op_tt = tt_diag(tt_vec(T_tt))
         mat_T_comp_linear_op_tt_ineq = tt_mat_mat_mul(mat_T_op_tt, tt_scale(-1, mat_lin_op_tt_ineq))
         lhs_skeleton[(2, 2)] = tt_rank_reduce(mat_ineq_res_op_tt, err_bound=tol)
-        lhs_skeleton[(2, 1)] = tt_rank_reduce(mat_T_comp_linear_op_tt_ineq, err_bound=tol)
+        lhs_skeleton[(2, 0)] = tt_rank_reduce(mat_T_comp_linear_op_tt_ineq, err_bound=tol)
     return lhs_skeleton
 
 
@@ -139,9 +139,9 @@ def _tt_ipm_newton_step(
         active_ineq
     )
     Delta_tt, res = tt_block_amen(lhs_matrix_tt, rhs_vec_tt, kickrank=2, eps=eps, verbose=verbose)
-    vec_Delta_Y_tt = tt_rank_reduce(_tt_get_block(0, Delta_tt), err_bound=tol)
+    vec_Delta_Y_tt = tt_rank_reduce(_tt_get_block(1, Delta_tt), err_bound=tol)
     Delta_T_tt = tt_rank_reduce(tt_mat(_tt_get_block(2, Delta_tt)), err_bound=tol) if active_ineq else None
-    Delta_X_tt = tt_rank_reduce(tt_mat(_tt_get_block(1, Delta_tt)), err_bound=tol)
+    Delta_X_tt = tt_rank_reduce(tt_mat(_tt_get_block(0, Delta_tt)), err_bound=tol)
     Delta_Z_tt = tt_rank_reduce(tt_mat(_tt_get_block(2+idx_add, Delta_tt)), err_bound=tol)
     if np.greater(res, eps):
         Delta_X_tt = _tt_symmetrise(Delta_X_tt, tol)
@@ -256,8 +256,8 @@ def tt_ipm(
     obj_tt = tt_rank_reduce(tt_vec(obj_tt), err_bound=op_tol)
     bias_tt = tt_rank_reduce(tt_vec(bias_tt), err_bound=op_tol)
     lhs_skeleton = {}
-    lhs_skeleton[(0, 0)] = tt_rank_reduce(tt_scale(-1, lin_op_tt_adj), err_bound=op_tol)
-    lhs_skeleton[(1, 1)] = tt_rank_reduce(tt_scale(-1, lin_op_tt), err_bound=op_tol)
+    lhs_skeleton[(0, 1)] = tt_rank_reduce(tt_scale(-1, lin_op_tt_adj), err_bound=op_tol)
+    lhs_skeleton[(1, 0)] = tt_rank_reduce(tt_scale(-1, lin_op_tt), err_bound=op_tol)
     lhs_skeleton[(0, 2 + int(active_ineq))] = tt_identity(2*dim)
     if active_ineq:
         lhs_skeleton[(0, 2)] = tt_rank_reduce(tt_scale(-1, lin_op_tt_ineq_adj), err_bound=op_tol)

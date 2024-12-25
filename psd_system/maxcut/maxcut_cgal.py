@@ -4,7 +4,6 @@ import os
 sys.path.append(os.getcwd() + '/../../')
 import time
 from src.tt_ops import *
-from psd_system.graph_plotting import *
 from maxcut import Config
 from src.baselines import cgal
 
@@ -27,4 +26,3 @@ if __name__ == "__main__":
     print(f"Objective value: {np.trace(C.T @ X)}")
     chol = robust_cholesky(X, epsilon=1e-3)
     nodes_in_cut = [i for i, v in enumerate(chol.T @ np.random.randn(chol.shape[0], 1)) if v > 0]
-    plot_maxcut(C, nodes_in_cut, duality_gaps)
