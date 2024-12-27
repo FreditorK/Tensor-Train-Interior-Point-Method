@@ -11,6 +11,7 @@ from src.tt_ops import *
 from src.tt_ops import _tt_core_collapse, tt_random_gaussian
 from src.tt_ipm import tt_ipm, _tt_get_block
 import time
+from src.tt_eig import tt_min_eig, tt_max_eig
 
 
 Q_PREFIX = [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1), np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)]
@@ -446,6 +447,8 @@ if __name__ == "__main__":
         print(np.round(M, decimals=4))
         print(np.round(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(Q_ineq_op, tt_vec(random_A)))), decimals=4))
 
+    print(tt_min_eig(L_op_tt)[0], tt_max_eig(L_op_tt)[0])
+    """
     # ---
     print("...Problem created!")
     print(f"Objective TT-ranks: {tt_ranks(C_tt)}")
@@ -476,3 +479,4 @@ if __name__ == "__main__":
     print(f"Ranks X_tt: {tt_ranks(X_tt)}, Y_tt: {tt_ranks(Y_tt)}, \n "
           f"     T_tt: {tt_ranks(T_tt)}, Z_tt: {tt_ranks(Z_tt)} ")
     print(f"Time: {t1 - t0}s")
+    """

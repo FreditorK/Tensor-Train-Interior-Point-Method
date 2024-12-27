@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from src.tt_ops import *
 from src.tt_ipm import tt_ipm, _tt_get_block
 import time
+from src.tt_eig import tt_min_eig, tt_max_eig
 
 
 def tt_G_entrywise_mask_op(G):
@@ -96,3 +97,4 @@ if __name__ == "__main__":
     print(f"Objective value: {tt_inner_prod(J_tt, X_tt)}")
     print("Complementary Slackness: ", tt_inner_prod(X_tt, Z_tt))
     print(f"Ranks X_tt {tt_ranks(X_tt)} Y_tt {tt_ranks(Y_tt)} Z_tt {tt_ranks(Z_tt)} ")
+    print(tt_min_eig(L_tt)[0], tt_max_eig(L_tt)[0])

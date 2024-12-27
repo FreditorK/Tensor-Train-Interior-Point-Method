@@ -7,6 +7,7 @@ sys.path.append(os.getcwd() + '/../../')
 from dataclasses import dataclass
 from src.tt_ops import *
 from src.tt_ipm import tt_ipm
+from src.tt_eig import tt_min_eig, tt_max_eig
 
 
 
@@ -49,3 +50,4 @@ if __name__ == "__main__":
     print("Complementary Slackness: ", tt_inner_prod(X_tt, Z_tt))
     print(f"Ranks X_tt: {tt_ranks(X_tt)}, Y_tt: {tt_ranks(Y_tt)}, Z_tt: {tt_ranks(Z_tt)} ")
     print(f"Time: {t1-t0}s")
+    print(tt_min_eig(diag_tt_op)[0], tt_max_eig(diag_tt_op)[0])

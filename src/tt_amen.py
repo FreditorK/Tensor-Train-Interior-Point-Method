@@ -668,6 +668,7 @@ def  ipm_solve_local_system(lhs, rhs, block_dim, num_blocks, eps):
         t = yt[block_dim:]
         x = inv_L_Z @ (L_X @ inv_I @ (R_d - L_eq_adj @ y - L_ineq_adj @ t) - R_c)
         z = inv_I @ (L_eq_adj @ y + L_ineq_adj @ t - R_d)
+        print(TL_ineq)
         #print("---", np.linalg.norm(A @ yt - b))
         #print(np.linalg.norm(-L_eq @ x + R_p))
         #print(np.linalg.norm(-L_eq_adj @ y - L_ineq_adj @ t + I @ z + R_d))
