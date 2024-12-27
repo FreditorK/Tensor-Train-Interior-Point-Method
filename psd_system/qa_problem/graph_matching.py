@@ -447,7 +447,9 @@ if __name__ == "__main__":
         print(np.round(M, decimals=4))
         print(np.round(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(Q_ineq_op, tt_vec(random_A)))), decimals=4))
 
-    print(tt_min_eig(L_op_tt)[0], tt_max_eig(L_op_tt)[0])
+    test_A = tt_mat_mat_mul(tt_transpose(L_op_tt), L_op_tt)
+    print(tt_max_eig(test_A)[0])
+    print(tt_min_eig(test_A)[0])
     """
     # ---
     print("...Problem created!")

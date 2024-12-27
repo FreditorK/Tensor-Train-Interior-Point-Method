@@ -2,6 +2,7 @@ import sys
 import os
 
 import numpy as np
+import scipy.linalg
 
 sys.path.append(os.getcwd() + '/../')
 
@@ -668,7 +669,6 @@ def  ipm_solve_local_system(lhs, rhs, block_dim, num_blocks, eps):
         t = yt[block_dim:]
         x = inv_L_Z @ (L_X @ inv_I @ (R_d - L_eq_adj @ y - L_ineq_adj @ t) - R_c)
         z = inv_I @ (L_eq_adj @ y + L_ineq_adj @ t - R_d)
-        print(TL_ineq)
         #print("---", np.linalg.norm(A @ yt - b))
         #print(np.linalg.norm(-L_eq @ x + R_p))
         #print(np.linalg.norm(-L_eq_adj @ y - L_ineq_adj @ t + I @ z + R_d))
@@ -679,7 +679,7 @@ def  ipm_solve_local_system(lhs, rhs, block_dim, num_blocks, eps):
     K = inv_L_Z @ L_X @ inv_I
     A = L_eq @ K @ L_eq_adj
     b = L_eq @ (K @ R_d - inv_L_Z @  R_c) - R_p
-    y, _, _, _ = scip.linalg.lstsq(A, b, cond=eps, check_finite=False)
+    y, _, _, _ = scipy.linalg.lstsq(A, b, cond=eps, check_finite=False)
     x = inv_L_Z @ (L_X @ inv_I @ (R_d - L_eq_adj @ y) - R_c)
     z = inv_I @ (L_eq_adj @ y - R_d)
     #print("---")
