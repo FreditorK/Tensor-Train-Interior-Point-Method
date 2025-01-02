@@ -447,10 +447,9 @@ if __name__ == "__main__":
         print(np.round(M, decimals=4))
         print(np.round(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(Q_ineq_op, tt_vec(random_A)))), decimals=4))
 
-    test_A = tt_mat_mat_mul(tt_transpose(L_op_tt), L_op_tt)
-    print(tt_max_eig(test_A)[0])
-    print(tt_min_eig(test_A)[0])
-    """
+    #test_A = tt_mat_mat_mul(tt_transpose(L_op_tt), L_op_tt)
+    #print(tt_max_eig(test_A)[0])
+    #print(tt_min_eig(test_A)[0])
     # ---
     print("...Problem created!")
     print(f"Objective TT-ranks: {tt_ranks(C_tt)}")
@@ -481,4 +480,3 @@ if __name__ == "__main__":
     print(f"Ranks X_tt: {tt_ranks(X_tt)}, Y_tt: {tt_ranks(Y_tt)}, \n "
           f"     T_tt: {tt_ranks(T_tt)}, Z_tt: {tt_ranks(Z_tt)} ")
     print(f"Time: {t1 - t0}s")
-    """

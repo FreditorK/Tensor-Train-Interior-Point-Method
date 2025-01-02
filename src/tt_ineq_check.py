@@ -14,7 +14,7 @@ def tt_is_geq(linear_op_tt, X_tt, vec_b_tt, nswp=10, eps=1e-10, crit=1e-10, verb
     norm = np.sqrt(tt_inner_prod(res_tt, res_tt))
     if norm > crit:
         res_tt = tt_scale(np.divide(1, norm), res_tt)
-        A = tt_rank_reduce(tt_diag(res_tt), 0.1*eps)
+        A = tt_rank_reduce(tt_diag(res_tt), 0.5*eps)
         min_val, _, res = tt_min_eig(A, nswp=nswp, eps=eps, verbose=verbose)
         return np.greater(norm*min_val, -crit), norm*min_val, res
     return True, 0.0, 0.0
@@ -25,7 +25,7 @@ def tt_is_geq_(X_tt, nswp=10, eps=1e-10, crit=1e-10, verbose=False):
     norm = np.sqrt(tt_inner_prod(res_tt, res_tt))
     if norm > crit:
         res_tt = tt_scale(np.divide(1, norm), res_tt)
-        A = tt_rank_reduce(tt_diag(res_tt), 0.1*eps)
+        A = tt_rank_reduce(tt_diag(res_tt), 0.5*eps)
         min_val, _, res = tt_min_eig(A, nswp=nswp, eps=eps, verbose=verbose)
         return np.greater(norm*min_val, -crit), norm*min_val, res
     return True, 0.0, 0.0

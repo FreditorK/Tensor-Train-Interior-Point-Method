@@ -10,6 +10,73 @@ from src.tt_eig import tt_min_eig
 from src.tt_ineq_check import tt_is_geq, tt_is_geq_
 
 
+def pd_inv(a):
+    return scip.linalg.solve(a, np.identity(a.shape[0]), assume_a="pos", overwrite_b=True, check_finite=False)
+
+def ipm_solve_local_system(prev_sol, lhs, rhs, num_blocks, eps):
+    k =  num_blocks - 1
+    block_dim = lhs.shape[0] // num_blocks
+    prev_yt = prev_sol[block_dim:k*block_dim]
+
+    L_eq = -lhs[block_dim:2*block_dim, :block_dim]
+    L_Z = lhs[k*block_dim:, :block_dim]
+    inv_L_Z = scip.linalg.inv(L_Z, check_finite=False, overwrite_a=True)
+    L_eq_adj = -lhs[:block_dim, block_dim:2*block_dim]
+    I = lhs[:block_dim, k*block_dim:]
+    inv_I = np.diag(np.divide(1, np.diagonal(lhs[:block_dim, k*block_dim:])))
+    L_X = lhs[k * block_dim:, k * block_dim:]
+    R_d = -rhs[:block_dim]
+    R_p = -rhs[block_dim:2*block_dim]
+    R_c = -rhs[k * block_dim:]
+    if num_blocks > 3:
+        TL_ineq = -lhs[2 * block_dim:3 * block_dim, :block_dim]
+        L_ineq_adj = -lhs[:block_dim, 2 * block_dim:3 * block_dim]
+        R_ineq = lhs[2 * block_dim:3 * block_dim, 2 * block_dim:3 * block_dim]
+        R_t = -rhs[2 * block_dim:3 * block_dim]
+        K = inv_L_Z @ L_X @ inv_I
+        A = np.block([
+            [L_eq @ K @ L_eq_adj, L_eq @ K @ L_ineq_adj],
+            [TL_ineq @ K @ L_eq_adj, R_ineq + TL_ineq @ K @ L_ineq_adj]
+        ])
+        b = np.block([
+            [L_eq @ (K @ R_d - inv_L_Z @ R_c) - R_p],
+            [TL_ineq @ (K @ R_d - inv_L_Z @ R_c) - R_t]
+        ])
+        lhs = A.T @ A
+        rhs = A.T @ (b - A @ prev_yt)
+        yt, _ = scip.sparse.linalg.cg(lhs, rhs, rtol=eps)
+        yt = yt.reshape(-1, 1) + prev_yt
+        y = yt[:block_dim]
+        t = yt[block_dim:]
+        x = inv_L_Z @ (L_X @ inv_I @ (R_d - L_eq_adj @ y - L_ineq_adj @ t) - R_c)
+        z = inv_I @ (L_eq_adj @ y + L_ineq_adj @ t - R_d)
+        print()
+        print("---")
+        print(np.linalg.norm(-L_eq @ x + R_p))
+        print(np.linalg.norm(-L_eq_adj @ y - L_ineq_adj @ t + I @ z + R_d))
+        print(np.linalg.norm(-TL_ineq @ x + R_ineq @ t + R_t))
+        print(np.linalg.norm(L_Z @ x + L_X @ z + R_c))
+        print("---")
+        return np.vstack((x, y, t, z))
+    K = inv_L_Z @ L_X @ inv_I
+    A = L_eq @ K @ L_eq_adj
+    b = L_eq @ (K @ R_d - inv_L_Z @ R_c) - R_p
+    lhs = A.T @ A
+    rhs = A.T @ (b - A @ prev_yt)
+    # preconditioning:
+    y, _ = scip.sparse.linalg.cg(lhs, rhs, rtol=eps)
+    y = y.reshape(-1, 1) + prev_yt
+    x = inv_L_Z @ (L_X @ inv_I @ (R_d - L_eq_adj @ y) - R_c)
+    z = inv_I @ (L_eq_adj @ y - R_d)
+
+    #print("---")
+    #print(np.linalg.norm(- L_eq_adj @ y + I @ z + R_d))
+    #print(np.linalg.norm(- L_eq @ x + R_p))
+    #print(np.linalg.norm(L_Z @ x + L_X @ z + R_c))
+    #print("---")
+    return np.vstack((x, y, z))
+
+
 def tt_infeasible_feas_rhs(
     vec_obj_tt,
     mat_lin_op_tt,
@@ -39,10 +106,10 @@ def tt_infeasible_feas_rhs(
     if active_ineq:
         vec_T_tt = tt_vec(T_tt)
         dual_feas = tt_add(dual_feas, tt_matrix_vec_mul(mat_lin_op_tt_ineq_adj, vec_T_tt))
-        primal_feas_ineq = tt_hadamard(vec_T_tt, tt_sub(tt_matrix_vec_mul(mat_lin_op_tt_ineq, vec_X_tt), vec_bias_tt_ineq))
+        primal_feas_ineq = tt_rank_reduce(tt_hadamard(vec_T_tt, tt_sub(tt_matrix_vec_mul(mat_lin_op_tt_ineq, vec_X_tt), vec_bias_tt_ineq)), err_bound=tol)
         # TODO: Does mu 1 not also be under mat_lin_op_tt_ineq, need to adjust mu 1 to have zeros where L(X) has zeros
-        one = tt_matrix_vec_mul(mat_lin_op_tt_ineq_adj, [np.ones((1, 2, 1)).reshape(1, 2, 1) for _ in vec_X_tt])
-        primal_feas_ineq = tt_rank_reduce(tt_add(primal_feas_ineq, tt_scale(mu, one)), err_bound=min(tol, 0.5*mu))
+        one = tt_rank_reduce(tt_matrix_vec_mul(mat_lin_op_tt_ineq_adj, [np.ones((1, 2, 1)).reshape(1, 2, 1) for _ in vec_X_tt]), err_bound=tol)
+        primal_feas_ineq = tt_add(primal_feas_ineq, tt_scale(mu, one))
         primal_ineq_error  = tt_inner_prod(primal_feas_ineq, primal_feas_ineq)
         if primal_ineq_error > 2*tol:
             rhs[2] = primal_feas_ineq
@@ -51,8 +118,8 @@ def tt_infeasible_feas_rhs(
     dual_feas =  tt_rank_reduce(dual_feas, err_bound=tol)
     dual_error = tt_inner_prod(dual_feas, dual_feas)
     XZ_term = tt_mat_mat_mul(X_tt, Z_tt)
-    centrality = tt_vec(tt_add(XZ_term, tt_transpose(XZ_term)))
-    centrality = tt_rank_reduce(tt_sub(tt_scale(2 * mu, tt_vec(tt_identity(len(X_tt)))), centrality), err_bound=min(tol, mu))
+    centrality = tt_rank_reduce(tt_vec(tt_add(XZ_term, tt_transpose(XZ_term))), err_bound=tol)
+    centrality = tt_sub(tt_scale(2 * mu, tt_vec(tt_identity(len(X_tt)))), centrality)
     if dual_error > feasibility_tol:
         rhs[0] = dual_feas
     rhs[2 + idx_add] = centrality
@@ -138,7 +205,9 @@ def _tt_ipm_newton_step(
         feasibility_tol,
         active_ineq
     )
-    Delta_tt, res = tt_block_amen(lhs_matrix_tt, rhs_vec_tt, kickrank=2, eps=eps, verbose=verbose)
+    num_blocks = 4 if active_ineq else 3
+    local_solver = lambda prev_sol, lhs, rhs : ipm_solve_local_system(prev_sol, lhs, rhs, eps=eps, num_blocks=num_blocks)
+    Delta_tt, res = tt_block_amen(lhs_matrix_tt, rhs_vec_tt, kickrank=2, eps=eps, local_solver=local_solver, verbose=verbose)
     vec_Delta_Y_tt = tt_rank_reduce(_tt_get_block(1, Delta_tt), err_bound=tol)
     Delta_T_tt = tt_rank_reduce(tt_mat(_tt_get_block(2, Delta_tt)), err_bound=tol) if active_ineq else None
     Delta_X_tt = tt_rank_reduce(tt_mat(_tt_get_block(0, Delta_tt)), err_bound=tol)
@@ -221,7 +290,10 @@ def _tt_line_search(
         else:
             new_Z_tt[0][:, :, :, r:] *= discount
             z_step_size *= discount
-
+    print("Intermediate z rate: ", z_step_size)
+    print(np.round(tt_matrix_to_matrix(T_tt), decimals=3))
+    print()
+    print(np.round(tt_matrix_to_matrix(Delta_T_tt), decimals=3))
     if active_ineq and discount_z:
         r = T_tt[0].shape[-1]
         new_T_tt = tt_add(T_tt, tt_scale(z_step_size, Delta_T_tt))
