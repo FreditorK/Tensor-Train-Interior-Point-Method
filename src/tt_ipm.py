@@ -42,7 +42,7 @@ def ipm_solve_local_system(prev_sol, lhs, rhs, num_blocks, eps):
             [L_eq @ (K @ R_d - inv_L_Z @ R_c) - R_p],
             [TL_ineq @ (K @ R_d - inv_L_Z @ R_c) - R_t]
         ])
-        lhs = A.T @ A
+        lhs = A.T @ A + (100*eps)*np.eye(2*block_dim)
         rhs = A.T @ (b - A @ prev_yt)
         yt, _ = scip.sparse.linalg.cg(lhs, rhs, rtol=eps)
         yt = yt.reshape(-1, 1) + prev_yt
@@ -50,20 +50,19 @@ def ipm_solve_local_system(prev_sol, lhs, rhs, num_blocks, eps):
         t = yt[block_dim:]
         x = inv_L_Z @ (L_X @ inv_I @ (R_d - L_eq_adj @ y - L_ineq_adj @ t) - R_c)
         z = inv_I @ (L_eq_adj @ y + L_ineq_adj @ t - R_d)
-        print()
-        print("---")
-        print(np.linalg.norm(-L_eq @ x + R_p))
-        print(np.linalg.norm(-L_eq_adj @ y - L_ineq_adj @ t + I @ z + R_d))
-        print(np.linalg.norm(-TL_ineq @ x + R_ineq @ t + R_t))
-        print(np.linalg.norm(L_Z @ x + L_X @ z + R_c))
-        print("---")
+        #print()
+        #print("---")
+        #print(np.linalg.norm(-L_eq @ x + R_p))
+        #print(np.linalg.norm(-L_eq_adj @ y - L_ineq_adj @ t + I @ z + R_d))
+        #print(np.linalg.norm(-TL_ineq @ x + R_ineq @ t + R_t))
+        #print(np.linalg.norm(L_Z @ x + L_X @ z + R_c))
+        #print("---")
         return np.vstack((x, y, t, z))
     K = inv_L_Z @ L_X @ inv_I
     A = L_eq @ K @ L_eq_adj
     b = L_eq @ (K @ R_d - inv_L_Z @ R_c) - R_p
     lhs = A.T @ A
     rhs = A.T @ (b - A @ prev_yt)
-    # preconditioning:
     y, _ = scip.sparse.linalg.cg(lhs, rhs, rtol=eps)
     y = y.reshape(-1, 1) + prev_yt
     x = inv_L_Z @ (L_X @ inv_I @ (R_d - L_eq_adj @ y) - R_c)
@@ -338,7 +337,7 @@ def tt_ipm(
     vec_Y_tt = [np.zeros((1, 2, 1)) for _ in range(2*dim)]
     T_tt = tt_one_matrix(dim)
     if active_ineq:
-        T_tt = tt_mat(tt_matrix_vec_mul(lin_op_tt_ineq_adj, tt_vec(T_tt)))
+        T_tt = tt_rank_reduce(tt_mat(tt_matrix_vec_mul(lin_op_tt_ineq_adj, tt_vec(T_tt))), err_bound=op_tol)
     Z_tt = tt_identity(dim)
     iter = 0
     for iter in range(1, max_iter):
