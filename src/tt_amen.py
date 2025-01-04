@@ -331,7 +331,7 @@ def tt_inv_precond(matrix_tt, target_ranks, tol=1e-10, max_iter=100, verbose=Fal
     return inv_tt
 
 
-def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kickrank=2, amen=False, local_solver=None, verbose=False):
+def tt_block_amen(block_A, block_b, aux_matrix_blocks=None, nswp=22, x0=None, eps=1e-10, rmax=1024, kickrank=2, amen=False, local_solver=None, verbose=False):
 
     damp = 2
     block_size = np.max(list(block_b.keys())) + 1
@@ -344,7 +344,10 @@ def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kick
         x = x0
 
     if local_solver is None:
-        local_solver = lambda lhs, rhs: svd_solve_local_system(lhs, rhs, eps)
+        local_solver = lambda prev_sol, lhs, rhs, local_auxs: svd_solve_local_system(lhs, rhs, eps)
+
+    if aux_matrix_blocks is None:
+        aux_matrix_blocks = {}
 
     x_cores = copy.copy(x)
     N = [c.shape[-2] for c in x_cores]
@@ -354,6 +357,7 @@ def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kick
 
     XAX = {key: [np.ones((1, 1, 1))] + [None] * (d - 1) + [np.ones((1, 1, 1))] for key in block_A} # size is rk x Rk x rk
     Xb = {key: [np.ones((1, 1))] + [None] * (d - 1) + [np.ones((1, 1))] for key in block_b}  # size is rk x rbk
+    Xaux_matrix_blocksX = {key: [np.ones((1, 1, 1))] + [None] * (d - 1) + [np.ones((1, 1, 1))] for key in aux_matrix_blocks}
     if amen:
         # z cores
         z_cores = tt_normalise(
@@ -439,6 +443,10 @@ def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kick
                 if not last and amen:
                     ZAX[(i, j)][k] /= normA[i, k - 1]
 
+            for key in aux_matrix_blocks:
+                XauxX_key_k = _compute_phi_bck_A(Xaux_matrix_blocksX[key][k+1], x_cores[k], aux_matrix_blocks[key][k], x_cores[k])
+                Xaux_matrix_blocksX[key][k] = XauxX_key_k / np.linalg.norm(XauxX_key_k)
+
             for i in block_b:
                 Xb_i_k = _compute_phi_bck_rhs(Xb[i][k + 1], block_b[i][k], x_cores[k]) # rb[k] x rx[k]
                 norm = np.linalg.norm(Xb_i_k)
@@ -474,9 +482,13 @@ def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kick
             for (i, j) in block_A:
                 local_B = einsum('lsr,smnS,LSR->lmLrnR', XAX[(i, j)][k], block_A[(i, j)][k], XAX[(i, j)][k + 1])
                 B[m*i:m*(i+1), m*j:m*(j+1)] = local_B.reshape(m, m)
+            local_auxs = {}
+            for key in aux_matrix_blocks:
+                local_aux_key = einsum('lsr,smnS,LSR->lmLrnR', Xaux_matrix_blocksX[key][k], aux_matrix_blocks[key][k], Xaux_matrix_blocksX[key][k + 1])
+                local_auxs[key] = local_aux_key.reshape(m, m)
 
             # Solve block system
-            solution_now =  local_solver(previous_solution, B, rhs)
+            solution_now =  local_solver(previous_solution, B, rhs, local_auxs)
 
             block_res_new = np.linalg.norm(B @ solution_now - rhs) / norm_rhs
             block_res_old = np.linalg.norm(B @ previous_solution - rhs) / norm_rhs
@@ -589,6 +601,11 @@ def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kick
                     XAX[(i, j)][k + 1] /= normA[i, k]
                     if not last and amen:
                         ZAX[(i, j)][k + 1] /= normA[i, k]
+
+                for key in aux_matrix_blocks:
+                    XauxX_key_k = _compute_phi_fwd_A(Xaux_matrix_blocksX[key][k], x_cores[k], aux_matrix_blocks[key][k], x_cores[k])
+                    Xaux_matrix_blocksX[key][k+1] = XauxX_key_k / np.linalg.norm(XauxX_key_k)
+
                 for i in block_b:
                     Xb_i_k = _compute_phi_fwd_rhs(Xb[i][k], block_b[i][k], x_cores[k])
                     norm = np.linalg.norm(Xb_i_k)
@@ -628,7 +645,7 @@ def tt_block_amen(block_A, block_b, nswp=22, x0=None, eps=1e-10, rmax=1024, kick
     return [normx * core for core in x_cores], max_res
 
 
-def svd_solve_local_system(_, B, rhs, eps):
+def svd_solve_local_system(B, rhs, eps):
     u, s, v = scip.linalg.svd(B, full_matrices=False, check_finite=False)
     # small singular values cause  numerical instabilities
     r = np.sum([s > eps])

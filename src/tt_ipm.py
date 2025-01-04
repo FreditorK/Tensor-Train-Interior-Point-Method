@@ -1,6 +1,8 @@
 import sys
 import os
 
+import scipy.sparse.linalg
+
 sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
@@ -13,7 +15,7 @@ from src.tt_ineq_check import tt_is_geq, tt_is_geq_
 def pd_inv(a):
     return scip.linalg.solve(a, np.identity(a.shape[0]), assume_a="pos", overwrite_b=True, check_finite=False)
 
-def ipm_solve_local_system(prev_sol, lhs, rhs, num_blocks, eps):
+def ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, num_blocks, eps):
     k =  num_blocks - 1
     block_dim = lhs.shape[0] // num_blocks
     prev_yt = prev_sol[block_dim:k*block_dim]
@@ -61,9 +63,14 @@ def ipm_solve_local_system(prev_sol, lhs, rhs, num_blocks, eps):
     K = inv_L_Z @ L_X @ inv_I
     A = L_eq @ K @ L_eq_adj
     b = L_eq @ (K @ R_d - inv_L_Z @ R_c) - R_p
-    lhs = A.T @ A
-    rhs = A.T @ (b - A @ prev_yt)
-    y, _ = scip.sparse.linalg.cg(lhs, rhs, rtol=eps)
+    local_lag_map = local_auxs["lag_map"]
+    lhs = np.block([
+        [A],
+        [local_lag_map]
+    ])
+    rhs = np.block([[b - A @ prev_yt],
+                    [-local_lag_map @ prev_yt]])
+    y, _ = scipy.sparse.linalg.cg(lhs.T @ lhs, lhs.T @ rhs, rtol=eps)  #scip.linalg.solve(lhs, rhs) #
     y = y.reshape(-1, 1) + prev_yt
     x = inv_L_Z @ (L_X @ inv_I @ (R_d - L_eq_adj @ y) - R_c)
     z = inv_I @ (L_eq_adj @ y - R_d)
@@ -157,6 +164,7 @@ def _tt_get_block(i, block_matrix_tt):
     return  block_matrix_tt[:-1] + [block_matrix_tt[-1][:, i]]
 
 def _tt_ipm_newton_step(
+        lag_map,
         vec_obj_tt,
         lhs_skeleton,
         mat_lin_op_tt,
@@ -172,8 +180,9 @@ def _tt_ipm_newton_step(
         tol,
         feasibility_tol,
         active_ineq,
+        local_solver,
         verbose,
-        eps = 1e-10,
+        eps
 ):
     mu = tt_inner_prod(Z_tt, [0.5 * c for c in X_tt])
     idx_add = int(active_ineq)
@@ -204,9 +213,7 @@ def _tt_ipm_newton_step(
         feasibility_tol,
         active_ineq
     )
-    num_blocks = 4 if active_ineq else 3
-    local_solver = lambda prev_sol, lhs, rhs : ipm_solve_local_system(prev_sol, lhs, rhs, eps=eps, num_blocks=num_blocks)
-    Delta_tt, res = tt_block_amen(lhs_matrix_tt, rhs_vec_tt, kickrank=2, eps=eps, local_solver=local_solver, verbose=verbose)
+    Delta_tt, res = tt_block_amen(lhs_matrix_tt, rhs_vec_tt, aux_matrix_blocks={"lag_map": lag_map}, kickrank=2, eps=eps, local_solver=local_solver, verbose=verbose)
     vec_Delta_Y_tt = tt_rank_reduce(_tt_get_block(1, Delta_tt), err_bound=tol)
     Delta_T_tt = tt_rank_reduce(tt_mat(_tt_get_block(2, Delta_tt)), err_bound=tol) if active_ineq else None
     Delta_X_tt = tt_rank_reduce(tt_mat(_tt_get_block(0, Delta_tt)), err_bound=tol)
@@ -226,6 +233,8 @@ def _tt_ipm_newton_step(
         print(f"Step sizes: {x_step_size}, {z_step_size}")
 
     print("Report ---")
+    print("Delta Y")
+    print(np.round(tt_matrix_to_matrix(tt_mat(vec_Delta_Y_tt)), decimals=3))
     print("Y")
     print(np.round(tt_matrix_to_matrix(tt_mat(vec_Y_tt)), decimals=3))
     if active_ineq:
@@ -289,10 +298,10 @@ def _tt_line_search(
         else:
             new_Z_tt[0][:, :, :, r:] *= discount
             z_step_size *= discount
-    print("Intermediate z rate: ", z_step_size)
-    print(np.round(tt_matrix_to_matrix(T_tt), decimals=3))
-    print()
-    print(np.round(tt_matrix_to_matrix(Delta_T_tt), decimals=3))
+    #print("Intermediate z rate: ", z_step_size)
+    #print(np.round(tt_matrix_to_matrix(T_tt), decimals=3))
+    #print()
+    #print(np.round(tt_matrix_to_matrix(Delta_T_tt), decimals=3))
     if active_ineq and discount_z:
         r = T_tt[0].shape[-1]
         new_T_tt = tt_add(T_tt, tt_scale(z_step_size, Delta_T_tt))
@@ -307,6 +316,7 @@ def _tt_line_search(
 
 
 def tt_ipm(
+    lag_map,
     obj_tt,
     lin_op_tt,
     lin_op_tt_adj,
@@ -317,13 +327,16 @@ def tt_ipm(
     max_iter=100,
     feasibility_tol=1e-5,
     centrality_tol=1e-3,
-    verbose=False
+    verbose=False,
+    eps=1e-10
 ):
     dim = len(obj_tt)
     feasibility_tol = feasibility_tol / np.sqrt(dim)
     centrality_tol = centrality_tol / np.sqrt(dim)
     op_tol = 0.5*min(feasibility_tol, centrality_tol)
     active_ineq = lin_op_tt_ineq is not None or lin_op_tt_ineq_adj is not None or bias_tt_ineq is not None
+    num_blocks = 4 if active_ineq else 3
+    local_solver = lambda prev_sol, lhs, rhs, local_auxs: ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, eps=eps, num_blocks=num_blocks)
     obj_tt = tt_rank_reduce(tt_vec(obj_tt), err_bound=op_tol)
     bias_tt = tt_rank_reduce(tt_vec(bias_tt), err_bound=op_tol)
     lhs_skeleton = {}
@@ -342,6 +355,7 @@ def tt_ipm(
     iter = 0
     for iter in range(1, max_iter):
         X_tt, vec_Y_tt, T_tt, Z_tt, pd_error, mu = _tt_ipm_newton_step(
+            lag_map,
             obj_tt,
             lhs_skeleton,
             lin_op_tt,
@@ -357,7 +371,9 @@ def tt_ipm(
             op_tol,
             feasibility_tol,
             active_ineq,
-            verbose
+            local_solver,
+            verbose,
+            eps
         )
         if verbose:
             print(f"---Step {iter}---")
