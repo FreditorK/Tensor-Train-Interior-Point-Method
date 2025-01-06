@@ -642,6 +642,9 @@ def tt_block_amen(block_A, block_b, aux_matrix_blocks=None, nswp=22, x0=None, ep
 
     normx = np.exp(np.sum(np.log(normx)) / d)
 
+    #TODO: There might be a large scale difference for the x blocks which normalisation also cannot alleviate. How do we deal with this
+    #FIXME: We could pass in a better initial guess
+
     return [normx * core for core in x_cores], max_res
 
 
