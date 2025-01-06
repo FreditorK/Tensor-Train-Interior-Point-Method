@@ -494,7 +494,7 @@ def tt_block_amen(block_A, block_b, aux_matrix_blocks=None, nswp=22, x0=None, ep
             block_res_old = np.linalg.norm(B @ previous_solution - rhs) / norm_rhs
 
             # residual damp check
-            if block_res_old / block_res_new < damp and block_res_new > real_tol:
+            if block_res_old < block_res_new and block_res_new > real_tol:
                 if verbose:
                     print(f"\r\tWARNING: residual increases. {block_res_old:10f}, {block_res_new:10f}", end='', flush=True)  # warning (from tt toolbox)
 

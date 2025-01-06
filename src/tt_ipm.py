@@ -1,6 +1,7 @@
 import sys
 import os
 
+import numpy as np
 import scipy.sparse.linalg
 
 sys.path.append(os.getcwd() + '/../')
@@ -44,9 +45,17 @@ def ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, num_blocks, eps):
             [L_eq @ (K @ R_d - inv_L_Z @ R_c) - R_p],
             [TL_ineq @ (K @ R_d - inv_L_Z @ R_c) - R_t]
         ])
-        lhs = A.T @ A + (100*eps)*np.eye(2*block_dim)
-        rhs = A.T @ (b - A @ prev_yt)
-        yt, _ = scip.sparse.linalg.cg(lhs, rhs, rtol=eps)
+        local_lag_map = np.block([
+            [local_auxs["y"], np.zeros((block_dim, block_dim))],
+            [np.zeros((block_dim, block_dim)), local_auxs["t"]]
+        ])
+        lhs = np.block([
+            [A],
+            [local_lag_map]
+        ])
+        rhs = np.block([[b - A @ prev_yt],
+                        [-local_lag_map @ prev_yt]])
+        yt, _ = scip.sparse.linalg.cg(lhs.T @ lhs, lhs.T @ rhs, rtol=eps)
         yt = yt.reshape(-1, 1) + prev_yt
         y = yt[:block_dim]
         t = yt[block_dim:]
@@ -63,7 +72,7 @@ def ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, num_blocks, eps):
     K = inv_L_Z @ L_X @ inv_I
     A = L_eq @ K @ L_eq_adj
     b = L_eq @ (K @ R_d - inv_L_Z @ R_c) - R_p
-    local_lag_map = local_auxs["lag_map"]
+    local_lag_map = local_auxs["y"]
     lhs = np.block([
         [A],
         [local_lag_map]
@@ -164,7 +173,7 @@ def _tt_get_block(i, block_matrix_tt):
     return  block_matrix_tt[:-1] + [block_matrix_tt[-1][:, i]]
 
 def _tt_ipm_newton_step(
-        lag_map,
+        lag_maps,
         vec_obj_tt,
         lhs_skeleton,
         mat_lin_op_tt,
@@ -213,7 +222,7 @@ def _tt_ipm_newton_step(
         feasibility_tol,
         active_ineq
     )
-    Delta_tt, res = tt_block_amen(lhs_matrix_tt, rhs_vec_tt, aux_matrix_blocks={"lag_map": lag_map}, kickrank=2, eps=eps, local_solver=local_solver, verbose=verbose)
+    Delta_tt, res = tt_block_amen(lhs_matrix_tt, rhs_vec_tt, aux_matrix_blocks=lag_maps, kickrank=2, eps=eps, local_solver=local_solver, verbose=verbose)
     vec_Delta_Y_tt = tt_rank_reduce(_tt_get_block(1, Delta_tt), err_bound=tol)
     Delta_T_tt = tt_rank_reduce(tt_mat(_tt_get_block(2, Delta_tt)), err_bound=tol) if active_ineq else None
     Delta_X_tt = tt_rank_reduce(tt_mat(_tt_get_block(0, Delta_tt)), err_bound=tol)
@@ -316,7 +325,7 @@ def _tt_line_search(
 
 
 def tt_ipm(
-    lag_map,
+    lag_maps,
     obj_tt,
     lin_op_tt,
     lin_op_tt_adj,
@@ -355,7 +364,7 @@ def tt_ipm(
     iter = 0
     for iter in range(1, max_iter):
         X_tt, vec_Y_tt, T_tt, Z_tt, pd_error, mu = _tt_ipm_newton_step(
-            lag_map,
+            lag_maps,
             obj_tt,
             lhs_skeleton,
             lin_op_tt,

@@ -78,11 +78,14 @@ if __name__ == "__main__":
     L_tt_adjoint = tt_rank_reduce(tt_add(G_entry_tt_op_adjoint, tr_tt_op_adjoint))
     bias_tt = tr_bias_tt
 
+    lag_maps = {"y": tt_rank_reduce(tt_diag(tt_vec(tt_sub(tt_one_matrix(Config.dim), tt_add(G, tr_bias_tt)))))}
+
     print("...Problem created!")
     print(f"Objective Ranks: {tt_ranks(J_tt)}")
     print(f"Constraint Ranks: \n \t L {tt_ranks(L_tt)}, L^* {tt_ranks(L_tt_adjoint)}, bias {tt_ranks(bias_tt)}")
     t0 = time.time()
     X_tt, Y_tt, T_tt, Z_tt = tt_ipm(
+        lag_maps,
         J_tt,
         L_tt,
         L_tt_adjoint,

@@ -227,17 +227,17 @@ if __name__ == "__main__":
         [   0    0    0    0 |    0 |   0    0    1]
         
         
-        [ 6  6  | 5  4  | 7 | P P P]
-        [ 6  6  | 0  5  | 7 | P P P]
+        [ 6  6  | 5  4  | 7 | 0 0 0]
+        [ 6  6  | 0  5  | 7 | 0 0 0]
         [--------------------------]
-        [ 5  4  | 8r  0 | 7 | P P P]
-        [ 0  5  | 0  8r | 7 | P P P]
+        [ 5  4  | 8r  0 | 7 | 0 0 0]
+        [ 0  5  | 0  8r | 7 | 0 0 0]
     Y = [--------------------------]
-        [ 8c 0  | 8c 0  | P | P P P]
+        [ 8c 0  | 8c 0  | P | 0 0 0]
         [--------------------------]
-        [ P  P  | P  P  | P | P P P]
-        [ P  P  | P  P  | P | P P P]
-        [ P  P  | P  P  | P | P P P]
+        [ 0  0  | 0  0  | 0 | P 0 0]
+        [ 0  0  | 0  0  | 0 | 0 P 0]
+        [ 0  0  | 0  0  | 0 | 0 0 P]
     """
     np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=4, suppress=True)
     print("Creating Problem...")
@@ -451,6 +451,54 @@ if __name__ == "__main__":
     #print(tt_max_eig(test_A)[0])
     #print(tt_min_eig(test_A)[0])
     # ---
+    lag_maps = {
+        "y": tt_rank_reduce(tt_diag(tt_vec(
+            tt_sub(
+                tt_one_matrix(2*n+1),
+                tt_sum(
+                    [np.array([[0.0, 0.0], [0.0, 1.0]]).reshape(1, 2, 2, 1)] + tt_identity(2 * n),  # P
+                    [np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [
+                        np.array([[1.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(2 * n)],  # 7
+                    [np.array([[0.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1)] + [
+                        np.array([[1.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)] + [
+                        np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)],  # 8r
+                    [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [
+                        np.array([[0.0, 0.0], [0.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(n)] + tt_identity(n),
+                    # 8c
+                    [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [
+                        np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)] + tt_one_matrix(n),
+                    # 6
+                    [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [
+                        np.array([[0.0, 1.0], [1.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)] + [
+                        np.array([[1.0, 1.0], [0.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(n)]  # 5, 4
+                )
+            )
+        ))),
+        "t": tt_rank_reduce(tt_diag(tt_vec([np.array([[0.0, 1.0], [1.0, 1.0]]).reshape(1, 2, 2, 1)] + tt_one_matrix(2*n))))
+    }
+    """
+    a = tt_sub(
+                tt_one_matrix(2*n+1),
+                tt_sum(
+                    [np.array([[0.0, 0.0], [0.0, 1.0]]).reshape(1, 2, 2, 1)] + tt_identity(2 * n),  # P
+                    [np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [
+                        np.array([[1.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(2 * n)],  # 7
+                    [np.array([[0.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1)] + [
+                        np.array([[1.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)] + [
+                        np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)],  # 8r
+                    [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [
+                        np.array([[0.0, 0.0], [0.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(n)] + tt_identity(n),
+                    # 8c
+                    [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [
+                        np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)] + tt_one_matrix(n),
+                    # 6
+                    [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [
+                        np.array([[0.0, 1.0], [1.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)] + [
+                        np.array([[1.0, 1.0], [0.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(n)]  # 5, 4
+                )
+            )
+    print(np.round(tt_matrix_to_matrix(a), decimals=4))
+    """
     print("...Problem created!")
     print(f"Objective TT-ranks: {tt_ranks(C_tt)}")
     print(f"Eq Op-rank: {tt_ranks(L_op_tt)}")
@@ -462,6 +510,7 @@ if __name__ == "__main__":
     print(f"Ineq Bias-rank: {tt_ranks(Q_ineq_bias)}")
     t0 = time.time()
     X_tt, Y_tt, T_tt, Z_tt = tt_ipm(
+        lag_maps,
         C_tt,
         L_op_tt,
         L_op_tt_adj,

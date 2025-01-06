@@ -445,3 +445,9 @@ def tt_diag(vec_tt):
     identity = np.eye(2)
     basis = [einsum("ij, rjR -> rijR", identity, c) for c in vec_tt]
     return tt_rank_reduce(basis)
+
+def tt_sum(*args):
+    sum_tt = args[0]
+    for arg in args[1:]:
+        sum_tt =  tt_rank_reduce(tt_add(sum_tt, arg))
+    return sum_tt
