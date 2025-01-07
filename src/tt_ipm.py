@@ -8,13 +8,18 @@ sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
 from src.tt_ops import tt_rank_reduce
-from src.tt_amen import tt_block_amen
+from src.tt_amen import tt_block_amen,  svd_solve_local_system
 from src.tt_eig import tt_min_eig
 from src.tt_ineq_check import tt_is_geq, tt_is_geq_
 
 
 def pd_inv(a):
-    return scip.linalg.solve(a, np.identity(a.shape[0]), assume_a="pos", overwrite_b=True, check_finite=False)
+    return scip.linalg.solve(a, np.identity(a.shape[0]), assume_a="pos", check_finite=False)
+
+def forward_backward_sub(L, b):
+    y = scip.linalg.solve_triangular(L, b, lower=True, check_finite=False)
+    x = scip.linalg.solve_triangular(L.T, y, lower=False, check_finite=False, overwrite_b=True)
+    return x
 
 def ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, num_blocks, eps):
     k =  num_blocks - 1
@@ -23,44 +28,47 @@ def ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, num_blocks, eps):
 
     L_eq = -lhs[block_dim:2*block_dim, :block_dim]
     L_Z = lhs[k*block_dim:, :block_dim]
-    inv_L_Z = scip.linalg.inv(L_Z, check_finite=False, overwrite_a=True)
+    L_L_Z = scip.linalg.cholesky(L_Z, check_finite=False, overwrite_a=True, lower=True)
     L_eq_adj = -lhs[:block_dim, block_dim:2*block_dim]
     I = lhs[:block_dim, k*block_dim:]
+    #print("I rank: ",  np.linalg.matrix_rank(I), I.shape)
     inv_I = np.diag(np.divide(1, np.diagonal(lhs[:block_dim, k*block_dim:])))
     L_X = lhs[k * block_dim:, k * block_dim:]
     R_d = -rhs[:block_dim]
     R_p = -rhs[block_dim:2*block_dim]
     R_c = -rhs[k * block_dim:]
+
+    L_X_inv_I = L_X @ inv_I
+    K = forward_backward_sub(L_L_Z, L_X_inv_I)
+    k = forward_backward_sub(L_L_Z, R_c)
+    KR_dmk = K @ R_d - k
+
     if num_blocks > 3:
         TL_ineq = -lhs[2 * block_dim:3 * block_dim, :block_dim]
         L_ineq_adj = -lhs[:block_dim, 2 * block_dim:3 * block_dim]
         R_ineq = lhs[2 * block_dim:3 * block_dim, 2 * block_dim:3 * block_dim]
         R_t = -rhs[2 * block_dim:3 * block_dim]
-        K = inv_L_Z @ L_X @ inv_I
         A = np.block([
             [L_eq @ K @ L_eq_adj, L_eq @ K @ L_ineq_adj],
             [TL_ineq @ K @ L_eq_adj, R_ineq + TL_ineq @ K @ L_ineq_adj]
         ])
         b = np.block([
-            [L_eq @ (K @ R_d - inv_L_Z @ R_c) - R_p],
-            [TL_ineq @ (K @ R_d - inv_L_Z @ R_c) - R_t]
+            [L_eq @ KR_dmk - R_p],
+            [TL_ineq @ KR_dmk - R_t]
         ])
         local_lag_map = np.block([
             [local_auxs["y"], np.zeros((block_dim, block_dim))],
             [np.zeros((block_dim, block_dim)), local_auxs["t"]]
         ])
-        lhs = np.block([
-            [A],
-            [local_lag_map]
-        ])
-        rhs = np.block([[b - A @ prev_yt],
-                        [-local_lag_map @ prev_yt]])
-        yt, _ = scip.sparse.linalg.cg(lhs.T @ lhs, lhs.T @ rhs, rtol=eps)
-        yt = yt.reshape(-1, 1) + prev_yt
+        lstq_rhs = A.T @ (b - A @ prev_yt) - local_lag_map.T @ (local_lag_map @ prev_yt)
+        lstq_lhs = A.T @  A + local_lag_map.T @ local_lag_map
+        y, _ = scip.sparse.linalg.cg(lstq_lhs, lstq_rhs, rtol=eps)
+        yt = y.reshape(-1, 1) + prev_yt
         y = yt[:block_dim]
         t = yt[block_dim:]
-        x = inv_L_Z @ (L_X @ inv_I @ (R_d - L_eq_adj @ y - L_ineq_adj @ t) - R_c)
-        z = inv_I @ (L_eq_adj @ y + L_ineq_adj @ t - R_d)
+        R_dmL_eq_adj_yt = R_d - L_eq_adj @ y - L_ineq_adj @ t
+        x = K @ R_dmL_eq_adj_yt - k
+        z = -inv_I @ R_dmL_eq_adj_yt
         #print()
         #print("---")
         #print(np.linalg.norm(-L_eq @ x + R_p))
@@ -69,9 +77,8 @@ def ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, num_blocks, eps):
         #print(np.linalg.norm(L_Z @ x + L_X @ z + R_c))
         #print("---")
         return np.vstack((x, y, t, z))
-    K = inv_L_Z @ L_X @ inv_I
     A = L_eq @ K @ L_eq_adj
-    b = L_eq @ (K @ R_d - inv_L_Z @ R_c) - R_p
+    b = L_eq @ KR_dmk - R_p
     local_lag_map = local_auxs["y"]
     lhs = np.block([
         [A],
@@ -79,10 +86,13 @@ def ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, num_blocks, eps):
     ])
     rhs = np.block([[b - A @ prev_yt],
                     [-local_lag_map @ prev_yt]])
-    y, _ = scipy.sparse.linalg.cg(lhs.T @ lhs, lhs.T @ rhs, rtol=eps)  #scip.linalg.solve(lhs, rhs) #
-    y = y.reshape(-1, 1) + prev_yt
-    x = inv_L_Z @ (L_X @ inv_I @ (R_d - L_eq_adj @ y) - R_c)
-    z = inv_I @ (L_eq_adj @ y - R_d)
+    lstq_rhs = lhs.T @ rhs
+    lstq_lhs = lhs.T @ lhs + 0.5 * eps * np.eye(block_dim)
+    L_lstq_lhs = scip.linalg.cholesky(lstq_lhs, check_finite=False, overwrite_a=True, lower=True)
+    y = forward_backward_sub(L_lstq_lhs, lstq_rhs) + prev_yt
+    R_dmL_eq_adj_y = R_d - L_eq_adj @ y
+    x = K @ R_dmL_eq_adj_y - k
+    z = -inv_I @ R_dmL_eq_adj_y
 
     #print("---")
     #print(np.linalg.norm(- L_eq_adj @ y + I @ z + R_d))
@@ -123,8 +133,8 @@ def tt_infeasible_feas_rhs(
         dual_feas = tt_add(dual_feas, tt_matrix_vec_mul(mat_lin_op_tt_ineq_adj, vec_T_tt))
         primal_feas_ineq = tt_rank_reduce(tt_hadamard(vec_T_tt, tt_sub(tt_matrix_vec_mul(mat_lin_op_tt_ineq, vec_X_tt), vec_bias_tt_ineq)), err_bound=tol)
         # TODO: Does mu 1 not also be under mat_lin_op_tt_ineq, need to adjust mu 1 to have zeros where L(X) has zeros
-        one = tt_rank_reduce(tt_matrix_vec_mul(mat_lin_op_tt_ineq_adj, [np.ones((1, 2, 1)).reshape(1, 2, 1) for _ in vec_X_tt]), err_bound=tol)
-        primal_feas_ineq = tt_add(primal_feas_ineq, tt_scale(mu, one))
+        one = tt_matrix_vec_mul(mat_lin_op_tt_ineq_adj, [np.ones((1, 2, 1)).reshape(1, 2, 1) for _ in vec_X_tt])
+        primal_feas_ineq = tt_rank_reduce(tt_add(primal_feas_ineq, tt_scale(mu, one)), err_bound=tol)
         primal_ineq_error  = tt_inner_prod(primal_feas_ineq, primal_feas_ineq)
         if primal_ineq_error > 2*tol:
             rhs[2] = primal_feas_ineq
@@ -133,8 +143,8 @@ def tt_infeasible_feas_rhs(
     dual_feas =  tt_rank_reduce(dual_feas, err_bound=tol)
     dual_error = tt_inner_prod(dual_feas, dual_feas)
     XZ_term = tt_mat_mat_mul(X_tt, Z_tt)
-    centrality = tt_rank_reduce(tt_vec(tt_add(XZ_term, tt_transpose(XZ_term))), err_bound=tol)
-    centrality = tt_sub(tt_scale(2 * mu, tt_vec(tt_identity(len(X_tt)))), centrality)
+    centrality = tt_vec(tt_add(XZ_term, tt_transpose(XZ_term)))
+    centrality = tt_rank_reduce(tt_sub(tt_scale(2 * mu, tt_vec(tt_identity(len(X_tt)))), centrality), err_bound=tol)
     if dual_error > feasibility_tol:
         rhs[0] = dual_feas
     rhs[2 + idx_add] = centrality
@@ -244,15 +254,21 @@ def _tt_ipm_newton_step(
     print("Report ---")
     print("Delta Y")
     print(np.round(tt_matrix_to_matrix(tt_mat(vec_Delta_Y_tt)), decimals=3))
-    print("Y")
-    print(np.round(tt_matrix_to_matrix(tt_mat(vec_Y_tt)), decimals=3))
+    #print("Y")
+    #print(np.round(tt_matrix_to_matrix(tt_mat(vec_Y_tt)), decimals=3))
     if active_ineq:
-        print("T")
-        print(np.round(tt_matrix_to_matrix(T_tt), decimals=3))
-    print("X")
-    print(np.round(tt_matrix_to_matrix(X_tt), decimals=3))
-    print("Z")
-    print(np.round(tt_matrix_to_matrix(Z_tt), decimals=3))
+        print("Delta T")
+        print(np.round(tt_matrix_to_matrix(Delta_T_tt), decimals=3))
+        #print("T")
+        #print(np.round(tt_matrix_to_matrix(T_tt), decimals=3))
+    print("Delta X")
+    print(np.round(tt_matrix_to_matrix(Delta_X_tt), decimals=6))
+    #print("X")
+    #print(np.round(tt_matrix_to_matrix(X_tt), decimals=3))
+    print("Delta Z")
+    print(np.round(tt_matrix_to_matrix(Delta_Z_tt), decimals=3))
+    #print("Z")
+    #print(np.round(tt_matrix_to_matrix(Z_tt), decimals=3))
 
     return X_tt, vec_Y_tt, T_tt, Z_tt, primal_dual_error, mu
 
@@ -328,10 +344,8 @@ def tt_ipm(
     lag_maps,
     obj_tt,
     lin_op_tt,
-    lin_op_tt_adj,
     bias_tt,
     lin_op_tt_ineq=None,
-    lin_op_tt_ineq_adj=None,
     bias_tt_ineq=None,
     max_iter=100,
     feasibility_tol=1e-5,
@@ -343,16 +357,20 @@ def tt_ipm(
     feasibility_tol = feasibility_tol / np.sqrt(dim)
     centrality_tol = centrality_tol / np.sqrt(dim)
     op_tol = 0.5*min(feasibility_tol, centrality_tol)
-    active_ineq = lin_op_tt_ineq is not None or lin_op_tt_ineq_adj is not None or bias_tt_ineq is not None
+    lag_maps = {key: tt_rank_reduce(value, err_bound=op_tol) for key, value in lag_maps.items()}
+    active_ineq = lin_op_tt_ineq is not None or bias_tt_ineq is not None
     num_blocks = 4 if active_ineq else 3
     local_solver = lambda prev_sol, lhs, rhs, local_auxs: ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, eps=eps, num_blocks=num_blocks)
     obj_tt = tt_rank_reduce(tt_vec(obj_tt), err_bound=op_tol)
     bias_tt = tt_rank_reduce(tt_vec(bias_tt), err_bound=op_tol)
     lhs_skeleton = {}
+    lin_op_tt_adj = tt_transpose(lin_op_tt)
     lhs_skeleton[(0, 1)] = tt_rank_reduce(tt_scale(-1, lin_op_tt_adj), err_bound=op_tol)
     lhs_skeleton[(1, 0)] = tt_rank_reduce(tt_scale(-1, lin_op_tt), err_bound=op_tol)
     lhs_skeleton[(0, 2 + int(active_ineq))] = tt_identity(2*dim)
+    lin_op_tt_ineq_adj = None
     if active_ineq:
+        lin_op_tt_ineq_adj = tt_scale(-1, tt_transpose(lin_op_tt_ineq))
         lhs_skeleton[(0, 2)] = tt_rank_reduce(tt_scale(-1, lin_op_tt_ineq_adj), err_bound=op_tol)
         bias_tt_ineq = tt_rank_reduce(tt_vec(bias_tt_ineq), err_bound=op_tol)
     X_tt = tt_identity(dim)

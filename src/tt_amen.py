@@ -378,7 +378,9 @@ def tt_block_amen(block_A, block_b, aux_matrix_blocks=None, nswp=22, x0=None, ep
         A_ranks = {key: tt_ranks(block) for key, block in block_A.items()}
         print(f"\tTT-Matrix rank: {A_ranks}")
         b_ranks = {key: tt_ranks(block) for key, block in block_b.items()}
-        print(f"\tTT-bias rank: {b_ranks} \n")
+        print(f"\tTT-bias rank: {b_ranks}")
+        aux_ranks = {key: tt_ranks(block) for key, block in aux_matrix_blocks.items()}
+        print(f"\tTT-aux rank: {aux_ranks} \n")
 
     normA = np.ones((block_size, d - 1)) # norm of each row in the block matrix
     normb = np.ones((block_size, d - 1)) # norm of each row of the rhs

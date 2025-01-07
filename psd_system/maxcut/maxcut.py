@@ -35,7 +35,6 @@ if __name__ == "__main__":
     #G_tt = tt_sub(tt_scale(2, G_tt), tt_one_matrix(Config.dim))
     print(np.round(tt_matrix_to_matrix(G_tt), decimals=2))
     L_tt = tt_diag_op(Config.dim)
-    L_tt_adj = tt_diag_op_adj(Config.dim)
     bias_tt = tt_identity(Config.dim)
 
     lag_maps = {"y": tt_rank_reduce(tt_diag(tt_vec(tt_sub(tt_one_matrix(Config.dim), tt_identity(Config.dim)))))}
@@ -44,7 +43,7 @@ if __name__ == "__main__":
     print(f"Objective Ranks: {tt_ranks(G_tt)}")
     print(f"Constraint Ranks: As {tt_ranks(L_tt)}, bias {tt_ranks(bias_tt)}")
     t0 = time.time()
-    X_tt, Y_tt, _, Z_tt = tt_ipm(lag_maps, G_tt, L_tt, L_tt_adj, bias_tt, max_iter=15, verbose=True)
+    X_tt, Y_tt, _, Z_tt = tt_ipm(lag_maps, G_tt, L_tt, bias_tt, max_iter=15, verbose=True)
     t1 = time.time()
     print("Solution: ")
     print(np.round(tt_matrix_to_matrix(X_tt), decimals=2))

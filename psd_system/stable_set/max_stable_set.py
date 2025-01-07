@@ -88,7 +88,6 @@ if __name__ == "__main__":
         lag_maps,
         J_tt,
         L_tt,
-        L_tt_adjoint,
         bias_tt,
         max_iter=15,
         verbose=True
