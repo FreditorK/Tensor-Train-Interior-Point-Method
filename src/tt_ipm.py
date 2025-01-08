@@ -69,13 +69,13 @@ def ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, num_blocks, eps):
         R_dmL_eq_adj_yt = R_d - L_eq_adj @ y - L_ineq_adj @ t
         x = K @ R_dmL_eq_adj_yt - k
         z = -inv_I @ R_dmL_eq_adj_yt
-        #print()
-        #print("---")
-        #print(np.linalg.norm(-L_eq @ x + R_p))
-        #print(np.linalg.norm(-L_eq_adj @ y - L_ineq_adj @ t + I @ z + R_d))
-        #print(np.linalg.norm(-TL_ineq @ x + R_ineq @ t + R_t))
-        #print(np.linalg.norm(L_Z @ x + L_X @ z + R_c))
-        #print("---")
+        print()
+        print("---")
+        print(np.linalg.norm(-L_eq @ x + R_p))
+        print(np.linalg.norm(-L_eq_adj @ y - L_ineq_adj @ t + I @ z + R_d))
+        print(np.linalg.norm(-TL_ineq @ x + R_ineq @ t + R_t))
+        print(np.linalg.norm(L_Z @ x + L_X @ z + R_c))
+        print("---")
         return np.vstack((x, y, t, z))
     A = L_eq @ K @ L_eq_adj
     b = L_eq @ KR_dmk - R_p

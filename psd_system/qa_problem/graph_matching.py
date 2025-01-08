@@ -96,67 +96,7 @@ def tt_Q_m_P_op(dim):
 # ------------------------------------------------------------------------------
 # Constraint 8 -----------------------------------------------------------------
 
-
-def tt_DS_op(block_size, dim):
-    row_op_1 = [np.array([[0, 0], [0, 1.0]]).reshape(1, 2, 2, 1), np.array([[1, 0.0], [0, 0]]).reshape(1, 2, 2, 1)]
-    for _ in range(dim-block_size):
-        row_op_1.extend([np.array([[1, 0], [0., 0]]).reshape(1, 2, 2, 1), np.array([[1, 0.], [0, 1]]).reshape(1, 2, 2, 1)])
-    for _ in range(block_size):
-        row_op_1.extend([np.array([[1, 0], [0., 0]]).reshape(1, 2, 2, 1), np.array([[1, 1.], [0, 0]]).reshape(1, 2, 2, 1)])
-    col_op_1 = [np.array([[0, 1], [0., 0]]).reshape(1, 2, 2, 1), np.array([[1, 0], [0., 0]]).reshape(1, 2, 2, 1)]
-    for _ in range(dim - block_size):
-        col_op_1.extend([np.array([[0, 0], [1., 0]]).reshape(1, 2, 2, 1), np.array([[0, 0], [1., 1]]).reshape(1, 2, 2, 1)])
-    for _ in range(block_size):
-        col_op_1.extend([
-            np.array([[[1., 0.], [0., 0.]], [[0., 1.],[0., 0.]]]).reshape(1, 2, 2, 2),
-            np.array([[[1., 0.], [0., 0.]], [[0., 0.], [0., 1.]]]).reshape(2, 2, 2, 1),
-        ])
-    op_tt_1 = tt_add(row_op_1, col_op_1)
-    row_op_2 = [
-        np.array([[0, 0.0], [1, 0]]).reshape(1, 2, 2, 1),
-        np.array([[0, 1], [0.0, 0]]).reshape(1, 2, 2, 1)
-    ]
-    for _ in range(dim - block_size):
-        row_op_2.extend([
-            np.array([[[1., 0.], [0., 1.]], [[0., 0.], [0., 0.]]]).reshape(1, 2, 2, 2),
-            np.array([[[1., 0.], [0., 0.]], [[0., 0.], [1., 0.]]]).reshape(2, 2, 2, 1)
-        ])
-    for _ in range(block_size):
-        row_op_2.extend([
-            np.array([[1., 1.], [0., 0.]]).reshape(1, 2, 2, 1),
-            np.array([[1., 0.], [0., 0.]]).reshape(1, 2, 2, 1)
-        ])
-
-    col_op_2 = [
-        np.array([[1., 0.], [0., 0.]]).reshape(1, 2, 2, 1),
-        np.array([[0., 1.], [0., 0.]]).reshape(1, 2, 2, 1)
-    ]
-    for _ in range(dim - block_size):
-        col_op_2.extend([
-            np.array([[0., 0.], [1., 1.]]).reshape(1, 2, 2, 1),
-            np.array([[0., 0.], [1., 0.]]).reshape(1, 2, 2, 1)
-        ])
-    for _ in range(block_size):
-        col_op_2.extend([
-            np.array([[[1., 0.], [0., 0.]], [[0., 0.], [0., 1.]]]).reshape(1, 2, 2, 2),
-            np.array([[[1., 0.], [0., 0.]], [[0., 0.], [1., 0.]]]).reshape(2, 2, 2, 1)
-        ])
-    op_tt_2 =  tt_add(row_op_2, col_op_2)
-    op_tt = tt_rank_reduce(tt_add(tt_scale(0.5, op_tt_1), tt_scale(0.5, op_tt_2)))
-    return op_tt
-
-def tt_DS_bias(block_size, dim):
-    matrix_tt_1 = (
-            [np.array([[0.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1)]
-            + [np.array([[1.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(dim - block_size)]
-            + [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(block_size)]
-    )
-    matrix_tt_2 = (
-            [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)]
-            + [np.array([[0.0, 0.0], [0.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(dim - block_size)]
-            + [np.eye(2).reshape(1, 2, 2, 1) for _ in range(block_size)]
-    )
-    return tt_rank_reduce(tt_add(matrix_tt_1, matrix_tt_2))
+# DS constraint implied by constraint collective of 5, 6, 8
 
 # ------------------------------------------------------------------------------
 # Constraint 9 -----------------------------------------------------------------
@@ -208,14 +148,16 @@ if __name__ == "__main__":
         [ 6  6  | 5  4  | 7 | 0 0 0]
         [ 6  6  | 0  5  | 7 | 0 0 0]
         [--------------------------]
-        [ 5  4  | 8r 0  | 7 | 0 0 0]
-        [ 0  5  | 0  8r | 7 | 0 0 0]
+        [ 5  4  | 0  0  | 7 | 0 0 0]
+        [ 0  5  | 0  0  | 7 | 0 0 0]
     Y = [--------------------------]
-        [ 8c 0  | 8c 0  | P | 0 0 0]
+        [ 0  0  | 0  0  | P | 0 0 0]
         [--------------------------]
         [ 0  0  | 0  0  | 0 | P 0 0]
         [ 0  0  | 0  0  | 0 | 0 P 0]
-        [ 0  0  | 0  0  | 0 | 0 0 P]
+        [ 0  0  | 0  0  | 0 | 0 0 P] 
+        
+        8r and 8c implied by other constraints
     """
     np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=4, suppress=True)
     print("Creating Problem...")
@@ -366,37 +308,6 @@ if __name__ == "__main__":
     eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, Q_m_P_op_bias))
 
     # ---
-    # VIII
-    DS_op = tt_DS_op(n, 2*n)
-    DS_op_adj = tt_transpose(DS_op)
-    DS_op_bias = tt_DS_bias(n, 2*n)
-
-    def test_DS_op():
-        random_A = tt_random_gaussian([3] * (2 * n), shape=(2, 2))
-        random_A = tt_add(random_A, tt_transpose(random_A))
-        M = tt_matrix_to_matrix(random_A)
-        print(np.round(M, decimals=4))
-        print(np.round(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(DS_op, tt_vec(random_A)))), decimals=4))
-        m = 2**(2*n)
-        P = M[m, :m].reshape(2**n, 2**n)
-        print(np.sum(P, axis=0))
-        print(np.sum(P, axis=1))
-
-    def test_DS_op_adj():
-        random_A = tt_random_gaussian([3] * (2 * n), shape=(2, 2))
-        M = tt_matrix_to_matrix(random_A)
-        print(np.round(M, decimals=4))
-        print(np.round(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(DS_op_adj, tt_vec(random_A)))), decimals=4))
-        m = 2**(2*n)
-        P_1 = np.concatenate((M[m, :m:2], M[m, :m:2]), axis=0)
-        P_2 = np.vstack((np.diagonal(M[:m, :m][-2**n:, -2**n:]), np.diagonal(M[:m, :m][-2**n:, -2**n:]))).flatten(order="F")
-        print(P_1 + P_2)
-
-    L_op_tt = tt_rank_reduce(tt_add(L_op_tt, DS_op))
-    L_op_tt_adj = tt_rank_reduce(tt_add(L_op_tt_adj, DS_op_adj))
-    eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, DS_op_bias))
-
-    # ---
     # IX
     padding_op = tt_padding_op(2*n)
     padding_op_adj = tt_transpose(padding_op)
@@ -464,31 +375,28 @@ if __name__ == "__main__":
                     pad,  # P
                     [np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [
                         np.array([[1.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(2 * n)],  # 7
-                    [np.array([[0.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1)] + [
-                        np.array([[1.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)] + [
-                        np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)],  # 8r
-                    [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [
-                        np.array([[0.0, 0.0], [0.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(n)] + tt_identity(n),
-                    # 8c
                     [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [
                         np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)] + tt_one_matrix(n),
                     # 6
                     [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [
                         np.array([[0.0, 1.0], [1.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)] + [
-                        np.array([[1.0, 1.0], [0.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(n)]  # 5, 4
+                        np.array([[1.0, 1.0], [0.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(n)],  # 5, 4
+                    #[np.array([[-10.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [
+                    #    np.array([[1.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)] + [
+                    #    np.array([[0.0, 0.0], [0.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(n)]
                 )
             )
 
     random_A = tt_random_gaussian([3] * (2 * n), shape=(2, 2))
     M = tt_matrix_to_matrix(random_A)
     print(np.round(M, decimals=4))
-    print(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(DS_op_adj, tt_vec(random_A)))))
     print(tt_matrix_to_matrix(a))
+    print(tt_inner_prod(a, Q_m_P_op_adj))
 
     A_1 = tt_matrix_to_matrix(tt_transpose(L_op_tt))
-    A_2 = tt_matrix_to_matrix(lag_maps["y"])
+    A_2 = tt_matrix_to_matrix(tt_diag(tt_vec(a)))
     A = np.block([[A_1], [A_2]])
-    print(A_1.shape, np.linalg.matrix_rank(A))
+    print(A_1.shape, np.linalg.matrix_rank(A_1), np.linalg.matrix_rank(A))
 
     A_1 = tt_matrix_to_matrix(L_op_tt)
     A_2 = tt_matrix_to_matrix(lag_maps["y"])
@@ -505,7 +413,7 @@ if __name__ == "__main__":
     A = np.block([[A_1], [A_2.T]])
     print(A_1.shape, np.linalg.matrix_rank(A))
 
-
+    """
     print("...Problem created!")
     print(f"Objective TT-ranks: {tt_ranks(C_tt)}")
     print(f"Eq Op-rank: {tt_ranks(L_op_tt)}")
@@ -534,3 +442,4 @@ if __name__ == "__main__":
     print(f"Ranks X_tt: {tt_ranks(X_tt)}, Y_tt: {tt_ranks(Y_tt)}, \n "
           f"     T_tt: {tt_ranks(T_tt)}, Z_tt: {tt_ranks(Z_tt)} ")
     print(f"Time: {t1 - t0}s")
+    """
