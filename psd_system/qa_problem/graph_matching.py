@@ -8,7 +8,7 @@ sys.path.append(os.getcwd() + '/../../')
 
 from dataclasses import dataclass
 from src.tt_ops import *
-from src.tt_ops import _tt_core_collapse, tt_random_gaussian
+from src.tt_ops import _tt_core_collapse, tt_random_gaussian, tt_matrix_svd, tt_mat, tt_matrix_to_matrix
 from src.tt_ipm import tt_ipm, _tt_get_block
 import time
 from src.tt_eig import tt_min_eig, tt_max_eig
@@ -151,7 +151,7 @@ if __name__ == "__main__":
         [ 5  4  | 0  0  | 7 | 0 0 0]
         [ 0  5  | 0  0  | 7 | 0 0 0]
     Y = [--------------------------]
-        [ 0  0  | 0  0  | P | 0 0 0]
+        [ 7  7  | 7  7  | P | 0 0 0]
         [--------------------------]
         [ 0  0  | 0  0  | 0 | P 0 0]
         [ 0  0  | 0  0  | 0 | 0 P 0]
@@ -350,24 +350,19 @@ if __name__ == "__main__":
                     pad,  # P
                     [np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [
                         np.array([[1.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(2 * n)],  # 7
-                    [np.array([[0.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1)] + [
-                       np.array([[1.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)] + [
-                      np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)],  # 8r
-                    [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [
-                        np.array([[0.0, 0.0], [0.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(n)] + tt_identity(n),
-                    # 8c
                     [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [
                         np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)] + tt_one_matrix(n),
                     # 6
                     [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [
                         np.array([[0.0, 1.0], [1.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)] + [
-                        np.array([[1.0, 1.0], [0.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(n)]  # 5, 4
+                        np.array([[1.0, 1.0], [0.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(n)],  # 5, 4
                 )
             )
         ))),
         "t": tt_rank_reduce(tt_diag(tt_vec([np.array([[0.0, 1.0], [1.0, 1.0]]).reshape(1, 2, 2, 1)] + tt_one_matrix(2*n))))
     }
 
+    test_partial_tr_J_op()
 
     a = tt_sub(
                 tt_one_matrix(2*n+1),
@@ -381,17 +376,38 @@ if __name__ == "__main__":
                     [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [
                         np.array([[0.0, 1.0], [1.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)] + [
                         np.array([[1.0, 1.0], [0.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(n)],  # 5, 4
-                    #[np.array([[-10.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [
-                    #    np.array([[1.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)] + [
-                    #    np.array([[0.0, 0.0], [0.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(n)]
+                    [np.array([[-10.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [
+                        np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)] + [
+                        np.array([[0.0, 0.0], [0.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(n)]
                 )
             )
 
-    random_A = tt_random_gaussian([3] * (2 * n), shape=(2, 2))
-    M = tt_matrix_to_matrix(random_A)
-    print(np.round(M, decimals=4))
+    """
+    X = tt_matrix_svd(
+        np.array([[0, 0, 0, 0, 0, 0, 0, 0],
+                  [0, 1, 1, 0, 1, 0, 0, 0],
+                  [0, 1, 1, 0, 1, 0, 0, 0],
+                  [0, 0, 0, 0, 0, 0, 0, 0],
+                  [0, 1, 1, 0, 1, 0, 0, 0],
+                  [0, 0, 0, 0, 0, 1, 0, 0],
+                  [0, 0, 0, 0, 0, 0, 1, 0],
+                  [0, 0, 0, 0, 0, 0, 0, 1]])
+    )
+    print(tt_matrix_to_matrix(X))
+    X =  tt_vec(X)
+    X = tt_matrix_vec_mul(L_op_tt, X)
+    X = tt_matrix_to_matrix(tt_mat(X))
+
+    print(X)
+    print(tt_matrix_to_matrix(eq_bias_tt))
+    """
+
+    #random_A = tt_random_gaussian([3] * (2 * n), shape=(2, 2))
+   # M = tt_matrix_to_matrix(random_A)
+    #print(np.round(M, decimals=4))
+    #print(tt_matrix_to_matrix(a))
+    #print(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(L_op_tt, tt_vec(tt_one_matrix(2*n+1))))))
     print(tt_matrix_to_matrix(a))
-    print(tt_inner_prod(a, Q_m_P_op_adj))
 
     A_1 = tt_matrix_to_matrix(tt_transpose(L_op_tt))
     A_2 = tt_matrix_to_matrix(tt_diag(tt_vec(a)))
@@ -400,7 +416,7 @@ if __name__ == "__main__":
 
     A_1 = tt_matrix_to_matrix(L_op_tt)
     A_2 = tt_matrix_to_matrix(lag_maps["y"])
-    A = np.block([[A_1], [A_2.T]])
+    A = np.block([[A_1], [A_2]])
     print(A_1.shape, np.linalg.matrix_rank(A))
 
     A_1 = tt_matrix_to_matrix(tt_scale(-1, tt_transpose(Q_ineq_op)))
@@ -412,8 +428,8 @@ if __name__ == "__main__":
     A_2 = tt_matrix_to_matrix(lag_maps["t"])
     A = np.block([[A_1], [A_2.T]])
     print(A_1.shape, np.linalg.matrix_rank(A))
-
     """
+
     print("...Problem created!")
     print(f"Objective TT-ranks: {tt_ranks(C_tt)}")
     print(f"Eq Op-rank: {tt_ranks(L_op_tt)}")
