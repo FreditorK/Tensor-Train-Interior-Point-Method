@@ -30,7 +30,7 @@ def ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, num_blocks, eps):
     L_Z = lhs[k*block_dim:, :block_dim]
     L_L_Z = scip.linalg.cholesky(L_Z, check_finite=False, overwrite_a=True, lower=True)
     L_eq_adj = -lhs[:block_dim, block_dim:2*block_dim]
-    I = lhs[:block_dim, k*block_dim:]
+    #I = lhs[:block_dim, k*block_dim:]
     #print("I rank: ",  np.linalg.matrix_rank(I), I.shape)
     inv_I = np.diag(np.divide(1, np.diagonal(lhs[:block_dim, k*block_dim:])))
     L_X = lhs[k * block_dim:, k * block_dim:]
@@ -62,8 +62,9 @@ def ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, num_blocks, eps):
         ])
         lstq_rhs = A.T @ (b - A @ prev_yt) - local_lag_map.T @ (local_lag_map @ prev_yt)
         lstq_lhs = A.T @  A + local_lag_map.T @ local_lag_map
-        y, _ = scip.sparse.linalg.cg(lstq_lhs, lstq_rhs, rtol=eps)
-        yt = y.reshape(-1, 1) + prev_yt
+        #print(np.linalg.cond(A.T @ A + local_lag_map.T @ local_lag_map))
+        yt, _ = scip.sparse.linalg.cg(lstq_lhs, lstq_rhs, rtol=eps)
+        yt = yt.reshape(-1, 1) + prev_yt
         y = yt[:block_dim]
         t = yt[block_dim:]
         R_dmL_eq_adj_yt = R_d - L_eq_adj @ y - L_ineq_adj @ t
