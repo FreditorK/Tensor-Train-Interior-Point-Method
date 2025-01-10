@@ -418,13 +418,13 @@ if __name__ == "__main__":
 
     A_1 = tt_matrix_to_matrix(tt_transpose(L_op_tt))
     A_2 = tt_matrix_to_matrix(tt_diag(tt_vec(a)))
-    A = np.block([[A_1], [A_2]])
+    A = np.block([[A_1.T @ A_1], [A_2]])
     print(A_1.shape, np.linalg.matrix_rank(A_1), np.linalg.matrix_rank(A))
     print(tt_inner_prod(tt_transpose(L_op_tt), tt_diag(tt_vec(a))))
 
     A_1 = tt_matrix_to_matrix(L_op_tt)
     A_2 = tt_matrix_to_matrix(tt_diag(tt_vec(b)))
-    A = np.block([[A_1], [A_2]])
+    A = np.block([[A_1.T @ A_1], [A_2]])
     print(A_1.shape, np.linalg.matrix_rank(A_1), np.linalg.matrix_rank(A))
     print(tt_inner_prod(L_op_tt, tt_diag(tt_vec(b))))
 

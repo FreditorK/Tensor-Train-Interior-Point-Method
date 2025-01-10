@@ -62,8 +62,14 @@ def ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, num_blocks, eps):
         ])
         lstq_rhs = A.T @ (b - A @ prev_yt) - local_lag_map.T @ (local_lag_map @ prev_yt)
         lstq_lhs = A.T @  A + local_lag_map.T @ local_lag_map
+        #TODO: Use block LDU form, get any solution for LDx = b and then use local_lag_map for U(yt) = (LD)^+ b
+        # [U] [yt] = [(LD)^+ b + LD_null z]
+        # [K]      = [0]
+        # #########
+        # [U  -LD_null] [yt] = [(LD)^+ b]
+        # [K        0 ] [z ]   [0       ]
         #print(np.linalg.cond(A.T @ A + local_lag_map.T @ local_lag_map))
-        yt, _ = scip.sparse.linalg.cg(lstq_lhs, lstq_rhs, rtol=eps)
+        yt, _ = scip.sparse.linalg.cg(lstq_lhs, lstq_rhs, rtol=0.5*np.divide(eps, 7))
         yt = yt.reshape(-1, 1) + prev_yt
         y = yt[:block_dim]
         t = yt[block_dim:]
