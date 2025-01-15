@@ -150,7 +150,7 @@ def tt_null_space(A, nswp=10, x0=None, eps=1e-10, verbose=False):
 
     XAX = [np.ones((1, 1, 1), dtype=dtype)] + [None] * (d - 1) + [np.ones((1, 1, 1), dtype=dtype)]  # size is rk x Rk x rk
 
-    for swp in range(2):
+    for swp in range(1):
         x_cores = tt_rl_orthogonalise(x_cores)
         rx[1:-1] = np.array(tt_ranks(x_cores))
         XAX, no = compute_phi_bcks_A(XAX, x_cores, A, x_cores, d=d)
@@ -173,11 +173,11 @@ def tt_null_space(A, nswp=10, x0=None, eps=1e-10, verbose=False):
             min_s = np.min(s)
             solution_now = v[s <= min_s + eps, :]
             solution_now = np.mean(solution_now, axis=0).reshape(-1, 1)
+            solution_now = np.reshape(solution_now, (rx[k] * N[k], rx[k + 1]))
 
             if min_s > eps:
                 solution_now = np.ones_like(solution_now)
 
-            solution_now = np.reshape(solution_now, (rx[k] * N[k], rx[k + 1]))
             # truncation
             if k < d - 1:
                 u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False)

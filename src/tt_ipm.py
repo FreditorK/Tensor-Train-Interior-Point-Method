@@ -258,22 +258,22 @@ def _tt_ipm_newton_step(
     if verbose:
         print(f"Step sizes: {x_step_size}, {z_step_size}")
 
-    print("Report ---")
-    print("Delta Y")
-    print(np.round(tt_matrix_to_matrix(tt_mat(vec_Delta_Y_tt)), decimals=3))
+    #print("Report ---")
+    #print("Delta Y")
+    #print(np.round(tt_matrix_to_matrix(tt_mat(vec_Delta_Y_tt)), decimals=3))
     #print("Y")
     #print(np.round(tt_matrix_to_matrix(tt_mat(vec_Y_tt)), decimals=3))
-    if active_ineq:
-        print("Delta T")
-        print(np.round(tt_matrix_to_matrix(Delta_T_tt), decimals=3))
+    #if active_ineq:
+    #    print("Delta T")
+    #    print(np.round(tt_matrix_to_matrix(Delta_T_tt), decimals=3))
         #print("T")
         #print(np.round(tt_matrix_to_matrix(T_tt), decimals=3))
-    print("Delta X")
-    print(np.round(tt_matrix_to_matrix(Delta_X_tt), decimals=6))
+    #print("Delta X")
+    #print(np.round(tt_matrix_to_matrix(Delta_X_tt), decimals=6))
     #print("X")
     #print(np.round(tt_matrix_to_matrix(X_tt), decimals=3))
-    print("Delta Z")
-    print(np.round(tt_matrix_to_matrix(Delta_Z_tt), decimals=3))
+    #print("Delta Z")
+    #print(np.round(tt_matrix_to_matrix(Delta_Z_tt), decimals=3))
     #print("Z")
     #print(np.round(tt_matrix_to_matrix(Z_tt), decimals=3))
 
