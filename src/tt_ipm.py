@@ -30,17 +30,18 @@ def ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, num_blocks, eps):
     L_Z = lhs[k*block_dim:, :block_dim]
     L_L_Z = scip.linalg.cholesky(L_Z, check_finite=False, overwrite_a=True, lower=True)
     L_eq_adj = -lhs[:block_dim, block_dim:2*block_dim]
-    #I = lhs[:block_dim, k*block_dim:]
-    #print("I rank: ",  np.linalg.matrix_rank(I), I.shape)
+    I = lhs[:block_dim, k*block_dim:]
     inv_I = np.diag(np.divide(1, np.diagonal(lhs[:block_dim, k*block_dim:])))
     L_X = lhs[k * block_dim:, k * block_dim:]
     R_d = -rhs[:block_dim]
     R_p = -rhs[block_dim:2*block_dim]
     R_c = -rhs[k * block_dim:]
 
-    L_X_inv_I = L_X @ inv_I
-    K = forward_backward_sub(L_L_Z, L_X_inv_I)
+    K_temp = forward_backward_sub(L_L_Z, L_X)
+    K = K_temp @ inv_I
+    print("hi", np.linalg.norm(L_Z @ K_temp - L_X))
     k = forward_backward_sub(L_L_Z, R_c)
+    print("hi 2", np.linalg.norm(L_Z @ k - R_c))
     KR_dmk = K @ R_d - k
 
     if num_blocks > 3:
@@ -62,14 +63,8 @@ def ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, num_blocks, eps):
         ])
         lstq_rhs = A.T @ (b - A @ prev_yt) - local_lag_map.T @ (local_lag_map @ prev_yt)
         lstq_lhs = A.T @  A + local_lag_map.T @ local_lag_map
-        #TODO: Use block LDU form, get any solution for LDx = b and then use local_lag_map for U(yt) = (LD)^+ b
-        # [U] [yt] = [(LD)^+ b + LD_null z]
-        # [K]      = [0]
-        # #########
-        # [U  -LD_null] [yt] = [(LD)^+ b]
-        # [K        0 ] [z ]   [0       ]
         #print(np.linalg.cond(A.T @ A + local_lag_map.T @ local_lag_map))
-        yt, _ = scip.sparse.linalg.cg(lstq_lhs, lstq_rhs, rtol=0.5*np.divide(eps, 7))
+        yt, _ = scip.sparse.linalg.cg(lstq_lhs, lstq_rhs, rtol=0.1*eps)
         yt = yt.reshape(-1, 1) + prev_yt
         y = yt[:block_dim]
         t = yt[block_dim:]
@@ -78,9 +73,9 @@ def ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, num_blocks, eps):
         z = -inv_I @ R_dmL_eq_adj_yt
         #print()
         #print("---")
-        #print(np.linalg.norm(-L_eq @ x + R_p))
+        #print(np.linalg.norm(-L_eq @ x + R_p)) # bad
         #print(np.linalg.norm(-L_eq_adj @ y - L_ineq_adj @ t + I @ z + R_d))
-        #print(np.linalg.norm(-TL_ineq @ x + R_ineq @ t + R_t))
+        #print(np.linalg.norm(-TL_ineq @ x + R_ineq @ t + R_t)) # bad
         #print(np.linalg.norm(L_Z @ x + L_X @ z + R_c))
         #print("---")
         return np.vstack((x, y, t, z))
@@ -94,9 +89,9 @@ def ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, num_blocks, eps):
     rhs = np.block([[b - A @ prev_yt],
                     [-local_lag_map @ prev_yt]])
     lstq_rhs = lhs.T @ rhs
-    lstq_lhs = lhs.T @ lhs + 0.5 * eps * np.eye(block_dim)
-    L_lstq_lhs = scip.linalg.cholesky(lstq_lhs, check_finite=False, overwrite_a=True, lower=True)
-    y = forward_backward_sub(L_lstq_lhs, lstq_rhs) + prev_yt
+    lstq_lhs = lhs.T @ lhs
+    yt, _ = scip.sparse.linalg.cg(lstq_lhs, lstq_rhs, rtol=0.1 * eps)
+    y = yt.reshape(-1, 1) + prev_yt
     R_dmL_eq_adj_y = R_d - L_eq_adj @ y
     x = K @ R_dmL_eq_adj_y - k
     z = -inv_I @ R_dmL_eq_adj_y
