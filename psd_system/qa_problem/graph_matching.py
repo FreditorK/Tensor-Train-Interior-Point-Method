@@ -59,8 +59,22 @@ def tt_diag_block_sum_linear_op(block_size, dim):
         core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
         core[:, 0, :] = c
         op_tt.append(core)
-    block_matrix = [np.array([[1.0, 0.0], [1.0, 1.0]]).reshape(1, 2, 2, 1)] + tt_one_matrix(block_size-1)
-    return tt_rank_reduce(Q_PREFIX + op_tt + tt_diag(tt_vec(block_matrix)))
+    block_matrix = tt_identity(block_size)
+    op_tt = op_tt + tt_diag(tt_vec(block_matrix))
+
+    op_tt_2 = []
+    for c in tt_vec(tt_identity(dim - block_size)):
+        core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
+        core[:, 0, :] = c
+        op_tt_2.append(core)
+    block_matrix = []
+    for i, c in enumerate(tt_vec(tt_sub(tt_one_matrix(block_size), tt_identity(block_size)))):
+        core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
+        core[:, (i+1) % 2, :] = c
+        block_matrix.append(core)
+    op_tt_2 = op_tt_2 + block_matrix
+
+    return tt_rank_reduce(Q_PREFIX + tt_add(op_tt, op_tt_2))
 
 # ------------------------------------------------------------------------------
 # Constraint 7 -----------------------------------------------------------------
@@ -429,7 +443,6 @@ if __name__ == "__main__":
     A_6 = A_1 + A_2 + A_3 + A_4 + A_5
     print(np.sum(np.linalg.svdvals(A_6) > 1e-10))
     print(tt_matrix_to_matrix(eq_bias_tt))
-
 
     print("...Problem created!")
     print(f"Objective TT-ranks: {tt_ranks(C_tt)}")

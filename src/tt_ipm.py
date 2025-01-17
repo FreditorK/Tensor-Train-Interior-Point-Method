@@ -39,9 +39,9 @@ def ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, num_blocks, eps):
 
     K_temp = forward_backward_sub(L_L_Z, L_X)
     K = K_temp @ inv_I
-    print("hi", np.linalg.norm(L_Z @ K_temp - L_X))
+    #print("hi", np.linalg.norm(L_Z @ K_temp - L_X))
     k = forward_backward_sub(L_L_Z, R_c)
-    print("hi 2", np.linalg.norm(L_Z @ k - R_c))
+    #print("hi 2", np.linalg.norm(L_Z @ k - R_c))
     KR_dmk = K @ R_d - k
 
     if num_blocks > 3:
