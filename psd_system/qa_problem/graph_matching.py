@@ -21,13 +21,17 @@ Q_PREFIX = [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1), np.array([[1
 # Constraint 4 -----------------------------------------------------------------
 
 def tt_partial_trace_op(block_size, dim):
-    matrix_tt = tt_sub(tt_one_matrix(dim - block_size), tt_identity(dim - block_size))
+    op_tt = []
+    for i, c in enumerate(tt_vec(tt_sub(tt_one_matrix(dim - block_size), tt_identity(dim - block_size)))):
+        core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
+        core[:, (i+1) % 2] = c
+        op_tt.append(core)
     block_op = []
     for i, c in enumerate(tt_vec(tt_identity(block_size))):
         core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
         core[:, 0] = c
         block_op.append(core)
-    return tt_rank_reduce(Q_PREFIX + tt_diag(tt_vec(matrix_tt)) + block_op)
+    return tt_rank_reduce(Q_PREFIX + op_tt + block_op)
 
 # ------------------------------------------------------------------------------
 # Constraint 5 -----------------------------------------------------------------
@@ -157,7 +161,7 @@ if __name__ == "__main__":
         [   0    0    0    0 |    0 |   0    0    1]
         
         
-        [ 6  0  | 4  0  | 7 | 0 0 0]
+        [ 6  0  | 0  0  | 7 | 0 0 0]
         [ 6  6  | 0  5  | 7 | 0 0 0]
         [--------------------------]
         [ 4  0  | 5  0  | 7 | 0 0 0]
@@ -331,6 +335,12 @@ if __name__ == "__main__":
         print(np.round(M, decimals=4))
         print(np.round(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(padding_op, tt_vec(random_A)))), decimals=4))
 
+    def test_padding_op_adj():
+        random_A = tt_random_gaussian([3] * (2 * n), shape=(2, 2))
+        M = tt_matrix_to_matrix(random_A)
+        print(np.round(M, decimals=4))
+        print(np.round(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(padding_op_adj, tt_vec(random_A)))), decimals=4))
+
     L_op_tt = tt_rank_reduce(tt_add(L_op_tt, padding_op))
     L_op_tt_adj = tt_rank_reduce(tt_add(L_op_tt_adj, padding_op_adj))
     eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, padding_op_bias))
@@ -349,15 +359,16 @@ if __name__ == "__main__":
         print(np.round(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(Q_ineq_op, tt_vec(random_A)))), decimals=4))
 
     # ---
-    pad = [np.array([[0.0, 1.0], [1.0, 1.0]]).reshape(1, 2, 2, 1)] + tt_one_matrix(2*n)
+    pad = [np.array([[0.0, 1.0], [1.0, 1.0]]).reshape(1, 2, 2, 1)] + tt_one_matrix(2 * n)
     pad = tt_sub(pad, [np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [
-        np.array([[1.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(2*n)])
+        np.array([[1.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(2 * n)])
     pad = tt_sub(pad, [np.array([[0.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1)] + [
-        np.array([[1.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(2*n)])
+        np.array([[1.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(2 * n)])
+
     lag_maps = {
         "y": tt_rank_reduce(tt_diag(tt_vec(
             tt_sub(
-                tt_one_matrix(2*n+1),
+                tt_one_matrix(2 * n + 1),
                 tt_sum(
                     pad,  # P
                     [np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [
@@ -370,12 +381,16 @@ if __name__ == "__main__":
                         np.array([[1.0, 0.0], [0.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(n)],  # 5, 4
                     [np.array([[-1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [
                         np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)] + [
-                        np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)] # 6 add
+                        np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)],  # 6 add
+                    [np.array([[-1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [
+                        np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)] + [
+                        np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)]  # 4 add
                 )
             )
         ))),
         "t": tt_rank_reduce(tt_diag(tt_vec([np.array([[0.0, 1.0], [1.0, 1.0]]).reshape(1, 2, 2, 1)] + tt_one_matrix(2*n))))
     }
+
 
     a = tt_sub(
                 tt_one_matrix(2*n+1),
@@ -391,17 +406,12 @@ if __name__ == "__main__":
                         np.array([[1.0, 0.0], [0.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(n)],  # 5, 4
                     [np.array([[-1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [
                         np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)] + [
-                        np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)]
+                        np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)], # 6 add
+                    [np.array([[-1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [
+                        np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)] + [
+                        np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)]  # 4 add
                 )
             )
-
-    b = tt_sum(
- [np.array([[0.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1)] + tt_one_matrix(2 * n),
-        tt_sub(
-            [np.array([[0.0, 0.0], [0.0, 1.0]]).reshape(1, 2, 2, 1)] + tt_sub(tt_one_matrix(2 * n), tt_identity(2*n)),
-            [np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [np.array([[1.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(2 * n)]
-        )
-    )
 
 
     X = tt_matrix_svd(
@@ -430,19 +440,41 @@ if __name__ == "__main__":
     #print(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(L_op_tt, tt_vec(tt_one_matrix(2*n+1))))))
     print(tt_matrix_to_matrix(a))
 
-    A_1 = tt_matrix_to_matrix(partial_tr_op)
-    print(np.sum(np.linalg.svdvals(A_1) > 1e-10))
-    A_2 = tt_matrix_to_matrix(partial_tr_J_op)
-    print(np.sum(np.linalg.svdvals(A_2) > 1e-10))
-    A_3 = tt_matrix_to_matrix(diag_block_sum_op)
-    print(np.sum(np.linalg.svdvals(A_3) > 1e-10))
-    A_4 = tt_matrix_to_matrix(Q_m_P_op)
-    print(np.sum(np.linalg.svdvals(A_4) > 1e-10))
-    A_5 = tt_matrix_to_matrix(padding_op)
-    print(np.sum(np.linalg.svdvals(A_5) > 1e-10))
-    A_6 = A_1 + A_2 + A_3 + A_4 + A_5
-    print(np.sum(np.linalg.svdvals(A_6) > 1e-10))
-    print(tt_matrix_to_matrix(eq_bias_tt))
+
+    #A_1 = tt_matrix_to_matrix(partial_tr_op)
+    #print(np.sum(np.linalg.svdvals(A_1) > 1e-10))
+    #A_2 = tt_matrix_to_matrix(partial_tr_J_op)
+    #print(np.sum(np.linalg.svdvals(A_2) > 1e-10))
+    #A_3 = tt_matrix_to_matrix(diag_block_sum_op)
+    #print(np.sum(np.linalg.svdvals(A_3) > 1e-10))
+    #A_4 = tt_matrix_to_matrix(Q_m_P_op)
+    #print(np.sum(np.linalg.svdvals(A_4) > 1e-10))
+    #A_5 = tt_matrix_to_matrix(padding_op)
+    #print(np.sum(np.linalg.svdvals(A_5) > 1e-10))
+    #A_6 = A_1 + A_2 + A_3 + A_4 + A_5
+    #print(np.sum(np.linalg.svdvals(A_6) > 1e-10))
+    #print(tt_matrix_to_matrix(eq_bias_tt))
+    A_1 = tt_matrix_to_matrix(tt_transpose(L_op_tt))
+    A_2 = tt_matrix_to_matrix(tt_diag(tt_vec(a)))
+    A = np.block([[A_1.T @ A_1], [A_2]])
+    print(A_1.shape, np.linalg.matrix_rank(A_1), np.linalg.matrix_rank(A))
+    print(tt_inner_prod(tt_transpose(L_op_tt), tt_diag(tt_vec(a))))
+
+    A_1 = tt_matrix_to_matrix(L_op_tt)
+    A_2 = tt_matrix_to_matrix(tt_diag(tt_vec(a)))
+    A = np.block([[A_1.T @ A_1], [A_2]])
+    print(A_1.shape, np.linalg.matrix_rank(A_1), np.linalg.matrix_rank(A))
+    print(tt_inner_prod(L_op_tt, tt_diag(tt_vec(a))))
+
+    A_1 = tt_matrix_to_matrix(tt_scale(-1, tt_transpose(Q_ineq_op)))
+    A_2 = tt_matrix_to_matrix(lag_maps["t"])
+    A = np.block([[A_1], [A_2]])
+    print(A_1.shape, np.linalg.matrix_rank(A))
+
+    A_1 = tt_matrix_to_matrix(Q_ineq_op)
+    A_2 = tt_matrix_to_matrix(lag_maps["t"])
+    A = np.block([[A_1], [A_2.T]])
+    print(A_1.shape, np.linalg.matrix_rank(A))
 
     print("...Problem created!")
     print(f"Objective TT-ranks: {tt_ranks(C_tt)}")
