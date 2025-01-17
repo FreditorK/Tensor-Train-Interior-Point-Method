@@ -206,7 +206,6 @@ def _tt_ipm_newton_step(
         eps
 ):
     mu = tt_inner_prod(Z_tt, [0.5 * c for c in X_tt])
-    idx_add = int(active_ineq)
     lhs_matrix_tt = tt_infeasible_newton_system_lhs(
         lhs_skeleton,
         X_tt,
@@ -238,7 +237,11 @@ def _tt_ipm_newton_step(
     vec_Delta_Y_tt = tt_rank_reduce(_tt_get_block(1, Delta_tt), err_bound=tol)
     Delta_T_tt = tt_rank_reduce(tt_mat(_tt_get_block(2, Delta_tt)), err_bound=tol) if active_ineq else None
     Delta_X_tt = tt_rank_reduce(tt_mat(_tt_get_block(0, Delta_tt)), err_bound=tol)
-    Delta_Z_tt = tt_rank_reduce(tt_mat(_tt_get_block(2+idx_add, Delta_tt)), err_bound=tol)
+    idx_add = int(active_ineq)
+    Delta_Z_tt = tt_sub(tt_mat(tt_sub(tt_matrix_vec_mul(mat_lin_op_tt_adj, tt_add(vec_Y_tt, vec_Delta_Y_tt)), vec_obj_tt)), Z_tt)
+    if active_ineq:
+        Delta_Z_tt = tt_add(Delta_Z_tt, tt_mat(tt_matrix_vec_mul(mat_lin_op_tt_ineq_adj, tt_vec(tt_add(T_tt, Delta_T_tt)))))
+    Delta_Z_tt = tt_rank_reduce(Delta_Z_tt, err_bound=tol)
     if np.greater(res, eps):
         Delta_X_tt = _tt_symmetrise(Delta_X_tt, tol)
         Delta_Z_tt = _tt_symmetrise(Delta_Z_tt, tol)
@@ -259,8 +262,8 @@ def _tt_ipm_newton_step(
     #print("Y")
     #print(np.round(tt_matrix_to_matrix(tt_mat(vec_Y_tt)), decimals=3))
     #if active_ineq:
-    #    print("Delta T")
-    #    print(np.round(tt_matrix_to_matrix(Delta_T_tt), decimals=3))
+        #print("Delta T")
+        #print(np.round(tt_matrix_to_matrix(Delta_T_tt), decimals=3))
         #print("T")
         #print(np.round(tt_matrix_to_matrix(T_tt), decimals=3))
     #print("Delta X")
