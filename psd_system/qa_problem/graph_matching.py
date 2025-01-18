@@ -37,8 +37,12 @@ def tt_partial_trace_op(block_size, dim):
 # Constraint 5 -----------------------------------------------------------------
 
 def tt_partial_J_trace_op(block_size, dim):
-    matrix_tt = [np.array([[0., 0], [0, 1.]]).reshape(1, 2, 2, 1)] + tt_one_matrix(dim - block_size - 1)
-    block_op_0 = [np.array([[0, 0], [1.0, 1]]).reshape(1, 2, 2, 1) for _ in range(2 * block_size)]
+    matrix_tt = [np.array([[0., 0], [0, 1.]]).reshape(1, 2, 2, 1)] + tt_identity(dim - block_size - 1)
+    block_op_0 = []
+    for i, c in enumerate(tt_vec(tt_identity(block_size))):
+        core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
+        core[:, 1] = c
+        block_op_0.append(core)
     op_tt_0 = tt_diag(tt_vec(matrix_tt)) + block_op_0
 
     matrix_tt = [np.array([[0., 1], [1, 0.]]).reshape(1, 2, 2, 1)] + tt_one_matrix(dim-block_size-1)
@@ -50,7 +54,11 @@ def tt_partial_J_trace_op(block_size, dim):
     op_tt_1 = tt_diag(tt_vec(matrix_tt)) + block_op_1
 
     op_tt_2 = [np.array([[0.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(2*(dim - block_size))]
-    block_op_2 = [np.array([[1, 1], [0.0, 0]]).reshape(1, 2, 2, 1) for _ in range(2*block_size)]
+    block_op_2 = []
+    for i, c in enumerate(tt_vec(tt_identity(block_size))):
+        core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
+        core[:, 0] = c
+        block_op_2.append(core)
     op_tt_2 += block_op_2
     return tt_rank_reduce(Q_PREFIX + tt_sum(op_tt_0, op_tt_1, op_tt_2))
 
