@@ -58,12 +58,14 @@ def ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, num_blocks, eps):
         ])
         lstq_rhs = A.T @ (b - A @ prev_yt) - local_lag_map.T @ (local_lag_map @ prev_yt)
         lstq_lhs = A.T @ A + local_lag_map.T @ local_lag_map
-        yt, _ = scip.sparse.linalg.cg(lstq_lhs, lstq_rhs, rtol=0.1 * eps)
+        L_lstq_lhs = scip.linalg.cholesky(lstq_lhs, check_finite=False, overwrite_a=True, lower=True)
+        #yt, _ = scip.sparse.linalg.cg(lstq_lhs, lstq_rhs, rtol=0.1 * eps)
+        yt = forward_backward_sub(L_lstq_lhs, lstq_rhs)
         yt = yt.reshape(-1, 1) + prev_yt
         y = yt[:block_dim]
         t = yt[block_dim:]
 
-        x = L_Z_inv@( b_3 - L_XL_eq_adj @ y - L_XL_ineq_adj @ t)
+        x = L_Z_inv @ ( b_3 - L_XL_eq_adj @ y - L_XL_ineq_adj @ t)
 
         #print("---")
         #print(np.linalg.norm(-L_eq @ x - b_1))
