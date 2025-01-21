@@ -10,7 +10,7 @@ from src.tt_ops import *
 from src.tt_ops import tt_rank_reduce
 from src.tt_amen import tt_block_amen,  svd_solve_local_system
 from src.tt_eig import tt_min_eig
-from src.tt_ineq_check import tt_is_geq, tt_is_geq_
+from src.tt_ineq_check import tt_is_geq, tt_is_geq_, tt_is_psd
 
 
 def pd_inv(a):
@@ -28,8 +28,9 @@ def ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, num_blocks, eps):
 
     L_eq = -lhs[:block_dim, :block_dim]
     L_Z = lhs[k * block_dim:, :block_dim]
-    L_Z_inv = np.linalg.inv(L_Z)
-    #L_L_Z = scip.linalg.cholesky(L_Z, check_finite=False, overwrite_a=True, lower=True)
+    #L_Z_inv = np.linalg.inv(L_Z)
+    L_L_Z = scip.linalg.cholesky(L_Z, check_finite=False, overwrite_a=True, lower=True)
+    L_Z_inv = forward_backward_sub(L_L_Z, np.eye(len(L_L_Z)))
     L_XL_eq_adj = lhs[k * block_dim:, block_dim:2*block_dim]
 
     b_1 = rhs[:block_dim]
@@ -60,11 +61,9 @@ def ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, num_blocks, eps):
         lstq_lhs = A.T @ A + local_lag_map.T @ local_lag_map
         L_lstq_lhs = scip.linalg.cholesky(lstq_lhs, check_finite=False, overwrite_a=True, lower=True)
         #yt, _ = scip.sparse.linalg.cg(lstq_lhs, lstq_rhs, rtol=0.1 * eps)
-        yt = forward_backward_sub(L_lstq_lhs, lstq_rhs)
-        yt = yt.reshape(-1, 1) + prev_yt
+        yt = forward_backward_sub(L_lstq_lhs, lstq_rhs)+ prev_yt
         y = yt[:block_dim]
         t = yt[block_dim:]
-
         x = L_Z_inv @ ( b_3 - L_XL_eq_adj @ y - L_XL_ineq_adj @ t)
 
         #print("---")
@@ -89,8 +88,9 @@ def ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, num_blocks, eps):
     lstq_rhs = lhs.T @ rhs
     lstq_lhs = lhs.T @ lhs
 
-    yt, _ = scip.sparse.linalg.cg(lstq_lhs, lstq_rhs, rtol=0.1 * eps)
-    y = yt.reshape(-1, 1) + prev_yt
+    #yt, _ = scip.sparse.linalg.cg(lstq_lhs, lstq_rhs, rtol=0.1 * eps)
+    L_lstq_lhs = scip.linalg.cholesky(lstq_lhs, check_finite=False, overwrite_a=True, lower=True)
+    y = forward_backward_sub(L_lstq_lhs, lstq_rhs) + prev_yt
     x = L_Z_inv @ (b_3 - L_XL_eq_adj @ y)
     #print("---")
     #print(np.linalg.norm(-L_eq @ x - b_1))
@@ -121,10 +121,6 @@ def tt_infeasible_newton_system(
     identity = tt_identity(len(Z_tt))
     L_Z = tt_rank_reduce(tt_add(tt_kron(identity, Z_tt), tt_kron(tt_transpose(Z_tt), identity)), err_bound=tol)
     L_X = tt_rank_reduce(tt_add(tt_kron(tt_transpose(X_tt), identity), tt_kron(identity, X_tt)), err_bound=tol)
-    #XZ_term = tt_mat_mat_mul(X_tt, Z_tt)
-    #c = tt_vec(tt_add(XZ_term, tt_transpose(XZ_term)))
-    #diff = tt_sub(c, tt_matrix_vec_mul(L_X, tt_vec(Z_tt)))
-    #print("diff:", tt_inner_prod(diff, diff))
 
     if active_ineq:
         ineq_res_tt = tt_sub(vec_bias_tt_ineq, tt_matrix_vec_mul(mat_lin_op_tt_ineq, tt_vec(X_tt)))
@@ -280,20 +276,17 @@ def _tt_line_search(
     discount_z = False
     r = X_tt[0].shape[-1]
     new_X_tt = tt_add(X_tt, Delta_X_tt)
+
     for iter in range(iters):
-        val_x, _, _ = tt_min_eig(new_X_tt)
-        # FIXME: The eigenvalue could give an upper bound on error bound to round with
-        # FIXME: Can we use tt_eig somehow to round while maintaining psdness?
-        discount_x = np.greater(val_x, crit)
+        discount_x, _ = tt_is_psd(new_X_tt, crit=crit)
         if discount_x:
             break
         else:
             new_X_tt[0][:, :, :, r:] *= discount
             x_step_size *= discount
-
     if active_ineq and discount_x:
         for iter in range(iters):
-            discount_x, val, _ = tt_is_geq(lin_op_tt_ineq, new_X_tt, vec_bias_tt_ineq, crit=crit)
+            discount_x, _ = tt_is_geq(lin_op_tt_ineq, new_X_tt, vec_bias_tt_ineq, crit=crit)
             if discount_x:
                 break
             else:
@@ -303,22 +296,17 @@ def _tt_line_search(
     r = Z_tt[0].shape[-1]
     new_Z_tt = tt_add(Z_tt, Delta_Z_tt)
     for iter in range(iters):
-        val_z, _, _ = tt_min_eig(new_Z_tt)
-        discount_z = np.greater(val_z, crit)
+        discount_z, _ = tt_is_psd(new_Z_tt, crit=crit)
         if discount_z:
             break
         else:
             new_Z_tt[0][:, :, :, r:] *= discount
             z_step_size *= discount
-    #print("Intermediate z rate: ", z_step_size)
-    #print(np.round(tt_matrix_to_matrix(T_tt), decimals=3))
-    #print()
-    #print(np.round(tt_matrix_to_matrix(Delta_T_tt), decimals=3))
     if active_ineq and discount_z:
         r = T_tt[0].shape[-1]
         new_T_tt = tt_add(T_tt, tt_scale(z_step_size, Delta_T_tt))
         for iter in range(iters):
-            discount_z, val, _ = tt_is_geq_(new_T_tt, crit=crit)
+            discount_z, _ = tt_is_geq_(new_T_tt, crit=crit, degenerate=True)
             if discount_z:
                 break
             else:

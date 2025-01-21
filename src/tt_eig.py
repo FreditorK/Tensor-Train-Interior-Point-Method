@@ -23,7 +23,6 @@ def tt_max_eig(matrix_tt, nswp=10, x0=None, eps=1e-10, verbose=False):
 def tt_min_eig(matrix_tt, nswp=10, x0=None, eps=1e-10, verbose=False):
     return _tt_eig(matrix_tt, min_eig=True, nswp=nswp, x0=x0, eps=eps, verbose=verbose)
 
-
 def _tt_eig(A, min_eig, nswp, x0, eps, verbose):
     if verbose:
         print(f"Starting Eigen solve with:\n \t {eps} \n \t sweeps: {nswp}")
