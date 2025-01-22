@@ -13,9 +13,6 @@ from src.tt_eig import tt_min_eig
 from src.tt_ineq_check import tt_is_geq, tt_is_geq_, tt_is_psd
 
 
-def pd_inv(a):
-    return scip.linalg.solve(a, np.identity(a.shape[0]), assume_a="pos", check_finite=False)
-
 def forward_backward_sub(L, b):
     y = scip.linalg.solve_triangular(L, b, lower=True, check_finite=False)
     x = scip.linalg.solve_triangular(L.T, y, lower=False, check_finite=False, overwrite_b=True)
@@ -28,7 +25,6 @@ def ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, num_blocks, eps):
 
     L_eq = -lhs[:block_dim, :block_dim]
     L_Z = lhs[k * block_dim:, :block_dim]
-    #L_Z_inv = np.linalg.inv(L_Z)
     L_L_Z = scip.linalg.cholesky(L_Z, check_finite=False, overwrite_a=True, lower=True)
     L_Z_inv = forward_backward_sub(L_L_Z, np.eye(len(L_L_Z)))
     L_XL_eq_adj = lhs[k * block_dim:, block_dim:2*block_dim]
@@ -60,8 +56,7 @@ def ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, num_blocks, eps):
         lstq_rhs = A.T @ (b - A @ prev_yt) - local_lag_map.T @ (local_lag_map @ prev_yt)
         lstq_lhs = A.T @ A + local_lag_map.T @ local_lag_map
         L_lstq_lhs = scip.linalg.cholesky(lstq_lhs, check_finite=False, overwrite_a=True, lower=True)
-        #yt, _ = scip.sparse.linalg.cg(lstq_lhs, lstq_rhs, rtol=0.1 * eps)
-        yt = forward_backward_sub(L_lstq_lhs, lstq_rhs)+ prev_yt
+        yt = forward_backward_sub(L_lstq_lhs, lstq_rhs) + prev_yt
         y = yt[:block_dim]
         t = yt[block_dim:]
         x = L_Z_inv @ ( b_3 - L_XL_eq_adj @ y - L_XL_ineq_adj @ t)
@@ -79,14 +74,8 @@ def ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, num_blocks, eps):
     k = L_Z_inv @ b_3
     b = b_1 + L_eq @ k
     local_lag_map = local_auxs["y"]
-    lhs = np.block([
-        [A],
-        [local_lag_map]
-    ])
-    rhs = np.block([[b - A @ prev_yt],
-                    [-local_lag_map @ prev_yt]])
-    lstq_rhs = lhs.T @ rhs
-    lstq_lhs = lhs.T @ lhs
+    lstq_rhs = A.T @ (b - A @ prev_yt) - local_lag_map.T @ (local_lag_map @ prev_yt)
+    lstq_lhs = A.T @ A + local_lag_map.T @ local_lag_map
 
     #yt, _ = scip.sparse.linalg.cg(lstq_lhs, lstq_rhs, rtol=0.1 * eps)
     L_lstq_lhs = scip.linalg.cholesky(lstq_lhs, check_finite=False, overwrite_a=True, lower=True)
@@ -233,25 +222,6 @@ def _tt_ipm_newton_step(
 
     if verbose:
         print(f"Step sizes: {x_step_size}, {z_step_size}")
-
-    #print("Report ---")
-    #print("Delta Y")
-    #print(np.round(tt_matrix_to_matrix(tt_mat(vec_Delta_Y_tt)), decimals=3))
-    #print("Y")
-    #print(np.round(tt_matrix_to_matrix(tt_mat(vec_Y_tt)), decimals=3))
-    #if active_ineq:
-        #print("Delta T")
-        #print(np.round(tt_matrix_to_matrix(Delta_T_tt), decimals=3))
-        #print("T")
-        #print(np.round(tt_matrix_to_matrix(T_tt), decimals=3))
-    #print("Delta X")
-    #print(np.round(tt_matrix_to_matrix(Delta_X_tt), decimals=6))
-    #print("X")
-    #print(np.round(tt_matrix_to_matrix(X_tt), decimals=3))
-    #print("Delta Z")
-    #print(np.round(tt_matrix_to_matrix(Delta_Z_tt), decimals=3))
-    #print("Z")
-    #print(np.round(tt_matrix_to_matrix(Z_tt), decimals=3))
 
     return X_tt, vec_Y_tt, T_tt, Z_tt, primal_dual_error, mu
 

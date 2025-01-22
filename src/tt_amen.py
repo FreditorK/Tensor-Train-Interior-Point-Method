@@ -495,11 +495,6 @@ def tt_block_amen(block_A, block_b, aux_matrix_blocks=None, nswp=22, x0=None, ep
             block_res_new = np.linalg.norm(B @ solution_now - rhs) / norm_rhs
             block_res_old = np.linalg.norm(B @ previous_solution - rhs) / norm_rhs
 
-            # residual damp check
-            if block_res_old < block_res_new and block_res_new > real_tol:
-                if verbose:
-                    print(f"\r\tWARNING: residual increases. {block_res_old:10f}, {block_res_new:10f}", end='', flush=True)  # warning (from tt toolbox)
-
             max_res = max(max_res, block_res_old)
             #print(k, block_res_old, block_res_new, block_res_old / block_res_new)
 
@@ -508,10 +503,11 @@ def tt_block_amen(block_A, block_b, aux_matrix_blocks=None, nswp=22, x0=None, ep
 
             solution_now = np.reshape(solution_now, (block_size, rx[k], N[k], rx[k + 1]))
             solution_now = np.transpose(solution_now, (1, 2, 0, 3))
-            solution_now = np.reshape(solution_now, [rx[k] * N[k] * block_size, rx[k + 1]])
+            solution_now = np.reshape(solution_now, [rx[k] * N[k], block_size*rx[k + 1]])
 
             # solution truncation
             if k < d - 1:
+                # FIXME: We need to do svd on (rx*N) x (block_size*rx), otherwise the pruning is ineffective
                 u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False)
                 v = np.diag(s) @ v
                 r = 0
@@ -579,14 +575,14 @@ def tt_block_amen(block_A, block_b, aux_matrix_blocks=None, nswp=22, x0=None, ep
                 # u: rx_k*N_k x enriched_rank, Rmat: enriched_rank x block_size*(r+rz[k+1])
                 u, Rmat = np.linalg.qr(u)
                 r = u.shape[1]
-                Rtens = Rmat.reshape(r, block_size, -1)
-                v = einsum("rbi, iR, Rdk -> rbdk", Rtens, v, x_cores[k + 1]) #  enriched_r x b x d x rx[k+1]
+                Rtens = Rmat.reshape(r, -1)
+                v =  v.reshape(-1, block_size, x_cores[k + 1].shape[0])
+                v = einsum("ri, ibR, Rdk -> rbdk", Rtens, v, x_cores[k + 1]) #  enriched_r x b x d x rx[k+1]
 
                 nrmsc = nrmsc * normA[:, k] * normx[k] / normb[:, k]
                 norm_now = np.linalg.norm(v)
                 v /= norm_now
                 normx[k] *= norm_now
-
                 x_cores[k] = np.reshape(u, [rx[k], N[k], r])
                 x_cores[k + 1] = np.reshape(v, [r, block_size, N[k + 1], rx[k + 2]])
                 rx[k + 1] = r
