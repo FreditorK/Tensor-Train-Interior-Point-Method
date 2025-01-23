@@ -9,10 +9,9 @@ sys.path.append(os.getcwd() + '/../../')
 
 from dataclasses import dataclass
 from src.tt_ops import *
-from src.tt_ops import _tt_core_collapse, tt_random_gaussian, tt_matrix_svd, tt_mat, tt_matrix_to_matrix
-from src.tt_ipm import tt_ipm, _tt_get_block
+from src.tt_ops import tt_random_gaussian, tt_mat, tt_matrix_to_matrix, E
+from src.tt_ipm import tt_ipm
 import time
-from src.tt_eig import tt_min_eig, tt_max_eig
 
 
 Q_PREFIX = [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1), np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)]
@@ -37,7 +36,7 @@ def tt_partial_trace_op(block_size, dim):
 # Constraint 5 -----------------------------------------------------------------
 
 def tt_partial_J_trace_op(block_size, dim):
-    matrix_tt = [np.array([[0., 0], [0, 1.]]).reshape(1, 2, 2, 1)] + tt_identity(dim - block_size - 1)
+    matrix_tt = [E(1, 1)] + tt_identity(dim - block_size - 1)
     block_op_0 = []
     for i, c in enumerate(tt_vec(tt_identity(block_size))):
         core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
@@ -45,7 +44,7 @@ def tt_partial_J_trace_op(block_size, dim):
         block_op_0.append(core)
     op_tt_0 = tt_diag(tt_vec(matrix_tt)) + block_op_0
 
-    matrix_tt = [np.array([[0., 1], [1, 0.]]).reshape(1, 2, 2, 1)] + tt_one_matrix(dim-block_size-1)
+    matrix_tt = [E(0, 1) + E(1, 0)] + tt_one_matrix(dim-block_size-1)
     block_op_1 = []
     for i, c in enumerate(tt_vec(tt_sub(tt_one_matrix(block_size), tt_identity(block_size)))):
         core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
@@ -84,28 +83,16 @@ def tt_diag_block_sum_linear_op(block_size, dim):
 # Constraint 7 -----------------------------------------------------------------
 
 def tt_Q_m_P_op(dim):
-    Q_part = [np.array([[1, 0], [0, 0]]).reshape(1, 2, 2, 1), np.array([[0, 0], [1, 0]]).reshape(1, 2, 2, 1)]
+    Q_part = [E(0,  0), E(1,  0)]
     for i in range(dim):
-        core_1 = np.concatenate((
-            np.array([[1, 0], [0, 0]]).reshape(1, 2, 2, 1),
-            np.array([[0, 0], [0, 1]]).reshape(1, 2, 2, 1)
-        ), axis=-1)
-        core_2 = np.concatenate((
-            np.array([[1, 0], [0, 0]]).reshape(1, 2, 2, 1),
-            np.array([[0, 1], [0, 0]]).reshape(1, 2, 2, 1)
-        ), axis=0)
+        core_1 = np.concatenate((E(0, 0), E(1, 1)), axis=-1)
+        core_2 = np.concatenate((E(0,0), E(0,  1)), axis=0)
         Q_part.extend([core_1, core_2])
-    P_part = [np.array([[-0.5, 0], [0, 0]]).reshape(1, 2, 2, 1), np.array([[0, 0], [0, 1]]).reshape(1, 2, 2, 1)] + tt_diag(tt_vec([np.array([[1.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(dim)]))
-    P_supplement = [np.array([[0, -0.5], [0, 0.]]).reshape(1, 2, 2, 1), np.array([[0, 0.], [1., 0]]).reshape(1, 2, 2, 1)]
+    P_part = [-0.5*E(0, 0), E(1, 1)] + tt_diag(tt_vec([E(0,  0) + E(1,  0) for _ in range(dim)]))
+    P_supplement = [-0.5*E(0, 1), E(1, 0)]
     for i in range(dim):
-        core_1 = np.concatenate((
-            np.array([[1, 0.], [0, 0]]).reshape(1, 2, 2, 1),
-            np.array([[0, 0.], [1, 0]]).reshape(1, 2, 2, 1)
-        ), axis=-1)
-        core_2 = np.concatenate((
-            np.array([[1, 0.], [0, 0]]).reshape(1, 2, 2, 1),
-            np.array([[0, 1.], [0, 0]]).reshape(1, 2, 2, 1)
-        ), axis=0)
+        core_1 = np.concatenate((E(0, 0), E(1,  0)), axis=-1)
+        core_2 = np.concatenate((E(0, 0), E(0,  1)), axis=0)
         P_supplement.extend([core_1, core_2])
     return tt_rank_reduce(tt_add(Q_part, tt_add(P_supplement, P_part)))
 
@@ -118,19 +105,16 @@ def tt_Q_m_P_op(dim):
 # Constraint 9 -----------------------------------------------------------------
 
 def tt_padding_op(dim):
-    matrix_tt = [np.array([[0.0, 1.0], [1.0, 1.0]]).reshape(1, 2, 2, 1)] + tt_one_matrix(dim)
-    matrix_tt  = tt_sub(matrix_tt, [np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [np.array([[1.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(dim)])
-    matrix_tt = tt_sub(matrix_tt, [np.array([[0.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1)] + [np.array([[1.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(dim)])
+    matrix_tt = [E(0, 1) + E(1, 0) +  E(1, 1)] + tt_one_matrix(dim)
+    matrix_tt  = tt_sub(matrix_tt, [E(0, 1)] + [E(0, 0) + E(1, 0) for _ in range(dim)])
+    matrix_tt = tt_sub(matrix_tt, [E(1,  0)] + [E(0, 0) + E(0, 1) for _ in range(dim)])
     basis = tt_diag(tt_vec(matrix_tt))
     return tt_rank_reduce(basis)
 
 # ------------------------------------------------------------------------------
 # Constraint 10 ----------------------------------------------------------------
 def tt_ineq_op(dim):
-    matrix_tt = [-np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [np.array([[1.0, 1.0], [1.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(dim)]
-    #matrix_tt = tt_add(matrix_tt, [-np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [np.array([[1.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(dim)])
-    #matrix_tt = tt_add(matrix_tt, [-np.array([[0.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1)] + [np.array([[1.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(dim)])
-    #matrix_tt = tt_add(matrix_tt, [-np.array([[0.0, 0.0], [0.0, 1.0]]).reshape(1, 2, 2, 1)] + [np.array([[1.0, 0.0], [0.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(dim)])
+    matrix_tt = [-E(0, 0)] + [np.ones((1, 2, 2, 1)) for _ in range(dim)]
     basis = tt_diag(tt_vec(matrix_tt))
     return tt_rank_reduce(basis)
 
@@ -140,7 +124,7 @@ def tt_ineq_op_adj(dim):
 
 @dataclass
 class Config:
-    seed = 5
+    seed = 6
     max_rank = 3
 
 if __name__ == "__main__":
@@ -190,7 +174,7 @@ if __name__ == "__main__":
     print(np.round(tt_matrix_to_matrix(G_B), decimals=2))
 
     print("Objective matrix: ")
-    C_tt = [np.array([[-1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + tt_kron(G_B, G_A)
+    C_tt = [-E(0, 0)] + tt_kron(G_B, G_A)
     print(np.round(tt_matrix_to_matrix(C_tt), decimals=2))
 
     # Equality Operator
@@ -324,7 +308,7 @@ if __name__ == "__main__":
     # IX
     padding_op = tt_padding_op(2*n)
     padding_op_adj = tt_transpose(padding_op)
-    padding_op_bias = [np.array([[0.0, 0.0], [0.0, 1.0]]).reshape(1, 2, 2, 1)] + tt_identity(2*n)
+    padding_op_bias = [E(1, 1)] + tt_identity(2*n)
 
     def test_padding_op():
         random_A = tt_random_gaussian([3] * (2 * n), shape=(2, 2))
@@ -356,11 +340,9 @@ if __name__ == "__main__":
         print(np.round(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(Q_ineq_op, tt_vec(random_A)))), decimals=4))
 
     # ---
-    pad = [np.array([[0.0, 1.0], [1.0, 1.0]]).reshape(1, 2, 2, 1)] + tt_one_matrix(2 * n)
-    pad = tt_sub(pad, [np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [
-        np.array([[1.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(2 * n)])
-    pad = tt_sub(pad, [np.array([[0.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1)] + [
-        np.array([[1.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(2 * n)])
+    pad = [1 - E(0, 0)] + tt_one_matrix(2 * n)
+    pad = tt_sub(pad, [E(0, 1)] + [E(0, 0) + E(1, 0) for _ in range(2 * n)])
+    pad = tt_sub(pad, [E(1, 0)] + [E(0, 0) + E(0, 1) for _ in range(2 * n)])
 
     lag_maps = {
         "y": tt_rank_reduce(tt_diag(tt_vec(
@@ -368,111 +350,20 @@ if __name__ == "__main__":
                 tt_one_matrix(2 * n + 1),
                 tt_sum(
                     pad,  # P
-                    [np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [
-                        np.array([[1.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(2 * n)],  # 7
-                    [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [
-                        np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)] + tt_one_matrix(n),
-                    # 6
-                    [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [
-                        np.array([[0.0, 1.0], [1.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(n)] + [
-                        np.array([[1.0, 0.0], [0.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(n)],  # 5, 4
-                    [np.array([[-1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [
-                        np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)] + [
-                        np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)],  # 6 add
-                    [np.array([[-1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [
-                        np.array([[0.0, 1.0], [0.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(n)] + [
-                        np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)]  # 4 add
+                    [E(0, 1)] + [E(0, 0) + E(1, 0) for _ in range(2 * n)],  # 7
+                    [E(0, 0)] + [E(0,0) for _ in range(n)] + tt_identity(n),
+                    # 6.1
+                    [E(0, 0)] + [E(0,  0) for _ in range(n)] + [E(1, 0) for _ in range(n)],  # 6.2
+                    [E(0,  0)] + tt_sub(
+                        tt_one_matrix(n) + [E(1, 1) for _ in range(n)],
+                        [E(0, 0) for _ in range(n)] + [E(1, 1) for _ in range(n)]),  # 5
+                    [E(0, 0)] + [E(1, 0) for _ in range(n)] + [E(0, 0) for _ in range(n)]  # 4
+
                 )
             )
         ))),
-        "t": tt_rank_reduce(tt_diag(tt_vec([np.array([[0.0, 1.0], [1.0, 1.0]]).reshape(1, 2, 2, 1)] + tt_one_matrix(2*n))))
+        "t": tt_rank_reduce(tt_diag(tt_vec([E(0, 1) + E(1,  0) + E(1, 1)] + tt_one_matrix(2*n))))
     }
-
-
-    a = tt_sub(
-                tt_one_matrix(2*n+1),
-                tt_sum(
-                    pad,  # P
-                    [np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [
-                        np.array([[1.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(2 * n)],  # 7
-                    [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [
-                        np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)] + tt_one_matrix(n),
-                    # 6
-                    [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [
-                        np.array([[0.0, 1.0], [1.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(n)] + [
-                        np.array([[1.0, 0.0], [0.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(n)],  # 5, 4
-                    [np.array([[-1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [
-                        np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)] + [
-                        np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)], # 6 add
-                    [np.array([[-1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [
-                        np.array([[0.0, 1.0], [0.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(n)] + [
-                        np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n)]  # 4 add
-                )
-            )
-
-
-    X = tt_matrix_svd(
-        np.array([[0, 0, 0, 0, 0, 0, 0, 0],
-                  [0, 1, 1, 0, 1, 0, 0, 0],
-                  [0, 1, 1, 0, 1, 0, 0, 0],
-                  [0, 0, 0, 0, 0, 0, 0, 0],
-                  [0, 1, 1, 0, 1, 0, 0, 0],
-                  [0, 0, 0, 0, 0, 1, 0, 0],
-                  [0, 0, 0, 0, 0, 0, 1, 0],
-                  [0, 0, 0, 0, 0, 0, 0, 1]])
-    )
-    X = tt_matrix_svd(np.random.randn(8, 8))
-    print(tt_matrix_to_matrix(X))
-    X =  tt_vec(X)
-    X = tt_matrix_vec_mul(L_op_tt, X)
-    X = tt_matrix_to_matrix(tt_mat(X))
-
-    print(X)
-    print(tt_matrix_to_matrix(eq_bias_tt))
-
-    #random_A = tt_random_gaussian([3] * (2 * n), shape=(2, 2))
-   # M = tt_matrix_to_matrix(random_A)
-    #print(np.round(M, decimals=4))
-    #print(tt_matrix_to_matrix(a))
-    #print(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(L_op_tt, tt_vec(tt_one_matrix(2*n+1))))))
-    print(tt_matrix_to_matrix(a))
-
-
-    #A_1 = tt_matrix_to_matrix(partial_tr_op)
-    #print(np.sum(np.linalg.svdvals(A_1) > 1e-10))
-    #A_2 = tt_matrix_to_matrix(partial_tr_J_op)
-    #print(np.sum(np.linalg.svdvals(A_2) > 1e-10))
-    #A_3 = tt_matrix_to_matrix(diag_block_sum_op)
-    #print(np.sum(np.linalg.svdvals(A_3) > 1e-10))
-    #A_4 = tt_matrix_to_matrix(Q_m_P_op)
-    #print(np.sum(np.linalg.svdvals(A_4) > 1e-10))
-    #A_5 = tt_matrix_to_matrix(padding_op)
-    #print(np.sum(np.linalg.svdvals(A_5) > 1e-10))
-    #A_6 = A_1 + A_2 + A_3 + A_4 + A_5
-    #print(np.sum(np.linalg.svdvals(A_6) > 1e-10))
-    #print(tt_matrix_to_matrix(eq_bias_tt))
-    A_1 = tt_matrix_to_matrix(tt_transpose(L_op_tt))
-    A_2 = tt_matrix_to_matrix(tt_diag(tt_vec(a)))
-    A = np.block([[A_1], [A_2]])
-    print(A_1.shape, np.linalg.matrix_rank(A_1), np.sum(np.linalg.svdvals(A) > 1e-10))
-    print(tt_inner_prod(tt_transpose(L_op_tt), tt_diag(tt_vec(a))))
-
-    A_1 = tt_matrix_to_matrix(L_op_tt)
-    A_2 = tt_matrix_to_matrix(tt_diag(tt_vec(a)))
-    A = np.block([[A_1.T @ A_1], [A_2]])
-    print(A_1.shape, np.linalg.matrix_rank(A_1), np.linalg.matrix_rank(A))
-    print(tt_inner_prod(L_op_tt, tt_diag(tt_vec(a))))
-
-    A_1 = tt_matrix_to_matrix(tt_scale(-1, tt_transpose(Q_ineq_op)))
-    A_2 = tt_matrix_to_matrix(lag_maps["t"])
-    A = np.block([[A_1], [A_2]])
-    print(A_1.shape, np.linalg.matrix_rank(A))
-
-    A_1 = tt_matrix_to_matrix(Q_ineq_op)
-    A_2 = tt_matrix_to_matrix(lag_maps["t"])
-    A = np.block([[A_1], [A_2.T]])
-    print(A_1.shape, np.linalg.matrix_rank(A))
-
 
     print("...Problem created!")
     print(f"Objective TT-ranks: {tt_ranks(C_tt)}")
@@ -502,4 +393,3 @@ if __name__ == "__main__":
     print(f"Ranks X_tt: {tt_ranks(X_tt)}, Y_tt: {tt_ranks(Y_tt)}, \n "
           f"     T_tt: {tt_ranks(T_tt)}, Z_tt: {tt_ranks(Z_tt)} ")
     print(f"Time: {t1 - t0}s")
-

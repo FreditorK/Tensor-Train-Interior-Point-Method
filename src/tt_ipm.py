@@ -148,8 +148,8 @@ def tt_infeasible_newton_system(
     dual_error = tt_inner_prod(dual_feas, dual_feas)
     b_3 = tt_rank_reduce(tt_sub(tt_scale(2 * mu, tt_vec(tt_identity(len(X_tt)))), tt_matrix_vec_mul(L_Z, vec_X_tt)), err_bound=tol)
     if dual_error > feasibility_tol:
-        b_3 = tt_sub(b_3, tt_matrix_vec_mul(L_X, dual_feas))
-    rhs[1 + idx_add] = b_3
+        b_3 = tt_rank_reduce(tt_sub(b_3, tt_matrix_vec_mul(L_X, dual_feas)), err_bound=tol)
+    rhs[1 + idx_add] = b_3 # FIXME: This bias becomes expensive
 
     return lhs_skeleton, rhs, primal_error + dual_error
 

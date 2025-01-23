@@ -5,8 +5,11 @@ from src.ops import *
 from cy_src.tt_ops_cy import *
 from opt_einsum import contract as einsum
 
-I = np.array([[1.0, 0],
-              [0, 1.0]]).reshape(1, 2, 2, 1)
+
+def E(i, j):
+    E = np.zeros((1, 2, 2, 1))
+    E[:, i, j] += 1
+    return E
 
 
 def tt_random_binary(target_ranks: List[int], shape=(2,)):
