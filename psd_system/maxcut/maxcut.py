@@ -15,7 +15,7 @@ from src.tt_eig import tt_min_eig, tt_max_eig
 class Config:
     seed = 3 #999: Very low rank solution, 9: Low rank solution, 3: Regular solution
     max_rank = 2
-    dim = 7
+    dim = 6
 
 
 def tt_diag_op(dim):

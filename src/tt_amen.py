@@ -389,6 +389,9 @@ def tt_block_amen(block_A, block_b, aux_matrix_blocks=None, nswp=22, x0=None, ep
     real_tol = (eps / np.sqrt(d)) / damp
 
     for swp in range(nswp):
+        if verbose:
+            print('Starting Sweep:\n\tMax num of sweeps: %d' % swp)
+            print(f"\tTT-sol rank: {tt_ranks(x_cores)} \n")
         for k in range(d - 1, 0, -1):
             if swp > 0:
                 nrmsc *= (normA[:, k - 1] * normx[k - 1]) / normb[:, k - 1]
@@ -500,6 +503,10 @@ def tt_block_amen(block_A, block_b, aux_matrix_blocks=None, nswp=22, x0=None, ep
 
             dx = np.linalg.norm(solution_now - previous_solution) / np.linalg.norm(solution_now)
             max_dx = max(max_dx, dx)
+
+            if 2*block_res_old < block_res_new and block_res_new > real_tol:
+                if verbose:
+                    print('WARNING: residual increases. res_old %g, res_new %g, real_tol %g' % (block_res_old, block_res_new, real_tol))
 
             solution_now = np.reshape(solution_now, (block_size, rx[k], N[k], rx[k + 1]))
             solution_now = np.transpose(solution_now, (1, 2, 0, 3))

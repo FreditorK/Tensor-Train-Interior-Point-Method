@@ -36,7 +36,7 @@ def tt_partial_trace_op(block_size, dim):
 # Constraint 5 -----------------------------------------------------------------
 
 def tt_partial_J_trace_op(block_size, dim):
-    matrix_tt = [E(1, 1)] + tt_identity(dim - block_size - 1)
+    matrix_tt = tt_sub(tt_identity(dim - block_size), [E(0, 0) for _  in range(dim-block_size)])
     block_op_0 = []
     for i, c in enumerate(tt_vec(tt_identity(block_size))):
         core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
@@ -44,7 +44,7 @@ def tt_partial_J_trace_op(block_size, dim):
         block_op_0.append(core)
     op_tt_0 = tt_diag(tt_vec(matrix_tt)) + block_op_0
 
-    matrix_tt = [E(0, 1) + E(1, 0)] + tt_one_matrix(dim-block_size-1)
+    matrix_tt = tt_sub(tt_one_matrix(dim-block_size), tt_identity(dim-block_size))
     block_op_1 = []
     for i, c in enumerate(tt_vec(tt_sub(tt_one_matrix(block_size), tt_identity(block_size)))):
         core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
@@ -124,7 +124,7 @@ def tt_ineq_op_adj(dim):
 
 @dataclass
 class Config:
-    seed = 6
+    seed = 7
     max_rank = 3
 
 if __name__ == "__main__":
@@ -175,7 +175,7 @@ if __name__ == "__main__":
 
     print("Objective matrix: ")
     C_tt = [-E(0, 0)] + tt_kron(G_B, G_A)
-    print(np.round(tt_matrix_to_matrix(C_tt), decimals=2))
+    print(np.round(tt_matrix_to_matrix(tt_kron(G_B, G_A)), decimals=2))
 
     # Equality Operator
     # IV
@@ -188,24 +188,12 @@ if __name__ == "__main__":
         M = tt_matrix_to_matrix(random_A)
         print(np.round(M, decimals=4))
         print(np.round(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(partial_tr_op, tt_vec(random_A)))), decimals=4))
-        partial_traces = {}
-        m = 2**n
-        for i, j in product(range(m), range(m)):
-            if i != j:
-                partial_traces[(i, j)] = (np.trace(M[m*i:m*(i+1), m*j: m*(j+1)]))
-        print(partial_traces)
 
     def test_partial_tr_op_adj():
         random_A = tt_random_gaussian([3] * (2 * n), shape=(2, 2))
         M = tt_matrix_to_matrix(random_A)
         print(np.round(M, decimals=4))
         print(np.round(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(partial_tr_op_adj, tt_vec(random_A)))), decimals=4))
-        partial_traces = {}
-        m = 2**n
-        for i, j in product(range(m), range(m)):
-            if i != j:
-                partial_traces[(i, j)] = (M[m*i:m*(i+1), m*j: m*(j+1)][0, -1])
-        print(partial_traces)
 
     L_op_tt = partial_tr_op
     L_op_tt_adj = partial_tr_op_adj
@@ -221,23 +209,12 @@ if __name__ == "__main__":
         M = tt_matrix_to_matrix(random_A)
         print(np.round(M, decimals=4))
         print(np.round(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(partial_tr_J_op, tt_vec(random_A)))), decimals=4))
-        partial_traces = {}
-        m = 2**n
-        for i, j in product(range(m), range(m)):
-            partial_traces[(i, j)] = (np.trace(np.ones_like(M[m*i:m*(i+1), m*j: m*(j+1)]) @ M[m*i:m*(i+1), m*j: m*(j+1)]))
-        print(partial_traces)
 
     def test_partial_tr_J_op_adj():
         random_A = tt_random_gaussian([3] * (2 * n), shape=(2, 2))
         M = tt_matrix_to_matrix(random_A)
         print(np.round(M, decimals=4))
         print(np.round(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(partial_tr_J_op_adj, tt_vec(random_A)))), decimals=4))
-        partial_traces = {}
-        m = 2**n
-        for i, j in product(range(m), range(m)):
-            if i > 0 and j == 0 or i == 0 and j > 0:
-                partial_traces[(i, j)] = [M[m*i:m*(i+1), m*j: m*(j+1)][0, 0], M[m*i:m*(i+1), m*j: m*(j+1)][-1, -1]]
-        print(partial_traces)
 
 
     L_op_tt = tt_rank_reduce(tt_add(L_op_tt, partial_tr_J_op))
@@ -255,19 +232,12 @@ if __name__ == "__main__":
         M = tt_matrix_to_matrix(random_A)
         print(np.round(M, decimals=4))
         print(np.round(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(diag_block_sum_op, tt_vec(random_A)))), decimals=4))
-        partial_traces = 0
-        m = 2**n
-        for i in range(m):
-            partial_traces += M[m*i:m*(i+1), m*i:m*(i+1)]
-        print(partial_traces)
 
     def test_diag_block_sum_op_adj():
         random_A = tt_random_gaussian([3] * (2 * n), shape=(2, 2))
         M = tt_matrix_to_matrix(random_A)
         print(np.round(M, decimals=4))
         print(np.round(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(diag_block_sum_op_adj, tt_vec(random_A)))), decimals=4))
-        m = 2**n
-        print(M[0:m, 0:m])
 
     L_op_tt = tt_rank_reduce(tt_add(L_op_tt, diag_block_sum_op))
     L_op_tt_adj = tt_rank_reduce(tt_add(L_op_tt_adj, diag_block_sum_op_adj))
@@ -284,21 +254,12 @@ if __name__ == "__main__":
         M = tt_matrix_to_matrix(random_A)
         print(np.round(M, decimals=4))
         print(np.round(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(Q_m_P_op, tt_vec(random_A)))), decimals=4))
-        m = 2**(2*n)
-        Q = M[:m, :m]
-        P = M[:m, m]
-        partial_traces = np.diagonal(Q) - P
-        print(partial_traces)
 
     def test_Q_m_P_op_adj():
         random_A = tt_random_gaussian([3] * (2 * n), shape=(2, 2))
         M = tt_matrix_to_matrix(random_A)
         print(np.round(M, decimals=4))
         print(np.round(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(Q_m_P_op_adj, tt_vec(random_A)))), decimals=4))
-        m = 2**(2*n)
-        P = M[:m, m]
-        partial_traces = P
-        print(partial_traces)
 
     L_op_tt = tt_rank_reduce(tt_add(L_op_tt, Q_m_P_op))
     L_op_tt_adj = tt_rank_reduce(tt_add(L_op_tt_adj, Q_m_P_op_adj))
@@ -365,6 +326,7 @@ if __name__ == "__main__":
         "t": tt_rank_reduce(tt_diag(tt_vec([E(0, 1) + E(1,  0) + E(1, 1)] + tt_one_matrix(2*n))))
     }
 
+
     print("...Problem created!")
     print(f"Objective TT-ranks: {tt_ranks(C_tt)}")
     print(f"Eq Op-rank: {tt_ranks(L_op_tt)}")
@@ -393,3 +355,5 @@ if __name__ == "__main__":
     print(f"Ranks X_tt: {tt_ranks(X_tt)}, Y_tt: {tt_ranks(Y_tt)}, \n "
           f"     T_tt: {tt_ranks(T_tt)}, Z_tt: {tt_ranks(Z_tt)} ")
     print(f"Time: {t1 - t0}s")
+    # TODO: Something went wrong when generalising to n=2
+

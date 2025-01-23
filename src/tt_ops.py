@@ -304,6 +304,42 @@ def tt_matrix_vec_mul(matrix_tt: List[np.array], vec_tt: List[np.array]) -> List
     return [_tt_mat_core_collapse(core_op, core) for core_op, core in zip(matrix_tt, vec_tt)]
 
 
+def swap_cores(core_a, core_b, err_bound):
+    if len(core_a.shape) == 3 and len(core_b.shape) == 3:
+        supercore = einsum("rms,snR->rnmR", core_a, core_b)
+        u, s, v = scip.linalg.svd(np.reshape(supercore, (core_a.shape[0] * core_b.shape[1], -1)), full_matrices=False, check_finite=False)
+        u = u @ np.diag(s)
+        r = max(np.sum(s > err_bound), 1)
+        u = u[:, :r]
+        v = v[:r, :]
+        return np.reshape(u, (core_a.shape[0], core_b.shape[1], -1)), np.reshape(v,(-1, core_a.shape[1], core_b.shape[2]))
+    elif len(core_a.shape) == 4 and len(core_b.shape) == 4:
+        supercore = einsum("rmas,snbR->rnbmaR", core_a, core_b)
+        u, s, v = scip.linalg.svd(np.reshape(supercore, (core_a.shape[0] * core_b.shape[1] * core_b.shape[2], -1)), full_matrices=False, check_finite=False)
+        u = u @ np.diag(s)
+        r = max(np.sum(s > err_bound), 1)
+        u = u[:, :r]
+        v = v[:r, :]
+        return np.reshape(u, (core_a.shape[0], core_b.shape[1], core_b.shape[2], -1)), np.reshape(v, (-1, core_a.shape[1], core_a.shape[2], core_b.shape[3]))
+    else:
+        raise Exception("The cores must be wither 3d or 4d tensors.")
+
+
+def tt_fast_matrix_vec_mul(matrix_tt: List[np.array], vec_tt: List[np.array], eps=1e-18) -> List[np.array]:
+    """ https://arxiv.org/pdf/2410.19747 """
+    dim = len(matrix_tt)
+    err_bound = eps * np.sqrt(np.divide(min(tt_inner_prod(matrix_tt, matrix_tt), tt_inner_prod(vec_tt, vec_tt)), dim - 1))
+
+    cores = [np.transpose(c, (2, 1, 0)) for c in vec_tt[::-1]]
+    for i in range(dim):
+        cores[0] = einsum("mabk,kbn->man", matrix_tt[dim - i - 1], cores[0])
+
+        if i != dim - 1:
+            for j in range(i, -1, -1):
+                cores[j], cores[j + 1] = swap_cores(cores[j], cores[j + 1], err_bound)
+
+    return cores
+
 def _tt_mat_mat_collapse(mat_core_1, mat_core_2):
     return sum([
         np.kron(mat_core_1[:, :, None, i], mat_core_2[:, None, i])
@@ -316,6 +352,20 @@ def tt_mat_mat_mul(matrix_tt_1, matrix_tt_2):
         _tt_mat_mat_collapse(core_op_1, core_op_2) for core_op_1, core_op_2 in
         zip(matrix_tt_1, matrix_tt_2)
     ]
+
+def tt_fast_mat_mat_mul(matrix_tt_1, matrix_tt_2, eps=1e-18):
+    dim= len(matrix_tt_1)
+    err_bound = eps * np.sqrt(np.divide(min(tt_inner_prod(matrix_tt_1, matrix_tt_1), tt_inner_prod(matrix_tt_2, matrix_tt_2)), dim - 1))
+
+    cores = [np.transpose(c, (3, 1, 2, 0)) for c in matrix_tt_2[::-1]]
+    for i in range(dim):
+        cores[0] = einsum("mabk,kbcn->macn", matrix_tt_1[dim - i - 1], cores[0])
+
+        if i != dim - 1:
+            for j in range(i, -1, -1):
+                cores[j], cores[j + 1] = swap_cores(cores[j], cores[j + 1], err_bound=err_bound)
+
+    return cores
 
 
 def tt_kron(matrix_tt_1, matrix_tt_2):
