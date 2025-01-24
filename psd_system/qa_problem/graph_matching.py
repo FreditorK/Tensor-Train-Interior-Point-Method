@@ -124,8 +124,8 @@ def tt_ineq_op_adj(dim):
 
 @dataclass
 class Config:
-    seed = 6 # Some seeds have bad convergence
-    max_rank = 3
+    seed = 88 # Some seeds have bad convergence
+    max_rank = 2
 
 if __name__ == "__main__":
     """
@@ -162,10 +162,14 @@ if __name__ == "__main__":
     np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=4, suppress=True)
     print("Creating Problem...")
 
-    n = 1
+    n = 2
+    A = np.eye(2**n)
+    permutation = np.random.permutation(2**n)
+    P = np.eye(2**n)[permutation]
+    B = P @ A
 
     np.random.seed(Config.seed)
-    G_A = tt_random_graph(n, Config.max_rank)
+    G_A = tt_matrix_svd(A)
     print("Graph A: ")
     print(np.round(tt_matrix_to_matrix(G_A), decimals=2))
 
@@ -344,7 +348,7 @@ if __name__ == "__main__":
         eq_bias_tt,
         Q_ineq_op,
         Q_ineq_bias,
-        max_iter=15,
+        max_iter=4,
         verbose=True
     )
     t1 = time.time()

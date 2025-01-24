@@ -139,6 +139,7 @@ def _tt_lr_random_orthogonalise(train_tt, gaussian_tt):
 def tt_rank_reduce(train_tt: List[np.array], eps=1e-18):
     """ Might reduce TT-rank """
     dim = len(train_tt)
+    eps = eps / np.sqrt(dim-1)
     if dim == 1 or np.all(np.array(tt_ranks(train_tt))==1):
         return train_tt
     train_tt = tt_rl_orthogonalise(train_tt)
@@ -342,6 +343,7 @@ def swap_cores(core_a, core_b, eps):
 def tt_fast_matrix_vec_mul(matrix_tt: List[np.array], vec_tt: List[np.array], eps=1e-18) -> List[np.array]:
     """ https://arxiv.org/pdf/2410.19747 """
     dim = len(matrix_tt)
+    eps = eps / np.sqrt(dim-1)
 
     cores = [np.transpose(c, (2, 1, 0)) for c in vec_tt[::-1]]
     for i in range(dim):
@@ -368,6 +370,7 @@ def tt_mat_mat_mul(matrix_tt_1, matrix_tt_2):
 
 def tt_fast_mat_mat_mul(matrix_tt_1, matrix_tt_2, eps=1e-18):
     dim= len(matrix_tt_1)
+    eps = eps / np.sqrt(dim-1)
 
     cores = [np.transpose(c, (3, 1, 2, 0)) for c in matrix_tt_2[::-1]]
     for i in range(dim):
@@ -382,6 +385,7 @@ def tt_fast_mat_mat_mul(matrix_tt_1, matrix_tt_2, eps=1e-18):
 
 def tt_fast_hadammard(train_tt_1, train_tt_2, eps=1e-18):
     dim = len(train_tt_1)
+    eps = eps / np.sqrt(dim-1)
 
     if len(train_tt_1[0].shape) == 4 and len(train_tt_2[0].shape) == 4:
 
