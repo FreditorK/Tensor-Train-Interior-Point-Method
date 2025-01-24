@@ -136,27 +136,25 @@ def _tt_lr_random_orthogonalise(train_tt, gaussian_tt):
     return train_tt
 
 
-def tt_rank_reduce(train_tt: List[np.array], err_bound=1e-18):
+def tt_rank_reduce(train_tt: List[np.array], eps=1e-18):
     """ Might reduce TT-rank """
     dim = len(train_tt)
     if dim == 1 or np.all(np.array(tt_ranks(train_tt))==1):
         return train_tt
     train_tt = tt_rl_orthogonalise(train_tt)
-    err_bound = err_bound*np.sqrt(np.divide(tt_inner_prod(train_tt, train_tt), dim-1))
     rank = 1
     for idx, tt_core in enumerate(train_tt[:-1]):
         idx_shape = tt_core.shape
         next_idx_shape = train_tt[idx + 1].shape
         k = len(idx_shape) - 1
-        U, S, V_T = scp.linalg.svd(train_tt[idx].reshape(rank * np.prod(idx_shape[1:k], dtype=int), -1), full_matrices=False, check_finite=False)
-        non_sing_eig_idxs = np.asarray(S >= min(np.max(S), err_bound)).nonzero()
-        S = S[non_sing_eig_idxs]
-        next_rank = len(S)
-        U = U[:, non_sing_eig_idxs]
-        V_T = V_T[non_sing_eig_idxs, :]
-        train_tt[idx] = U.reshape(rank, *idx_shape[1:-1], next_rank)
+        u, s, v_t = scp.linalg.svd(train_tt[idx].reshape(rank * np.prod(idx_shape[1:k], dtype=int), -1), full_matrices=False, check_finite=False)
+        next_rank = prune_singular_vals(s, eps)
+        s = s[:next_rank]
+        u = u[:, :next_rank]
+        v_t = v_t[:next_rank, :]
+        train_tt[idx] = u.reshape(rank, *idx_shape[1:-1], next_rank)
         train_tt[idx + 1] = (
-            np.diag(S) @ V_T @ train_tt[idx + 1].reshape(V_T.shape[-1], -1)
+            np.diag(s) @ v_t @ train_tt[idx + 1].reshape(v_t.shape[-1], -1)
         ).reshape(next_rank, *next_idx_shape[1:-1], -1)
         rank = next_rank
     return train_tt
@@ -268,6 +266,7 @@ def tt_hadamard(train_1_tt: List[np.array], train_2_tt: List[np.array]) -> List[
 
 
 def _tt_core_collapse(core_1: np.array, core_2: np.array) -> np.array:
+    # TODO: Switch kron for einsum
     return np.sum([
         np.kron(core_1[(slice(None),) + i], core_2[(slice(None),) + i])
         for i in product(*([list(range(s)) for s in core_1.shape[1:-1]]))
@@ -304,12 +303,27 @@ def tt_matrix_vec_mul(matrix_tt: List[np.array], vec_tt: List[np.array]) -> List
     return [_tt_mat_core_collapse(core_op, core) for core_op, core in zip(matrix_tt, vec_tt)]
 
 
-def swap_cores(core_a, core_b, err_bound):
+def prune_singular_vals(s, eps):
+    if np.linalg.norm(s) == 0.0:
+        return 1
+
+    if eps <= 0.0:
+        return s.size
+
+    sc = np.cumsum(np.abs(s[::-1]) ** 2)[::-1]
+    R = np.argmax(sc < eps ** 2)
+    R = max(R, 1)
+    R = s.size if sc[-1] > eps ** 2 else R
+
+    return R
+
+
+def swap_cores(core_a, core_b, eps):
     if len(core_a.shape) == 3 and len(core_b.shape) == 3:
         supercore = einsum("rms,snR->rnmR", core_a, core_b)
         u, s, v = scip.linalg.svd(np.reshape(supercore, (core_a.shape[0] * core_b.shape[1], -1)), full_matrices=False, check_finite=False)
         u = u @ np.diag(s)
-        r = max(np.sum(s > err_bound), 1)
+        r = prune_singular_vals(s, eps)
         u = u[:, :r]
         v = v[:r, :]
         return np.reshape(u, (core_a.shape[0], core_b.shape[1], -1)), np.reshape(v,(-1, core_a.shape[1], core_b.shape[2]))
@@ -317,7 +331,7 @@ def swap_cores(core_a, core_b, err_bound):
         supercore = einsum("rmas,snbR->rnbmaR", core_a, core_b)
         u, s, v = scip.linalg.svd(np.reshape(supercore, (core_a.shape[0] * core_b.shape[1] * core_b.shape[2], -1)), full_matrices=False, check_finite=False)
         u = u @ np.diag(s)
-        r = max(np.sum(s > err_bound), 1)
+        r = prune_singular_vals(s, eps)
         u = u[:, :r]
         v = v[:r, :]
         return np.reshape(u, (core_a.shape[0], core_b.shape[1], core_b.shape[2], -1)), np.reshape(v, (-1, core_a.shape[1], core_a.shape[2], core_b.shape[3]))
@@ -328,7 +342,6 @@ def swap_cores(core_a, core_b, err_bound):
 def tt_fast_matrix_vec_mul(matrix_tt: List[np.array], vec_tt: List[np.array], eps=1e-18) -> List[np.array]:
     """ https://arxiv.org/pdf/2410.19747 """
     dim = len(matrix_tt)
-    err_bound = eps * np.sqrt(np.divide(min(tt_inner_prod(matrix_tt, matrix_tt), tt_inner_prod(vec_tt, vec_tt)), dim - 1))
 
     cores = [np.transpose(c, (2, 1, 0)) for c in vec_tt[::-1]]
     for i in range(dim):
@@ -336,7 +349,7 @@ def tt_fast_matrix_vec_mul(matrix_tt: List[np.array], vec_tt: List[np.array], ep
 
         if i != dim - 1:
             for j in range(i, -1, -1):
-                cores[j], cores[j + 1] = swap_cores(cores[j], cores[j + 1], err_bound)
+                cores[j], cores[j + 1] = swap_cores(cores[j], cores[j + 1], eps)
 
     return cores
 
@@ -355,7 +368,6 @@ def tt_mat_mat_mul(matrix_tt_1, matrix_tt_2):
 
 def tt_fast_mat_mat_mul(matrix_tt_1, matrix_tt_2, eps=1e-18):
     dim= len(matrix_tt_1)
-    err_bound = eps * np.sqrt(np.divide(min(tt_inner_prod(matrix_tt_1, matrix_tt_1), tt_inner_prod(matrix_tt_2, matrix_tt_2)), dim - 1))
 
     cores = [np.transpose(c, (3, 1, 2, 0)) for c in matrix_tt_2[::-1]]
     for i in range(dim):
@@ -363,9 +375,39 @@ def tt_fast_mat_mat_mul(matrix_tt_1, matrix_tt_2, eps=1e-18):
 
         if i != dim - 1:
             for j in range(i, -1, -1):
-                cores[j], cores[j + 1] = swap_cores(cores[j], cores[j + 1], err_bound=err_bound)
+                cores[j], cores[j + 1] = swap_cores(cores[j], cores[j + 1], eps)
 
     return cores
+
+
+def tt_fast_hadammard(train_tt_1, train_tt_2, eps=1e-18):
+    dim = len(train_tt_1)
+
+    if len(train_tt_1[0].shape) == 4 and len(train_tt_2[0].shape) == 4:
+
+        cores = [np.transpose(c, (3, 1, 2, 0)) for c in train_tt_2[::-1]]
+        for i in range(dim):
+            cores[0] = einsum("maAk,kbBn,AB,ab->maAn", train_tt_1[dim - i - 1], cores[0],
+                                   np.eye(train_tt_1[dim - i - 1].shape[1], dtype=cores[0].dtype),
+                                   np.eye(train_tt_1[dim - i - 1].shape[1], dtype=cores[0].dtype))
+
+            if i != dim - 1:
+                for j in range(i, -1, -1):
+                    cores[j], cores[j + 1] = swap_cores(cores[j], cores[j + 1], eps)
+
+        return cores
+    else:
+
+        cores = [np.transpose(c, (2, 1, 0)) for c in train_tt_2[::-1]]
+        for i in range(dim):
+            cores[0] = einsum("mak,kbn,ab->man", train_tt_1[dim - i - 1], cores[0],
+                                   np.eye(train_tt_1[dim - i - 1].shape[1], dtype=cores[0].dtype))
+
+            if i != dim - 1:
+                for j in range(i, -1, -1):
+                    cores[j], cores[j + 1] = swap_cores(cores[j], cores[j + 1], eps)
+
+        return cores
 
 
 def tt_kron(matrix_tt_1, matrix_tt_2):

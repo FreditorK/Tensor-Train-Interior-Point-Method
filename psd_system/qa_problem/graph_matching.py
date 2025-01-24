@@ -124,7 +124,7 @@ def tt_ineq_op_adj(dim):
 
 @dataclass
 class Config:
-    seed = 7
+    seed = 6 # Some seeds have bad convergence
     max_rank = 3
 
 if __name__ == "__main__":

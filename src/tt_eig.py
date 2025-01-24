@@ -136,7 +136,7 @@ def tt_null_space(A, nswp=10, x0=None, eps=1e-10, verbose=False):
     dtype = A[0].dtype
     damp = 2
 
-    A = tt_rank_reduce(tt_kron(tt_identity(len(A)), A), err_bound=eps)
+    A = tt_rank_reduce(tt_kron(tt_identity(len(A)), A), eps=eps)
 
     if x0 == None:
         x_cores = tt_random_gaussian(tt_ranks(A), shape=(2, ))

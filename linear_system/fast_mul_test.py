@@ -22,3 +22,16 @@ print(tt_matrix_to_matrix(matrix_tt) @ tt_matrix_to_matrix(matrix_tt_2))
 
 print("Fast test:")
 print(tt_matrix_to_matrix(tt_fast_mat_mat_mul(matrix_tt, matrix_tt_2)))
+
+
+print("Ground truth:")
+print(tt_matrix_to_matrix(matrix_tt) * tt_matrix_to_matrix(matrix_tt_2))
+
+print("Fast test:")
+print(tt_matrix_to_matrix(tt_fast_hadammard(matrix_tt, matrix_tt_2)))
+
+print("Ground truth:")
+print(tt_vec_to_vec(vec_tt) * tt_vec_to_vec(vec_tt))
+
+print("Fast test:")
+print(tt_vec_to_vec(tt_fast_hadammard(vec_tt, vec_tt)))

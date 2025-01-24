@@ -11,7 +11,7 @@ from src.tt_eig import tt_max_eig, tt_min_eig
 
 
 s_matrix_tt = tt_scale(5, tt_random_gaussian([4, 4], shape=(2, 2)))
-s_matrix_tt = tt_rl_orthogonalise(tt_rank_reduce(tt_mat_mat_mul(s_matrix_tt, tt_transpose(s_matrix_tt)), err_bound=0))
+s_matrix_tt = tt_rl_orthogonalise(tt_rank_reduce(tt_mat_mat_mul(s_matrix_tt, tt_transpose(s_matrix_tt)), eps=0))
 
 k_matrix_tt = tt_scale(0.056, tt_identity(3))
 

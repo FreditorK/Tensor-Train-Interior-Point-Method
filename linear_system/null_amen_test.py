@@ -23,7 +23,7 @@ print(np.sum(np.linalg.svdvals(tt_matrix_to_matrix(s_matrix_tt)) > 1e-10))
 
 print("Local Res: ", res)
 print("Global Res: ", global_res)
-print(tt_ranks(tt_rank_reduce(tt_mat(null_vec), err_bound=1e-10)))
+print(tt_ranks(tt_rank_reduce(tt_mat(null_vec), eps=1e-10)))
 null_mat = tt_mat(null_vec)
 null_res_mat = tt_mat_mat_mul(s_matrix_tt, null_mat)
 #print(np.round(tt_matrix_to_matrix(null_res_mat), decimals=4))

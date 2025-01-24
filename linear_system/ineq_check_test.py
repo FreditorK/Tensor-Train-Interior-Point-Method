@@ -9,7 +9,7 @@ from src.tt_ineq_check import tt_is_geq, tt_is_leq
 np.random.seed(4)
 
 s_matrix_tt = tt_random_gaussian([4, 4, 4], shape=(2, 2))
-s_matrix_tt = tt_rank_reduce(tt_add(s_matrix_tt, tt_transpose(s_matrix_tt)), err_bound=0)
+s_matrix_tt = tt_rank_reduce(tt_add(s_matrix_tt, tt_transpose(s_matrix_tt)), eps=0)
 
 X_tt = tt_random_gaussian([2], shape=(2, 2))
 b_tt = tt_vec(tt_scale(-0.11, [np.ones((1, 2, 2, 1)) for _ in range(2)]))
