@@ -339,6 +339,7 @@ def tt_block_amen(block_A, block_b, aux_matrix_blocks=None, nswp=22, x0=None, ep
     x_shape = model_entry[0].shape[1:-1]
 
     if x0 == None:
+        # TODO: Temp decreased block_size
         x = tt_normalise([np.random.randn(1, *c.shape[1:-1], 1) for c in model_entry[:-1]] + [np.random.randn(1, block_size, *x_shape, 1)])
     else:
         x = x0
