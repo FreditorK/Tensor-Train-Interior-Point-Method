@@ -35,3 +35,6 @@ print(tt_vec_to_vec(vec_tt) * tt_vec_to_vec(vec_tt))
 
 print("Fast test:")
 print(tt_vec_to_vec(tt_fast_hadammard(vec_tt, vec_tt)))
+
+print(tt_matrix_to_matrix(matrix_tt))
+print(tt_matrix_to_matrix(tt_rank_retraction(tt_diag(tt_diagonal(matrix_tt)), [1, 1])))

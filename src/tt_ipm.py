@@ -1,7 +1,9 @@
+import copy
 import sys
 import os
 
 import numpy as np
+import scipy.optimize
 import scipy.sparse.linalg
 
 sys.path.append(os.getcwd() + '/../')
@@ -25,19 +27,21 @@ def ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, num_blocks, eps):
 
     L_eq = -lhs[block_dim:2*block_dim, :block_dim]
     L_Z = lhs[k*block_dim:, :block_dim]
-    L_L_Z = scip.linalg.cholesky(L_Z, check_finite=False, overwrite_a=True, lower=True)
+    #L_L_Z = scip.linalg.cholesky(L_Z, check_finite=False, overwrite_a=True, lower=True)
+    L_inv = np.linalg.inv(L_Z)
     L_eq_adj = -lhs[:block_dim, block_dim:2*block_dim]
     #I = lhs[:block_dim, k*block_dim:]
     inv_I = np.diag(np.divide(1, np.diagonal(lhs[:block_dim, k*block_dim:])))
     L_X = lhs[k * block_dim:, k * block_dim:]
+    #L_L_X = scip.linalg.cholesky(L_X, check_finite=False, overwrite_a=True, lower=True)
     R_d = -rhs[:block_dim]
     R_p = -rhs[block_dim:2*block_dim]
     R_c = -rhs[k * block_dim:]
-
-    K_temp = forward_backward_sub(L_L_Z, L_X)
+    K_temp = L_inv  @ L_X
     K = K_temp @ inv_I
+
     #print("hi", np.linalg.norm(L_Z @ K_temp - L_X))
-    k = forward_backward_sub(L_L_Z, R_c)
+    k = L_inv @ R_c
     #print("hi 2", np.linalg.norm(L_Z @ k - R_c))
     KR_dmk = K @ R_d - k
 
@@ -48,20 +52,20 @@ def ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, num_blocks, eps):
         R_t = -rhs[2 * block_dim:3 * block_dim]
         A = np.block([
             [L_eq @ K @ L_eq_adj, L_eq @ K @ L_ineq_adj],
-            [TL_ineq @ K @ L_eq_adj, R_ineq + TL_ineq @ K @ L_ineq_adj]
-        ])
-        b = np.block([
-            [L_eq @ KR_dmk - R_p],
-            [TL_ineq @ KR_dmk - R_t]
-        ])
-        local_lag_map = np.block([
+            [TL_ineq @ K @ L_eq_adj, R_ineq + TL_ineq @ K @ L_ineq_adj],
             [local_auxs["y"], np.zeros((block_dim, block_dim))],
             [np.zeros((block_dim, block_dim)), local_auxs["t"]]
         ])
-        lstq_rhs = A.T @ (b - A @ prev_yt) - local_lag_map.T @ (local_lag_map @ prev_yt)
-        lstq_lhs = A.T @  A + local_lag_map.T @ local_lag_map
-        L_lstq_lhs = scip.linalg.cholesky(lstq_lhs, check_finite=False, overwrite_a=True, lower=True)
-        yt = forward_backward_sub(L_lstq_lhs, lstq_rhs) + prev_yt
+        b = np.block([
+            [L_eq @ KR_dmk - R_p],
+            [TL_ineq @ KR_dmk - R_t],
+            [np.zeros((2*block_dim, 1))]
+        ])
+        P, _ = np.linalg.qr(np.random.randn(4*block_dim, 2*block_dim))
+        rhs = P.T @ (b - A @ prev_yt)
+        lhs = P.T @ A
+        sol = np.linalg.solve(lhs, rhs)
+        yt = sol + prev_yt
         y = yt[:block_dim]
         t = yt[block_dim:]
         R_dmL_eq_adj_yt = R_d - L_eq_adj @ y - L_ineq_adj @ t
@@ -75,19 +79,18 @@ def ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, num_blocks, eps):
         #print(np.linalg.norm(L_Z @ x + L_X @ z + R_c))
         #print("---")
         return np.vstack((x, y, t, z))
-    A = L_eq @ K @ L_eq_adj
-    b = L_eq @ KR_dmk - R_p
-    local_lag_map = local_auxs["y"]
-    lhs = np.block([
-        [A],
-        [local_lag_map]
+    A = np.block([
+        [L_eq @ K @ L_eq_adj],
+        [local_auxs["y"]]
     ])
-    rhs = np.block([[b - A @ prev_yt],
-                    [-local_lag_map @ prev_yt]])
-    lstq_rhs = lhs.T @ rhs
-    lstq_lhs = lhs.T @ lhs
-    L_lstq_lhs = scip.linalg.cholesky(lstq_lhs, check_finite=False, overwrite_a=True, lower=True)
-    y = forward_backward_sub(L_lstq_lhs, lstq_rhs) + prev_yt
+    b = np.block([[L_eq @ KR_dmk - R_p],
+                    [np.zeros((block_dim, 1))]])
+    P, _ = np.linalg.qr(np.random.randn(2 * block_dim, block_dim))
+    rhs = P.T @ (b - A @ prev_yt)
+    lhs = P.T @ A
+    print("Cond: ", np.linalg.cond(lhs))
+    sol = np.linalg.solve(lhs, rhs)
+    y = sol + prev_yt
     R_dmL_eq_adj_y = R_d - L_eq_adj @ y
     x = K @ R_dmL_eq_adj_y - k
     z = -inv_I @ R_dmL_eq_adj_y
@@ -99,6 +102,27 @@ def ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, num_blocks, eps):
     #print("---")
     return np.vstack((x, y, z))
 
+
+def tt_preconditioner(Z_tt):
+    dim = len(Z_tt)
+    rank_one_Z_tt = tt_rank_retraction(tt_diag(tt_diagonal(copy.deepcopy(Z_tt))), [1]*(dim-1))
+    root_Z_tt = []
+    root_Z_tt_inv = []
+    sign = 1
+    for i, c in enumerate(rank_one_Z_tt):
+        c = sign*np.squeeze(c)
+        l, Q = np.linalg.eigh(c)
+        if np.all(l < 0) and i < dim-1:
+            l *= - 1
+            sign *= -1
+        else:
+            r = np.sum(l > 0)
+            l =  l[-r:]
+            Q = Q[:, -r:]
+        root_Z_tt.append((Q @ np.diag(np.sqrt(l)).reshape(1, 2, 2, 1)))
+        root_Z_tt_inv.append((Q @ np.diag(np.divide(1, np.sqrt(l)))).reshape(1, 2, 2, 1))
+    print(tt_matrix_to_matrix(root_Z_tt) @ tt_matrix_to_matrix(root_Z_tt).T)
+    return root_Z_tt, root_Z_tt_inv
 
 def tt_infeasible_newton_system(
         lhs_skeleton,
@@ -120,9 +144,9 @@ def tt_infeasible_newton_system(
         active_ineq
 ):
     idx_add = int(active_ineq)
-    identity = tt_identity(len(Z_tt))
-    L_Z = tt_rank_reduce(tt_add(tt_kron(identity, Z_tt), tt_kron(tt_transpose(Z_tt), identity)), eps=tol)
-    L_X = tt_rank_reduce(tt_add(tt_kron(tt_transpose(X_tt), identity), tt_kron(identity, X_tt)), eps=tol)
+    scaling_matrix, scaling_matrix_inv = tt_preconditioner(Z_tt) #tt_identity(len(Z_tt))
+    L_Z = tt_rank_reduce(tt_add(tt_kron(tt_transpose(scaling_matrix_inv), tt_mat_mat_mul(scaling_matrix, Z_tt)), tt_kron(tt_mat_mat_mul(scaling_matrix, tt_transpose(Z_tt)), tt_transpose(scaling_matrix_inv))), eps=tol)
+    L_X = tt_rank_reduce(tt_add(tt_kron(tt_transpose(scaling_matrix_inv), tt_mat_mat_mul(scaling_matrix, X_tt)), tt_kron(tt_mat_mat_mul(scaling_matrix, tt_transpose(X_tt)), tt_transpose(scaling_matrix_inv))), eps=tol)
 
     if active_ineq:
         ineq_res_tt = tt_sub(vec_bias_tt_ineq, tt_fast_matrix_vec_mul(mat_lin_op_tt_ineq, tt_vec(X_tt), eps))

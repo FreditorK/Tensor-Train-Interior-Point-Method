@@ -545,6 +545,9 @@ def tt_diag(vec_tt):
     basis = [einsum("ij, rjR -> rijR", identity, c) for c in vec_tt]
     return tt_rank_reduce(basis)
 
+def tt_diagonal(matrix_tt):
+    return [np.transpose(np.diagonal(c,  axis1=1, axis2=2), (0, 2, 1)) for c in matrix_tt]
+
 def tt_sum(*args):
     sum_tt = args[0]
     for arg in args[1:]:
