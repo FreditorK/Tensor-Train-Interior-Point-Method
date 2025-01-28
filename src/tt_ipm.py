@@ -123,11 +123,11 @@ def tt_infeasible_newton_system(
     L_Z = tt_rank_reduce(tt_kron(scaling_matrix, Z_tt), eps=tol)
     L_X = tt_rank_reduce(tt_kron(X_tt, scaling_matrix), eps=tol)
 
-    print("Cond Z_tt: ", np.linalg.cond(tt_matrix_to_matrix(Z_tt)))
-    print("Cond X_tt: ", np.linalg.cond(tt_matrix_to_matrix(X_tt)))
-    scaling_matrix, scaling_matrix_inv = tt_preconditioner(Z_tt)
-    print("Cond Z_tt_s: ", np.linalg.cond(scip.linalg.fractional_matrix_power(tt_matrix_to_matrix(Z_tt), -1/2) @ tt_matrix_to_matrix(Z_tt)))
-    print("Cond X_tt_s: ", np.linalg.cond(scip.linalg.fractional_matrix_power(tt_matrix_to_matrix(Z_tt), -1/2) @ tt_matrix_to_matrix(X_tt)))
+    #print("Cond Z_tt: ", np.linalg.cond(tt_matrix_to_matrix(Z_tt)))
+    #print("Cond X_tt: ", np.linalg.cond(tt_matrix_to_matrix(X_tt)))
+    #scaling_matrix, scaling_matrix_inv = tt_preconditioner(Z_tt)
+    #print("Cond Z_tt_s: ", np.linalg.cond(scip.linalg.fractional_matrix_power(tt_matrix_to_matrix(Z_tt), -1/2) @ tt_matrix_to_matrix(Z_tt)))
+    #print("Cond X_tt_s: ", np.linalg.cond(scip.linalg.fractional_matrix_power(tt_matrix_to_matrix(Z_tt), -1/2) @ tt_matrix_to_matrix(X_tt)))
 
     if active_ineq:
         ineq_res_tt = tt_sub(vec_bias_tt_ineq, tt_fast_matrix_vec_mul(mat_lin_op_tt_ineq, tt_vec(X_tt), eps))
@@ -196,7 +196,6 @@ def _tt_ipm_newton_step(
         eps
 ):
     mu = tt_inner_prod(Z_tt, [0.5 * c for c in X_tt])
-    op_eps = (1e-4)*eps
     lhs_matrix_tt, rhs_vec_tt, primal_dual_error = tt_infeasible_newton_system(
         lhs_skeleton,
         vec_obj_tt,
@@ -213,11 +212,11 @@ def _tt_ipm_newton_step(
         0.5 * mu,
         tol,
         feasibility_tol,
-        op_eps,
+        eps,
         active_ineq
     )
     idx_add = int(active_ineq)
-    Delta_tt, res = tt_block_amen(lhs_matrix_tt, rhs_vec_tt, aux_matrix_blocks=lag_maps, kickrank=2, eps=eps, local_solver=local_solver, verbose=verbose)
+    Delta_tt, res = tt_block_amen(lhs_matrix_tt, rhs_vec_tt, aux_matrix_blocks=lag_maps, kickrank=2, eps=0.1*tol, local_solver=local_solver, verbose=verbose)
     vec_Delta_Y_tt = tt_rank_reduce(_tt_get_block(1, Delta_tt), eps=tol)
     Delta_T_tt = tt_rank_reduce(tt_mat(_tt_get_block(2, Delta_tt)), eps=tol) if active_ineq else None
     Delta_X_tt = tt_rank_reduce(tt_mat(_tt_get_block(0, Delta_tt)), eps=tol)

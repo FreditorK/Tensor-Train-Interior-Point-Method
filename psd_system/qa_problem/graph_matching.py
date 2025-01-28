@@ -344,7 +344,7 @@ if __name__ == "__main__":
         eq_bias_tt,
         Q_ineq_op,
         Q_ineq_bias,
-        max_iter=15,
+        max_iter=16,
         verbose=True
     )
     t1 = time.time()
