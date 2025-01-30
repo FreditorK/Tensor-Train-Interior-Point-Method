@@ -553,3 +553,9 @@ def tt_sum(*args):
     for arg in args[1:]:
         sum_tt =  tt_rank_reduce(tt_add(sum_tt, arg))
     return sum_tt
+
+def tt_reshape(train_tt, shape):
+    return [c.reshape(c.shape[0], *shape, c.shape[-1]) for c in train_tt]
+
+def tt_merge_matrix_cores(matrix_tt):
+    return [einsum("kijr, rsdK -> kisjdK", c_1, c_2) for c_1, c_2 in zip(matrix_tt[:-1:2], matrix_tt[1::2])]
