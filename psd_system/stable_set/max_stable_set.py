@@ -49,7 +49,7 @@ def tt_tr_op_adjoint(dim):
 class Config:
     seed = 5
     max_rank = 3
-    dim= 2
+    dim= 5
 
 
 if __name__ == "__main__":
@@ -59,7 +59,7 @@ if __name__ == "__main__":
 
     np.random.seed(Config.seed)
     G = tt_random_graph(Config.dim, Config.max_rank)
-    print(np.round(tt_matrix_to_matrix(G), decimals=2))
+    #print(np.round(tt_matrix_to_matrix(G), decimals=2))
 
     # I
     G_entry_tt_op = tt_G_entrywise_mask_op(G)
@@ -89,14 +89,13 @@ if __name__ == "__main__":
         J_tt,
         L_tt,
         bias_tt,
-        max_iter=15,
+        max_iter=16,
         verbose=True
     )
     t1 = time.time()
-    print("Solution: ")
-    print(np.round(tt_matrix_to_matrix(X_tt), decimals=2))
+    #print("Solution: ")
+    #print(np.round(tt_matrix_to_matrix(X_tt), decimals=2))
     print(f"Problem solved in {t1 - t0:.3f}s")
     print(f"Objective value: {tt_inner_prod(J_tt, X_tt)}")
     print("Complementary Slackness: ", tt_inner_prod(X_tt, Z_tt))
     print(f"Ranks X_tt {tt_ranks(X_tt)} Y_tt {tt_ranks(Y_tt)} Z_tt {tt_ranks(Z_tt)} ")
-    print(tt_min_eig(L_tt)[0], tt_max_eig(L_tt)[0])

@@ -334,7 +334,7 @@ def tt_inv_precond(matrix_tt, target_ranks, tol=1e-10, max_iter=100, verbose=Fal
 def tt_block_amen(block_A, block_b, aux_matrix_blocks=None, nswp=22, x0=None, eps=1e-10, rmax=1024, kickrank=2, amen=False, local_solver=None, verbose=False):
 
     damp = 2
-    block_size = np.max(list(block_b.keys())) + 1
+    block_size = np.max(list(k[0] for k in block_A.keys())) + 1
     model_entry = next(iter(block_b.values()))
     x_shape = model_entry[0].shape[1:-1]
 

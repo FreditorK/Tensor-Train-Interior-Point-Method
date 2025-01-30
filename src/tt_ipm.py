@@ -54,6 +54,8 @@ def ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, num_blocks, eps):
         D = R_ineq + TL_ineq @ K @ L_ineq_adj
         alpha = 0.005*(np.linalg.norm(A)/ np.linalg.norm(local_auxs["y"]))
         delta = 0.005*(np.linalg.norm(D) / np.linalg.norm(local_auxs["t"]))
+        print("Conditioning: ", np.linalg.norm(D + delta*local_auxs["t"]))
+        #FIXME D is well conditioned, so schur complement with D inversion
         lhs = np.block([
             [A + alpha*local_auxs["y"], L_eq @ K @ L_ineq_adj],
             [TL_ineq @ K @ L_eq_adj, D + delta*local_auxs["t"]],
@@ -127,12 +129,27 @@ def tt_infeasible_newton_system(
     scaling_matrix = tt_identity(len(Z_tt)) #tt_preconditioner(Z_tt) #tt_identity(len(Z_tt))
     L_Z = tt_rank_reduce(tt_add(tt_kron(scaling_matrix, Z_tt), tt_kron(Z_tt, scaling_matrix)), eps=tol)
     L_X = tt_rank_reduce(tt_add(tt_kron(X_tt, scaling_matrix), tt_kron(scaling_matrix, X_tt)), eps=tol)
+    #L_Z = tt_rank_reduce(tt_kron(scaling_matrix, Z_tt), eps=tol)
+    #L_X = tt_rank_reduce(tt_kron(X_tt, scaling_matrix), eps=tol)
 
-    #print("Cond Z_tt: ", np.linalg.cond(tt_matrix_to_matrix(Z_tt)))
-    #print("Cond X_tt: ", np.linalg.cond(tt_matrix_to_matrix(X_tt)))
+    """
+    Z = tt_matrix_to_matrix(Z_tt)
+    X = tt_matrix_to_matrix(X_tt)
+    X_root_inv = scip.linalg.fractional_matrix_power(X, -1 / 2)
+    X_root = X_root_inv @ X
+    Z_op = np.kron(np.eye(len(Z)), Z) + np.kron(Z, np.eye(len(Z)))
+    X_op = np.kron(np.eye(len(X)), X) + np.kron(X, np.eye(len(X)))
+    prec_Z_op = np.kron((Z @ X_root).T, X_root_inv) + np.kron(X_root_inv.T, X_root @ Z)
+    prec_X_op = np.kron(X_root.T, X_root_inv @ X) + np.kron((X @ X_root_inv).T, X_root)
+    print("Cond Z_tt: ", np.linalg.cond(Z_op))
+    print("Cond X_tt: ", np.linalg.cond(X_op))
     #scaling_matrix, scaling_matrix_inv = tt_preconditioner(Z_tt)
-    #print("Cond Z_tt_s: ", np.linalg.cond(scip.linalg.fractional_matrix_power(tt_matrix_to_matrix(Z_tt), -1/2) @ tt_matrix_to_matrix(Z_tt)))
-    #print("Cond X_tt_s: ", np.linalg.cond(scip.linalg.fractional_matrix_power(tt_matrix_to_matrix(Z_tt), -1/2) @ tt_matrix_to_matrix(X_tt)))
+    print("Cond Z_tt: ", np.linalg.cond(prec_Z_op))
+    print("Cond X_tt: ", np.linalg.cond(prec_X_op))
+    Z_eigs = np.linalg.eigvals(Z)
+    X_eigs = np.linalg.eigvals(X)
+    print(np.min(X_eigs), np.max(X_eigs), np.min(Z_eigs), np.max(Z_eigs))
+    """
 
     if active_ineq:
         ineq_res_tt = tt_sub(vec_bias_tt_ineq, tt_fast_matrix_vec_mul(mat_lin_op_tt_ineq, tt_vec(X_tt), eps))
@@ -198,7 +215,8 @@ def _tt_ipm_newton_step(
         active_ineq,
         local_solver,
         verbose,
-        eps
+        eps,
+        sigma
 ):
     mu = tt_inner_prod(Z_tt, [0.5 * c for c in X_tt])
     lhs_matrix_tt, rhs_vec_tt, primal_dual_error = tt_infeasible_newton_system(
@@ -214,7 +232,7 @@ def _tt_ipm_newton_step(
         mat_lin_op_tt_ineq,
         mat_lin_op_tt_ineq_adj,
         vec_bias_tt_ineq,
-        0.5 * mu,
+        sigma * mu,
         tol,
         feasibility_tol,
         eps,
@@ -354,6 +372,7 @@ def tt_ipm(
         T_tt = tt_mat(tt_fast_matrix_vec_mul(lin_op_tt_ineq_adj, tt_vec(T_tt), eps))
     Z_tt = tt_identity(dim)
     iter = 0
+    sigma = 0.5
     for iter in range(1, max_iter):
         X_tt, vec_Y_tt, T_tt, Z_tt, pd_error, mu = _tt_ipm_newton_step(
             lag_maps,
@@ -374,12 +393,15 @@ def tt_ipm(
             active_ineq,
             local_solver,
             verbose,
-            eps
+            eps,
+            sigma
         )
+        sigma = max(min((pd_error / mu)**2, 1), 0.1)*sigma
         if verbose:
             print(f"---Step {iter}---")
             print(f"Duality Gap: {100 * np.abs(mu):.4f}%")
             print(f"Primal-Dual error: {pd_error:.8f}")
+            print(f"Sigma: {sigma:.4f}")
             print(
                 f"Ranks X_tt: {tt_ranks(X_tt)}, Z_tt: {tt_ranks(Z_tt)}, \n"
                 f"      vec(Y_tt): {tt_ranks(vec_Y_tt)}, T_tt: {tt_ranks(T_tt)} \n"
