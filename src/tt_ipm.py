@@ -33,19 +33,18 @@ def ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, num_blocks, eps):
     #I = lhs[:block_dim, k*block_dim:]
     inv_I = np.diag(np.divide(1, np.diagonal(lhs[:block_dim, k*block_dim:])))
     L_X = lhs[k * block_dim:, k * block_dim:]
-    #L_L_X = scip.linalg.cholesky(L_X, check_finite=False, overwrite_a=True, lower=True)
     R_d = -rhs[:block_dim]
     R_p = -rhs[block_dim:2*block_dim]
     R_c = -rhs[k * block_dim:]
     K_temp = forward_backward_sub(L_L_Z, L_X)
     K = K_temp @ inv_I
-
-    #print("hi", np.linalg.norm(L_Z @ K_temp - L_X))
     k = forward_backward_sub(L_L_Z, R_c)
     #print("hi 2", np.linalg.norm(L_Z @ k - R_c))
     KR_dmk = K @ R_d - k
 
     if num_blocks > 3:
+        prev_y = prev_yt[:block_dim]
+        prev_t = prev_yt[block_dim:]
         TL_ineq = -lhs[2 * block_dim:3 * block_dim, :block_dim]
         L_ineq_adj = -lhs[:block_dim, 2 * block_dim:3 * block_dim]
         R_ineq = lhs[2 * block_dim:3 * block_dim, 2 * block_dim:3 * block_dim]
@@ -54,22 +53,20 @@ def ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, num_blocks, eps):
         D = R_ineq + TL_ineq @ K @ L_ineq_adj
         alpha = 0.005*(np.linalg.norm(A)/ np.linalg.norm(local_auxs["y"]))
         delta = 0.005*(np.linalg.norm(D) / np.linalg.norm(local_auxs["t"]))
-        print("Conditioning: ", np.linalg.norm(D + delta*local_auxs["t"]))
+        A += alpha*local_auxs["y"]
+        B = L_eq @ K @ L_ineq_adj
+        C = TL_ineq @ K @ L_eq_adj
+        D += delta*local_auxs["t"]
+        #print("Conditioning: ", np.linalg.norm(D + delta*local_auxs["t"]))
+        print(scip.linalg.eigvals(L_Z))
         #FIXME D is well conditioned, so schur complement with D inversion
-        lhs = np.block([
-            [A + alpha*local_auxs["y"], L_eq @ K @ L_ineq_adj],
-            [TL_ineq @ K @ L_eq_adj, D + delta*local_auxs["t"]],
-        ])
-        b = np.block([
-            [L_eq @ KR_dmk - R_p],
-            [TL_ineq @ KR_dmk - R_t]
-        ])
-        #P, _ = np.linalg.qr(np.random.randn(4*block_dim, 2*block_dim))
-        rhs = b - lhs @ prev_yt
-        sol = scip.linalg.solve(lhs, rhs, check_finite=False)
-        yt = sol + prev_yt
-        y = yt[:block_dim]
-        t = yt[block_dim:]
+
+        u = L_eq @ KR_dmk - R_p - A @ prev_y - B @ prev_t
+        v = TL_ineq @ KR_dmk - R_t - C @ prev_y - D @ prev_t
+        D_inv = scip.linalg.inv(D, check_finite=False)
+        sol = scip.linalg.solve(A - B @ D_inv @ C, u - B @ D_inv @ v, check_finite=False, assume_a="gen")
+        t = D_inv @ (v - C @ sol) + prev_t
+        y = sol + prev_y
         R_dmL_eq_adj_yt = R_d - L_eq_adj @ y - L_ineq_adj @ t
         x = K @ R_dmL_eq_adj_yt - k
         z = -inv_I @ R_dmL_eq_adj_yt
@@ -339,7 +336,7 @@ def tt_ipm(
     bias_tt_ineq=None,
     max_iter=100,
     feasibility_tol=1e-5,
-    centrality_tol=5e-3,
+    centrality_tol=1e-2,
     verbose=False,
     eps=1e-10
 ):
