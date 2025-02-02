@@ -162,7 +162,7 @@ if __name__ == "__main__":
     np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=4, suppress=True)
     print("Creating Problem...")
 
-    n = 1
+    n = 2
 
     np.random.seed(Config.seed)
     G_A = tt_random_graph(n, Config.max_rank)
@@ -373,7 +373,7 @@ if __name__ == "__main__":
         eq_bias_tt,
         Q_ineq_op,
         Q_ineq_bias,
-        max_iter=16,
+        max_iter=18,
         verbose=True
     )
     t1 = time.time()

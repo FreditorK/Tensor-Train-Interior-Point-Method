@@ -5,7 +5,6 @@ from src.ops import *
 from cy_src.tt_ops_cy import *
 from opt_einsum import contract as einsum
 
-
 def E(i, j):
     E = np.zeros((1, 2, 2, 1))
     E[:, i, j] += 1

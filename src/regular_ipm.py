@@ -339,7 +339,7 @@ def _tt_line_search(
     return discount_x*x_step_size, discount_z*z_step_size
 
 
-def tt_ipm(
+def ipm(
     lag_maps,
     obj_tt,
     lin_op_tt,
@@ -356,21 +356,24 @@ def tt_ipm(
     feasibility_tol = feasibility_tol / np.sqrt(dim)
     centrality_tol = centrality_tol / np.sqrt(dim)
     op_tol = 0.5*min(feasibility_tol, centrality_tol)
-    lag_maps = {key: tt_rank_reduce(value, eps=op_tol) for key, value in lag_maps.items()}
+    lag_maps = {key: tt_matrix_to_matrix(value) for key, value in lag_maps.items()}
+    obj_tt = tt_matrix_to_matrix(obj_tt)
+    lin_op_tt = tt_matrix_to_matrix(lin_op_tt)
+    bias_tt = tt_matrix_to_matrix(bias_tt)
+
     active_ineq = lin_op_tt_ineq is not None or bias_tt_ineq is not None
-    num_blocks = 4 if active_ineq else 3
-    local_solver = lambda prev_sol, lhs, rhs, local_auxs: ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, eps=eps, num_blocks=num_blocks)
-    obj_tt = tt_rank_reduce(tt_vec(obj_tt), eps=op_tol)
-    bias_tt = tt_rank_reduce(tt_vec(bias_tt), eps=op_tol)
-    lhs_skeleton = {}
-    lin_op_tt_adj = tt_transpose(lin_op_tt)
-    lhs_skeleton[(0, 1)] = tt_rank_reduce(tt_scale(-1, lin_op_tt_adj), eps=op_tol)
-    lhs_skeleton[(1, 0)] = tt_rank_reduce(tt_scale(-1, lin_op_tt), eps=op_tol)
+    block_size = len(obj_tt)
+    lhs_skeleton = np.zeros(4*block_size, 4*block_size)
+    lin_op_tt_adj = lin_op_tt.T
+    lhs_skeleton[:block_size, block_size:2*block_size] = -lin_op_tt_adj
+    lhs_skeleton[block_size:2*block_size, :block_size] = -lin_op_tt
     lin_op_tt_ineq_adj = None
     if active_ineq:
-        lin_op_tt_ineq_adj = tt_scale(-1, tt_transpose(lin_op_tt_ineq))
-        lhs_skeleton[(0, 2)] = tt_rank_reduce(tt_scale(-1, lin_op_tt_ineq_adj), eps=op_tol)
-        lhs_skeleton[(0, 3)] = tt_identity(2*dim)
+        lin_op_tt_ineq = tt_matrix_to_matrix(lin_op_tt_ineq)
+        lin_op_tt_ineq_adj = tt_matrix_to_matrix(lin_op_tt_ineq_adj)
+        lin_op_tt_ineq_adj = -lin_op_tt_ineq.T
+        lhs_skeleton[:block_size, 2*block_size:3*block_size] = -lin_op_tt_ineq_adj
+        lhs_skeleton[:block_size, 3*block_size:4*block_size] = np.eye(2**(2*dim))
         bias_tt_ineq = tt_rank_reduce(tt_vec(bias_tt_ineq), eps=op_tol)
     else:
         lhs_skeleton[(0, 2)] = tt_identity(2 * dim)

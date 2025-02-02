@@ -48,8 +48,8 @@ def tt_tr_op_adjoint(dim):
 @dataclass
 class Config:
     seed = 5
-    max_rank = 3
-    dim= 5
+    max_rank = 4
+    dim= 6 #max 5
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 import sys
 import os
-
+from idlelib.configdialog import is_int
 
 sys.path.append(os.getcwd() + '/../')
 
@@ -504,17 +504,17 @@ def tt_block_amen(block_A, block_b, aux_matrix_blocks=None, nswp=22, x0=None, ep
 
             dx = np.linalg.norm(solution_now - previous_solution) / np.linalg.norm(solution_now)
             max_dx = max(max_dx, dx)
+            is_increase = block_res_old < block_res_new and block_res_new > real_tol
 
-            if 2*block_res_old < block_res_new and block_res_new > real_tol:
-                if verbose:
-                    print('WARNING: residual increases. res_old %g, res_new %g, real_tol %g' % (block_res_old, block_res_new, real_tol))
+            if is_increase:
+                solution_now = previous_solution
 
             solution_now = np.reshape(solution_now, (block_size, rx[k], N[k], rx[k + 1]))
             solution_now = np.transpose(solution_now, (1, 2, 0, 3))
             solution_now = np.reshape(solution_now, [rx[k] * N[k], block_size*rx[k + 1]])
 
             # solution truncation
-            if k < d - 1:
+            if k < d - 1 and not is_increase:
                 # FIXME: We need to do svd on (rx*N) x (block_size*rx), otherwise the pruning is ineffective
                 u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False)
                 v = np.diag(s) @ v
@@ -633,7 +633,7 @@ def tt_block_amen(block_A, block_b, aux_matrix_blocks=None, nswp=22, x0=None, ep
         if swp >= nswp - 2:
             last = True
 
-        if max_res < eps or max_dx < eps:
+        if max_res < eps or 2*max_dx < eps:
             last = True
             if not amen:
                 break
@@ -688,6 +688,16 @@ def l1_lstq(_, lhs, rhs, eps):
     # Solve using L-BFGS-B (or try other methods like 'trust-constr')
     result = scip.optimize.minimize(l1_regularized_least_squares, w0, args=(lhs, rhs, lam), tol=eps)
     return result.x.reshape(-1,  1)
+
+
+def tt_divide(vec_tt_1, vec_tt_2, degenerate=False, eps=1e-10):
+    b = vec_tt_1
+    A = tt_diag(vec_tt_2)
+    if degenerate:
+        A = tt_add(A, tt_scale(0.5*eps, tt_identity(len(A))))
+    A = tt_rank_reduce(A, eps)
+    sol, _ = tt_amen(A, b)
+    return sol
 
 
 
