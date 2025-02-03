@@ -162,7 +162,7 @@ if __name__ == "__main__":
     np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=4, suppress=True)
     print("Creating Problem...")
 
-    n = 2
+    n = 1
 
     np.random.seed(Config.seed)
     G_A = tt_random_graph(n, Config.max_rank)

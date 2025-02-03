@@ -162,7 +162,7 @@ def tt_amen(A, b, nswp=50, x0=None, eps=1e-10, rmax=1024, solver_limit=500, kick
             res_new = np.linalg.norm(B @ solution_now - rhs) / norm_rhs
 
             # residual damp check
-            if res_old / res_new < damp and res_new > real_tol:
+            if res_old < damp*res_new and res_new > real_tol:
                 if verbose:
                     print('WARNING: residual increases. res_old %g, res_new %g, real_tol %g' % (
                         res_old, res_new, real_tol))  # warning (from tt toolbox)

@@ -10,7 +10,7 @@ from cy_src.ops_cy import *
 
 
 
-def tt_is_psd(A, nswp=10, x0=None, eps=1e-10, crit=1e-10, verbose=False):
+def tt_is_psd(A, nswp=10, x0=None, eps=1e-10, verbose=False):
     if verbose:
         print(f"Starting Eigen solve with:\n \t {eps} \n \t sweeps: {nswp}")
         t0 = time.time()
@@ -51,7 +51,7 @@ def tt_is_psd(A, nswp=10, x0=None, eps=1e-10, crit=1e-10, verbose=False):
 
             #TODO: Need to normalise x_cores ?
             eig_val, solution_now = scip.sparse.linalg.eigsh(B, k=1, which=min_or_max, v0=previous_solution)
-            if np.less(eig_val, -2*crit):
+            if np.less(eig_val, -2*eps):
                 return False, 0
 
             norm_rhs = eig_val if abs(eig_val) > real_tol else 1.0
@@ -116,39 +116,39 @@ def tt_is_psd(A, nswp=10, x0=None, eps=1e-10, crit=1e-10, verbose=False):
         print('\t Time per sweep: ', (time.time() - t0) / (swp + 1))
 
     final_eig_val = tt_inner_prod(x_cores, tt_matrix_vec_mul(A, x_cores))
-    return np.greater(final_eig_val, -crit), max_res
+    return np.greater(final_eig_val, -0.5*eps), max_res
 
 
 
-def tt_is_geq(linear_op_tt, X_tt, vec_b_tt, nswp=10, eps=1e-10, crit=1e-10, verbose=False):
+def tt_is_geq(linear_op_tt, X_tt, vec_b_tt, nswp=10, eps=1e-10, verbose=False):
     res_tt = tt_sub(vec_b_tt, tt_matrix_vec_mul(linear_op_tt, tt_vec(X_tt)))
     norm = np.sqrt(tt_inner_prod(res_tt, res_tt))
-    if norm > crit:
+    if norm > eps:
         res_tt = tt_scale(np.divide(1, norm), res_tt)
         A = tt_rank_reduce(tt_diag(res_tt), 0.5*eps)
         return tt_is_psd(A, nswp=nswp, eps=eps, verbose=verbose)
     return True, 0.0
 
 
-def tt_is_geq_(X_tt, nswp=10, eps=1e-10, crit=1e-10, degenerate=False, verbose=False):
+def tt_is_geq_(X_tt, nswp=10, eps=1e-10, degenerate=False, verbose=False):
     res_tt = tt_vec(X_tt)
     norm = np.sqrt(tt_inner_prod(res_tt, res_tt))
-    if norm > crit:
+    if norm > eps:
         res_tt = tt_scale(np.divide(1, norm), res_tt)
         A = tt_diag(res_tt)
         if degenerate:
-            A = tt_add(A, tt_scale(0.9*crit, tt_identity(len(A))))
+            A = tt_add(A, tt_scale(0.5*eps, tt_identity(len(A))))
         A = tt_rank_reduce(A, 0.5*eps)
         return tt_is_psd(A, nswp=nswp, eps=eps, verbose=verbose)
     return True, 0.0
 
 
-def tt_is_leq(linear_op_tt, X_tt, vec_b_tt, nswp=10, eps=1e-10, crit=1e-10, verbose=False):
+def tt_is_leq(linear_op_tt, X_tt, vec_b_tt, nswp=10, eps=1e-10, verbose=False):
     res_tt = tt_sub(vec_b_tt, tt_matrix_vec_mul(linear_op_tt, tt_vec(X_tt)))
     norm = np.sqrt(tt_inner_prod(res_tt, res_tt))
-    if norm > crit:
+    if norm > eps:
         res_tt = tt_scale(np.divide(1, norm), res_tt)
-        A = tt_rank_reduce(tt_diag(res_tt), 0.1*eps)
+        A = tt_rank_reduce(tt_diag(res_tt), 0.5*eps)
         max_val, _, res = tt_max_eig(A, nswp=nswp, eps=eps, verbose=verbose)
-        return np.less(norm*max_val, crit), norm*max_val, res
+        return np.less(norm*max_val, 0.5*eps), norm*max_val, res
     return True, 0.0
