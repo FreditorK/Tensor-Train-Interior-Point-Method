@@ -6,16 +6,8 @@ sys.path.append(os.getcwd() + '/../../')
 
 from dataclasses import dataclass
 from src.tt_ops import *
-from src.tt_ipm import tt_ipm
-from src.tt_eig import tt_min_eig, tt_max_eig
-
-
-
-@dataclass
-class Config:
-    seed = 3 #999: Very low rank solution, 9: Low rank solution, 3: Regular solution
-    max_rank = 2
-    dim = 2 #max 9 symmetric op
+from src.regular_ipm import ipm
+from maxcut import Config
 
 
 def tt_diag_op(dim):
@@ -43,11 +35,10 @@ if __name__ == "__main__":
     print(f"Objective Ranks: {tt_ranks(G_tt)}")
     print(f"Constraint Ranks: As {tt_ranks(L_tt)}, bias {tt_ranks(bias_tt)}")
     t0 = time.time()
-    X_tt, Y_tt, _, Z_tt = tt_ipm(lag_maps, G_tt, L_tt, bias_tt, max_iter=3, verbose=True)
+    X, Y, _, Z = ipm(lag_maps, G_tt, L_tt, bias_tt, max_iter=18, verbose=True)
     t1 = time.time()
     print("Solution: ")
-    print(np.round(tt_matrix_to_matrix(X_tt), decimals=2))
-    print(f"Objective value: {tt_inner_prod(G_tt, X_tt)}")
-    print("Complementary Slackness: ", tt_inner_prod(X_tt, Z_tt))
-    print(f"Ranks X_tt: {tt_ranks(X_tt)}, Y_tt: {tt_ranks(Y_tt)}, Z_tt: {tt_ranks(Z_tt)} ")
+    print(np.round(X, decimals=2))
+    print(f"Objective value: {np.trace(tt_matrix_to_matrix(G_tt).T @ X)}")
+    print("Complementary Slackness: ", np.trace(X.T @ Z))
     print(f"Time: {t1-t0}s")

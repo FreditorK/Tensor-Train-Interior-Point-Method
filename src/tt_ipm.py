@@ -139,6 +139,7 @@ def tt_infeasible_newton_system(
     L_X = tt_rank_reduce(tt_add(tt_kron(X_tt, P), tt_kron(P, X_tt)), eps=tol) #tt_rank_reduce(tt_add(tt_kron(X_tt, scaling_matrix), tt_kron(scaling_matrix, X_tt)), eps=tol)
     #L_Z = tt_rank_reduce(tt_kron(scaling_matrix, Z_tt), eps=tol)
     #L_X = tt_rank_reduce(tt_kron(X_tt, scaling_matrix), eps=tol)
+    print(tt_matrix_to_matrix(L_Z))
 
     vec_X_tt = tt_vec(X_tt)
 
@@ -209,7 +210,7 @@ def _tt_ipm_newton_step(
         eps,
         sigma
 ):
-    mu = tt_inner_prod(Z_tt, [0.5 * c for c in X_tt])
+    mu = tt_inner_prod(Z_tt, [0.25 * c for c in X_tt])
     lhs_matrix_tt, rhs_vec_tt, primal_dual_error = tt_infeasible_newton_system(
         lhs_skeleton,
         vec_obj_tt,
@@ -252,8 +253,8 @@ def _tt_ipm_newton_step(
     #print("Delta Y")
     #print(np.round(tt_matrix_to_matrix(tt_mat(vec_Delta_Y_tt)), decimals=3))
     #if active_ineq:
-        #print("Delta T")
-        #print(np.round(tt_matrix_to_matrix(Delta_T_tt), decimals=3))
+    #    print("Delta T")
+    #    print(np.round(tt_matrix_to_matrix(Delta_T_tt), decimals=3))
     #print("Delta X")
     #print(np.round(tt_matrix_to_matrix(Delta_X_tt), decimals=3))
     #print("Delta Z")
