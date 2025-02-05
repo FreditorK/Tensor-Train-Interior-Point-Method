@@ -287,7 +287,8 @@ def tt_to_tensor(tt_train):
 
 
 def tt_normalise(train_tt, radius=1):
-    return tt_scale(np.divide(radius, np.sqrt(tt_inner_prod(train_tt, train_tt))), train_tt)
+    factor = np.divide(radius, np.sqrt(tt_inner_prod(train_tt, train_tt)))
+    return tt_scale(factor, train_tt)
 
 
 def _tt_mat_core_collapse(core_op: np.array, core: np.array) -> np.array:

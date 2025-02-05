@@ -139,7 +139,6 @@ def tt_infeasible_newton_system(
     L_X = tt_rank_reduce(tt_add(tt_kron(X_tt, P), tt_kron(P, X_tt)), eps=tol) #tt_rank_reduce(tt_add(tt_kron(X_tt, scaling_matrix), tt_kron(scaling_matrix, X_tt)), eps=tol)
     #L_Z = tt_rank_reduce(tt_kron(scaling_matrix, Z_tt), eps=tol)
     #L_X = tt_rank_reduce(tt_kron(X_tt, scaling_matrix), eps=tol)
-    print(tt_matrix_to_matrix(L_Z))
 
     vec_X_tt = tt_vec(X_tt)
 
@@ -335,12 +334,23 @@ def tt_ipm(
     verbose=False,
     eps=1e-10
 ):
+    active_ineq = lin_op_tt_ineq is not None or bias_tt_ineq is not None
+    # Normalisation
+    obj_tt = tt_normalise(obj_tt)
+    factor = np.divide(1, np.sqrt(tt_inner_prod(lin_op_tt, lin_op_tt)))
+    lin_op_tt = tt_scale(factor, lin_op_tt)
+    bias_tt = tt_scale(factor, bias_tt)
+    if active_ineq:
+        factor = np.divide(1, np.sqrt(tt_inner_prod(lin_op_tt_ineq, lin_op_tt_ineq)))
+        lin_op_tt_ineq = tt_scale(factor, lin_op_tt_ineq)
+        bias_tt_ineq = tt_scale(factor, bias_tt_ineq)
+    # -------------
+
     dim = len(obj_tt)
     feasibility_tol = feasibility_tol / np.sqrt(dim)
     centrality_tol = centrality_tol / np.sqrt(dim)
     op_tol = 0.5*min(feasibility_tol, centrality_tol)
     lag_maps = {key: tt_rank_reduce(value, eps=op_tol) for key, value in lag_maps.items()}
-    active_ineq = lin_op_tt_ineq is not None or bias_tt_ineq is not None
     num_blocks = 4 if active_ineq else 3
     local_solver = lambda prev_sol, lhs, rhs, local_auxs: ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, eps=eps, num_blocks=num_blocks)
     obj_tt = tt_rank_reduce(tt_vec(obj_tt), eps=op_tol)

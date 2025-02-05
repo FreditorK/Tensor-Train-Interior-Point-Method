@@ -9,47 +9,8 @@ from src.tt_ops import *
 from src.tt_ipm import tt_ipm, _tt_get_block
 import time
 from src.tt_eig import tt_min_eig, tt_max_eig
-
-
-def tt_G_entrywise_mask_op(G):
-    vec_g_copy = tt_vec(copy.deepcopy(G))
-    basis = []
-    for g_core in vec_g_copy:
-        core = np.zeros((g_core.shape[0], 2, 2, g_core.shape[-1]))
-        core[:, 0, 0] = g_core[:, 0]
-        core[:, 1, 1] = g_core[:, 1]
-        basis.append(core)
-    return tt_rank_reduce(basis)
-
-def tt_G_entrywise_mask_op_adj(G):
-    return tt_G_entrywise_mask_op(G)
-
-
-def tt_tr_op(dim):
-    vec_identity = tt_vec(tt_identity(dim))
-    basis = []
-    for g_core in vec_identity:
-        core = np.zeros((g_core.shape[0], 2, 2, g_core.shape[-1]))
-        core[:, 0, 0] = g_core[:, 0]
-        core[:, 0, 1] = g_core[:, 1]
-        basis.append(core)
-    return tt_rank_reduce(basis)
-
-def tt_tr_op_adjoint(dim):
-    vec_identity = tt_vec(tt_identity(dim))
-    basis = []
-    for g_core in vec_identity:
-        core = np.zeros((g_core.shape[0], 2, 2, g_core.shape[-1]))
-        core[:, 0, 0] = g_core[:, 0]
-        core[:, 1, 0] = g_core[:, 1]
-        basis.append(core)
-    return tt_rank_reduce(basis)
-
-@dataclass
-class Config:
-    seed = 5
-    max_rank = 4
-    dim= 5 #max 5
+from max_stable_set import *
+from src.regular_ipm import ipm
 
 
 if __name__ == "__main__":
@@ -84,7 +45,7 @@ if __name__ == "__main__":
     print(f"Objective Ranks: {tt_ranks(J_tt)}")
     print(f"Constraint Ranks: \n \t L {tt_ranks(L_tt)}, L^* {tt_ranks(L_tt_adjoint)}, bias {tt_ranks(bias_tt)}")
     t0 = time.time()
-    X_tt, Y_tt, T_tt, Z_tt = tt_ipm(
+    X, Y, _, Z = ipm(
         lag_maps,
         J_tt,
         L_tt,
@@ -94,8 +55,7 @@ if __name__ == "__main__":
     )
     t1 = time.time()
     print("Solution: ")
-    print(np.round(tt_matrix_to_matrix(X_tt), decimals=2))
+    print(np.round(X, decimals=2))
     print(f"Problem solved in {t1 - t0:.3f}s")
-    print(f"Objective value: {tt_inner_prod(J_tt, X_tt)}")
-    print("Complementary Slackness: ", tt_inner_prod(X_tt, Z_tt))
-    print(f"Ranks X_tt {tt_ranks(X_tt)} Y_tt {tt_ranks(Y_tt)} Z_tt {tt_ranks(Z_tt)} ")
+    print(f"Objective value: {np.trace(tt_matrix_to_matrix(J_tt).T @ X)}")
+    print("Complementary Slackness: ", np.trace(X.T @ Z))

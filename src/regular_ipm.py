@@ -42,18 +42,19 @@ def ipm_solve_system(lhs, rhs, local_auxs, num_blocks):
 
     L_eq = -lhs[block_dim:2*block_dim, :block_dim]
     L_Z = lhs[k*block_dim:, :block_dim]
-    print("Cond: ", np.linalg.cond(L_Z))
-    L_L_Z = scip.linalg.cholesky(L_Z, check_finite=False, overwrite_a=True, lower=True)
+    print("Eigs: ", np.min(np.linalg.eigvals(L_Z)), np.linalg.norm(L_Z - L_Z.T))
+    L_Z_inv = scip.linalg.inv(L_Z)
     L_eq_adj = -lhs[:block_dim, block_dim:2*block_dim]
     I = lhs[:block_dim, k*block_dim:]
     inv_I = np.diag(np.divide(1, np.diagonal(lhs[:block_dim, k*block_dim:])))
     L_X = lhs[k * block_dim:, k * block_dim:]
+    print("Cond: ", np.linalg.cond(L_Z), np.linalg.cond(L_X))
     R_d = -rhs[:block_dim]
     R_p = -rhs[block_dim:2*block_dim]
     R_c = -rhs[k * block_dim:]
-    K_temp = forward_backward_sub(L_L_Z, L_X)
+    K_temp = L_Z_inv @ L_X
     K = K_temp @ inv_I
-    k = forward_backward_sub(L_L_Z, R_c)
+    k = L_Z_inv @ R_c
     KR_dmk = K @ R_d - k
 
     if num_blocks > 3:
@@ -88,7 +89,8 @@ def ipm_solve_system(lhs, rhs, local_auxs, num_blocks):
         #print("---")
         return np.vstack((x, y, t, z))
     A = L_eq @ K @ L_eq_adj
-    lhs = A + 0.005*(np.linalg.norm(A)/ np.linalg.norm(local_auxs["y"]))*local_auxs["y"]
+    lhs = A + 0.05*(np.linalg.norm(A)/ np.linalg.norm(local_auxs["y"]))*local_auxs["y"]
+    print("Cond  A: ", np.linalg.cond(lhs))
     rhs = L_eq @ KR_dmk - R_p
     sol = np.linalg.solve(lhs, rhs)
     y = sol
@@ -102,6 +104,28 @@ def ipm_solve_system(lhs, rhs, local_auxs, num_blocks):
     #print(np.linalg.norm(L_Z @ x + L_X @ z + R_c))
     #print("---")
     return np.vstack((x, y, z))
+
+
+def scaling_matrcies(matrix):
+    lam, Q = np.linalg.eigh(matrix)
+    root_matrix = Q @ np.diag(np.sqrt(lam)) @ Q.T
+    root_matrix_inv = Q @ np.diag(1/np.sqrt(lam)) @ Q.T
+    return root_matrix, root_matrix_inv
+
+
+def preconditioned_scaling_matrices(matrix, k, eps=0.01):
+    dim = matrix.shape[0]
+    I = np.eye(dim)
+    lam, Q = scipy.linalg.eigh(matrix)
+    lam = 1/np.sqrt(lam)
+    # X^(-1/2)
+    tau = (1-eps)*np.max(lam[k:]) + eps*np.min(lam[k:])
+    print(lam, lam[:k] - tau)
+    U = Q[:, :k] @ np.diag(np.sqrt(lam[:k] - tau))
+    S_inv = scipy.linalg.inv(tau*I[:k, :k] + U.T @ U)
+    P = tau*I + U @ U.T
+    P_inv = np.divide(1, tau)*(I - U @ S_inv @ U.T)
+    return P, P_inv
 
 
 def tt_style_kron(matrix_1, matrix_2):
@@ -132,11 +156,12 @@ def infeasible_newton_system(
         active_ineq
 ):
     idx_add = int(active_ineq)
-    # TODO: scaling matrix needs to be full rank, otherwise we have problems
-    scaling_matrix = np.eye(len(Z))
-    # TODO: Kronecker product not correct for vectorisation
-    L_Z = tt_style_kron(scaling_matrix, Z) + tt_style_kron(Z, scaling_matrix) #np.kron(scaling_matrix, Z) + np.kron(Z, scaling_matrix)
-    L_X = tt_style_kron(X, scaling_matrix) + tt_style_kron(scaling_matrix, X)
+    #I = np.eye(len(Z))
+    #L_Z = tt_style_kron(Z, I) + tt_style_kron(I, Z)
+    #L_X = tt_style_kron(I, X) +  tt_style_kron(X, I)
+    P_inv, P = preconditioned_scaling_matrices(X, k=1) #scaling_matrcies(X)
+    L_Z = tt_style_kron((Z @ P_inv).T, P) + tt_style_kron(P.T, P_inv @ Z)
+    L_X = tt_style_kron(P_inv.T, P @ X) +  tt_style_kron((X @ P).T, P_inv)
     block_dim = len(L_Z)
     vec_X = vec(X)
 

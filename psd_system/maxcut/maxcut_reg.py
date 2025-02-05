@@ -7,16 +7,7 @@ sys.path.append(os.getcwd() + '/../../')
 from dataclasses import dataclass
 from src.tt_ops import *
 from src.regular_ipm import ipm
-from maxcut import Config
-
-
-def tt_diag_op(dim):
-    identity = tt_identity(dim)
-    basis = tt_diag(tt_vec(identity))
-    return basis
-
-def tt_diag_op_adj(dim):
-    return tt_diag_op(dim)
+from maxcut import *
 
 
 if __name__ == "__main__":
