@@ -2,6 +2,8 @@ import sys
 import os
 from idlelib.configdialog import is_int
 
+import numpy as np
+
 sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
@@ -331,9 +333,8 @@ def tt_inv_precond(matrix_tt, target_ranks, tol=1e-10, max_iter=100, verbose=Fal
     return inv_tt
 
 
-def tt_block_amen(block_A, block_b, aux_matrix_blocks=None, nswp=22, x0=None, eps=1e-10, rmax=1024, kickrank=2, amen=False, local_solver=None, verbose=False):
+def tt_block_amen(block_A, block_b, aux_matrix_blocks=None, nswp=22, x0=None, eps=1e-10, rmax=128, kickrank=2, amen=False, local_solver=None, variable_error=False, verbose=False):
 
-    damp = 2
     block_size = np.max(list(k[0] for k in block_A.keys())) + 1
     model_entry = next(iter(block_b.values()))
     x_shape = model_entry[0].shape[1:-1]
@@ -353,7 +354,7 @@ def tt_block_amen(block_A, block_b, aux_matrix_blocks=None, nswp=22, x0=None, ep
     x_cores = copy.copy(x)
     N = [c.shape[-2] for c in x_cores]
     d = len(N)
-    rx = [1] + tt_ranks(x) + [1]
+    rx = np.array([1] + tt_ranks(x) + [1])
     rmax = [1] + (d - 1) * [rmax] + [1]
 
     XAX = {key: [np.ones((1, 1, 1))] + [None] * (d - 1) + [np.ones((1, 1, 1))] for key in block_A} # size is rk x Rk x rk
@@ -387,7 +388,7 @@ def tt_block_amen(block_A, block_b, aux_matrix_blocks=None, nswp=22, x0=None, ep
     normb = np.ones((block_size, d - 1)) # norm of each row of the rhs
     nrmsc = np.ones(block_size)
     normx = np.ones((d - 1))
-    real_tol = (eps / np.sqrt(d)) / damp
+    real_tol = (eps / np.sqrt(d))*np.ones(d)
 
     for swp in range(nswp):
         if verbose:
@@ -442,7 +443,7 @@ def tt_block_amen(block_A, block_b, aux_matrix_blocks=None, nswp=22, x0=None, ep
                 XAX[(i, j)][k] = XAX_ij_k
                 if not last and amen:
                     ZAX[(i, j)][k] = _compute_phi_bck_A(ZAX[(i, j)][k + 1], z_cores[k], block_A[(i, j)][k], x_cores[k]) # rz[k] x rA[k] x rx[k]
-            row_A += (row_A < real_tol)
+            row_A += (row_A < real_tol[k])
             normA[:, k - 1] = np.sqrt(row_A)
             for (i, j) in block_A:
                 XAX[(i, j)][k] /= normA[i, k - 1]
@@ -456,7 +457,7 @@ def tt_block_amen(block_A, block_b, aux_matrix_blocks=None, nswp=22, x0=None, ep
             for i in block_b:
                 Xb_i_k = _compute_phi_bck_rhs(Xb[i][k + 1], block_b[i][k], x_cores[k]) # rb[k] x rx[k]
                 norm = np.linalg.norm(Xb_i_k)
-                norm = norm if norm > real_tol else 1.0
+                norm = norm if norm > real_tol[k] else 1.0
                 normb[i, k - 1] = norm
                 Xb[i][k] = Xb_i_k / norm
                 if not last and amen:
@@ -464,8 +465,8 @@ def tt_block_amen(block_A, block_b, aux_matrix_blocks=None, nswp=22, x0=None, ep
             nrmsc *= normb[:, k - 1] / (normA[:, k - 1] * normx[k - 1])
 
         # start loop
-        max_res = 0
-        max_dx = 0
+        local_res = np.zeros(d)
+        local_dx = np.zeros(d)
 
         for k in range(d):
 
@@ -481,7 +482,7 @@ def tt_block_amen(block_A, block_b, aux_matrix_blocks=None, nswp=22, x0=None, ep
             norm_rhs = np.linalg.norm(rhs)
 
             # residuals
-            norm_rhs = norm_rhs if norm_rhs > real_tol else 1.0
+            norm_rhs = norm_rhs if norm_rhs > real_tol[k] else 1.0
 
             # assemble lhs
             B = np.zeros((block_size*m, block_size*m))
@@ -498,16 +499,15 @@ def tt_block_amen(block_A, block_b, aux_matrix_blocks=None, nswp=22, x0=None, ep
 
             block_res_new = np.linalg.norm(B @ solution_now - rhs) / norm_rhs
             block_res_old = np.linalg.norm(B @ previous_solution - rhs) / norm_rhs
-
-            max_res = max(max_res, block_res_old)
             #print(k, block_res_old, block_res_new, block_res_old / block_res_new)
-
-            dx = np.linalg.norm(solution_now - previous_solution) / np.linalg.norm(solution_now)
-            max_dx = max(max_dx, dx)
-            is_increase = block_res_old < block_res_new and block_res_new > real_tol
+            is_increase = block_res_old < block_res_new and block_res_new > real_tol[k]
+            local_res[k] = max(block_res_new, block_res_old)
 
             if is_increase:
                 solution_now = previous_solution
+                local_res[k] = block_res_old
+            dx = np.linalg.norm(solution_now - previous_solution) / np.linalg.norm(solution_now)
+            local_dx[k] = dx
 
             solution_now = np.reshape(solution_now, (block_size, rx[k], N[k], rx[k + 1]))
             solution_now = np.transpose(solution_now, (1, 2, 0, 3))
@@ -522,7 +522,7 @@ def tt_block_amen(block_A, block_b, aux_matrix_blocks=None, nswp=22, x0=None, ep
                 for r in range(u.shape[1] - 1, 0, -1):
                     solution = np.reshape(u[:, :r] @ v[:r, :], (rx[k], N[k], block_size, rx[k + 1]))
                     res = np.linalg.norm(B @ np.reshape(np.transpose(solution, (2, 0, 1, 3)), (-1, 1)) - rhs) / norm_rhs
-                    if res > max(real_tol * damp, block_res_new):
+                    if res > max(real_tol[k+1], block_res_new):
                         break
                 r += 1
                 r = min([r, np.size(s), rmax[k + 1]])
@@ -601,7 +601,7 @@ def tt_block_amen(block_A, block_b, aux_matrix_blocks=None, nswp=22, x0=None, ep
                     XAX[(i, j)][k + 1] = XAX_ij_k
                     if not last and amen:
                         ZAX[(i, j)][k + 1] = _compute_phi_fwd_A(ZAX[(i, j)][k], z_cores[k], block_A[(i, j)][k], x_cores[k])
-                row_A += (row_A < real_tol)
+                row_A += (row_A < real_tol[k])
                 normA[:, k] = np.sqrt(row_A)
                 for (i, j) in block_A:
                     XAX[(i, j)][k + 1] /= normA[i, k]
@@ -615,7 +615,7 @@ def tt_block_amen(block_A, block_b, aux_matrix_blocks=None, nswp=22, x0=None, ep
                 for i in block_b:
                     Xb_i_k = _compute_phi_fwd_rhs(Xb[i][k], block_b[i][k], x_cores[k])
                     norm = np.linalg.norm(Xb_i_k)
-                    norm = norm if norm > real_tol else 1.0
+                    norm = norm if norm > real_tol[k] else 1.0
                     normb[i, k] = norm
                     Xb[i][k + 1] = Xb_i_k / norm
                     if not last and amen:
@@ -627,13 +627,18 @@ def tt_block_amen(block_A, block_b, aux_matrix_blocks=None, nswp=22, x0=None, ep
                 current_core = np.reshape(u @ v, (rx[k], N[k], block_size, rx[k + 1]))
                 x_cores[k] = np.transpose(current_core, (0, 2, 1, 3))
 
+            if variable_error:
+                rank_percent = rx[1:-1] / np.sum(rx[1:-1])
+                total_tol = np.sum(real_tol)
+                real_tol[1:] = total_tol*rank_percent
+
         if last:
             break
 
         if swp >= nswp - 2:
             last = True
 
-        if max_res < eps or 2*max_dx < eps:
+        if np.all(local_res < real_tol) or np.all(2*local_dx < real_tol):
             last = True
             if not amen:
                 break
@@ -641,7 +646,7 @@ def tt_block_amen(block_A, block_b, aux_matrix_blocks=None, nswp=22, x0=None, ep
     if verbose:
         print("\n\t---Results---")
         print('\tSolution rank is', rx[1:-1])
-        print('\tResidual ', max_res)
+        print('\tResidual ', np.mean(local_res))
         print('\tNumber of sweeps', swp+1)
         print('\tTime: ', time.time() - t0)
         print('\tTime per sweep: ', (time.time() - t0) / (swp+1))
@@ -651,7 +656,7 @@ def tt_block_amen(block_A, block_b, aux_matrix_blocks=None, nswp=22, x0=None, ep
     #TODO: There might be a large scale difference for the x blocks which normalisation also cannot alleviate. How do we deal with this
     #FIXME: We could pass in a better initial guess
 
-    return [normx * core for core in x_cores], max_res
+    return [normx * core for core in x_cores], np.mean(local_res)
 
 
 def svd_solve_local_system(B, rhs, eps):

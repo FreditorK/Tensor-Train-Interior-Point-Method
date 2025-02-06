@@ -172,7 +172,7 @@ def tt_infeasible_newton_system(
 
     dual_feas = tt_rank_reduce(dual_feas, tol)
     dual_error = tt_inner_prod(dual_feas, dual_feas)
-    XZ_term = tt_fast_matrix_vec_mul(L_Z, vec_X_tt, eps)
+    XZ_term = tt_fast_matrix_vec_mul(L_Z, vec_X_tt, tol)
     rhs[2 + idx_add] = tt_rank_reduce(tt_sub(tt_scale(2*mu, tt_vec(tt_identity(len(X_tt)))), XZ_term), max(0.5*mu, tol))
     if dual_error > feasibility_tol:
         rhs[0] = dual_feas
@@ -209,7 +209,7 @@ def _tt_ipm_newton_step(
         eps,
         sigma
 ):
-    mu = tt_inner_prod(Z_tt, [0.25 * c for c in X_tt])
+    mu = tt_inner_prod(Z_tt, [0.5 * c for c in X_tt])
     lhs_matrix_tt, rhs_vec_tt, primal_dual_error = tt_infeasible_newton_system(
         lhs_skeleton,
         vec_obj_tt,
@@ -230,17 +230,23 @@ def _tt_ipm_newton_step(
         active_ineq
     )
     idx_add = int(active_ineq)
-    Delta_tt, res = tt_block_amen(lhs_matrix_tt, rhs_vec_tt, aux_matrix_blocks=lag_maps, kickrank=2, eps=10*eps, local_solver=local_solver, verbose=verbose)
-    vec_Delta_Y_tt = tt_rank_reduce(_tt_get_block(1, Delta_tt), eps=tol)
-    Delta_T_tt = tt_rank_reduce(tt_mat(_tt_get_block(2, Delta_tt)), eps=tol) if active_ineq else None
+    Delta_tt, res = tt_block_amen(lhs_matrix_tt, rhs_vec_tt, aux_matrix_blocks=lag_maps, eps=eps, local_solver=local_solver, verbose=verbose, variable_error=True)
+    vec_Delta_Y_tt = _tt_get_block(1, Delta_tt)
     Delta_X_tt = tt_rank_reduce(tt_mat(_tt_get_block(0, Delta_tt)), eps=tol)
     Delta_Z_tt = tt_rank_reduce(tt_mat(_tt_get_block(2 + idx_add, Delta_tt)), eps=tol)
+    Delta_T_tt = None
+    # Corrections to improve TT-ranks and reduce instabilities
+    vec_Delta_Y_tt = tt_rank_reduce(tt_sub(vec_Delta_Y_tt, tt_fast_matrix_vec_mul(lag_maps["y"], vec_Delta_Y_tt)), eps=tol)
     Delta_X_tt = _tt_symmetrise(Delta_X_tt, tol)
     Delta_Z_tt = _tt_symmetrise(Delta_Z_tt, tol)
+    if active_ineq:
+        Delta_T_tt_vec = _tt_get_block(2, Delta_tt)
+        Delta_T_tt = tt_rank_reduce(tt_mat(tt_sub(Delta_T_tt_vec, tt_fast_matrix_vec_mul(lag_maps["t"], Delta_T_tt_vec))), eps=tol)
+    # ---
     x_step_size, z_step_size = _tt_line_search(X_tt, T_tt, Z_tt, Delta_X_tt, Delta_T_tt, Delta_Z_tt, mat_lin_op_tt_ineq, vec_bias_tt_ineq, active_ineq, eps=eps)
-    X_tt = tt_rank_reduce(tt_add(X_tt, tt_scale(0.98 * x_step_size, Delta_X_tt)), eps=eps)
+    X_tt = tt_rank_reduce(tt_add(X_tt, tt_scale(0.98 * x_step_size, Delta_X_tt)), eps=0.5*tol)
     vec_Y_tt = tt_rank_reduce(tt_add(vec_Y_tt, tt_scale(0.98 * z_step_size, vec_Delta_Y_tt)), eps=tol)
-    Z_tt = tt_rank_reduce(tt_add(Z_tt, tt_scale(0.98 * z_step_size, Delta_Z_tt)), eps=eps)
+    Z_tt = tt_rank_reduce(tt_add(Z_tt, tt_scale(0.98 * z_step_size, Delta_Z_tt)), eps=0.5*tol)
     if active_ineq:
         # FIXME: Note that T_tt should grow large on the zeros of b - L_ineq(X_tt)
         T_tt = tt_rank_reduce(tt_add(T_tt, tt_scale(0.98 * z_step_size, Delta_T_tt)), eps=eps)
@@ -292,7 +298,7 @@ def _tt_line_search(
             x_step_size *= discount
     if active_ineq and discount_x:
         for iter in range(iters):
-            discount_x, _ = tt_is_geq(lin_op_tt_ineq, new_X_tt,  eps=eps)
+            discount_x, _ = tt_is_geq(lin_op_tt_ineq, new_X_tt, vec_bias_tt_ineq,  eps=eps)
             if discount_x:
                 break
             else:
@@ -332,7 +338,7 @@ def tt_ipm(
     feasibility_tol=1e-5,
     centrality_tol=1e-2,
     verbose=False,
-    eps=1e-10
+    eps=1e-9
 ):
     active_ineq = lin_op_tt_ineq is not None or bias_tt_ineq is not None
     # Normalisation
@@ -411,7 +417,7 @@ def tt_ipm(
             )
 
         if np.less(pd_error, feasibility_tol) and np.less(np.abs(mu), centrality_tol):
-                break
+            break
     if verbose:
         print(f"---Terminated---")
         print(f"Converged in {iter} iterations.")

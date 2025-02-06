@@ -228,7 +228,7 @@ def _ipm_newton_step(
         eps,
         sigma
 ):
-    mu = np.trace(Z.T @ X)/(2**(Z.shape[0]))
+    mu = np.trace(Z.T @ X)/(Z.shape[0])
     lhs_matrix, rhs_vec, primal_dual_error = infeasible_newton_system(
         lhs_skeleton,
         vec_obj,

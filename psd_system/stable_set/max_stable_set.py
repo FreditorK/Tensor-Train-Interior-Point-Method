@@ -47,14 +47,13 @@ def tt_tr_op_adjoint(dim):
 
 @dataclass
 class Config:
-    seed = 5
-    max_rank = 4
-    dim= 5 #max 5
+    seed = 2
+    max_rank = 3
+    dim= 4 #max 6 (maybe higher but gets slow, solution always full rank which is weird, maybe not suited)
 
 
 if __name__ == "__main__":
     np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=4, suppress=True)
-
     print("Creating Problem...")
 
     np.random.seed(Config.seed)
@@ -90,12 +89,16 @@ if __name__ == "__main__":
         L_tt,
         bias_tt,
         max_iter=16,
-        verbose=True
+        verbose=True,
+        feasibility_tol=1e-5,
+        centrality_tol=1e-2
     )
     t1 = time.time()
     print("Solution: ")
-    print(np.round(tt_matrix_to_matrix(X_tt), decimals=2))
+    print(np.round(tt_matrix_to_matrix(X_tt), decimals=4))
     print(f"Problem solved in {t1 - t0:.3f}s")
     print(f"Objective value: {tt_inner_prod(J_tt, X_tt)}")
     print("Complementary Slackness: ", tt_inner_prod(X_tt, Z_tt))
     print(f"Ranks X_tt {tt_ranks(X_tt)} Y_tt {tt_ranks(Y_tt)} Z_tt {tt_ranks(Z_tt)} ")
+    # FIXME: Rank of solution drops drastically when decreasing eps
+    print("Pruned ranks: ", tt_ranks(tt_rank_reduce(X_tt, eps=1e-2)))
