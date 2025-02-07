@@ -126,6 +126,7 @@ def tt_ineq_op_adj(dim):
 class Config:
     seed = 6 # Some seeds have bad convergence
     max_rank = 3
+    n = 1
 
 if __name__ == "__main__":
     """
@@ -159,11 +160,9 @@ if __name__ == "__main__":
         
         8r and 8c implied by other constraints
     """
+    n = Config.n
     np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=4, suppress=True)
     print("Creating Problem...")
-
-    n = 1
-
     np.random.seed(Config.seed)
     G_A = tt_random_graph(n, Config.max_rank)
     print("Graph A: ")
@@ -179,62 +178,20 @@ if __name__ == "__main__":
 
     # Equality Operator
     # IV
-    partial_tr_op = tt_partial_trace_op(n, 2*n)
+    partial_tr_op = tt_partial_trace_op(n, 2 * n)
     partial_tr_op_adj = tt_transpose(partial_tr_op)
     partial_tr_op_bias = tt_zero_matrix(2 * n + 1)
-
-    def test_partial_tr_op():
-        random_A = tt_random_gaussian([3] * (2 * n), shape=(2, 2))
-        M = tt_matrix_to_matrix(random_A)
-        print(np.round(M, decimals=4))
-        print(np.round(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(partial_tr_op, tt_vec(random_A)))), decimals=4))
-        block_size = 2**n
-        sum = 0
-        for i in range(block_size):
-            for j in range(block_size):
-                if i != j:
-                    sum += np.linalg.trace(M[i*block_size:(i+1)*block_size, j*block_size:(j+1)*block_size])
-        print("Ground truth: ", sum)
-
-
-    def test_partial_tr_op_adj():
-        random_A = tt_random_gaussian([3] * (2 * n), shape=(2, 2))
-        M = tt_matrix_to_matrix(random_A)
-        print(np.round(M, decimals=4))
-        print(np.round(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(partial_tr_op_adj, tt_vec(random_A)))), decimals=4))
 
     L_op_tt = partial_tr_op
     L_op_tt_adj = partial_tr_op_adj
     eq_bias_tt = partial_tr_op_bias
     # ---
     # V
-    partial_tr_J_op = tt_partial_J_trace_op(n, 2*n)
+    partial_tr_J_op = tt_partial_J_trace_op(n, 2 * n)
     partial_tr_J_op_adj = tt_transpose(partial_tr_J_op)
-    partial_tr_J_op_bias = [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)] + [np.array([[0.0, 1.0], [1.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(n)] + [np.array([[0.0, 0.0], [0.0, 1.0]]).reshape(1, 2, 2, 1) for _ in range(n)]
-
-    def test_partial_tr_J_op():
-        random_A = tt_random_gaussian([3] * (2 * n), shape=(2, 2))
-        M = tt_matrix_to_matrix(random_A)
-        print(np.round(M, decimals=4))
-        print(np.round(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(partial_tr_J_op, tt_vec(random_A)))), decimals=4))
-        block_size = 2 ** n
-        sum = np.zeros((block_size, block_size))
-        for i in range(block_size):
-            for j in range(block_size):
-                if i != j:
-                    sum[i, j] = np.linalg.trace((np.ones((block_size, block_size)) - np.eye(block_size)) @ M[i * block_size:(i + 1) * block_size, j * block_size:(j + 1) * block_size])
-                else:
-                    sum[i, j] = np.linalg.trace(M[i * block_size:(i + 1) * block_size, j * block_size:(j + 1) * block_size])
-
-        print(sum)
-
-
-    def test_partial_tr_J_op_adj():
-        random_A = tt_random_gaussian([3] * (2 * n), shape=(2, 2))
-        M = tt_matrix_to_matrix(random_A)
-        print(np.round(M, decimals=4))
-        print(np.round(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(partial_tr_J_op_adj, tt_vec(random_A)))), decimals=4))
-
+    partial_tr_J_op_bias = ([E(0, 0)]
+                            + tt_sub(tt_one_matrix(n), [E(0, 0) for _ in range(n)])
+                            + [E(1, 1) for _ in range(n)])
 
     L_op_tt = tt_rank_reduce(tt_add(L_op_tt, partial_tr_J_op))
     L_op_tt_adj = tt_rank_reduce(tt_add(L_op_tt_adj, partial_tr_J_op_adj))
@@ -242,30 +199,9 @@ if __name__ == "__main__":
 
     # ---
     # VI
-    diag_block_sum_op = tt_diag_block_sum_linear_op(n, 2*n)
+    diag_block_sum_op = tt_diag_block_sum_linear_op(n, 2 * n)
     diag_block_sum_op_adj = tt_transpose(diag_block_sum_op)
-    diag_block_sum_op_bias = [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(n+1)] + tt_identity(n)
-
-    def test_diag_block_sum_op():
-        random_A = tt_random_gaussian([3] * (2 * n), shape=(2, 2))
-        M = tt_matrix_to_matrix(random_A)
-        print(np.round(M, decimals=4))
-        print(np.round(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(diag_block_sum_op, tt_vec(random_A)))), decimals=4))
-        block_size = 2 ** n
-        diag_sum = np.zeros((block_size, block_size))
-        for i in range(block_size):
-            for j in range(block_size):
-                if i == j:
-                    diag_sum += np.eye(block_size)*(M[i * block_size:(i + 1) * block_size,j * block_size:(j + 1) * block_size])
-                    diag_sum[-1, 0] += np.linalg.trace((np.ones((block_size, block_size)) - np.eye(block_size)) @ M[i * block_size:(i + 1) * block_size,j * block_size:(j + 1) * block_size])
-
-        print(diag_sum)
-
-    def test_diag_block_sum_op_adj():
-        random_A = tt_random_gaussian([3] * (2 * n), shape=(2, 2))
-        M = tt_matrix_to_matrix(random_A)
-        print(np.round(M, decimals=4))
-        print(np.round(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(diag_block_sum_op_adj, tt_vec(random_A)))), decimals=4))
+    diag_block_sum_op_bias = [E(0, 0) for _ in range(n + 1)] + tt_identity(n)
 
     L_op_tt = tt_rank_reduce(tt_add(L_op_tt, diag_block_sum_op))
     L_op_tt_adj = tt_rank_reduce(tt_add(L_op_tt_adj, diag_block_sum_op_adj))
@@ -273,23 +209,9 @@ if __name__ == "__main__":
 
     # ---
     # VII
-    Q_m_P_op = tt_Q_m_P_op(2*n)
+    Q_m_P_op = tt_Q_m_P_op(2 * n)
     Q_m_P_op_adj = tt_transpose(Q_m_P_op)
-    Q_m_P_op_bias = tt_zero_matrix(2*n + 1)
-
-    def test_Q_m_P_op():
-        random_A = tt_random_gaussian([3] * (2 * n), shape=(2, 2))
-        M = tt_matrix_to_matrix(random_A)
-        print(np.round(M, decimals=4))
-        print(np.round(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(Q_m_P_op, tt_vec(random_A)))), decimals=4))
-        block_size = 2 ** n
-        print(np.diag(M[:block_size**2, :block_size**2]).flatten() - 0.5*M[:block_size**2, block_size**2:block_size**2+1].flatten() - 0.5*M[block_size**2:block_size**2+1, :block_size**2].flatten())
-
-    def test_Q_m_P_op_adj():
-        random_A = tt_random_gaussian([3] * (2 * n), shape=(2, 2))
-        M = tt_matrix_to_matrix(random_A)
-        print(np.round(M, decimals=4))
-        print(np.round(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(Q_m_P_op_adj, tt_vec(random_A)))), decimals=4))
+    Q_m_P_op_bias = tt_zero_matrix(2 * n + 1)
 
     L_op_tt = tt_rank_reduce(tt_add(L_op_tt, Q_m_P_op))
     L_op_tt_adj = tt_rank_reduce(tt_add(L_op_tt_adj, Q_m_P_op_adj))
@@ -297,21 +219,9 @@ if __name__ == "__main__":
 
     # ---
     # IX
-    padding_op = tt_padding_op(2*n)
+    padding_op = tt_padding_op(2 * n)
     padding_op_adj = tt_transpose(padding_op)
-    padding_op_bias = [E(1, 1)] + tt_identity(2*n)
-
-    def test_padding_op():
-        random_A = tt_random_gaussian([3] * (2 * n), shape=(2, 2))
-        M = tt_matrix_to_matrix(random_A)
-        print(np.round(M, decimals=4))
-        print(np.round(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(padding_op, tt_vec(random_A)))), decimals=4))
-
-    def test_padding_op_adj():
-        random_A = tt_random_gaussian([3] * (2 * n), shape=(2, 2))
-        M = tt_matrix_to_matrix(random_A)
-        print(np.round(M, decimals=4))
-        print(np.round(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(padding_op_adj, tt_vec(random_A)))), decimals=4))
+    padding_op_bias = [E(1, 1)] + tt_identity(2 * n)
 
     L_op_tt = tt_rank_reduce(tt_add(L_op_tt, padding_op))
     L_op_tt_adj = tt_rank_reduce(tt_add(L_op_tt_adj, padding_op_adj))
@@ -320,15 +230,10 @@ if __name__ == "__main__":
     # ---
     # Inequality Operator
     # X
-    Q_ineq_op = tt_ineq_op(2*n)
-    Q_ineq_op_adj = tt_ineq_op_adj(2*n)
-    Q_ineq_bias = tt_rank_reduce(tt_scale(0.01, tt_mat(tt_matrix_vec_mul(Q_ineq_op_adj, [np.ones((1, 2, 1)) for _ in range(2*(2*n+1))]))))
-
-    def test_Q_ineq_op():
-        random_A = tt_random_gaussian([3] * (2 * n), shape=(2, 2))
-        M = tt_matrix_to_matrix(random_A)
-        print(np.round(M, decimals=4))
-        print(np.round(tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(Q_ineq_op, tt_vec(random_A)))), decimals=4))
+    Q_ineq_op = tt_ineq_op(2 * n)
+    Q_ineq_op_adj = tt_ineq_op_adj(2 * n)
+    Q_ineq_bias = tt_rank_reduce(
+        tt_scale(0.02, tt_mat(tt_matrix_vec_mul(Q_ineq_op_adj, [np.ones((1, 2, 1)) for _ in range(2 * (2 * n + 1))]))))
 
     # ---
     pad = [1 - E(0, 0)] + tt_one_matrix(2 * n)
@@ -342,10 +247,10 @@ if __name__ == "__main__":
                 tt_sum(
                     pad,  # P
                     [E(0, 1)] + [E(0, 0) + E(1, 0) for _ in range(2 * n)],  # 7
-                    [E(0, 0)] + [E(0,0) for _ in range(n)] + tt_identity(n),
+                    [E(0, 0)] + [E(0, 0) for _ in range(n)] + tt_identity(n),
                     # 6.1
-                    [E(0, 0)] + [E(0,  0) for _ in range(n)] + [E(1, 0) for _ in range(n)],  # 6.2
-                    [E(0,  0)] + tt_sub(
+                    [E(0, 0)] + [E(0, 0) for _ in range(n)] + [E(1, 0) for _ in range(n)],  # 6.2
+                    [E(0, 0)] + tt_sub(
                         tt_one_matrix(n) + [E(1, 1) for _ in range(n)],
                         [E(0, 0) for _ in range(n)] + [E(1, 1) for _ in range(n)]),  # 5
                     [E(0, 0)] + [E(1, 0) for _ in range(n)] + [E(0, 0) for _ in range(n)]  # 4
@@ -353,7 +258,7 @@ if __name__ == "__main__":
                 )
             )
         ))),
-        "t": tt_rank_reduce(tt_diag(tt_vec([E(0, 1) + E(1,  0) + E(1, 1)] + tt_one_matrix(2*n))))
+        "t": tt_rank_reduce(tt_diag(tt_vec([E(0, 1) + E(1, 0) + E(1, 1)] + tt_one_matrix(2 * n))))
     }
 
     print("...Problem created!")
@@ -373,7 +278,7 @@ if __name__ == "__main__":
         eq_bias_tt,
         Q_ineq_op,
         Q_ineq_bias,
-        max_iter=15,
+        max_iter=18,
         verbose=True
     )
     t1 = time.time()
