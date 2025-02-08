@@ -13,6 +13,7 @@ from src.tt_ops import *
 import copy
 from opt_einsum import contract as einsum
 from cy_src.ops_cy import *
+from src.tt_amen import tt_divide
 from scipy.sparse import csr_matrix
 
 
@@ -229,3 +230,85 @@ def tt_null_space(A, nswp=10, x0=None, eps=1e-10, verbose=False):
         print('\t Time per sweep: ', (time.time() - t0) / (swp + 1))
 
     return tt_inner_prod(x_cores, tt_matrix_vec_mul(A, x_cores)), x_cores, max_res
+
+
+
+def tt_elementwise_max(vec_tt, val, nswp=5, eps=1e-10, verbose=False):
+    if verbose:
+        print(f"Starting Eigen solve with:\n \t {eps} \n \t sweeps: {nswp}")
+        t0 = time.time()
+    A = tt_diag(vec_tt)
+    A = tt_rank_reduce(tt_sub(A, tt_scale(val+eps, tt_identity(len(A)))), eps)
+    dtype = A[0].dtype
+    x_cores = [np.ones_like(c[:, :, 0], dtype=dtype) for c in A]
+
+    d = len(x_cores)
+    rx = np.array([1] + tt_ranks(x_cores) + [1])
+    N = np.array([c.shape[1] for c in x_cores])
+
+    XAX = [np.ones((1, 1, 1), dtype=dtype)] + [None] * (d - 1) + [np.ones((1, 1, 1), dtype=dtype)]  # size is rk x Rk x rk
+
+    max_res = 0
+    for swp in range(nswp):
+        x_cores = tt_rl_orthogonalise(x_cores)
+        rx[1:-1] = np.array(tt_ranks(x_cores))
+        XAX, no = compute_phi_bcks_A(XAX, x_cores, A, x_cores, d=d)
+
+        # start loop
+        max_res = 0
+
+        for k in range(d):
+
+            # solve the local system
+            Bp = einsum("smnS,LSR->smnRL", A[k], XAX[k + 1], optimize=True)
+            B = einsum("lsr,smnRL->lmLrnR", XAX[k], Bp, optimize=True)
+            B = np.reshape(B, [rx[k] * N[k] * rx[k + 1], rx[k] * N[k] * rx[k + 1]])
+
+            #TODO: Need to normalise x_cores ?
+            eig_vals, Q = scip.linalg.eigh(B, check_finite=False)
+            l = np.sum(eig_vals > 0)
+            solution_now = Q[:, -l:]
+
+            b = solution_now.shape[-1]
+            solution_now = np.reshape(solution_now, (rx[k] * N[k], b*rx[k+1]))
+            u, v = np.linalg.qr(solution_now)
+            r = u.shape[1]
+            s = np.ones(r, dtype=dtype)
+            u = u[:, :r]
+            v = np.diag(s[:r]) @ v[:r, :]
+
+
+            if k < d - 1:
+                v = einsum('ij,jkl->ikl', v, np.tile(x_cores[k + 1], (b, 1, 1)), optimize=True)
+
+                x_cores[k] = np.reshape(u, [rx[k], N[k], r])
+                x_cores[k + 1] = np.reshape(v, [r, N[k + 1], rx[k + 2]])
+                rx[k + 1] = r
+
+                # next phis with norm correction
+                XAX[k + 1] = compute_phi_fwd_A(XAX[k], x_cores[k], A[k], x_cores[k])
+
+                # ... and norms
+                norm = np.linalg.norm(XAX[k + 1])
+                norm = norm if np.greater(norm, 0) else 1.0
+                XAX[k + 1] = np.divide(XAX[k + 1], norm)
+
+            else:
+                x_cores[k] = np.reshape(np.tile(u,  (1, b)) @ v.reshape(r*b, rx[k + 1]), (rx[k], N[k], rx[k + 1]))
+
+        x_cores = tt_normalise(x_cores)
+
+    if verbose:
+        print("\t -----")
+        print(f"\t Solution rank is {rx[1:-1]}")
+        print(f"\t Residual {max_res}")
+        print('\t Number of sweeps', swp + 1)
+        print('\t Time: ', time.time() - t0)
+        print('\t Time per sweep: ', (time.time() - t0) / (swp + 1))
+
+    x_cores = tt_divide(x_cores, x_cores, degenerate=True)
+    print(tt_vec_to_vec(x_cores).flatten())
+
+    vec_tt = tt_fast_hadammard(x_cores,  vec_tt, eps)
+
+    return vec_tt
