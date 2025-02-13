@@ -233,7 +233,7 @@ def tt_null_space(A, nswp=10, x0=None, eps=1e-10, verbose=False):
 
 
 
-def tt_elementwise_max(vec_tt, val, nswp=5, eps=1e-10, verbose=False):
+def tt_elementwise_max(vec_tt, val, nswp=2, eps=1e-10, verbose=False):
     if verbose:
         print(f"Starting Eigen solve with:\n \t {eps} \n \t sweeps: {nswp}")
         t0 = time.time()
@@ -249,6 +249,7 @@ def tt_elementwise_max(vec_tt, val, nswp=5, eps=1e-10, verbose=False):
     XAX = [np.ones((1, 1, 1), dtype=dtype)] + [None] * (d - 1) + [np.ones((1, 1, 1), dtype=dtype)]  # size is rk x Rk x rk
 
     max_res = 0
+    all_negative = False
     for swp in range(nswp):
         x_cores = tt_rl_orthogonalise(x_cores)
         rx[1:-1] = np.array(tt_ranks(x_cores))
@@ -266,7 +267,11 @@ def tt_elementwise_max(vec_tt, val, nswp=5, eps=1e-10, verbose=False):
 
             #TODO: Need to normalise x_cores ?
             eig_vals, Q = scip.linalg.eigh(B, check_finite=False)
-            l = np.sum(eig_vals > 0)
+            l = np.sum(eig_vals > -eps)
+            if l == 0:
+                all_negative = True
+                x_cores = [np.zeros((1, 2, 1)) for _ in x_cores]
+                break
             solution_now = Q[:, -l:]
 
             b = solution_now.shape[-1]
@@ -296,7 +301,8 @@ def tt_elementwise_max(vec_tt, val, nswp=5, eps=1e-10, verbose=False):
             else:
                 x_cores[k] = np.reshape(np.tile(u,  (1, b)) @ v.reshape(r*b, rx[k + 1]), (rx[k], N[k], rx[k + 1]))
 
-        x_cores = tt_normalise(x_cores)
+        if all_negative:
+            break
 
     if verbose:
         print("\t -----")
@@ -306,9 +312,9 @@ def tt_elementwise_max(vec_tt, val, nswp=5, eps=1e-10, verbose=False):
         print('\t Time: ', time.time() - t0)
         print('\t Time per sweep: ', (time.time() - t0) / (swp + 1))
 
-    x_cores = tt_divide(x_cores, x_cores, degenerate=True)
-    print(tt_vec_to_vec(x_cores).flatten())
+    x_cores = tt_fast_hadammard(x_cores, x_cores, eps=eps)
 
-    vec_tt = tt_fast_hadammard(x_cores,  vec_tt, eps)
+    vec_tt = tt_fast_hadammard(vec_tt, x_cores, eps)
+    vec_tt = tt_add(vec_tt, tt_scale(val+eps, [np.ones((1, 2, 1)) for _ in vec_tt]))
 
     return vec_tt

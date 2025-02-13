@@ -1,13 +1,13 @@
 import sys
 import os
 
+
 sys.path.append(os.getcwd() + '/../')
 from src.tt_ops import *
 from src.tt_amen import tt_divide
 from src.regular_ipm import vec, mat
 from src.tt_eig import tt_elementwise_max
 
-np.random.seed(9)
 np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=4, suppress=True)
 matrix_tt_1 = tt_random_gaussian([3, 2], shape=(2, ))
 print(tt_vec_to_vec(matrix_tt_1).flatten())

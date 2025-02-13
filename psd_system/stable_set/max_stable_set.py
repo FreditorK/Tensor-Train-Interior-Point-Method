@@ -102,3 +102,4 @@ if __name__ == "__main__":
     print(f"Ranks X_tt {tt_ranks(X_tt)} Y_tt {tt_ranks(Y_tt)} Z_tt {tt_ranks(Z_tt)} ")
     # FIXME: Rank of solution drops drastically when decreasing eps
     print("Pruned ranks: ", tt_ranks(tt_rank_reduce(X_tt, eps=1e-2)))
+    print(f"Objective value: {tt_inner_prod(J_tt, tt_rank_reduce(X_tt, eps=1e-2))}")
