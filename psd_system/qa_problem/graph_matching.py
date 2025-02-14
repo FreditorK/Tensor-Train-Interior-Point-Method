@@ -3,7 +3,7 @@ import sys
 import os
 
 import numpy as np
-
+from opt_einsum.backends.torch import einsum
 
 sys.path.append(os.getcwd() + '/../../')
 
@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from src.tt_ops import *
 from src.tt_ops import tt_random_gaussian, tt_mat, tt_matrix_to_matrix, E
 from src.tt_ipm import tt_ipm
+from src.tt_eig import tt_elementwise_max
 import time
 
 
@@ -111,6 +112,19 @@ def tt_padding_op(dim):
     basis = tt_diag(tt_vec(matrix_tt))
     return tt_rank_reduce(basis)
 
+# ------------------------------------------------------------------------------
+# Constraint 10 ----------------------------------------------------------------
+def half_space_projection(primal_variable):
+    print("Before: ")
+    print(tt_matrix_to_matrix(primal_variable))
+    Q_first_core =  copy.copy(primal_variable[0][:, 0, 0, :])
+    primal_variable[0][:, 0, 0, :] = 0
+    Q_primal_variable = [einsum("rR, Refk -> refk",Q_first_core,  primal_variable[1])] + primal_variable[2:]
+    Q_primal_variable = tt_mat(tt_elementwise_max(tt_vec(Q_primal_variable), 1e-6))
+    primal_variable = tt_rank_reduce(tt_add([E(0, 0)] + Q_primal_variable, primal_variable), 1e-10)
+    print("After: ")
+    print(tt_matrix_to_matrix(primal_variable))
+    return  primal_variable
 # ------------------------------------------------------------------------------
 # Constraint 10 ----------------------------------------------------------------
 def tt_ineq_op(dim):
@@ -236,6 +250,8 @@ if __name__ == "__main__":
         tt_scale(0.02, tt_mat(tt_matrix_vec_mul(Q_ineq_op_adj, [np.ones((1, 2, 1)) for _ in range(2 * (2 * n + 1))]))))
 
     # ---
+
+    # ---
     pad = [1 - E(0, 0)] + tt_one_matrix(2 * n)
     pad = tt_sub(pad, [E(0, 1)] + [E(0, 0) + E(1, 0) for _ in range(2 * n)])
     pad = tt_sub(pad, [E(1, 0)] + [E(0, 0) + E(0, 1) for _ in range(2 * n)])
@@ -266,10 +282,6 @@ if __name__ == "__main__":
     print(f"Eq Op-rank: {tt_ranks(L_op_tt)}")
     print(f"Eq Op-adjoint-rank: {tt_ranks(L_op_tt_adj)}")
     print(f"Eq Bias-rank: {tt_ranks(eq_bias_tt)}")
-    print("-----------------------------------")
-    print(f"Ineq Op-rank: {tt_ranks(Q_ineq_op)}")
-    print(f"Ineq Op-adjoint-rank: {tt_ranks(Q_ineq_op_adj)}")
-    print(f"Ineq Bias-rank: {tt_ranks(Q_ineq_bias)}")
     t0 = time.time()
     X_tt, Y_tt, T_tt, Z_tt = tt_ipm(
         lag_maps,

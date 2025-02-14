@@ -270,7 +270,7 @@ def _tt_line_search(
         lin_op_tt_ineq,
         vec_bias_tt_ineq,
         active_ineq,
-        iters=15,
+        iters=18,
         eps=1e-10
 ):
     x_step_size = 1
@@ -279,6 +279,7 @@ def _tt_line_search(
     discount_x = False
     discount_z = False
     r = X_tt[0].shape[-1]
+    print("X is psd: ", tt_is_psd(X_tt, eps=eps))
     new_X_tt = tt_add(X_tt, Delta_X_tt)
 
     for iter in range(iters):
@@ -329,6 +330,7 @@ def tt_ipm(
     max_iter=100,
     feasibility_tol=1e-5,
     centrality_tol=1e-2,
+    primal_projection=None,
     verbose=False,
     eps=1e-9
 ):
@@ -398,7 +400,11 @@ def tt_ipm(
         )
         x_step_size, z_step_size = _tt_line_search(X_tt, T_tt, Z_tt, Delta_X_tt, Delta_T_tt, Delta_Z_tt,
                                                    lin_op_tt_ineq, bias_tt_ineq, active_ineq, eps=eps)
-        X_tt = tt_rank_reduce(tt_add(X_tt, tt_scale(0.98 * x_step_size, Delta_X_tt)), eps=0.5 * op_tol)
+        if primal_projection is not None:
+            X_tt = primal_projection(tt_add(X_tt, tt_scale(0.98 * x_step_size, Delta_X_tt)))
+        else:
+            X_tt = tt_add(X_tt, tt_scale(0.98 * x_step_size, Delta_X_tt))
+        X_tt = tt_rank_reduce(X_tt, eps=0.5 * op_tol)
         vec_Y_tt = tt_rank_reduce(tt_add(vec_Y_tt, tt_scale(0.98 * z_step_size, vec_Delta_Y_tt)), eps=op_tol)
         Z_tt = tt_rank_reduce(tt_add(Z_tt, tt_scale(0.98 * z_step_size, Delta_Z_tt)), eps=0.5 * op_tol)
         if active_ineq:

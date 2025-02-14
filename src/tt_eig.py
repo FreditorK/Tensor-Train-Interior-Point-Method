@@ -233,12 +233,15 @@ def tt_null_space(A, nswp=10, x0=None, eps=1e-10, verbose=False):
 
 
 
-def tt_elementwise_max(vec_tt, val, nswp=2, eps=1e-10, verbose=False):
+def tt_elementwise_max(vec_tt, val, nswp=4, eps=1e-10, verbose=False):
     if verbose:
         print(f"Starting Eigen solve with:\n \t {eps} \n \t sweeps: {nswp}")
         t0 = time.time()
-    A = tt_diag(vec_tt)
-    A = tt_rank_reduce(tt_sub(A, tt_scale(val+eps, tt_identity(len(A)))), eps)
+    vec_tt_norm = np.sqrt(tt_inner_prod(vec_tt, vec_tt))
+    A = tt_scale(np.divide(1, vec_tt_norm), tt_diag(vec_tt))
+    if val != 0:
+        A = tt_sub(A, tt_scale(val+eps, tt_identity(len(A))))
+    A = tt_rank_reduce(A, eps=eps)
     dtype = A[0].dtype
     x_cores = [np.ones_like(c[:, :, 0], dtype=dtype) for c in A]
 
@@ -249,6 +252,7 @@ def tt_elementwise_max(vec_tt, val, nswp=2, eps=1e-10, verbose=False):
     XAX = [np.ones((1, 1, 1), dtype=dtype)] + [None] * (d - 1) + [np.ones((1, 1, 1), dtype=dtype)]  # size is rk x Rk x rk
 
     max_res = 0
+    real_tol = (eps / np.sqrt(d))
     all_negative = False
     for swp in range(nswp):
         x_cores = tt_rl_orthogonalise(x_cores)
@@ -276,11 +280,27 @@ def tt_elementwise_max(vec_tt, val, nswp=2, eps=1e-10, verbose=False):
 
             b = solution_now.shape[-1]
             solution_now = np.reshape(solution_now, (rx[k] * N[k], b*rx[k+1]))
-            u, v = np.linalg.qr(solution_now)
-            r = u.shape[1]
-            s = np.ones(r, dtype=dtype)
+
+            # solution truncation
+            norm = np.linalg.norm(solution_now)
+            if k < d - 1 and False:
+                # FIXME: We need to do svd on (rx*N) x (block_size*rx), otherwise the pruning is ineffective
+                u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False)
+                v = np.diag(s) @ v
+                r = 0
+                for r in range(u.shape[1] - 1, 0, -1):
+                    solution = u[:, :r] @ v[:r, :]
+                    res = np.linalg.norm(solution - solution_now) / norm
+                    if res > real_tol:
+                        break
+                r += 1
+                u = u[:, :r]
+                v = v[:r, :]
+            else:
+                u, v = np.linalg.qr(solution_now)
+                r = u.shape[1]
             u = u[:, :r]
-            v = np.diag(s[:r]) @ v[:r, :]
+            v = v[:r, :]
 
 
             if k < d - 1:
@@ -312,9 +332,13 @@ def tt_elementwise_max(vec_tt, val, nswp=2, eps=1e-10, verbose=False):
         print('\t Time: ', time.time() - t0)
         print('\t Time per sweep: ', (time.time() - t0) / (swp + 1))
 
-    x_cores = tt_fast_hadammard(x_cores, x_cores, eps=eps)
 
-    vec_tt = tt_fast_hadammard(vec_tt, x_cores, eps)
-    vec_tt = tt_add(vec_tt, tt_scale(val+eps, [np.ones((1, 2, 1)) for _ in vec_tt]))
+    x_cores = tt_fast_hadammard(x_cores, x_cores, eps)
+    print(vec_tt_norm*tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(A, x_cores))))
+
+
+    vec_tt = tt_scale(vec_tt_norm, tt_fast_matrix_vec_mul(A, x_cores, eps))
+    if val != 0:
+        vec_tt = tt_rank_reduce(tt_add(vec_tt, tt_scale(val + eps, [np.ones((1, 2, 1)) for _ in vec_tt])), eps)
 
     return vec_tt
