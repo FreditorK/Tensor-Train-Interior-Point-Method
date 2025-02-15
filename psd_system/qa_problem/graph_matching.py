@@ -128,7 +128,7 @@ def half_space_projection(primal_variable):
 # ------------------------------------------------------------------------------
 # Constraint 10 ----------------------------------------------------------------
 def tt_ineq_op(dim):
-    matrix_tt = [-E(0, 0)] + [np.ones((1, 2, 2, 1)) for _ in range(dim)]
+    matrix_tt = [-E(0, 0)] + tt_sub([np.ones((1, 2, 2, 1)) for _ in range(dim)], tt_identity(dim))
     basis = tt_diag(tt_vec(matrix_tt))
     return tt_rank_reduce(basis)
 
@@ -274,7 +274,7 @@ if __name__ == "__main__":
                 )
             )
         ))),
-        "t": tt_rank_reduce(tt_diag(tt_vec([E(0, 1) + E(1, 0) + E(1, 1)] + tt_one_matrix(2 * n))))
+        "t": tt_rank_reduce(tt_diag(tt_vec(tt_add([E(0, 0)] + tt_identity(2*n), [E(0, 1) + E(1, 0) + E(1, 1)] + tt_one_matrix(2 * n)))))
     }
 
     print("...Problem created!")

@@ -2,6 +2,8 @@ import sys
 import os
 import time
 
+import numpy as np
+
 sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
@@ -10,7 +12,7 @@ from cy_src.ops_cy import *
 
 
 
-def tt_is_psd(A, nswp=10, x0=None, eps=1e-10, verbose=False):
+def _tt_is_psd(A, nswp=10, x0=None, eps=1e-10, verbose=False):
     if verbose:
         print(f"Starting Eigen solve with:\n \t {eps} \n \t sweeps: {nswp}")
         t0 = time.time()
@@ -116,17 +118,26 @@ def tt_is_psd(A, nswp=10, x0=None, eps=1e-10, verbose=False):
         print('\t Time per sweep: ', (time.time() - t0) / (swp + 1))
 
     final_eig_val = tt_inner_prod(x_cores, tt_matrix_vec_mul(A, x_cores))
-    return np.greater(final_eig_val, -0.5*eps), max_res
+    return np.greater(final_eig_val, -eps), max_res
 
 
+def tt_is_psd(A, degenerate=False, eps=1e-10, verbose=False):
+    if degenerate:
+        A = tt_add(A, tt_scale(eps, tt_identity(len(A))))
+    A = tt_rank_reduce(A, 0.5 * eps)
+    return _tt_is_psd(A, eps=eps, verbose=verbose)
 
-def tt_is_geq(linear_op_tt, X_tt, vec_b_tt, nswp=10, eps=1e-10, verbose=False):
+
+def tt_is_geq(linear_op_tt, X_tt, vec_b_tt, nswp=10, eps=1e-10, degenerate=False, verbose=False):
     res_tt = tt_sub(vec_b_tt, tt_matrix_vec_mul(linear_op_tt, tt_vec(X_tt)))
     norm = np.sqrt(tt_inner_prod(res_tt, res_tt))
     if norm > eps:
         res_tt = tt_scale(np.divide(1, norm), res_tt)
-        A = tt_rank_reduce(tt_diag(res_tt), 0.5*eps)
-        return tt_is_psd(A, nswp=nswp, eps=eps, verbose=verbose)
+        A = tt_diag(res_tt)
+        if degenerate:
+            A = tt_add(A, tt_scale(eps, tt_identity(len(A))))
+        A = tt_rank_reduce(A, 0.5 * eps)
+        return _tt_is_psd(A, nswp=nswp, eps=eps, verbose=verbose)
     return True, 0.0
 
 
@@ -137,9 +148,9 @@ def tt_is_geq_(X_tt, nswp=10, eps=1e-10, degenerate=False, verbose=False):
         res_tt = tt_scale(np.divide(1, norm), res_tt)
         A = tt_diag(res_tt)
         if degenerate:
-            A = tt_add(A, tt_scale(0.5*eps, tt_identity(len(A))))
+            A = tt_add(A, tt_scale(eps, tt_identity(len(A))))
         A = tt_rank_reduce(A, 0.5*eps)
-        return tt_is_psd(A, nswp=nswp, eps=eps, verbose=verbose)
+        return _tt_is_psd(A, nswp=nswp, eps=eps, verbose=verbose)
     return True, 0.0
 
 

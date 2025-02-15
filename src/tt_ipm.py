@@ -126,12 +126,14 @@ def tt_infeasible_newton_system(
         mat_lin_op_tt_ineq,
         mat_lin_op_tt_ineq_adj,
         vec_bias_tt_ineq,
+        sigma,
         mu,
         tol,
         feasibility_tol,
         eps,
         active_ineq
 ):
+    mu = max(sigma * mu,  1e-3)
     idx_add = int(active_ineq)
     # TODO: scaling matrix needs to be full rank, otherwise we have problems
     P = tt_identity(len(Z_tt))
@@ -165,7 +167,8 @@ def tt_infeasible_newton_system(
         # TODO: Does mu 1 not also be under mat_lin_op_tt_ineq, need to adjust mu 1 to have zeros where L(X) has zeros
         one = tt_matrix_vec_mul(mat_lin_op_tt_ineq_adj, [np.ones((1, 2, 1)).reshape(1, 2, 1) for _ in vec_X_tt])
         Tineq_res_tt = tt_fast_hadammard(vec_T_tt, ineq_res_tt, eps)
-        primal_feas_ineq = tt_rank_reduce(tt_sub(tt_scale(mu, one), Tineq_res_tt), min(0.25*mu, tol))
+        nu = tt_inner_prod([0.5*c for c in vec_T_tt], ineq_res_tt)
+        primal_feas_ineq = tt_rank_reduce(tt_sub(tt_scale(nu, one), Tineq_res_tt), min(0.25*nu, tol))
         primal_ineq_error = tt_inner_prod(primal_feas_ineq, primal_feas_ineq)
         if primal_ineq_error > tol:
             rhs[2] = primal_feas_ineq
@@ -226,7 +229,8 @@ def _tt_ipm_newton_step(
         mat_lin_op_tt_ineq,
         mat_lin_op_tt_ineq_adj,
         vec_bias_tt_ineq,
-        max(sigma * mu,  1e-3),
+        sigma,
+        mu,
         tol,
         feasibility_tol,
         eps,
@@ -270,7 +274,7 @@ def _tt_line_search(
         lin_op_tt_ineq,
         vec_bias_tt_ineq,
         active_ineq,
-        iters=18,
+        iters=15,
         eps=1e-10
 ):
     x_step_size = 1
@@ -279,11 +283,11 @@ def _tt_line_search(
     discount_x = False
     discount_z = False
     r = X_tt[0].shape[-1]
-    print("X is psd: ", tt_is_psd(X_tt, eps=eps))
+    print("X is psd: ", tt_is_psd(X_tt, degenerate=True, eps=eps))
     new_X_tt = tt_add(X_tt, Delta_X_tt)
 
     for iter in range(iters):
-        discount_x, _ = tt_is_psd(new_X_tt, eps=eps)
+        discount_x, _ = tt_is_psd(new_X_tt, degenerate=True, eps=eps)
         if discount_x:
             break
         else:
@@ -291,7 +295,8 @@ def _tt_line_search(
             x_step_size *= discount
     if active_ineq and discount_x:
         for iter in range(iters):
-            discount_x, _ = tt_is_geq(lin_op_tt_ineq, new_X_tt, vec_bias_tt_ineq,  eps=eps)
+            discount_x, _ = tt_is_geq(lin_op_tt_ineq, new_X_tt, vec_bias_tt_ineq, degenerate=True, eps=eps)
+            print(tt_matrix_to_matrix(X_tt))
             if discount_x:
                 break
             else:
@@ -301,7 +306,7 @@ def _tt_line_search(
     r = Z_tt[0].shape[-1]
     new_Z_tt = tt_add(Z_tt, Delta_Z_tt)
     for iter in range(iters):
-        discount_z, _ = tt_is_psd(new_Z_tt, eps=eps)
+        discount_z, _ = tt_is_psd(new_Z_tt, degenerate=True, eps=eps)
         if discount_z:
             break
         else:
@@ -311,7 +316,7 @@ def _tt_line_search(
         r = T_tt[0].shape[-1]
         new_T_tt = tt_add(T_tt, tt_scale(z_step_size, Delta_T_tt))
         for iter in range(iters):
-            discount_z, _ = tt_is_geq_(new_T_tt, eps=0.01*eps, degenerate=True)
+            discount_z, _ = tt_is_geq_(new_T_tt, eps=eps, degenerate=True)
             if discount_z:
                 break
             else:
