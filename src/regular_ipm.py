@@ -188,7 +188,8 @@ def infeasible_newton_system(
         dual_feas = dual_feas + mat_lin_op_ineq_adj @ vec_T
         # TODO: Does mu 1 not also be under mat_lin_op_tt_ineq, need to adjust mu 1 to have zeros where L(X) has zeros
         one = mat_lin_op_ineq_adj @ np.ones_like(vec_X)
-        primal_feas_ineq = mu*one -vec_T*ineq_res
+        nu = np.sum(vec_T.T @ ineq_res)/T.shape[0]
+        primal_feas_ineq = nu*one -vec_T*ineq_res
         primal_ineq_error = np.trace(primal_feas_ineq.T @ primal_feas_ineq)
         #if primal_ineq_error > tol:
         rhs[2*block_dim:3*block_dim] = primal_feas_ineq
@@ -284,7 +285,7 @@ def _ipm_newton_step(
 
     return X, vec_Y, T, Z, primal_dual_error, mu
 
-"""
+
 def _line_search(
         X,
         T,
@@ -333,73 +334,7 @@ def _line_search(
             else:
                 z_step_size *= discount
     return discount_x*x_step_size, discount_z*z_step_size
-"""
 
-def _line_search(
-        X_tt,
-        T_tt,
-        Z_tt,
-        Delta_X_tt,
-        Delta_T_tt,
-        Delta_Z_tt,
-        lin_op_tt_ineq,
-        vec_bias_tt_ineq,
-        active_ineq,
-        iters=15,
-        eps=1e-10
-):
-    X_tt = tt_matrix_svd(X_tt)
-    T_tt = tt_matrix_svd(T_tt)
-    Z_tt = tt_matrix_svd(Z_tt)
-    Delta_X_tt = tt_matrix_svd(Delta_X_tt)
-    Delta_T_tt = tt_matrix_svd(Delta_T_tt)
-    Delta_Z_tt = tt_matrix_svd(Delta_Z_tt)
-    lin_op_tt_ineq = tt_matrix_svd(lin_op_tt_ineq)
-    vec_bias_tt_ineq = tt_vec(tt_matrix_svd(mat(vec_bias_tt_ineq)))
-    x_step_size = 1
-    z_step_size = 1
-    discount = 0.5
-    discount_x = False
-    discount_z = False
-    r = X_tt[0].shape[-1]
-    new_X_tt = tt_add(X_tt, Delta_X_tt)
-
-    for iter in range(iters):
-        discount_x, _ = tt_is_psd(new_X_tt, eps=eps)
-        if discount_x:
-            break
-        else:
-            new_X_tt[0][:, :, :, r:] *= discount
-            x_step_size *= discount
-    if active_ineq and discount_x:
-        for iter in range(iters):
-            discount_x, _ = tt_is_geq(lin_op_tt_ineq, new_X_tt, vec_bias_tt_ineq,  eps=eps)
-            if discount_x:
-                break
-            else:
-                new_X_tt[0][:, :, :, r:] *= discount
-                x_step_size *= discount
-
-    r = Z_tt[0].shape[-1]
-    new_Z_tt = tt_add(Z_tt, Delta_Z_tt)
-    for iter in range(iters):
-        discount_z, _ = tt_is_psd(new_Z_tt, eps=eps)
-        if discount_z:
-            break
-        else:
-            new_Z_tt[0][:, :, :, r:] *= discount
-            z_step_size *= discount
-    if active_ineq and discount_z:
-        r = T_tt[0].shape[-1]
-        new_T_tt = tt_add(T_tt, tt_scale(z_step_size, Delta_T_tt))
-        for iter in range(iters):
-            discount_z, _ = tt_is_geq_(new_T_tt, eps=1e-12, degenerate=True)
-            if discount_z:
-                break
-            else:
-                new_T_tt[0][:, :, :, r:] *= discount
-                z_step_size *= discount
-    return discount_x*x_step_size, discount_z*z_step_size
 
 
 def ipm(
