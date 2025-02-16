@@ -11,7 +11,7 @@ sys.path.append(os.getcwd() + '/../')
 from src.tt_ops import *
 from src.tt_ops import tt_rank_reduce
 from src.tt_amen import tt_block_amen, svd_solve_local_system, tt_divide
-from src.tt_eig import tt_min_eig
+from src.tt_eig import tt_min_eig, tt_elementwise_max
 from src.tt_ineq_check import tt_is_geq, tt_is_geq_, tt_is_psd
 
 
@@ -167,7 +167,10 @@ def tt_infeasible_newton_system(
         # TODO: Does mu 1 not also be under mat_lin_op_tt_ineq, need to adjust mu 1 to have zeros where L(X) has zeros
         one = tt_matrix_vec_mul(mat_lin_op_tt_ineq_adj, [np.ones((1, 2, 1)).reshape(1, 2, 1) for _ in vec_X_tt])
         Tineq_res_tt = tt_fast_hadammard(vec_T_tt, ineq_res_tt, eps)
-        nu = tt_inner_prod([0.5*c for c in vec_T_tt], ineq_res_tt)
+        avg_factor = np.sqrt(0.5)
+        nu = max(sigma*tt_inner_prod([avg_factor*c for c in vec_T_tt], ineq_res_tt), 0)
+        print("nu ", nu)
+        print(tt_matrix_to_matrix(tt_mat(ineq_res_tt)))
         primal_feas_ineq = tt_rank_reduce(tt_sub(tt_scale(nu, one), Tineq_res_tt), min(0.25*nu, tol))
         primal_ineq_error = tt_inner_prod(primal_feas_ineq, primal_feas_ineq)
         if primal_ineq_error > tol:
@@ -253,9 +256,11 @@ def _tt_ipm_newton_step(
     #print("Report ---")
     #print("Delta Y")
     #print(np.round(tt_matrix_to_matrix(tt_mat(vec_Delta_Y_tt)), decimals=3))
-    #if active_ineq:
-    #    print("Delta T")
-    #    print(np.round(tt_matrix_to_matrix(Delta_T_tt), decimals=3))
+    if active_ineq:
+        print("Delta T")
+        print(np.round(tt_matrix_to_matrix(Delta_T_tt), decimals=3))
+        print("T")
+        print(np.round(tt_matrix_to_matrix(T_tt), decimals=3))
     #print("Delta X")
     #print(np.round(tt_matrix_to_matrix(Delta_X_tt), decimals=3))
     #print("Delta Z")
@@ -296,7 +301,6 @@ def _tt_line_search(
     if active_ineq and discount_x:
         for iter in range(iters):
             discount_x, _ = tt_is_geq(lin_op_tt_ineq, new_X_tt, vec_bias_tt_ineq, degenerate=True, eps=eps)
-            print(tt_matrix_to_matrix(X_tt))
             if discount_x:
                 break
             else:

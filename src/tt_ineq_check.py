@@ -118,7 +118,7 @@ def _tt_is_psd(A, nswp=10, x0=None, eps=1e-10, verbose=False):
         print('\t Time per sweep: ', (time.time() - t0) / (swp + 1))
 
     final_eig_val = tt_inner_prod(x_cores, tt_matrix_vec_mul(A, x_cores))
-    return np.greater(final_eig_val, -eps), max_res
+    return np.greater(final_eig_val, -0.5*eps), max_res
 
 
 def tt_is_psd(A, degenerate=False, eps=1e-10, verbose=False):

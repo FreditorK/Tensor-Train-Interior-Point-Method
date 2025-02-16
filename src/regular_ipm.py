@@ -151,12 +151,14 @@ def infeasible_newton_system(
         mat_lin_op_ineq,
         mat_lin_op_ineq_adj,
         vec_bias_ineq,
+        sigma,
         mu,
         tol,
         feasibility_tol,
         eps,
         active_ineq
 ):
+    mu = max(sigma * mu,  1e-3)
     idx_add = int(active_ineq)
     I = np.eye(len(Z))
     L_Z = tt_style_kron(Z, I) + tt_style_kron(I, Z)
@@ -188,8 +190,10 @@ def infeasible_newton_system(
         dual_feas = dual_feas + mat_lin_op_ineq_adj @ vec_T
         # TODO: Does mu 1 not also be under mat_lin_op_tt_ineq, need to adjust mu 1 to have zeros where L(X) has zeros
         one = mat_lin_op_ineq_adj @ np.ones_like(vec_X)
-        nu = np.sum(vec_T.T @ ineq_res)/T.shape[0]
+        nu = min(sigma*np.sum(vec_T.T @ ineq_res)/T.shape[0], 1)
+        print("Nu: ", nu)
         primal_feas_ineq = nu*one -vec_T*ineq_res
+        print(mat(ineq_res))
         primal_ineq_error = np.trace(primal_feas_ineq.T @ primal_feas_ineq)
         #if primal_ineq_error > tol:
         rhs[2*block_dim:3*block_dim] = primal_feas_ineq
@@ -245,7 +249,8 @@ def _ipm_newton_step(
         mat_lin_op_ineq,
         mat_lin_op_ineq_adj,
         vec_bias_ineq,
-        max(sigma * mu,  1e-3),
+        sigma,
+        mu,
         tol,
         feasibility_tol,
         eps,
@@ -272,16 +277,20 @@ def _ipm_newton_step(
     if verbose:
         print(f"Step sizes: {x_step_size}, {z_step_size}")
 
-    #print("Report ---")
-    #print("Delta Y")
-    #print(np.round(mat(vec_Delta_Y), decimals=3))
-    #if active_ineq:
-    #    print("Delta T")
-    #    print(np.round(Delta_T, decimals=3))
-    #print("Delta X")
-    #print(np.round(Delta_X, decimals=3))
-    #print("Delta Z")
-    #print(np.round(Delta_Z, decimals=3))
+    print("Report ---")
+    print("Delta Y")
+    print(np.round(mat(vec_Delta_Y), decimals=3))
+    if active_ineq:
+        print("Delta T")
+        print(np.round(Delta_T, decimals=3))
+        print("T")
+        print(np.round(T, decimals=3))
+    print("Delta X")
+    print(np.round(Delta_X, decimals=3))
+    print("X")
+    print(np.round(X, decimals=3))
+    print("Delta Z")
+    print(np.round(Delta_Z, decimals=3))
 
     return X, vec_Y, T, Z, primal_dual_error, mu
 
@@ -296,7 +305,8 @@ def _line_search(
         lin_op_ineq,
         vec_bias_ineq,
         active_ineq,
-        iters=15
+        iters=15,
+        eps=1e-10
 ):
     x_step_size = 1
     z_step_size = 1
@@ -305,30 +315,28 @@ def _line_search(
     discount_z = False
 
     for iter in range(iters):
-        discount_x = np.min(np.linalg.eigvalsh(X + x_step_size * Delta_X)) > 0
+        discount_x = np.min(np.linalg.eigvalsh(X + x_step_size * Delta_X)) >= 0
         if discount_x:
             break
         else:
             x_step_size *= discount
     if active_ineq and discount_x:
         for iter in range(iters):
-            print(X + x_step_size * Delta_X)
-            print(mat(vec_bias_ineq - lin_op_ineq @ vec(X + x_step_size * Delta_X)))
-            discount_x = np.all(vec_bias_ineq - lin_op_ineq @ vec(X + x_step_size * Delta_X) >= 0)
+            discount_x = np.all(vec_bias_ineq - lin_op_ineq @ vec(X + x_step_size * Delta_X) > -eps)
             if discount_x:
                 break
             else:
                 x_step_size *= discount
 
     for iter in range(iters):
-        discount_z = np.min(np.linalg.eigvalsh(Z + z_step_size * Delta_Z)) > 0
+        discount_z = np.min(np.linalg.eigvalsh(Z + z_step_size * Delta_Z)) >= 0
         if discount_z:
             break
         else:
             z_step_size *= discount
     if active_ineq and discount_z:
         for iter in range(iters):
-            discount_z = np.min(T + z_step_size*Delta_T) >= 0
+            discount_z = np.min(T + z_step_size*Delta_T) > -eps
             if discount_z:
                 break
             else:
