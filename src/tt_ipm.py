@@ -234,7 +234,7 @@ def _tt_ipm_newton_step(
         active_ineq
     )
     idx_add = int(active_ineq)
-    Delta_tt, res = tt_block_amen(lhs_matrix_tt, rhs_vec_tt, nswp=10, aux_matrix_blocks=lag_maps, eps=eps, local_solver=local_solver, verbose=verbose, variable_error=True)
+    Delta_tt, res = tt_block_amen(lhs_matrix_tt, rhs_vec_tt, nswp=4, aux_matrix_blocks=lag_maps, eps=eps, local_solver=local_solver, verbose=verbose, variable_error=True)
     vec_Delta_Y_tt = _tt_get_block(1, Delta_tt)
     Delta_X_tt = tt_rank_reduce(tt_mat(_tt_get_block(0, Delta_tt)), eps=eps)
     Delta_Z_tt = tt_rank_reduce(tt_mat(_tt_get_block(2 + idx_add, Delta_tt)), eps=eps)
@@ -415,7 +415,7 @@ def tt_ipm(
 
         if verbose:
             print(f"Step sizes: {x_step_size}, {z_step_size}")
-        sigma *= max(min((pd_error / mu)**2, 1), 0.01)
+        sigma *= max(min((pd_error / mu)**2, 1), 0.1)
         if verbose:
             print(f"---Step {iter}---")
             print(f"Duality Gap: {100 * np.abs(mu):.4f}%")
