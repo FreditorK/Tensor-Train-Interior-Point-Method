@@ -43,13 +43,11 @@ def ipm_solve_system(lhs, rhs, local_auxs, num_blocks):
 
     L_eq = -lhs[block_dim:2*block_dim, :block_dim]
     L_Z = lhs[k*block_dim:, :block_dim]
-    print("Eigs: ", np.min(np.linalg.eigvals(L_Z)), np.linalg.norm(L_Z - L_Z.T))
     L_Z_inv = scip.linalg.inv(L_Z)
     L_eq_adj = -lhs[:block_dim, block_dim:2*block_dim]
-    I = lhs[:block_dim, k*block_dim:]
+    #I = lhs[:block_dim, k*block_dim:]
     inv_I = np.diag(np.divide(1, np.diagonal(lhs[:block_dim, k*block_dim:])))
     L_X = lhs[k * block_dim:, k * block_dim:]
-    print("Cond: ", np.linalg.cond(L_Z), np.linalg.cond(L_X))
     R_d = -rhs[:block_dim]
     R_p = -rhs[block_dim:2*block_dim]
     R_c = -rhs[k * block_dim:]
@@ -74,7 +72,6 @@ def ipm_solve_system(lhs, rhs, local_auxs, num_blocks):
 
         u = L_eq @ KR_dmk - R_p
         v = TL_ineq @ KR_dmk - R_t
-        print("D cond: ", np.linalg.cond(D))
         D_inv = scip.linalg.inv(D, check_finite=False)
         sol = scip.linalg.solve(A - B @ D_inv @ C, u - B @ (D_inv @ v), check_finite=False, assume_a="gen")
         t = D_inv @ (v - C @ sol)
@@ -82,17 +79,16 @@ def ipm_solve_system(lhs, rhs, local_auxs, num_blocks):
         R_dmL_eq_adj_yt = R_d - L_eq_adj @ y - L_ineq_adj @ t
         x = K @ R_dmL_eq_adj_yt - k
         z = -inv_I @ R_dmL_eq_adj_yt
-        print()
-        print("---")
-        print(np.linalg.norm(-L_eq @ x + R_p)) # bad
-        print(np.linalg.norm(-L_eq_adj @ y - L_ineq_adj @ t + I @ z + R_d))
-        print(np.linalg.norm(-TL_ineq @ x + R_ineq @ t + R_t)) # bad
-        print(np.linalg.norm(L_Z @ x + L_X @ z + R_c))
-        print("---")
+        #print()
+        #print("---")
+        #print(np.linalg.norm(-L_eq @ x + R_p)) # bad
+        #print(np.linalg.norm(-L_eq_adj @ y - L_ineq_adj @ t + I @ z + R_d))
+        #print(np.linalg.norm(-TL_ineq @ x + R_ineq @ t + R_t)) # bad
+        #print(np.linalg.norm(L_Z @ x + L_X @ z + R_c))
+        #print("---")
         return np.vstack((x, y, t, z))
     A = L_eq @ K @ L_eq_adj
     lhs = A + 0.05*(np.linalg.norm(A)/ np.linalg.norm(local_auxs["y"]))*local_auxs["y"]
-    print("Cond  A: ", np.linalg.cond(lhs))
     rhs = L_eq @ KR_dmk - R_p
     sol = np.linalg.solve(lhs, rhs)
     y = sol
@@ -122,7 +118,6 @@ def preconditioned_scaling_matrices(matrix, k, eps=0.01):
     lam = 1/np.sqrt(lam)
     # X^(-1/2)
     tau = (1-eps)*np.max(lam[k:]) + eps*np.min(lam[k:])
-    print(lam, lam[:k] - tau)
     U = Q[:, :k] @ np.diag(np.sqrt(lam[:k] - tau))
     S_inv = scipy.linalg.inv(tau*I[:k, :k] + U.T @ U)
     P = tau*I + U @ U.T
@@ -191,20 +186,17 @@ def infeasible_newton_system(
         # TODO: Does mu 1 not also be under mat_lin_op_tt_ineq, need to adjust mu 1 to have zeros where L(X) has zeros
         one = mat_lin_op_ineq_adj @ np.ones_like(vec_X)
         nu = max(sigma*np.sum(vec_T.T @ ineq_res)/T.shape[0], 0)
-        print("Nu: ", nu)
         primal_feas_ineq = nu*one -vec_T*ineq_res
         primal_ineq_error = np.trace(primal_feas_ineq.T @ primal_feas_ineq)
         #if primal_ineq_error > tol:
         rhs[2*block_dim:3*block_dim] = primal_feas_ineq
         #primal_error += primal_ineq_error
-        print("Error ineq: ", primal_ineq_error)
 
     dual_error = np.trace(dual_feas.T @ dual_feas)
     XZ_term = L_Z @ vec_X
     rhs[(2 + idx_add)*block_dim:] = 2*mu*vec(np.eye(len(X))) - XZ_term
     #if dual_error > feasibility_tol:
     rhs[:block_dim] = dual_feas
-    print("Error", primal_error, dual_error)
 
     return lhs_skeleton, rhs, primal_error + dual_error
 
@@ -277,19 +269,19 @@ def _ipm_newton_step(
         print(f"Step sizes: {x_step_size}, {z_step_size}")
 
     print("Report ---")
-    print("Delta Y")
-    print(np.round(mat(vec_Delta_Y), decimals=3))
+    print("Y")
+    print(np.round(mat(vec_Y), decimals=3))
     if active_ineq:
-        print("Delta T")
-        print(np.round(Delta_T, decimals=3))
+        #print("Delta T")
+        #print(np.round(Delta_T, decimals=3))
         print("T")
         print(np.round(T, decimals=3))
-    print("Delta X")
-    print(np.round(Delta_X, decimals=3))
+    #print("Delta X")
+    #print(np.round(Delta_X, decimals=3))
     print("X")
     print(np.round(X, decimals=3))
-    print("Delta Z")
-    print(np.round(Delta_Z, decimals=3))
+    #print("Delta Z")
+    #print(np.round(Delta_Z, decimals=3))
 
     return X, vec_Y, T, Z, primal_dual_error, mu
 
@@ -358,6 +350,17 @@ def ipm(
     eps=1e-10
 ):
     dim = len(obj_tt)
+    active_ineq = lin_op_tt_ineq is not None or bias_tt_ineq is not None
+    # Normalisation
+    obj_tt = tt_normalise(obj_tt)
+    factor = np.divide(1, np.sqrt(tt_inner_prod(lin_op_tt, lin_op_tt)))
+    lin_op_tt = tt_scale(factor, lin_op_tt)
+    bias_tt = tt_scale(factor, bias_tt)
+    if active_ineq:
+        factor = np.divide(1, np.sqrt(tt_inner_prod(lin_op_tt_ineq, lin_op_tt_ineq)))
+        lin_op_tt_ineq = tt_scale(factor, lin_op_tt_ineq)
+        bias_tt_ineq = tt_scale(factor, bias_tt_ineq)
+    # -------------
     feasibility_tol = feasibility_tol / np.sqrt(dim)
     centrality_tol = centrality_tol / np.sqrt(dim)
     op_tol = 0.5*min(feasibility_tol, centrality_tol)
@@ -366,7 +369,6 @@ def ipm(
     lin_op = tt_matrix_to_matrix(lin_op_tt)
     vec_bias = vec(tt_matrix_to_matrix(bias_tt))
 
-    active_ineq = lin_op_tt_ineq is not None or bias_tt_ineq is not None
     block_size = len(vec_obj)
     lhs_skeleton = np.zeros(((3+int(active_ineq))*block_size, (3+int(active_ineq))*block_size))
     lin_op_adj = lin_op.T

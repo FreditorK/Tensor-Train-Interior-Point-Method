@@ -135,7 +135,7 @@ def tt_is_geq(linear_op_tt, X_tt, vec_b_tt, nswp=10, eps=1e-10, degenerate=False
         res_tt = tt_scale(np.divide(1, norm), res_tt)
         A = tt_diag(res_tt)
         if degenerate:
-            A = tt_add(A, tt_scale(eps, tt_identity(len(A))))
+            A = tt_add(A, tt_scale(2*eps, tt_identity(len(A))))
         A = tt_rank_reduce(A, 0.5 * eps)
         return _tt_is_psd(A, nswp=nswp, eps=eps, verbose=verbose)
     return True, 0.0
@@ -148,7 +148,7 @@ def tt_is_geq_(X_tt, nswp=10, eps=1e-10, degenerate=False, verbose=False):
         res_tt = tt_scale(np.divide(1, norm), res_tt)
         A = tt_diag(res_tt)
         if degenerate:
-            A = tt_add(A, tt_scale(eps, tt_identity(len(A))))
+            A = tt_add(A, tt_scale(2*eps, tt_identity(len(A))))
         A = tt_rank_reduce(A, 0.5*eps)
         return _tt_is_psd(A, nswp=nswp, eps=eps, verbose=verbose)
     return True, 0.0

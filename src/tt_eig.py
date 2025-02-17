@@ -334,8 +334,6 @@ def tt_elementwise_max(vec_tt, val, nswp=4, eps=1e-10, verbose=False):
 
 
     x_cores = tt_fast_hadammard(x_cores, x_cores, eps)
-    print(vec_tt_norm*tt_matrix_to_matrix(tt_mat(tt_matrix_vec_mul(A, x_cores))))
-
 
     vec_tt = tt_scale(vec_tt_norm, tt_fast_matrix_vec_mul(A, x_cores, eps))
     if val != 0:

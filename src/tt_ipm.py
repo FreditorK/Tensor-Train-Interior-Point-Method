@@ -234,7 +234,7 @@ def _tt_ipm_newton_step(
         active_ineq
     )
     idx_add = int(active_ineq)
-    Delta_tt, res = tt_block_amen(lhs_matrix_tt, rhs_vec_tt, aux_matrix_blocks=lag_maps, eps=eps, local_solver=local_solver, verbose=verbose, variable_error=True)
+    Delta_tt, res = tt_block_amen(lhs_matrix_tt, rhs_vec_tt, nswp=10, aux_matrix_blocks=lag_maps, eps=eps, local_solver=local_solver, verbose=verbose, variable_error=True)
     vec_Delta_Y_tt = _tt_get_block(1, Delta_tt)
     Delta_X_tt = tt_rank_reduce(tt_mat(_tt_get_block(0, Delta_tt)), eps=eps)
     Delta_Z_tt = tt_rank_reduce(tt_mat(_tt_get_block(2 + idx_add, Delta_tt)), eps=eps)
@@ -247,18 +247,18 @@ def _tt_ipm_newton_step(
         Delta_T_tt_vec = _tt_get_block(2, Delta_tt)
         Delta_T_tt = tt_rank_reduce(tt_mat(tt_sub(Delta_T_tt_vec, tt_fast_matrix_vec_mul(lag_maps["t"], Delta_T_tt_vec))), eps=eps)
 
-    #print("Report ---")
-    #print("Delta Y")
-    #print(np.round(tt_matrix_to_matrix(tt_mat(vec_Delta_Y_tt)), decimals=3))
-    #if active_ineq:
+    print("Report ---")
+    print("Y")
+    print(np.round(tt_matrix_to_matrix(tt_mat(vec_Y_tt)), decimals=3))
+    if active_ineq:
     #    print("Delta T")
     #    print(np.round(tt_matrix_to_matrix(Delta_T_tt), decimals=3))
-    #    print("T")
-    #    print(np.round(tt_matrix_to_matrix(T_tt), decimals=3))
-    #print("Delta X")
-    #print(np.round(tt_matrix_to_matrix(Delta_X_tt), decimals=3))
-    #print("Delta Z")
-    #print(np.round(tt_matrix_to_matrix(Delta_Z_tt), decimals=3))
+        print("T")
+        print(np.round(tt_matrix_to_matrix(T_tt), decimals=3))
+    print("X")
+    print(np.round(tt_matrix_to_matrix(X_tt), decimals=3))
+    print("Z")
+    print(np.round(tt_matrix_to_matrix(Z_tt), decimals=3))
 
     return Delta_X_tt, vec_Delta_Y_tt, Delta_T_tt, Delta_Z_tt, primal_dual_error, mu
 
@@ -293,7 +293,9 @@ def _tt_line_search(
             x_step_size *= discount
     if active_ineq and discount_x:
         for iter in range(iters):
-            discount_x, _ = tt_is_geq(lin_op_tt_ineq, new_X_tt, vec_bias_tt_ineq, degenerate=True, eps=eps)
+            diff = tt_mat(tt_sub(vec_bias_tt_ineq, tt_fast_matrix_vec_mul(lin_op_tt_ineq, tt_vec(new_X_tt), eps)))
+            diff = [einsum("rR, Refk -> refk", diff[0][:, 0,  0, :], diff[1])] + diff[2:]
+            discount_x, _ = tt_is_geq_(diff, degenerate=True, eps=eps)
             if discount_x:
                 break
             else:
@@ -343,7 +345,7 @@ def tt_ipm(
     lin_op_tt = tt_scale(factor, lin_op_tt)
     bias_tt = tt_scale(factor, bias_tt)
     if active_ineq:
-        factor = np.divide(1, np.sqrt(tt_inner_prod(lin_op_tt_ineq, lin_op_tt_ineq)))
+        factor = np.divide(2, np.sqrt(tt_inner_prod(lin_op_tt_ineq, lin_op_tt_ineq)))
         lin_op_tt_ineq = tt_scale(factor, lin_op_tt_ineq)
         bias_tt_ineq = tt_scale(factor, bias_tt_ineq)
     # -------------
@@ -352,7 +354,7 @@ def tt_ipm(
     feasibility_tol = feasibility_tol / np.sqrt(dim)
     centrality_tol = centrality_tol / np.sqrt(dim)
     op_tol = 0.5*min(feasibility_tol, centrality_tol)
-    lag_maps = {key: tt_rank_reduce(value, eps=op_tol) for key, value in lag_maps.items()}
+    lag_maps = {key: tt_rank_reduce(value, eps=eps) for key, value in lag_maps.items()}
     num_blocks = 4 if active_ineq else 3
     local_solver = lambda prev_sol, lhs, rhs, local_auxs: ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, eps=eps, num_blocks=num_blocks)
     obj_tt = tt_rank_reduce(tt_vec(obj_tt), eps=eps)
@@ -374,6 +376,7 @@ def tt_ipm(
     T_tt = tt_one_matrix(dim)
     if active_ineq:
         T_tt = tt_mat(tt_fast_matrix_vec_mul(lin_op_tt_ineq_adj, tt_vec(T_tt), eps))
+        T_tt = tt_normalise(T_tt)
     Z_tt = tt_identity(dim)
     iter = 0
     sigma = 0.5
@@ -403,11 +406,7 @@ def tt_ipm(
         )
         x_step_size, z_step_size = _tt_line_search(X_tt, T_tt, Z_tt, Delta_X_tt, Delta_T_tt, Delta_Z_tt,
                                                    lin_op_tt_ineq, bias_tt_ineq, active_ineq, eps=eps)
-        if primal_projection is not None:
-            X_tt = primal_projection(tt_add(X_tt, tt_scale(0.98 * x_step_size, Delta_X_tt)))
-        else:
-            X_tt = tt_add(X_tt, tt_scale(0.98 * x_step_size, Delta_X_tt))
-        X_tt = tt_rank_reduce(X_tt, eps=0.5 * eps)
+        X_tt = tt_rank_reduce(tt_add(X_tt, tt_scale(0.98 * x_step_size, Delta_X_tt)), eps=0.5 * eps)
         vec_Y_tt = tt_rank_reduce(tt_add(vec_Y_tt, tt_scale(0.98 * z_step_size, vec_Delta_Y_tt)), eps=eps)
         Z_tt = tt_rank_reduce(tt_add(Z_tt, tt_scale(0.98 * z_step_size, Delta_Z_tt)), eps=0.5 * eps)
         if active_ineq:
