@@ -140,7 +140,7 @@ def tt_ineq_op_adj(dim):
 class Config:
     seed = 6 # Some seeds have bad convergence
     max_rank = 3
-    n = 1
+    n = 2
 
 if __name__ == "__main__":
     """
@@ -290,7 +290,7 @@ if __name__ == "__main__":
         eq_bias_tt,
         Q_ineq_op,
         Q_ineq_bias,
-        max_iter=18,
+        max_iter=13,
         verbose=True
     )
     t1 = time.time()

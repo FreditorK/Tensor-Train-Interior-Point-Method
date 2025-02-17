@@ -190,14 +190,13 @@ def infeasible_newton_system(
         dual_feas = dual_feas + mat_lin_op_ineq_adj @ vec_T
         # TODO: Does mu 1 not also be under mat_lin_op_tt_ineq, need to adjust mu 1 to have zeros where L(X) has zeros
         one = mat_lin_op_ineq_adj @ np.ones_like(vec_X)
-        nu = min(sigma*np.sum(vec_T.T @ ineq_res)/T.shape[0], 1)
+        nu = max(sigma*np.sum(vec_T.T @ ineq_res)/T.shape[0], 0)
         print("Nu: ", nu)
         primal_feas_ineq = nu*one -vec_T*ineq_res
-        print(mat(ineq_res))
         primal_ineq_error = np.trace(primal_feas_ineq.T @ primal_feas_ineq)
         #if primal_ineq_error > tol:
         rhs[2*block_dim:3*block_dim] = primal_feas_ineq
-        primal_error += primal_ineq_error
+        #primal_error += primal_ineq_error
         print("Error ineq: ", primal_ineq_error)
 
     dual_error = np.trace(dual_feas.T @ dual_feas)

@@ -638,7 +638,7 @@ def tt_block_amen(block_A, block_b, aux_matrix_blocks=None, nswp=22, x0=None, ep
         if swp >= nswp - 2:
             last = True
 
-        if np.all(local_res < real_tol) or np.all(2*local_dx < real_tol):
+        if np.all(local_res < eps) or np.all(2*local_dx < eps):
             last = True
             if not amen:
                 break
