@@ -49,7 +49,7 @@ def tt_tr_op_adjoint(dim):
 class Config:
     seed = 2
     max_rank = 3
-    dim= 4 #max 6 (maybe higher but gets slow, solution always full rank which is weird, maybe not suited)
+    dim= 5 #max 6 (maybe higher but gets slow, solution always full rank which is weird, maybe not suited)
 
 
 if __name__ == "__main__":
@@ -91,7 +91,8 @@ if __name__ == "__main__":
         max_iter=16,
         verbose=True,
         feasibility_tol=1e-5,
-        centrality_tol=1e-2
+        centrality_tol=1e-2,
+        op_tol=6e-4
     )
     t1 = time.time()
     print("Solution: ")
@@ -101,5 +102,3 @@ if __name__ == "__main__":
     print("Complementary Slackness: ", tt_inner_prod(X_tt, Z_tt))
     print(f"Ranks X_tt {tt_ranks(X_tt)} Y_tt {tt_ranks(Y_tt)} Z_tt {tt_ranks(Z_tt)} ")
     # FIXME: Rank of solution drops drastically when decreasing eps
-    print("Pruned ranks: ", tt_ranks(tt_rank_reduce(X_tt, eps=1e-2)))
-    print(f"Objective value: {tt_inner_prod(J_tt, tt_rank_reduce(X_tt, eps=1e-2))}")

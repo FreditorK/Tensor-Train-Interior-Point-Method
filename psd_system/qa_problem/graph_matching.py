@@ -242,7 +242,7 @@ eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, padding_op_bias))
 Q_ineq_op = tt_ineq_op(2 * n)
 Q_ineq_op_adj = tt_ineq_op_adj(2 * n)
 Q_ineq_bias = tt_rank_reduce(
-    tt_scale(0.1, tt_mat(tt_matrix_vec_mul(Q_ineq_op_adj, [np.ones((1, 2, 1)) for _ in range(2 * (2 * n + 1))])))
+    tt_scale(0.05, tt_mat(tt_matrix_vec_mul(Q_ineq_op_adj, [np.ones((1, 2, 1)) for _ in range(2 * (2 * n + 1))])))
 )
 
 # ---
@@ -290,6 +290,7 @@ if __name__ == "__main__":
         Q_ineq_op,
         Q_ineq_bias,
         max_iter=16,
+        op_tol=1e-7,
         verbose=True
     )
     t1 = time.time()

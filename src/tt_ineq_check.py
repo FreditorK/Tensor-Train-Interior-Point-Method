@@ -121,14 +121,14 @@ def _tt_is_psd(A, nswp=10, x0=None, eps=1e-10, verbose=False):
     return np.greater(final_eig_val, -0.5*eps), max_res
 
 
-def tt_is_psd(A, degenerate=False, eps=1e-10, verbose=False):
+def tt_is_psd(A, op_tol, degenerate=False, eps=1e-10, verbose=False):
     if degenerate:
         A = tt_add(A, tt_scale(eps, tt_identity(len(A))))
-    A = tt_rank_reduce(A, 0.5 * eps)
+    A = tt_rank_reduce(A, op_tol)
     return _tt_is_psd(A, eps=eps, verbose=verbose)
 
 
-def tt_is_geq(linear_op_tt, X_tt, vec_b_tt, nswp=10, eps=1e-10, degenerate=False, verbose=False):
+def tt_is_geq(linear_op_tt, X_tt, vec_b_tt, op_tol, nswp=10, eps=1e-10, degenerate=False, verbose=False):
     res_tt = tt_sub(vec_b_tt, tt_matrix_vec_mul(linear_op_tt, tt_vec(X_tt)))
     norm = np.sqrt(tt_inner_prod(res_tt, res_tt))
     if norm > eps:
@@ -136,12 +136,12 @@ def tt_is_geq(linear_op_tt, X_tt, vec_b_tt, nswp=10, eps=1e-10, degenerate=False
         A = tt_diag(res_tt)
         if degenerate:
             A = tt_add(A, tt_scale(2*eps, tt_identity(len(A))))
-        A = tt_rank_reduce(A, 0.5 * eps)
+        A = tt_rank_reduce(A, op_tol)
         return _tt_is_psd(A, nswp=nswp, eps=eps, verbose=verbose)
     return True, 0.0
 
 
-def tt_is_geq_(X_tt, nswp=10, eps=1e-10, degenerate=False, verbose=False):
+def tt_is_geq_(X_tt, op_tol, nswp=10, eps=1e-10, degenerate=False, verbose=False):
     res_tt = tt_vec(X_tt)
     norm = np.sqrt(tt_inner_prod(res_tt, res_tt))
     if norm > eps:
@@ -149,7 +149,7 @@ def tt_is_geq_(X_tt, nswp=10, eps=1e-10, degenerate=False, verbose=False):
         A = tt_diag(res_tt)
         if degenerate:
             A = tt_add(A, tt_scale(2*eps, tt_identity(len(A))))
-        A = tt_rank_reduce(A, 0.5*eps)
+        A = tt_rank_reduce(A, op_tol)
         return _tt_is_psd(A, nswp=nswp, eps=eps, verbose=verbose)
     return True, 0.0
 

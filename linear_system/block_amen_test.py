@@ -26,7 +26,7 @@ b_2_tt = tt_rank_reduce(tt_matrix_vec_mul(block_11_tt, tt_random_gaussian([3, 1,
 temp_x = tt_random_gaussian([4, 3, 1, 2], shape=(2,))
 b_3_tt = tt_rank_reduce(tt_add(tt_matrix_vec_mul(block_21_tt, temp_x), tt_matrix_vec_mul(block_22_tt, temp_x)))
 block_b_tt = {0: b_1_tt, 1: b_2_tt, 2: b_3_tt}
-sol, _ = tt_block_amen(block_matrix_tt, block_b_tt, kickrank=2, nswp=10, verbose=True)
+sol, _ = tt_block_amen(block_matrix_tt, block_b_tt, kickrank=2, nswp=10, verbose=True, amen=False)
 block_sol_1 = sol[:-1] + [sol[-1][:, 0]]
 block_sol_2 = sol[:-1] + [sol[-1][:, 1]]
 block_sol_3 = sol[:-1] + [sol[-1][:, 2]]
