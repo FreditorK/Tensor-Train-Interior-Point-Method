@@ -433,36 +433,6 @@ def tt_trace(matrix_tt):
     return tt_inner_prod(matrix_tt, I)
 
 
-def tt_random_graph(dim, max_rank, max_iter=100):
-    if dim == 1:
-        d = np.round(np.random.rand())
-        return [np.array([[np.round(np.random.rand()), d], [d, np.round(np.random.rand())]]).reshape(1, 2, 2, 1)]
-    max_rank = max_rank
-    perm_cores = [
-        np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1),
-        np.array([[0.0, 1.0], [0.0, 0.0]]).reshape(1, 2, 2, 1),
-        np.array([[0.0, 0.0], [1.0, 0.0]]).reshape(1, 2, 2, 1),
-        np.array([[0.0, 0.0], [0.0, 1.0]]).reshape(1, 2, 2, 1)
-    ]
-    unique_rows = set()
-    graph = tt_zero_matrix(dim)
-    for _ in range(max_iter):
-        row = np.random.randint(0, 3, dim)
-        if (1 in row) or (2 in row):
-            if tuple(row) not in unique_rows:
-                cores = [perm_cores[i] for i in row]
-                cores = tt_add(cores, tt_transpose(cores))
-                graph = tt_add(graph, cores)
-                graph = tt_rank_reduce(graph)
-            unique_rows.add(tuple(row))
-            row_t = np.where(row == 1, 2, np.where(row == 2, 1, row))
-            unique_rows.add(tuple(row_t))
-        if np.max(tt_ranks(graph)) >= max_rank:
-            break
-
-    return graph
-
-
 def tt_matrix_to_matrix(matrix_tt):
     if len(matrix_tt) == 1:
         return np.squeeze(matrix_tt)

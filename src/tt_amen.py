@@ -1,8 +1,5 @@
 import sys
 import os
-from idlelib.configdialog import is_int
-
-import numpy as np
 
 sys.path.append(os.getcwd() + '/../')
 
