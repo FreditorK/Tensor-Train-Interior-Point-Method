@@ -341,13 +341,5 @@ def tt_elementwise_max(vec_tt, val, nswp=4, eps=1e-10, verbose=False):
 
     return vec_tt
 
-
-def tt_random_graph(dim, init_rank):
-    random_tt = tt_random_gaussian([max(init_rank // 2, 1)] * (dim - 1), shape=(2, 2))
-    random_tt = tt_rank_reduce(tt_add(tt_transpose(random_tt), random_tt), eps=1e-5)
-    random_tt = tt_elementwise_max(tt_vec(random_tt), 0)
-    random_tt = tt_mat(tt_divide(random_tt, random_tt, degenerate=True, eps=1e-8))
-    random_tt = tt_fast_hadammard(tt_sub(tt_one_matrix(dim), tt_identity(dim)), random_tt, 1e-6)
-    random_tt =  tt_rank_reduce(random_tt, eps=1e-2)
-
-    return random_tt
+def tt_elementwise_min(vec_tt, val, nswp=4, eps=1e-10, verbose=False):
+    return tt_scale(-1, tt_elementwise_max(tt_scale(-1, vec_tt), -val, nswp, eps, verbose))

@@ -136,7 +136,7 @@ def tt_ineq_op_adj(dim):
 class Config:
     seed = 6 # Some seeds have bad convergence
     max_rank = 3
-    n = 2
+    n = 2 # max n=3 , m=3^2, 2^m
 
 """
         [Q   P  0 ]

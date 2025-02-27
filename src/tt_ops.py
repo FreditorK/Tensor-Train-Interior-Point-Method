@@ -135,12 +135,16 @@ def _tt_lr_random_orthogonalise(train_tt, gaussian_tt):
     return train_tt
 
 
-def tt_rank_reduce(train_tt: List[np.array], eps=1e-18):
+def tt_rank_reduce(train_tt: List[np.array], eps=1e-18, variable_error=False):
     """ Might reduce TT-rank """
     dim = len(train_tt)
-    eps = eps / np.sqrt(dim-1)
-    if dim == 1 or np.all(np.array(tt_ranks(train_tt))==1):
+    ranks = np.array(tt_ranks(train_tt))
+    if dim == 1 or np.all(ranks==1):
         return train_tt
+    if variable_error:
+        eps = np.sqrt(ranks/np.sum(ranks))*eps
+    else:
+        eps = np.ones(dim - 1) * (eps / np.sqrt(dim - 1))
     train_tt = tt_rl_orthogonalise(train_tt)
     rank = 1
     for idx, tt_core in enumerate(train_tt[:-1]):
@@ -148,7 +152,7 @@ def tt_rank_reduce(train_tt: List[np.array], eps=1e-18):
         next_idx_shape = train_tt[idx + 1].shape
         k = len(idx_shape) - 1
         u, s, v_t = scp.linalg.svd(train_tt[idx].reshape(rank * np.prod(idx_shape[1:k], dtype=int), -1), full_matrices=False, check_finite=False)
-        next_rank = prune_singular_vals(s, eps)
+        next_rank = prune_singular_vals(s, eps[idx])
         s = s[:next_rank]
         u = u[:, :next_rank]
         v_t = v_t[:next_rank, :]
@@ -529,3 +533,21 @@ def tt_reshape(train_tt, shape):
 
 def tt_merge_matrix_cores(matrix_tt):
     return [einsum("kijr, rsdK -> kisjdK", c_1, c_2) for c_1, c_2 in zip(matrix_tt[:-1:2], matrix_tt[1::2])]
+
+
+def tt_random_rank_one(dim):
+    off_diag = np.round(np.random.rand())
+    return [np.array([[np.round(np.random.rand()), off_diag], [off_diag, np.round(np.random.rand())]]).reshape(1, 2, 2, 1) for _ in range(dim)]
+
+
+def tt_random_graph(dim, max_rank, eps=1e-9):
+    mask_matrix = tt_sub(tt_one_matrix(dim), tt_identity(dim))
+    graph = tt_zero_matrix(dim)
+    rank = 0
+    while rank < max_rank - 1 or tt_inner_prod(graph, graph) < eps:
+        new_graph = tt_random_rank_one(dim)
+        masked_new_graph = tt_fast_hadammard(tt_sub(mask_matrix, graph), new_graph, eps)
+        graph = tt_rank_reduce(tt_add(graph, masked_new_graph), eps)
+        rank = np.max(tt_ranks(graph)) - (tt_inner_prod(graph,  graph) == 0)
+
+    return graph

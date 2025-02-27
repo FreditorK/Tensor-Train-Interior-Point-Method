@@ -26,30 +26,18 @@ def tt_G_entrywise_mask_op_adj(G):
 
 
 def tt_tr_op(dim):
-    vec_identity = tt_vec(tt_identity(dim))
-    basis = []
-    for g_core in vec_identity:
-        core = np.zeros((g_core.shape[0], 2, 2, g_core.shape[-1]))
-        core[:, 0, 0] = g_core[:, 0]
-        core[:, 0, 1] = g_core[:, 1]
-        basis.append(core)
-    return tt_rank_reduce(basis)
-
-def tt_tr_op_adjoint(dim):
-    vec_identity = tt_vec(tt_identity(dim))
-    basis = []
-    for g_core in vec_identity:
-        core = np.zeros((g_core.shape[0], 2, 2, g_core.shape[-1]))
-        core[:, 0, 0] = g_core[:, 0]
-        core[:, 1, 0] = g_core[:, 1]
-        basis.append(core)
-    return tt_rank_reduce(basis)
+    op =[]
+    for i, c in enumerate(tt_vec(tt_identity(dim))):
+        core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
+        core[:, 0] = c
+        op.append(core)
+    return tt_rank_reduce(op)
 
 @dataclass
 class Config:
     seed = 2
     max_rank = 3
-    dim= 5 #max 6 (maybe higher but gets slow, solution always full rank which is weird, maybe not suited)
+    dim= 5 #max 6
 
 
 if __name__ == "__main__":
@@ -66,7 +54,6 @@ if __name__ == "__main__":
 
     # II
     tr_tt_op = tt_tr_op(Config.dim)
-    tr_tt_op_adjoint = tt_tr_op_adjoint(Config.dim)
     tr_bias_tt = [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(Config.dim)]
 
     # Objective
@@ -74,14 +61,13 @@ if __name__ == "__main__":
 
     # Constraint
     L_tt = tt_rank_reduce(tt_add(G_entry_tt_op, tr_tt_op))
-    L_tt_adjoint = tt_rank_reduce(tt_add(G_entry_tt_op_adjoint, tr_tt_op_adjoint))
     bias_tt = tr_bias_tt
 
     lag_maps = {"y": tt_rank_reduce(tt_diag(tt_vec(tt_sub(tt_one_matrix(Config.dim), tt_add(G, tr_bias_tt)))))}
 
     print("...Problem created!")
     print(f"Objective Ranks: {tt_ranks(J_tt)}")
-    print(f"Constraint Ranks: \n \t L {tt_ranks(L_tt)}, L^* {tt_ranks(L_tt_adjoint)}, bias {tt_ranks(bias_tt)}")
+    print(f"Constraint Ranks: \n \t L {tt_ranks(L_tt)}, bias {tt_ranks(bias_tt)}")
     t0 = time.time()
     X_tt, Y_tt, T_tt, Z_tt = tt_ipm(
         lag_maps,
@@ -92,7 +78,7 @@ if __name__ == "__main__":
         verbose=True,
         feasibility_tol=1e-5,
         centrality_tol=1e-2,
-        op_tol=6e-4
+        op_tol=2e-4
     )
     t1 = time.time()
     print("Solution: ")

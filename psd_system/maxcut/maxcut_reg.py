@@ -11,6 +11,10 @@ from maxcut import *
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Script with optional memory tracking.")
+    parser.add_argument("--track_mem", action="store_true", help="Enable memory tracking from a certain point.")
+    args = parser.parse_args()
+
     np.random.seed(Config.seed)
     np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=4, suppress=True)
     print("Creating Problem...")
@@ -25,9 +29,17 @@ if __name__ == "__main__":
     print("...Problem created!")
     print(f"Objective Ranks: {tt_ranks(G_tt)}")
     print(f"Constraint Ranks: As {tt_ranks(L_tt)}, bias {tt_ranks(bias_tt)}")
+    if args.track_mem:
+        print("Memory tracking started...")
+        tracemalloc.start()  # Start memory tracking
     t0 = time.time()
     X, Y, _, Z = ipm(lag_maps, G_tt, L_tt, bias_tt, max_iter=18, verbose=True)
     t1 = time.time()
+    if args.track_mem:
+        current, peak = tracemalloc.get_traced_memory()
+        print(f"Current memory usage: {current / 10 ** 6:.2f} MB")
+        print(f"Peak memory usage: {peak / 10 ** 6:.2f} MB")
+        tracemalloc.stop()  # Stop tracking after measuring
     print("Solution: ")
     print(np.round(X, decimals=2))
     print(f"Objective value: {np.trace(tt_matrix_to_matrix(G_tt).T @ X)}")
