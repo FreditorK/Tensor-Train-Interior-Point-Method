@@ -55,8 +55,8 @@ if __name__ == "__main__":
         G_tt,
         L_tt,
         bias_tt,
-        op_tol=1e-4,
-        centrality_tol=1e-2,
+        op_tol=5e-5,
+        centrality_tol=8e-3,
         feasibility_tol=1e-5,
         max_iter=26,
         verbose=True)
