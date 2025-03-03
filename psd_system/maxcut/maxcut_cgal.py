@@ -3,6 +3,7 @@ import sys
 import os
 import argparse
 import tracemalloc
+
 sys.path.append(os.getcwd() + '/../../')
 import time
 from src.tt_ops import *
@@ -16,9 +17,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     np.random.seed(Config.seed)
+    np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=4, suppress=True)
     t0 = time.time()
     G = tt_rank_reduce(tt_random_graph(Config.dim, Config.max_rank))
-    print(np.round(tt_matrix_to_matrix(G), decimals=2))
     t1 = time.time()
     print(f"Random graph produced in {t1 - t0:.3f}s")
     C = np.round(tt_matrix_to_matrix(G))
@@ -29,8 +30,8 @@ if __name__ == "__main__":
     if args.track_mem:
         print("Memory tracking started...")
         tracemalloc.start()  # Start memory tracking
-    X, duality_gaps = cgal(-C, constraint_matrices, bias, (trace_param, trace_param), num_iter=100)
-    print(np.round(X, decimals=2))
+    X, duality_gaps = cgal(-C, constraint_matrices, bias, (trace_param, trace_param), duality_tol=0.1, num_iter=100*2**Config.dim, verbose=True)
+    #print(np.round(X, decimals=3))
     t3 = time.time()
     if args.track_mem:
         current, peak = tracemalloc.get_traced_memory()
@@ -39,5 +40,5 @@ if __name__ == "__main__":
         tracemalloc.stop()  # Stop tracking after measuring
     print(f"Problem solved in {t3 - t2:.3f}s")
     print(f"Objective value: {np.trace(C.T @ X)}")
-    chol = robust_cholesky(X, epsilon=1e-3)
-    nodes_in_cut = [i for i, v in enumerate(chol.T @ np.random.randn(chol.shape[0], 1)) if v > 0]
+    print(f"Duality Surrogate Gap: {np.abs(duality_gaps[-1])}")
+    print(f"Total feasibility error: {np.linalg.norm([np.trace(c.T @ X) - b for c, b in zip(constraint_matrices, bias)])**2}")

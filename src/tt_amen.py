@@ -375,9 +375,6 @@ def tt_block_amen(block_A, block_b, aux_matrix_blocks=None, nswp=22, x0=None, ep
     real_tol = (eps / np.sqrt(d))*np.ones(d)
 
     for swp in range(nswp):
-        if verbose:
-            print('Starting Sweep:\n\tMax num of sweeps: %d' % swp)
-            print(f"\tTT-sol rank: {tt_ranks(x_cores)} \n")
         for k in range(d - 1, 0, -1):
             if swp > 0:
                 nrmsc *= (normA[:, k - 1] * normx[k - 1]) / normb[:, k - 1]
@@ -532,8 +529,13 @@ def tt_block_amen(block_A, block_b, aux_matrix_blocks=None, nswp=22, x0=None, ep
                 total_tol = np.sum(real_tol)
                 real_tol[:-1] = total_tol*rank_percent
 
+        if verbose:
+            print('Starting Sweep:\n\tMax num of sweeps: %d' % swp)
+            print(f"\tTT-sol rank: {tt_ranks(x_cores)} \n")
+
         if np.all(local_res < eps) or np.all(2*local_dx < eps):
             break
+
 
     if verbose:
         print("\n\t---Results---")

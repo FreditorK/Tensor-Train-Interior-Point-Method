@@ -268,18 +268,18 @@ def _ipm_newton_step(
     if verbose:
         print(f"Step sizes: {x_step_size}, {z_step_size}")
 
-    print("Report ---")
-    print("Y")
-    print(np.round(mat(vec_Y), decimals=3))
-    if active_ineq:
+    #print("Report ---")
+    #print("Y")
+    #print(np.round(mat(vec_Y), decimals=3))
+    #if active_ineq:
         #print("Delta T")
         #print(np.round(Delta_T, decimals=3))
-        print("T")
-        print(np.round(T, decimals=3))
+    #    print("T")
+    #    print(np.round(T, decimals=3))
     #print("Delta X")
     #print(np.round(Delta_X, decimals=3))
-    print("X")
-    print(np.round(X, decimals=3))
+    #print("X")
+    #print(np.round(X, decimals=3))
     #print("Delta Z")
     #print(np.round(Delta_Z, decimals=3))
 

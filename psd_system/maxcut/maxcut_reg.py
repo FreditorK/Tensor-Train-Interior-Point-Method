@@ -40,8 +40,8 @@ if __name__ == "__main__":
         print(f"Current memory usage: {current / 10 ** 6:.2f} MB")
         print(f"Peak memory usage: {peak / 10 ** 6:.2f} MB")
         tracemalloc.stop()  # Stop tracking after measuring
-    print("Solution: ")
-    print(np.round(X, decimals=2))
+    #print("Solution: ")
+    #print(np.round(X, decimals=2))
     print(f"Objective value: {np.trace(tt_matrix_to_matrix(G_tt).T @ X)}")
     print("Complementary Slackness: ", np.trace(X.T @ Z))
     print(f"Time: {t1-t0}s")

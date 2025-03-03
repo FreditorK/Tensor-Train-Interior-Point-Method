@@ -15,9 +15,9 @@ from src.tt_eig import tt_min_eig, tt_max_eig
 
 @dataclass
 class Config:
-    seed = 3 #999: Very low rank solution, 9: Low rank solution, 3: Regular solution
-    max_rank = 2
-    dim = 5 #max 9 symmetric op
+    seed = 5
+    max_rank = 3
+    dim = 6 #max 9 symmetric op
 
 
 def tt_diag_op(dim):
@@ -38,8 +38,6 @@ if __name__ == "__main__":
     np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=4, suppress=True)
     print("Creating Problem...")
     G_tt = tt_rank_reduce(tt_random_graph(Config.dim, Config.max_rank))
-    #G_tt = tt_sub(tt_scale(2, G_tt), tt_one_matrix(Config.dim))
-    print(np.round(tt_matrix_to_matrix(G_tt), decimals=2))
     L_tt = tt_diag_op(Config.dim)
     bias_tt = tt_identity(Config.dim)
 
@@ -58,7 +56,9 @@ if __name__ == "__main__":
         L_tt,
         bias_tt,
         op_tol=1e-4,
-        max_iter=20,
+        centrality_tol=1e-2,
+        feasibility_tol=1e-5,
+        max_iter=26,
         verbose=True)
     t1 = time.time()
     if args.track_mem:
@@ -66,9 +66,11 @@ if __name__ == "__main__":
         print(f"Current memory usage: {current / 10 ** 6:.2f} MB")
         print(f"Peak memory usage: {peak / 10 ** 6:.2f} MB")
         tracemalloc.stop()  # Stop tracking after measuring
-    print("Solution: ")
-    print(np.round(tt_matrix_to_matrix(X_tt), decimals=3))
+    #print("Solution: ")
+    #print(np.round(tt_matrix_to_matrix(X_tt), decimals=3))
     print(f"Objective value: {tt_inner_prod(G_tt, X_tt)}")
     print("Complementary Slackness: ", tt_inner_prod(X_tt, Z_tt))
+    primal_res = tt_sub(tt_fast_matrix_vec_mul(L_tt, tt_vec(X_tt)), tt_vec(bias_tt))
+    print(f"Total primal feasibility error: {np.sqrt(np.abs(tt_inner_prod(primal_res, primal_res)))}")
     print(f"Ranks X_tt: {tt_ranks(X_tt)}, Y_tt: {tt_ranks(Y_tt)}, Z_tt: {tt_ranks(Z_tt)} ")
     print(f"Time: {t1-t0}s")

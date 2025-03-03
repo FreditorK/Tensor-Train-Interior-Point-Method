@@ -20,19 +20,6 @@ def forward_backward_sub(L, b):
     x = scip.linalg.solve_triangular(L.T, y, lower=False, check_finite=False, overwrite_b=True)
     return x
 
-def get_scaling_preconditioner(L_Z, eps=1e-2):
-    dim = L_Z.shape[0]
-    I = np.eye(dim)
-    lam, Q = scipy.linalg.eigh(L_Z)
-    r = np.sum(lam > eps)
-    if r < dim:
-        tau = np.mean(lam[r:])
-        U = Q[:, :r] @ np.diag(np.sqrt(np.abs(lam[:r] - tau)))
-        S_inv = scipy.linalg.inv(tau*I[:r, :r] + U.T @ U)
-        precond = np.divide(1, tau)*(I + U @ S_inv @ U.T)
-        return precond
-    return I
-
 def ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, num_blocks, eps):
     k =  num_blocks - 1
     block_dim = lhs.shape[0] // num_blocks
@@ -40,8 +27,6 @@ def ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, num_blocks, eps):
 
     L_eq = -lhs[block_dim:2*block_dim, :block_dim]
     L_Z = lhs[k*block_dim:, :block_dim]
-    #print("Before", np.linalg.cond(L_Z))
-    #print("After", np.linalg.cond(L_Z))
 
     L_L_Z = scip.linalg.cholesky(L_Z, check_finite=False, overwrite_a=True, lower=True)
     L_eq_adj = -lhs[:block_dim, block_dim:2*block_dim]
@@ -105,14 +90,6 @@ def ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, num_blocks, eps):
     #print("---")
     return np.vstack((x, y, z))
 
-
-def tt_scaling_matrices(X_tt):
-    dim = len(X_tt)
-    rank_one_X_tt = tt_rank_retraction(tt_diag(tt_diagonal(copy.deepcopy(X_tt))), [1] * (dim - 1))
-    root_X_tt = [np.diag(np.sqrt(np.diagonal(np.abs(c.squeeze())))).reshape(1, 2, 2, 1) for c in rank_one_X_tt]
-    root_X_tt_inv = [np.diag(1./np.sqrt(np.diagonal(np.abs(c.squeeze())))).reshape(1, 2, 2, 1) for c in rank_one_X_tt]
-    return root_X_tt_inv, root_X_tt
-
 def tt_infeasible_newton_system(
         lhs_skeleton,
         vec_obj_tt,
@@ -129,16 +106,14 @@ def tt_infeasible_newton_system(
         sigma,
         mu,
         op_tol,
+        feasibility_tol,
         active_ineq
 ):
     mu = max(sigma * mu,  1e-3)
     idx_add = int(active_ineq)
-    # TODO: scaling matrix needs to be full rank, otherwise we have problems
     P = tt_identity(len(Z_tt))
     L_Z = tt_rank_reduce(tt_add(tt_kron(P, Z_tt), tt_kron(Z_tt, P)), eps=op_tol, variable_error=True)
     L_X = tt_rank_reduce(tt_add(tt_kron(X_tt, P), tt_kron(P, X_tt)), eps=op_tol, variable_error=True)
-    #L_Z = tt_rank_reduce(tt_kron(scaling_matrix, Z_tt), eps=tol)
-    #L_X = tt_rank_reduce(tt_kron(X_tt, scaling_matrix), eps=tol)
 
     vec_X_tt = tt_vec(X_tt)
 
@@ -155,7 +130,7 @@ def tt_infeasible_newton_system(
     dual_feas = tt_sub(tt_fast_matrix_vec_mul(lin_op_tt_adj, vec_Y_tt, 0.5*op_tol), tt_add(tt_vec(Z_tt), vec_obj_tt))
     primal_feas = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(lin_op_tt, vec_X_tt, 0.5*op_tol), bias_tt), op_tol, variable_error=True)  # primal feasibility
     primal_error = tt_inner_prod(primal_feas, primal_feas)
-    if primal_error > op_tol:
+    if primal_error > feasibility_tol:
         rhs[1] = primal_feas
 
     if active_ineq:
@@ -164,8 +139,7 @@ def tt_infeasible_newton_system(
         # TODO: Does mu 1 not also be under mat_lin_op_tt_ineq, need to adjust mu 1 to have zeros where L(X) has zeros
         one = tt_matrix_vec_mul(lin_op_tt_ineq_adj, [np.ones((1, 2, 1)).reshape(1, 2, 1) for _ in vec_X_tt])
         Tineq_res_tt = tt_fast_hadammard(vec_T_tt, ineq_res_tt, 0.5*op_tol)
-        avg_factor = np.sqrt(0.5)
-        nu = max(sigma*tt_inner_prod([avg_factor*c for c in vec_T_tt], ineq_res_tt), 0.5*op_tol)
+        nu = max(2*sigma*tt_inner_prod([0.5*c for c in vec_T_tt], ineq_res_tt), 0.5*op_tol)
         primal_feas_ineq = tt_rank_reduce(tt_sub(tt_scale(nu, one), Tineq_res_tt), 0.5*op_tol, variable_error=True)
         #primal_ineq_error = tt_inner_prod(primal_feas_ineq, primal_feas_ineq)
         rhs[2] = primal_feas_ineq
@@ -174,14 +148,14 @@ def tt_infeasible_newton_system(
     dual_error = tt_inner_prod(dual_feas, dual_feas)
     XZ_term = tt_fast_matrix_vec_mul(L_Z, vec_X_tt, 0.5*op_tol)
     rhs[2 + idx_add] = tt_rank_reduce(tt_sub(tt_scale(2*mu, tt_vec(tt_identity(len(X_tt)))), XZ_term), op_tol, variable_error=True)
-    if 2*dual_error > op_tol:
+    if dual_error > feasibility_tol:
         rhs[0] = dual_feas
 
     return lhs_skeleton, rhs, primal_error + dual_error
 
 
 def _tt_symmetrise(matrix_tt, err_bound):
-    return tt_rank_reduce(tt_scale(0.5, tt_add(matrix_tt, tt_transpose(matrix_tt))), eps=err_bound)
+    return tt_rank_reduce(tt_scale(0.5, tt_add(matrix_tt, tt_transpose(matrix_tt))), eps=err_bound, variable_error=True)
 
 
 def _tt_get_block(i, block_matrix_tt):
@@ -203,6 +177,7 @@ def _tt_ipm_newton_step(
             Z_tt,
             sigma,
             op_tol,
+            feasibility_tol,
             active_ineq,
             local_solver,
             verbose
@@ -224,21 +199,22 @@ def _tt_ipm_newton_step(
         sigma,
         mu,
         op_tol,
+        feasibility_tol,
         active_ineq
     )
     idx_add = int(active_ineq)
     Delta_tt, res = tt_block_amen(lhs_matrix_tt, rhs_vec_tt, nswp=4, aux_matrix_blocks=lag_maps, eps=0.5*op_tol, local_solver=local_solver, verbose=verbose, variable_error=True)
     vec_Delta_Y_tt = _tt_get_block(1, Delta_tt)
-    Delta_X_tt = tt_rank_reduce(tt_mat(_tt_get_block(0, Delta_tt)), eps=op_tol)
-    Delta_Z_tt = tt_rank_reduce(tt_mat(_tt_get_block(2 + idx_add, Delta_tt)), eps=op_tol)
+    Delta_X_tt = tt_rank_reduce(tt_mat(_tt_get_block(0, Delta_tt)), eps=0.5*op_tol, variable_error=True)
+    Delta_Z_tt = tt_rank_reduce(tt_mat(_tt_get_block(2 + idx_add, Delta_tt)), eps=0.5*op_tol, variable_error=True)
     Delta_T_tt = None
     # Corrections to improve TT-ranks and reduce instabilities
-    vec_Delta_Y_tt = tt_rank_reduce(tt_sub(vec_Delta_Y_tt, tt_fast_matrix_vec_mul(lag_maps["y"], vec_Delta_Y_tt)), eps=op_tol)
-    Delta_X_tt = _tt_symmetrise(Delta_X_tt, op_tol)
-    Delta_Z_tt = _tt_symmetrise(Delta_Z_tt, op_tol)
+    vec_Delta_Y_tt = tt_rank_reduce(tt_sub(vec_Delta_Y_tt, tt_fast_matrix_vec_mul(lag_maps["y"], vec_Delta_Y_tt)), eps=0.5*op_tol, variable_error=True)
+    Delta_X_tt = _tt_symmetrise(Delta_X_tt, 0.5*op_tol)
+    Delta_Z_tt = _tt_symmetrise(Delta_Z_tt, 0.5*op_tol)
     if active_ineq:
         Delta_T_tt_vec = _tt_get_block(2, Delta_tt)
-        Delta_T_tt = tt_rank_reduce(tt_mat(tt_sub(Delta_T_tt_vec, tt_fast_matrix_vec_mul(lag_maps["t"], Delta_T_tt_vec))), eps=op_tol)
+        Delta_T_tt = tt_rank_reduce(tt_mat(tt_sub(Delta_T_tt_vec, tt_fast_matrix_vec_mul(lag_maps["t"], Delta_T_tt_vec))), eps=0.5*op_tol, variable_error=True)
 
     #print("Report ---")
     #print("Y")
@@ -279,7 +255,7 @@ def _tt_line_search(
     new_X_tt = tt_add(X_tt, Delta_X_tt)
 
     for iter in range(iters):
-        discount_x, _ = tt_is_psd(new_X_tt, op_tol, degenerate=True, eps=eps)
+        discount_x, _ = tt_is_psd(new_X_tt, op_tol=op_tol, eps=eps, degenerate=True)
         if discount_x:
             break
         else:
@@ -299,7 +275,7 @@ def _tt_line_search(
     r = Z_tt[0].shape[-1]
     new_Z_tt = tt_add(Z_tt, Delta_Z_tt)
     for iter in range(iters):
-        discount_z, _ = tt_is_psd(new_Z_tt, op_tol=op_tol, degenerate=True, eps=eps)
+        discount_z, _ = tt_is_psd(new_Z_tt, op_tol=op_tol, eps=eps, degenerate=True)
         if discount_z:
             break
         else:
@@ -387,7 +363,8 @@ def tt_ipm(
             T_tt,
             Z_tt,
             sigma,
-            0.1*op_tol,
+            op_tol,
+            feasibility_tol,
             active_ineq,
             local_solver,
             verbose
@@ -407,7 +384,6 @@ def tt_ipm(
 
         if verbose:
             print(f"Step sizes: {x_step_size}, {z_step_size}")
-        sigma *= max(min((pd_error / mu)**2, 1), 0.01)
         if verbose:
             print(f"---Step {iter}---")
             print(f"Duality Gap: {100 * np.abs(mu):.4f}%")
@@ -418,8 +394,10 @@ def tt_ipm(
                 f"      vec(Y_tt): {tt_ranks(vec_Y_tt)}, T_tt: {tt_ranks(T_tt)} \n"
             )
 
-        if np.less(pd_error, feasibility_tol) and np.less(np.abs(mu), centrality_tol):
-            break
+        if np.less(pd_error, feasibility_tol):
+            sigma *= max(min((pd_error / mu) ** 2, 1), 0.1)
+            if np.less(np.abs(mu), centrality_tol):
+                break
     if verbose:
         print(f"---Terminated---")
         print(f"Converged in {iter} iterations.")

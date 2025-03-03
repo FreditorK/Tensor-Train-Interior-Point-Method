@@ -290,7 +290,7 @@ if __name__ == "__main__":
         Q_ineq_op,
         Q_ineq_bias,
         max_iter=16,
-        op_tol=1e-7,
+        op_tol=1e-8,
         verbose=True
     )
     t1 = time.time()

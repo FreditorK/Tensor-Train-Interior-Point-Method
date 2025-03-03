@@ -4,7 +4,7 @@ import scipy as scp
 from src.ops import *
 
 
-def cgal(obj_matrix, constraint_matrices, bias, trace_params, num_iter=100):
+def cgal(obj_matrix, constraint_matrices, bias, trace_params, duality_tol=1e-2, feasability_tol=1e-5, num_iter=100, verbose=False):
     X = np.zeros_like(obj_matrix)
     res = -bias
     lag_mul_1 = np.zeros((len(constraint_matrices), 1))
@@ -16,8 +16,10 @@ def cgal(obj_matrix, constraint_matrices, bias, trace_params, num_iter=100):
         constraint_term = sum(
             [A.T * (y_i + lag_mul_2 * r) for A, y_i, r in zip(constraint_matrices, lag_mul_1.flatten(), res.flatten())])
         sdp_gradient = obj_matrix + constraint_term
+        norm = np.linalg.norm(sdp_gradient)
+        sdp_gradient = sdp_gradient / norm
         min_eig_val, eig = scp.sparse.linalg.eigsh(2 * np.eye(sdp_gradient.shape[0]) - sdp_gradient, k=1, which='LM')
-        min_eig_val = 2 - min_eig_val
+        min_eig_val = (2 - min_eig_val)*norm
         eta = np.divide(2, it + 1)
         current_trace_param = trace_params[0] if min_eig_val > 0 else trace_params[1]
         duality_gap = np.trace(obj_matrix @ X) + np.trace(constraint_term @ X) - current_trace_param * min_eig_val
@@ -28,10 +30,18 @@ def cgal(obj_matrix, constraint_matrices, bias, trace_params, num_iter=100):
         alpha = min(np.divide(alpha_0, np.power(it + 1, 3 / 2) * (res.T @ res)), 1)
         lag_mul_1 = lag_mul_1 + alpha * res
         lag_mul_2 = np.sqrt(it + 1)
+        if verbose:
+            print(f"---Step {it}---")
+            print(f"Duality gap: {np.sum(duality_gap)}")
+            print(f"Feasibility error: {np.linalg.norm(res)**2}")
+        if duality_gap < duality_tol and np.linalg.norm(res)**2 < feasability_tol:
+            break
+
+    print("Converged after {} iterations".format(it))
     return X, duality_gaps
 
 
-def sketchy_cgal(obj_matrix, constraint_matrices, bias, trace_params, R=1, num_iter=100):
+def sketchy_cgal(obj_matrix, constraint_matrices, bias, trace_params, R=1, duality_tol=1e-2, feasability_tol=1e-5, num_iter=100, verbose=False):
     Omega, S = nystrom_sketch_init(obj_matrix.shape[0], R)
     res = -bias
     lag_mul_1 = np.zeros((len(constraint_matrices), 1))
@@ -45,8 +55,10 @@ def sketchy_cgal(obj_matrix, constraint_matrices, bias, trace_params, R=1, num_i
         constraint_term = sum(
             [A.T * (y_i + lag_mul_2 * r) for A, y_i, r in zip(constraint_matrices, lag_mul_1.flatten(), res.flatten())])
         sdp_gradient = obj_matrix + constraint_term
+        norm = np.linalg.norm(sdp_gradient)
+        sdp_gradient = sdp_gradient / norm
         min_eig_val, eig = scp.sparse.linalg.eigsh(2 * np.eye(sdp_gradient.shape[0]) - sdp_gradient, k=1, which='LM')
-        min_eig_val = 2 - min_eig_val
+        min_eig_val = (2 - min_eig_val) * norm
         eta = np.divide(2, it + 1)
         current_trace_param = trace_params[0] if min_eig_val > 0 else trace_params[1]
         current_trace = (1- eta)*current_trace + eta*current_trace_param
@@ -59,10 +71,23 @@ def sketchy_cgal(obj_matrix, constraint_matrices, bias, trace_params, R=1, num_i
         alpha = min(np.divide(alpha_0, np.power(it + 1, 3 / 2) * (res.T @ res)), 1)
         lag_mul_1 = lag_mul_1 + alpha * res
         lag_mul_2 = np.sqrt(it + 1)
+        if verbose:
+            print(f"---Step {it}---")
+            print(f"Duality gap: {duality_gap}")
+            print(f"Feasibility error: {np.sum(res.T @ res)}")
+        if duality_gap < duality_tol and res.T @ res < feasability_tol:
+            break
     U, Lambda = nystrom_sketch_reconstruct(S, Omega)
     U = U[:, :R]
     Lambda = Lambda + (current_trace - np.trace(Lambda)) * np.eye(R) / R
-    return U @ Lambda @ U.T, duality_gaps
+    print("Converged after {} iterations".format(it))
+    X = U @ Lambda @ U.T
+    min_eig_val, eig = scp.sparse.linalg.eigsh(2 * np.eye(sdp_gradient.shape[0]) - sdp_gradient, k=1, which='LM')
+    min_eig_val = (2 - min_eig_val) * norm
+    current_trace_param = trace_params[0] if min_eig_val > 0 else trace_params[1]
+    duality_gap = np.trace(obj_matrix @ X) + np.trace(constraint_term @ X) - current_trace_param * min_eig_val
+    duality_gaps.append(duality_gap)
+    return X, duality_gaps
 
 
 def power_method(matrix, num_iter=200):

@@ -37,7 +37,7 @@ def tt_tr_op(dim):
 class Config:
     seed = 2
     max_rank = 3
-    dim= 5 #max 6
+    dim= 4 #max 6
 
 
 if __name__ == "__main__":
@@ -78,7 +78,7 @@ if __name__ == "__main__":
         verbose=True,
         feasibility_tol=1e-5,
         centrality_tol=1e-2,
-        op_tol=2e-4
+        op_tol=8e-4
     )
     t1 = time.time()
     print("Solution: ")
@@ -86,5 +86,7 @@ if __name__ == "__main__":
     print(f"Problem solved in {t1 - t0:.3f}s")
     print(f"Objective value: {tt_inner_prod(J_tt, X_tt)}")
     print("Complementary Slackness: ", tt_inner_prod(X_tt, Z_tt))
+    primal_res = tt_sub(tt_fast_matrix_vec_mul(L_tt, tt_vec(X_tt)), tt_vec(bias_tt))
+    print(f"Total primal feasibility error: {np.sqrt(tt_inner_prod(primal_res,  primal_res))}")
     print(f"Ranks X_tt {tt_ranks(X_tt)} Y_tt {tt_ranks(Y_tt)} Z_tt {tt_ranks(Z_tt)} ")
     # FIXME: Rank of solution drops drastically when decreasing eps
