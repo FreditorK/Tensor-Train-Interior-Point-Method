@@ -529,10 +529,14 @@ def tt_sum(*args):
     return sum_tt
 
 def tt_reshape(train_tt, shape):
+    if np.prod(shape) > np.prod(train_tt[0].shape[1:-1]):
+        train_tt = tt_merge_cores(train_tt)
     return [c.reshape(c.shape[0], *shape, c.shape[-1]) for c in train_tt]
 
-def tt_merge_matrix_cores(matrix_tt):
-    return [einsum("kijr, rsdK -> kisjdK", c_1, c_2) for c_1, c_2 in zip(matrix_tt[:-1:2], matrix_tt[1::2])]
+def tt_merge_cores(train_tt):
+    if len(train_tt[0].shape[1:-1]) == 1:
+        return [einsum("kir, rsK -> kisK", c_1, c_2) for c_1, c_2 in zip(train_tt[:-1:2], train_tt[1::2])]
+    return [einsum("kijr, rsdK -> kisjdK", c_1, c_2) for c_1, c_2 in zip(train_tt[:-1:2], train_tt[1::2])]
 
 
 def tt_random_rank_one(dim):

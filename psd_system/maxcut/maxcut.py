@@ -3,21 +3,12 @@ import os
 import time
 import argparse
 import tracemalloc
+import yaml
 
 sys.path.append(os.getcwd() + '/../../')
 
-from dataclasses import dataclass
 from src.tt_ops import *
 from src.tt_ipm import tt_ipm
-from src.tt_eig import tt_min_eig, tt_max_eig
-
-
-
-@dataclass
-class Config:
-    seed = 5
-    max_rank = 3
-    dim = 6 #max 9 symmetric op
 
 
 def tt_diag_op(dim):
@@ -30,18 +21,21 @@ def tt_diag_op_adj(dim):
 
 
 if __name__ == "__main__":
+    np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=4, suppress=True)
     parser = argparse.ArgumentParser(description="Script with optional memory tracking.")
     parser.add_argument("--track_mem", action="store_true", help="Enable memory tracking from a certain point.")
+    parser.add_argument("--config", type=str, required=True, help="Path to the YAML configuration file")
     args = parser.parse_args()
+    with open(os.getcwd() + '/../../' + args.config, "r") as file:
+        config = yaml.safe_load(file)
 
-    np.random.seed(Config.seed)
-    np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=4, suppress=True)
     print("Creating Problem...")
-    G_tt = tt_rank_reduce(tt_random_graph(Config.dim, Config.max_rank))
-    L_tt = tt_diag_op(Config.dim)
-    bias_tt = tt_identity(Config.dim)
+    np.random.seed(config["seed"])
+    G_tt = tt_rank_reduce(tt_random_graph(config["dim"], config["max_rank"]))
+    L_tt = tt_diag_op(config["dim"])
+    bias_tt = tt_identity(config["dim"])
 
-    lag_maps = {"y": tt_rank_reduce(tt_diag(tt_vec(tt_sub(tt_one_matrix(Config.dim), tt_identity(Config.dim)))))}
+    lag_maps = {"y": tt_rank_reduce(tt_diag(tt_vec(tt_sub(tt_one_matrix(config["dim"]), tt_identity(config["dim"])))))}
 
     print("...Problem created!")
     print(f"Objective Ranks: {tt_ranks(G_tt)}")
@@ -55,11 +49,12 @@ if __name__ == "__main__":
         G_tt,
         L_tt,
         bias_tt,
-        op_tol=5e-5,
-        centrality_tol=8e-3,
-        feasibility_tol=1e-5,
-        max_iter=26,
-        verbose=True)
+        max_iter=config["max_iter"],
+        verbose=True,
+        feasibility_tol=config["feasibility_tol"],
+        centrality_tol=config["centrality_tol"],
+        op_tol=config["op_tol"]
+    )
     t1 = time.time()
     if args.track_mem:
         current, peak = tracemalloc.get_traced_memory()
@@ -70,7 +65,7 @@ if __name__ == "__main__":
     #print(np.round(tt_matrix_to_matrix(X_tt), decimals=3))
     print(f"Objective value: {tt_inner_prod(G_tt, X_tt)}")
     print("Complementary Slackness: ", tt_inner_prod(X_tt, Z_tt))
-    primal_res = tt_sub(tt_fast_matrix_vec_mul(L_tt, tt_vec(X_tt)), tt_vec(bias_tt))
+    primal_res = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(L_tt, tt_vec(X_tt)), tt_vec(bias_tt)), eps=1e-10)
     print(f"Total primal feasibility error: {np.sqrt(np.abs(tt_inner_prod(primal_res, primal_res)))}")
     print(f"Ranks X_tt: {tt_ranks(X_tt)}, Y_tt: {tt_ranks(Y_tt)}, Z_tt: {tt_ranks(Z_tt)} ")
     print(f"Time: {t1-t0}s")

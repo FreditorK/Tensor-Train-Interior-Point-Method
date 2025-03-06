@@ -1,6 +1,8 @@
 import sys
 import os
 
+import numpy as np
+
 sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
@@ -330,7 +332,7 @@ def tt_inv_precond(matrix_tt, target_ranks, tol=1e-10, max_iter=100, verbose=Fal
     return inv_tt
 
 
-def tt_block_amen(block_A, block_b, aux_matrix_blocks=None, nswp=22, x0=None, eps=1e-10, rmax=128, local_solver=None, variable_error=False, verbose=False):
+def tt_block_amen(block_A, block_b, tols, eps=1e-10, aux_matrix_blocks=None, nswp=22, x0=None, rmax=128, local_solver=None, error_func=None, variable_error=False, verbose=False):
 
     block_size = np.max(list(k[0] for k in block_A.keys())) + 1
     model_entry = next(iter(block_b.values()))
@@ -352,7 +354,6 @@ def tt_block_amen(block_A, block_b, aux_matrix_blocks=None, nswp=22, x0=None, ep
     N = [c.shape[-2] for c in x_cores]
     d = len(N)
     rx = np.array([1] + tt_ranks(x) + [1])
-    rmax = [1] + (d - 1) * [rmax] + [1]
 
     XAX = {key: [np.ones((1, 1, 1))] + [None] * (d - 1) + [np.ones((1, 1, 1))] for key in block_A} # size is rk x Rk x rk
     Xb = {key: [np.ones((1, 1))] + [None] * (d - 1) + [np.ones((1, 1))] for key in block_b}  # size is rk x rbk
@@ -372,7 +373,9 @@ def tt_block_amen(block_A, block_b, aux_matrix_blocks=None, nswp=22, x0=None, ep
     normb = np.ones((block_size, d - 1)) # norm of each row of the rhs
     nrmsc = np.ones(block_size)
     normx = np.ones((d - 1))
-    real_tol = (eps / np.sqrt(d))*np.ones(d)
+    real_tol = np.outer((tols / np.sqrt(d)), np.ones(d))
+    local_res = np.zeros((block_size, d))
+    local_dx = np.zeros(d)
 
     for swp in range(nswp):
         for k in range(d - 1, 0, -1):
@@ -398,7 +401,7 @@ def tt_block_amen(block_A, block_b, aux_matrix_blocks=None, nswp=22, x0=None, ep
                 row_A[i] += np.linalg.norm(XAX_ij_k)**2
                 XAX[(i, j)][k] = XAX_ij_k
 
-            row_A += (row_A < real_tol[k])
+            row_A += (row_A < eps)
             normA[:, k - 1] = np.sqrt(row_A)
             for (i, j) in block_A:
                 XAX[(i, j)][k] /= normA[i, k - 1]
@@ -410,14 +413,10 @@ def tt_block_amen(block_A, block_b, aux_matrix_blocks=None, nswp=22, x0=None, ep
             for i in block_b:
                 Xb_i_k = _compute_phi_bck_rhs(Xb[i][k + 1], block_b[i][k], x_cores[k]) # rb[k] x rx[k]
                 norm = np.linalg.norm(Xb_i_k)
-                norm = norm if norm > real_tol[k] else 1.0
+                norm = norm if norm > eps else 1.0
                 normb[i, k - 1] = norm
                 Xb[i][k] = Xb_i_k / norm
             nrmsc *= normb[:, k - 1] / (normA[:, k - 1] * normx[k - 1])
-
-        # start loop
-        local_res = np.zeros(d)
-        local_dx = np.zeros(d)
 
         for k in range(d):
 
@@ -426,20 +425,18 @@ def tt_block_amen(block_A, block_b, aux_matrix_blocks=None, nswp=22, x0=None, ep
             m = rx[k] * N[k] * rx[k + 1]
 
             # assemble rhs
-            rhs = np.zeros((block_size*m, 1))
+            rhs = {}
             for i in block_b:
                 local_rhs = einsum('br,bmB,BR->rmR', Xb[i][k], nrmsc[i] * block_b[i][k], Xb[i][k + 1])
-                rhs[m*i: m*(i+1)] = np.reshape(local_rhs, (-1, 1))
-            norm_rhs = np.linalg.norm(rhs)
-
-            # residuals
-            norm_rhs = norm_rhs if norm_rhs > real_tol[k] else 1.0
+                rhs[i] = np.reshape(local_rhs, (-1, 1))
+            #norm_rhss = [max(np.linalg.norm(c), real_tol[k]) for c in rhs.values()]
+            #norm_rhs = np.sqrt(sum(c**2 for c in norm_rhss))
 
             # assemble lhs
-            B = np.zeros((block_size*m, block_size*m))
+            B = {}
             for (i, j) in block_A:
                 local_B = einsum('lsr,smnS,LSR->lmLrnR', XAX[(i, j)][k], block_A[(i, j)][k], XAX[(i, j)][k + 1])
-                B[m*i:m*(i+1), m*j:m*(j+1)] = local_B.reshape(m, m)
+                B[(i, j)] = local_B.reshape(m, m)
             local_auxs = {}
             for key in aux_matrix_blocks:
                 local_aux_key = einsum('lsr,smnS,LSR->lmLrnR', Xaux_matrix_blocksX[key][k], aux_matrix_blocks[key][k], Xaux_matrix_blocksX[key][k + 1])
@@ -448,16 +445,10 @@ def tt_block_amen(block_A, block_b, aux_matrix_blocks=None, nswp=22, x0=None, ep
             # Solve block system
             solution_now =  local_solver(previous_solution, B, rhs, local_auxs)
 
-            block_res_new = np.linalg.norm(B @ solution_now - rhs) / norm_rhs
-            block_res_old = np.linalg.norm(B @ previous_solution - rhs) / norm_rhs
-            #print(k, block_res_old, block_res_new, block_res_old / block_res_new)
-            is_increase = block_res_old < block_res_new and block_res_new > real_tol[k]
+            block_res_new = error_func(B, solution_now, rhs)
+            block_res_old = error_func(B, previous_solution, rhs)
+            local_res[:, k] = np.maximum(block_res_new, block_res_old)
 
-            if is_increase:
-                solution_now = previous_solution
-                local_res[k] = block_res_old
-            else:
-                local_res[k] = block_res_new
             dx = np.linalg.norm(solution_now - previous_solution) / np.linalg.norm(solution_now)
             local_dx[k] = dx
 
@@ -467,17 +458,15 @@ def tt_block_amen(block_A, block_b, aux_matrix_blocks=None, nswp=22, x0=None, ep
 
             # solution truncation
             if k < d - 1:
-                # FIXME: We need to do svd on (rx*N) x (block_size*rx), otherwise the pruning is ineffective
                 u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False)
                 v = np.diag(s) @ v
-                r = 0
                 for r in range(u.shape[1] - 1, 0, -1):
                     solution = np.reshape(u[:, :r] @ v[:r, :], (rx[k], N[k], block_size, rx[k + 1]))
-                    res = np.linalg.norm(B @ np.reshape(np.transpose(solution, (2, 0, 1, 3)), (-1, 1)) - rhs) / norm_rhs
-                    if res > max(real_tol[k], local_res[k] + 0.5*real_tol[k]):
+                    res = error_func(B, np.reshape(np.transpose(solution, (2, 0, 1, 3)), (-1, 1)),  rhs)
+                    if np.any(res > np.maximum(2*real_tol[:, k], local_res[:, k])):
                         break
                 r += 1
-                r = min(r, rmax[k + 1])
+                r = min(r, rmax)
                 u = u[:, :r]
                 v = v[:r, :]
             else:
@@ -502,7 +491,7 @@ def tt_block_amen(block_A, block_b, aux_matrix_blocks=None, nswp=22, x0=None, ep
                     row_A[i] += np.linalg.norm(XAX_ij_k)**2
                     XAX[(i, j)][k + 1] = XAX_ij_k
 
-                row_A += (row_A < real_tol[k+1])
+                row_A += (row_A < eps)
                 normA[:, k] = np.sqrt(row_A)
                 for (i, j) in block_A:
                     XAX[(i, j)][k + 1] /= normA[i, k]
@@ -514,7 +503,7 @@ def tt_block_amen(block_A, block_b, aux_matrix_blocks=None, nswp=22, x0=None, ep
                 for i in block_b:
                     Xb_i_k = _compute_phi_fwd_rhs(Xb[i][k], block_b[i][k], x_cores[k])
                     norm = np.linalg.norm(Xb_i_k)
-                    norm = norm if norm > real_tol[k+1] else 1.0
+                    norm = norm if norm > eps else 1.0
                     normb[i, k] = norm
                     Xb[i][k + 1] = Xb_i_k / norm
 
@@ -526,21 +515,21 @@ def tt_block_amen(block_A, block_b, aux_matrix_blocks=None, nswp=22, x0=None, ep
 
             if variable_error:
                 rank_percent = rx[1:-1] / np.sum(rx[1:-1])
-                total_tol = np.sum(real_tol)
-                real_tol[:-1] = total_tol*rank_percent
+                total_tol = np.sum(real_tol, axis=-1)
+                real_tol[:,  :-1] = np.outer(total_tol, rank_percent)
 
         if verbose:
             print('Starting Sweep:\n\tMax num of sweeps: %d' % swp)
             print(f"\tTT-sol rank: {tt_ranks(x_cores)} \n")
 
-        if np.all(local_res < eps) or np.all(2*local_dx < eps):
+        if np.all(local_res < real_tol) or np.all(local_dx < eps):
             break
 
 
     if verbose:
         print("\n\t---Results---")
         print('\tSolution rank is', rx[1:-1])
-        print('\tResidual ', np.mean(local_res))
+        print('\tResidual ', np.mean(local_res, axis=-1).flatten())
         print('\tNumber of sweeps', swp+1)
         print('\tTime: ', time.time() - t0)
         print('\tTime per sweep: ', (time.time() - t0) / (swp+1))
