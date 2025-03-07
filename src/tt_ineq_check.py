@@ -10,6 +10,7 @@ sys.path.append(os.getcwd() + '/../')
 from src.tt_ops import *
 from src.tt_eig import tt_min_eig, tt_max_eig
 from cy_src.ops_cy import *
+from src.tt_amen import _compute_phi_bck_A
 
 
 
@@ -163,6 +164,8 @@ def tt_is_psd_line_search(A, Delta, nswp=10, x0=None, eps=1e-10, verbose=False):
     dtype = A[0].dtype
     damp = 2
 
+    min_or_max = "SA"
+
     if x0 == None:
         x_cores = [np.ones_like(c[:, :, 0], dtype=dtype) for c in A]
     else:
@@ -173,16 +176,27 @@ def tt_is_psd_line_search(A, Delta, nswp=10, x0=None, eps=1e-10, verbose=False):
     N = np.array([c.shape[1] for c in x_cores])
 
     XAX = [np.ones((1, 1, 1), dtype=dtype)] + [None] * (d - 1) + [np.ones((1, 1, 1), dtype=dtype)]  # size is rk x Rk x rk
-    XDeltaX = [np.ones((1, 1, 1), dtype=dtype)] + [None] * (d - 1) + [np.ones((1, 1, 1), dtype=dtype)]  # size is rk x Rk x rk
+    XDX = [np.ones((1, 1, 1), dtype=dtype)] + [None] * (d - 1) + [np.ones((1, 1, 1), dtype=dtype)]  # size is rk x Rk x rk
 
     max_res = 0
-    step_size = 1
     for swp in range(nswp):
         x_cores = tt_rl_orthogonalise(x_cores)
         rx[1:-1] = np.array(tt_ranks(x_cores))
-        XAX, _ = compute_phi_bcks_A(XAX, x_cores, A, x_cores, d=d)
-        XDeltaX, _ = compute_phi_bcks_A(XDeltaX, x_cores, Delta, x_cores, d=d)
+        for k in range(d - 1, 0, -1):
 
+            # update phis (einsum)
+            XAX[k] = _compute_phi_bck_A(
+                XAX[k + 1], x_cores[k], A[k], x_cores[k])
+
+            # update phis (einsum)
+            XDX[k] = _compute_phi_bck_A(
+                XDX[k + 1], x_cores[k], Delta[k], x_cores[k])
+
+            # ... and norms
+            norm = np.sqrt(np.linalg.norm(XAX[k])**2 + np.linalg.norm(XDX[k])**2)
+            norm = norm if norm > 0 else 1.0
+            XAX[k] = XAX[k] / norm
+            XDX[k] = XDX[k] / norm
         # start loop
         max_res = 0
 
@@ -196,25 +210,18 @@ def tt_is_psd_line_search(A, Delta, nswp=10, x0=None, eps=1e-10, verbose=False):
             B = einsum("lsr,smnRL->lmLrnR", XAX[k], Bp, optimize=True)
             B = np.reshape(B, [rx[k] * N[k] * rx[k + 1], rx[k] * N[k] * rx[k + 1]])
 
-            Dp = einsum("smnS,LSR->smnRL", Delta[k], XDeltaX[k + 1], optimize=True)
-            D = einsum("lsr,smnRL->lmLrnR", XDeltaX[k], Dp, optimize=True)
+            # solve the local system
+            Dp = einsum("smnS,LSR->smnRL", Delta[k], XDX[k + 1], optimize=True)
+            D = einsum("lsr,smnRL->lmLrnR", XDX[k], Dp, optimize=True)
             D = np.reshape(D, [rx[k] * N[k] * rx[k + 1], rx[k] * N[k] * rx[k + 1]])
 
+            B = B + D
 
-            #L = scip.linalg.cholesky(B, check_finite=False, lower=True)
-            #L_inv = np.linalg.inv(L)
-            #eig_val, _ = scip.sparse.linalg.eigsh(-L_inv @ D @ L_inv.T, k=1, which="LA")
-            #step_size = min(step_size, 1 / eig_val)
-            #print("??")
-            #print(1/eig_val)
-            norm_1 = np.linalg.norm(B)
-            norm_2 = np.linalg.norm(D)
-            eig_val, solution_now = scip.sparse.linalg.eigsh((norm_2/norm_1)*B + D, k=1, which="SA", v0=previous_solution) # 0.001284*D #step_size*D
-            #print(k, eig_val, step_size)
-
+            eig_val, solution_now = scip.sparse.linalg.eigsh(B, k=1, which=min_or_max, v0=previous_solution)
+            print("hi", eig_val)
             norm_rhs = eig_val if abs(eig_val) > real_tol else 1.0
-            res_new = np.linalg.norm(((norm_2/norm_1)*B + D) @ solution_now - eig_val * solution_now) / norm_rhs
-            res_old = np.linalg.norm(((norm_2/norm_1)*B + D) @ previous_solution - eig_val * previous_solution) / norm_rhs
+            res_new = np.linalg.norm(B @ solution_now - eig_val * solution_now) / norm_rhs
+            res_old = np.linalg.norm(B @ previous_solution - eig_val * previous_solution) / norm_rhs
 
             max_res = max(res_old, res_new)
 
@@ -226,10 +233,11 @@ def tt_is_psd_line_search(A, Delta, nswp=10, x0=None, eps=1e-10, verbose=False):
                 for r in range(u.shape[1] - 1, 0, -1):
                     # solution has the same size
                     solution = np.reshape(u[:, :r] @ np.diag(s[:r]) @ v[:r, :], [-1, 1])
-                    res = np.linalg.norm(((norm_2/norm_1)*B + D) @ solution - eig_val * solution) / norm_rhs
+                    res = np.linalg.norm(B @ solution - eig_val * solution) / norm_rhs
                     if res > max(real_tol * damp, res_new):
                         break
                 r += 1
+
                 r = min(r, np.size(s))
             else:
                 u, v = np.linalg.qr(solution_now)
@@ -250,16 +258,15 @@ def tt_is_psd_line_search(A, Delta, nswp=10, x0=None, eps=1e-10, verbose=False):
 
                 # next phis with norm correction
                 XAX[k + 1] = compute_phi_fwd_A(XAX[k], x_cores[k], A[k], x_cores[k])
-                XDeltaX[k + 1] = compute_phi_fwd_A(XDeltaX[k], x_cores[k], Delta[k], x_cores[k])
+
+                # next phis with norm correction
+                XDX[k + 1] = compute_phi_fwd_A(XDX[k], x_cores[k], Delta[k], x_cores[k])
 
                 # ... and norms
-                norm = np.linalg.norm(XAX[k + 1])
+                norm = np.sqrt(np.linalg.norm(XAX[k + 1])**2 + np.linalg.norm(XDX[k + 1])**2)
                 norm = norm if np.greater(norm, 0) else 1.0
                 XAX[k + 1] = np.divide(XAX[k + 1], norm)
-
-                norm = np.linalg.norm(XDeltaX[k + 1])
-                norm = norm if np.greater(norm, 0) else 1.0
-                XDeltaX[k + 1] = np.divide(XDeltaX[k + 1], norm)
+                XDX[k + 1] = np.divide(XDX[k + 1], norm)
 
             else:
                 x_cores[k] = np.reshape(u @ v.T, (rx[k], N[k], rx[k + 1]))
@@ -277,5 +284,4 @@ def tt_is_psd_line_search(A, Delta, nswp=10, x0=None, eps=1e-10, verbose=False):
         print('\t Time: ', time.time() - t0)
         print('\t Time per sweep: ', (time.time() - t0) / (swp + 1))
 
-    step_size = tt_inner_prod(x_cores, tt_matrix_vec_mul(tt_add(A, Delta), x_cores))
-    return step_size, max_res
+    return tt_inner_prod(x_cores, tt_matrix_vec_mul(tt_add(A, Delta), x_cores)), max_res
