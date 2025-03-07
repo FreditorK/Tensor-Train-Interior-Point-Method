@@ -179,6 +179,8 @@ def tt_is_psd_line_search(A, Delta, nswp=10, x0=None, eps=1e-10, verbose=False):
     XDX = [np.ones((1, 1, 1), dtype=dtype)] + [None] * (d - 1) + [np.ones((1, 1, 1), dtype=dtype)]  # size is rk x Rk x rk
 
     max_res = 0
+    step_size = 1
+    eig_vals = -np.inf*np.ones(d)
     for swp in range(nswp):
         x_cores = tt_rl_orthogonalise(x_cores)
         rx[1:-1] = np.array(tt_ranks(x_cores))
@@ -215,10 +217,14 @@ def tt_is_psd_line_search(A, Delta, nswp=10, x0=None, eps=1e-10, verbose=False):
             D = einsum("lsr,smnRL->lmLrnR", XDX[k], Dp, optimize=True)
             D = np.reshape(D, [rx[k] * N[k] * rx[k + 1], rx[k] * N[k] * rx[k + 1]])
 
-            B = B + D
+            L = scip.linalg.cholesky(B, check_finite=False, lower=True)
+            L_inv = np.linalg.inv(L)
+            eig_val, _ = scip.sparse.linalg.eigsh(-L_inv @ D @ L_inv.T, k=1, which="LA")
+            step_size = min(step_size, 1 / eig_val)
 
+            B = B + step_size*D
             eig_val, solution_now = scip.sparse.linalg.eigsh(B, k=1, which=min_or_max, v0=previous_solution)
-            print("hi", eig_val)
+            eig_vals[k] = eig_val
             norm_rhs = eig_val if abs(eig_val) > real_tol else 1.0
             res_new = np.linalg.norm(B @ solution_now - eig_val * solution_now) / norm_rhs
             res_old = np.linalg.norm(B @ previous_solution - eig_val * previous_solution) / norm_rhs
@@ -273,7 +279,7 @@ def tt_is_psd_line_search(A, Delta, nswp=10, x0=None, eps=1e-10, verbose=False):
 
         x_cores = tt_normalise(x_cores)
 
-        if max_res < eps:
+        if max_res < eps and np.min(eig_vals) > 0:
             break
 
     if verbose:
@@ -284,4 +290,4 @@ def tt_is_psd_line_search(A, Delta, nswp=10, x0=None, eps=1e-10, verbose=False):
         print('\t Time: ', time.time() - t0)
         print('\t Time per sweep: ', (time.time() - t0) / (swp + 1))
 
-    return tt_inner_prod(x_cores, tt_matrix_vec_mul(tt_add(A, Delta), x_cores)), max_res
+    return step_size, max_res
