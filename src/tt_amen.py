@@ -332,7 +332,7 @@ def tt_inv_precond(matrix_tt, target_ranks, tol=1e-10, max_iter=100, verbose=Fal
     return inv_tt
 
 
-def tt_block_amen(block_A, block_b, tols, eps=1e-10, aux_matrix_blocks=None, nswp=22, x0=None, rmax=128, local_solver=None, error_func=None, variable_error=False, verbose=False):
+def tt_block_amen(block_A, block_b, tols, eps=1e-10, aux_matrix_blocks=None, nswp=22, x0=None, rmax=128, local_solver=None, error_func=None, rank_weighted_error=False, verbose=False):
 
     block_size = np.max(list(k[0] for k in block_A.keys())) + 1
     model_entry = next(iter(block_b.values()))
@@ -374,8 +374,6 @@ def tt_block_amen(block_A, block_b, tols, eps=1e-10, aux_matrix_blocks=None, nsw
     nrmsc = np.ones(block_size)
     normx = np.ones((d - 1))
     real_tol = np.outer((tols / np.sqrt(d)), np.ones(d))
-    local_res = np.zeros((block_size, d))
-    local_dx = np.zeros(d)
 
     for swp in range(nswp):
         for k in range(d - 1, 0, -1):
@@ -418,6 +416,9 @@ def tt_block_amen(block_A, block_b, tols, eps=1e-10, aux_matrix_blocks=None, nsw
                 Xb[i][k] = Xb_i_k / norm
             nrmsc *= normb[:, k - 1] / (normA[:, k - 1] * normx[k - 1])
 
+        local_res = np.zeros((block_size, d))
+        local_dx = np.zeros(d)
+
         for k in range(d):
 
             # bring block dimension to front
@@ -448,6 +449,9 @@ def tt_block_amen(block_A, block_b, tols, eps=1e-10, aux_matrix_blocks=None, nsw
             block_res_new = error_func(B, solution_now, rhs)
             block_res_old = error_func(B, previous_solution, rhs)
             local_res[:, k] = np.maximum(block_res_new, block_res_old)
+            if  np.all(block_res_old < block_res_new):
+                solution_now = previous_solution
+                local_res[:, k] = block_res_old
 
             dx = np.linalg.norm(solution_now - previous_solution) / np.linalg.norm(solution_now)
             local_dx[k] = dx
@@ -513,10 +517,9 @@ def tt_block_amen(block_A, block_b, tols, eps=1e-10, aux_matrix_blocks=None, nsw
                 current_core = np.reshape(u @ v, (rx[k], N[k], block_size, rx[k + 1]))
                 x_cores[k] = np.transpose(current_core, (0, 2, 1, 3))
 
-            if variable_error:
-                rank_percent = rx[1:-1] / np.sum(rx[1:-1])
-                total_tol = np.sum(real_tol, axis=-1)
-                real_tol[:,  :-1] = np.outer(total_tol, rank_percent)
+            if rank_weighted_error:
+                rank_percent = np.sqrt(rx[1:-1] / np.sum(rx[1:-1]))
+                real_tol[:,  :-1] = tols.reshape(-1, 1) @ rank_percent.reshape(1, -1)
 
         if verbose:
             print('Starting Sweep:\n\tMax num of sweeps: %d' % swp)

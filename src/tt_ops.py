@@ -135,13 +135,13 @@ def _tt_lr_random_orthogonalise(train_tt, gaussian_tt):
     return train_tt
 
 
-def tt_rank_reduce(train_tt: List[np.array], eps=1e-18, variable_error=False):
+def tt_rank_reduce(train_tt: List[np.array], eps=1e-18, rank_weighted_error=False):
     """ Might reduce TT-rank """
     dim = len(train_tt)
     ranks = np.array(tt_ranks(train_tt))
     if dim == 1 or np.all(ranks==1):
         return train_tt
-    if variable_error:
+    if rank_weighted_error:
         eps = np.sqrt(ranks/np.sum(ranks))*eps
     else:
         eps = np.ones(dim - 1) * (eps / np.sqrt(dim - 1))

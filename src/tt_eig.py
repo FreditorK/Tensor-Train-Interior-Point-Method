@@ -65,7 +65,7 @@ def _tt_eig(A, min_eig, nswp, x0, eps, verbose):
 
             #TODO: Need to normalise x_cores ?
             eig_val, solution_now = scip.sparse.linalg.eigsh(B, k=1, which=min_or_max, v0=previous_solution)
-
+            print("hi", eig_val)
             norm_rhs = eig_val if abs(eig_val) > real_tol else 1.0
             res_new = np.linalg.norm(B @ solution_now - eig_val * solution_now) / norm_rhs
             res_old = np.linalg.norm(B @ previous_solution - eig_val * previous_solution) / norm_rhs

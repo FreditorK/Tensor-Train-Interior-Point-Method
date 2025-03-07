@@ -26,11 +26,10 @@ def ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, num_blocks, eps):
     L_eq = -lhs[(1, 0)]
     L_Z = lhs[(k, 0)]
     block_dim = L_Z.shape[-1]
-    prev_x = prev_sol[:block_dim]
     prev_y = prev_sol[block_dim:2*block_dim]
-    prev_z = prev_sol[k*block_dim:]
 
     L_L_Z = scip.linalg.cholesky(L_Z, check_finite=False, overwrite_a=True, lower=True)
+    #L_Z_inv = np.linalg.inv(L_Z)
     L_eq_adj = -lhs[(0, 1)]
     I = lhs[(0, k)]
     inv_I = np.diag(np.divide(1, np.diagonal(I)))
@@ -40,9 +39,9 @@ def ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, num_blocks, eps):
     R_d = -rhs[0] if dual_nonzero else 0
     R_p = -rhs[1] if primal_nonzero else 0
     R_c = -rhs[k]
-    K_temp = forward_backward_sub(L_L_Z, L_X)
+    K_temp = forward_backward_sub(L_L_Z, L_X) #L_Z_inv @ L_X
     K = K_temp @ inv_I
-    k = forward_backward_sub(L_L_Z, R_c)
+    k = forward_backward_sub(L_L_Z, R_c) # L_Z_inv @ R_c
     KR_dmk = K @ R_d - k if dual_nonzero else -k
 
     if num_blocks > 3:
@@ -117,11 +116,11 @@ def tt_scaling_matrices(X_tt):
     rank_one_X_tt = tt_rank_retraction(tt_diag(tt_diagonal(copy.deepcopy(X_tt))), [1] * (dim - 1))
     root_X_tt = [np.diag(np.sqrt(np.diagonal(np.abs(c.squeeze())))).reshape(1, 2, 2, 1) for c in rank_one_X_tt]
     root_X_tt_inv = [np.diag(1./np.sqrt(np.diagonal(np.abs(c.squeeze())))).reshape(1, 2, 2, 1) for c in rank_one_X_tt]
-    return root_X_tt_inv, root_X_tt
+    return root_X_tt, root_X_tt_inv
 
 def tt_infeasible_newton_system(
         lhs_skeleton,
-        vec_obj_tt,
+        obj_tt,
         X_tt,
         Y_tt,
         Z_tt,
@@ -142,12 +141,15 @@ def tt_infeasible_newton_system(
     mu = max(sigma * mu,  1e-3)
     idx_add = int(active_ineq)
     P = tt_identity(len(Z_tt))
-    L_Z = tt_rank_reduce(tt_reshape(tt_add(tt_kron(P, Z_tt), tt_kron(Z_tt, P)), (4, 4)), eps=op_tol, variable_error=True)
-    L_X = tt_rank_reduce(tt_reshape(tt_add(tt_kron(X_tt, P), tt_kron(P, X_tt)), (4, 4)), eps=op_tol, variable_error=True)
+    L_Z = tt_rank_reduce(tt_reshape(tt_add(tt_kron(P, Z_tt), tt_kron(Z_tt, P)), (4, 4)), eps=op_tol, rank_weighted_error=True)
+    L_X = tt_rank_reduce(tt_reshape(tt_add(tt_kron(X_tt, P), tt_kron(P, X_tt)), (4, 4)), eps=op_tol, rank_weighted_error=True)
     #P_inv, P = tt_scaling_matrices(X_tt)
-    #ZPinv = tt_fast_matrix_vec_mul(Z_tt, P_inv, eps)
-    #L_Z = tt_rank_reduce(tt_add(tt_kron(tt_transpose(ZPinv), P), tt_kron(P.T, P_inv @ Z_tt)), eps=op_tol, variable_error=True)
-    #L_X = tt_rank_reduce(tt_add(tt_kron(P_inv.T, P @ X_tt),  tt_kron((X_tt @ P).T, P_inv)), eps=op_tol, variable_error=True)
+    #ZPinv = tt_fast_mat_mat_mul(Z_tt, P_inv, eps)
+    #PinvZ = tt_fast_mat_mat_mul(P_inv, Z_tt, eps)
+    #XP = tt_fast_mat_mat_mul(X_tt, P, eps)
+    #PX = tt_fast_mat_mat_mul(P, X_tt, eps)
+    #L_Z = tt_rank_reduce(tt_reshape(tt_add(tt_kron(tt_transpose(ZPinv), P), tt_kron(tt_transpose(P), PinvZ)), (4, 4)), eps=op_tol, variable_error=True)
+    #L_X = tt_rank_reduce(tt_reshape(tt_add(tt_kron(tt_transpose(P_inv), PX),  tt_kron(tt_transpose(XP), P_inv)), (4, 4)), eps=op_tol, variable_error=True)
 
     X_tt = tt_reshape(X_tt, (4, ))
     Y_tt = tt_reshape(Y_tt, (4, ))
@@ -156,15 +158,15 @@ def tt_infeasible_newton_system(
     if active_ineq:
         ineq_res_tt = tt_sub(bias_tt_ineq, tt_fast_matrix_vec_mul(lin_op_tt_ineq, X_tt, eps))
         mat_ineq_res_op_tt = tt_diag(ineq_res_tt)
-        lhs_skeleton[(2, 2)] = tt_rank_reduce(mat_ineq_res_op_tt, op_tol, variable_error=True)
+        lhs_skeleton[(2, 2)] = tt_rank_reduce(mat_ineq_res_op_tt, op_tol, rank_weighted_error=True)
         Tmat_lin_op_tt_ineq =  tt_fast_mat_mat_mul(tt_reshape(tt_diag(tt_vec(T_tt)), (4, 4)), lin_op_tt_ineq, eps)
-        lhs_skeleton[(2, 0)] = tt_rank_reduce(tt_scale(-1, Tmat_lin_op_tt_ineq), eps=op_tol, variable_error=True)
+        lhs_skeleton[(2, 0)] = tt_rank_reduce(tt_scale(-1, Tmat_lin_op_tt_ineq), eps=op_tol, rank_weighted_error=True)
     lhs_skeleton[(2 + idx_add, 0)] = L_Z
     lhs_skeleton[(2 + idx_add, 2 + idx_add)] = L_X
 
     rhs = {}
-    dual_feas = tt_sub(tt_fast_matrix_vec_mul(lin_op_tt_adj, Y_tt, eps), tt_add(Z_tt, vec_obj_tt))
-    primal_feas = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(lin_op_tt, X_tt, eps), bias_tt), op_tol, variable_error=True)  # primal feasibility
+    dual_feas = tt_sub(tt_fast_matrix_vec_mul(lin_op_tt_adj, Y_tt, eps), tt_add(Z_tt, obj_tt))
+    primal_feas = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(lin_op_tt, X_tt, eps), bias_tt), op_tol, rank_weighted_error=True)  # primal feasibility
     primal_error = tt_inner_prod(primal_feas, primal_feas)
     if primal_error > feasibility_tol:
         rhs[1] = primal_feas
@@ -176,14 +178,14 @@ def tt_infeasible_newton_system(
         one = tt_matrix_vec_mul(lin_op_tt_ineq_adj, [np.ones((1, 4, 1)) for _ in X_tt])
         Tineq_res_tt = tt_fast_hadammard(reshaped_T, ineq_res_tt, eps)
         nu = max(2*sigma*tt_inner_prod([0.5*c for c in reshaped_T], ineq_res_tt), 0.5*op_tol)
-        primal_feas_ineq = tt_rank_reduce(tt_sub(tt_scale(nu, one), Tineq_res_tt), 0.5*op_tol, variable_error=True)
+        primal_feas_ineq = tt_rank_reduce(tt_sub(tt_scale(nu, one), Tineq_res_tt), 0.5 * op_tol, rank_weighted_error=True)
         #primal_ineq_error = tt_inner_prod(primal_feas_ineq, primal_feas_ineq)
         rhs[2] = primal_feas_ineq
 
-    dual_feas = tt_rank_reduce(dual_feas, op_tol, variable_error=True)
+    dual_feas = tt_rank_reduce(dual_feas, op_tol, rank_weighted_error=True)
     dual_error = tt_inner_prod(dual_feas, dual_feas)
-    XZ_term = tt_fast_matrix_vec_mul(L_Z, X_tt, eps)
-    rhs[2 + idx_add] = tt_rank_reduce(tt_sub(tt_scale(2*mu, tt_reshape(tt_identity(len(X_tt)), (4, ))), XZ_term), op_tol, variable_error=True)
+    XZ_term = tt_fast_matrix_vec_mul(L_X, Z_tt, eps)
+    rhs[2 + idx_add] = tt_rank_reduce(tt_sub(tt_scale(2*mu, tt_reshape(tt_identity(len(X_tt)), (4, ))), XZ_term), op_tol, rank_weighted_error=True)
     if dual_error > feasibility_tol:
         rhs[0] = dual_feas
 
@@ -191,7 +193,7 @@ def tt_infeasible_newton_system(
 
 
 def _tt_symmetrise(matrix_tt, err_bound):
-    return tt_rank_reduce(tt_scale(0.5, tt_add(matrix_tt, tt_transpose(matrix_tt))), eps=err_bound, variable_error=True)
+    return tt_rank_reduce(tt_scale(0.5, tt_add(matrix_tt, tt_transpose(matrix_tt))), eps=err_bound, rank_weighted_error=True)
 
 
 def _tt_get_block(i, block_matrix_tt):
@@ -243,17 +245,17 @@ def _tt_ipm_newton_step(
         eps
     )
     idx_add = int(active_ineq)
-    Delta_tt, res = tt_block_amen(lhs_matrix_tt, rhs_vec_tt, tols=np.array([0.1*feasibility_tol, 0.1*feasibility_tol, 0.1*centrality_tol]), nswp=4, aux_matrix_blocks=lag_maps, rmax=50, local_solver=local_solver, error_func=error_func, verbose=verbose, variable_error=True)
-    Delta_Y_tt = tt_rank_reduce(tt_reshape(_tt_get_block(1, Delta_tt), (2, 2)), eps=0.5*op_tol, variable_error=True)
-    Delta_X_tt = tt_rank_reduce(tt_reshape(_tt_get_block(0, Delta_tt), (2, 2)), eps=0.5*op_tol, variable_error=True)
-    Delta_Z_tt = tt_rank_reduce(tt_reshape(_tt_get_block(2 + idx_add, Delta_tt), (2, 2)), eps=0.5*op_tol, variable_error=True)
+    Delta_tt, res = tt_block_amen(lhs_matrix_tt, rhs_vec_tt, tols=np.array([0.1*feasibility_tol, 0.1*feasibility_tol, 0.1*centrality_tol]), nswp=4, aux_matrix_blocks=lag_maps, rmax=50, local_solver=local_solver, error_func=error_func, verbose=verbose, rank_weighted_error=True)
+    Delta_Y_tt = tt_rank_reduce(tt_reshape(_tt_get_block(1, Delta_tt), (2, 2)), eps=0.5*op_tol, rank_weighted_error=True)
+    Delta_X_tt = tt_rank_reduce(tt_reshape(_tt_get_block(0, Delta_tt), (2, 2)), eps=0.5*op_tol, rank_weighted_error=True)
+    Delta_Z_tt = tt_rank_reduce(tt_reshape(_tt_get_block(2 + idx_add, Delta_tt), (2, 2)), eps=0.5*op_tol, rank_weighted_error=True)
     Delta_T_tt = None
     # Corrections to improve TT-ranks and reduce instabilities
     Delta_X_tt = _tt_symmetrise(Delta_X_tt, op_tol)
     Delta_Z_tt = _tt_symmetrise(Delta_Z_tt, op_tol)
     if active_ineq:
         Delta_T_tt = _tt_get_block(2, Delta_tt)
-        Delta_T_tt = tt_rank_reduce(tt_reshape(tt_sub(Delta_T_tt, tt_fast_matrix_vec_mul(lag_maps["t"], Delta_T_tt, eps)), (2, 2)), eps=0.5*op_tol, variable_error=True)
+        Delta_T_tt = tt_rank_reduce(tt_reshape(tt_sub(Delta_T_tt, tt_fast_matrix_vec_mul(lag_maps["t"], Delta_T_tt, eps)), (2, 2)), eps=0.5*op_tol, rank_weighted_error=True)
 
     #print("Report ---")
     #print("Y")
@@ -424,13 +426,13 @@ def tt_ipm(
             lin_op_tt_ineq, bias_tt_ineq,
             active_ineq, op_tol=op_tol, eps=eps
         )
-        X_tt = tt_rank_reduce(tt_add(X_tt, tt_scale(0.98*x_step_size, Delta_X_tt)), eps=op_tol, variable_error=True)
-        Y_tt = tt_add(Y_tt, tt_scale(0.98*z_step_size, Delta_Y_tt))
-        Y_tt = tt_rank_reduce(tt_sub(Y_tt, tt_reshape(tt_fast_matrix_vec_mul(lag_maps["y"], tt_reshape(Y_tt, shape=(4, )), eps), (2, 2))), eps=op_tol, variable_error=True)
-        Z_tt = tt_rank_reduce(tt_add(Z_tt, tt_scale(0.98*z_step_size, Delta_Z_tt)), eps=op_tol, variable_error=True)
+        X_tt = tt_rank_reduce(tt_add(X_tt, tt_scale(x_step_size, Delta_X_tt)), eps=op_tol, rank_weighted_error=True)
+        Y_tt = tt_add(Y_tt, tt_scale(z_step_size, Delta_Y_tt))
+        Y_tt = tt_rank_reduce(tt_sub(Y_tt, tt_reshape(tt_fast_matrix_vec_mul(lag_maps["y"], tt_reshape(Y_tt, shape=(4, )), eps), (2, 2))), eps=op_tol, rank_weighted_error=True)
+        Z_tt = tt_rank_reduce(tt_add(Z_tt, tt_scale(z_step_size, Delta_Z_tt)), eps=op_tol, rank_weighted_error=True)
         if active_ineq:
             # FIXME: Note that T_tt should grow large on the zeros of b - L_ineq(X_tt)
-            T_tt = tt_rank_reduce(tt_add(T_tt, tt_scale(0.98*z_step_size, Delta_T_tt)), eps=op_tol, variable_error=True)
+            T_tt = tt_rank_reduce(tt_add(T_tt, tt_scale(z_step_size, Delta_T_tt)), eps=op_tol, rank_weighted_error=True)
 
         if verbose:
             print(f"Step sizes: {x_step_size}, {z_step_size}")
