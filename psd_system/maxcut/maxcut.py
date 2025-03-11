@@ -63,9 +63,9 @@ if __name__ == "__main__":
         tracemalloc.stop()  # Stop tracking after measuring
     #print("Solution: ")
     #print(np.round(tt_matrix_to_matrix(X_tt), decimals=3))
+    print(f"Problem solved in {t1 - t0:.3f}s")
     print(f"Objective value: {tt_inner_prod(G_tt, X_tt)}")
     print("Complementary Slackness: ", tt_inner_prod(X_tt, Z_tt))
     primal_res = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(L_tt, tt_vec(X_tt)), tt_vec(bias_tt)), eps=1e-10)
     print(f"Total primal feasibility error: {np.sqrt(np.abs(tt_inner_prod(primal_res, primal_res)))}")
     print(f"Ranks X_tt: {tt_ranks(X_tt)}, Y_tt: {tt_ranks(Y_tt)}, Z_tt: {tt_ranks(Z_tt)} ")
-    print(f"Time: {t1-t0}s")

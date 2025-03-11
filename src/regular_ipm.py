@@ -14,7 +14,7 @@ from src.tt_ops import *
 from src.tt_ops import tt_rank_reduce
 from src.tt_amen import tt_block_amen,  svd_solve_local_system
 from src.tt_eig import tt_min_eig
-from src.tt_ineq_check import tt_is_geq, tt_is_geq_, tt_is_psd
+from src.tt_ineq_check import tt_is_geq, tt_is_geq_zero, tt_is_psd
 
 
 def vec(matrix):

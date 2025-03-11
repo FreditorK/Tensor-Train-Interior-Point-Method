@@ -12,7 +12,7 @@ from src.tt_ops import *
 from src.tt_ops import tt_rank_reduce
 from src.tt_amen import tt_block_amen, svd_solve_local_system, tt_divide
 from src.tt_eig import tt_min_eig, tt_elementwise_max, tt_max_eig
-from src.tt_ineq_check import tt_is_geq, tt_is_geq_, tt_is_psd
+from src.tt_ineq_check import tt_is_geq, tt_is_geq_zero, tt_is_psd, tt_pd_line_search
 
 
 def forward_backward_sub(L, b):
@@ -272,7 +272,7 @@ def _tt_ipm_newton_step(
 
     return Delta_X_tt, Delta_Y_tt, Delta_T_tt, Delta_Z_tt, primal_dual_error, mu
 
-
+"""
 def _tt_line_search(
         X_tt,
         T_tt,
@@ -306,7 +306,7 @@ def _tt_line_search(
         for iter in range(iters):
             diff = tt_mat(tt_sub(vec_bias_tt_ineq, tt_fast_matrix_vec_mul(lin_op_tt_ineq, tt_vec(new_X_tt), eps)))
             diff = [einsum("rR, Refk -> refk", diff[0][:, 0,  0, :], diff[1])] + diff[2:]
-            discount_x, _ = tt_is_geq_(diff, op_tol=op_tol, degenerate=True, eps=eps)
+            discount_x, _ = tt_is_geq_zero(diff, op_tol=op_tol, degenerate=True, eps=eps)
             if discount_x:
                 break
             else:
@@ -326,13 +326,34 @@ def _tt_line_search(
         r = T_tt[0].shape[-1]
         new_T_tt = tt_add(T_tt, tt_scale(z_step_size, Delta_T_tt))
         for iter in range(iters):
-            discount_z, _ = tt_is_geq_(new_T_tt, op_tol=op_tol, eps=eps, degenerate=True)
+            discount_z, _ = tt_is_geq_zero(new_T_tt, op_tol=op_tol, eps=eps, degenerate=True)
             if discount_z:
                 break
             else:
                 new_T_tt[0][:, :, :, r:] *= discount
                 z_step_size *= discount
     return discount_x*x_step_size, discount_z*z_step_size
+"""
+
+
+def _tt_line_search(
+        X_tt,
+        T_tt,
+        Z_tt,
+        Delta_X_tt,
+        Delta_T_tt,
+        Delta_Z_tt,
+        lin_op_tt_ineq,
+        vec_bias_tt_ineq,
+        active_ineq,
+        iters=15,
+        op_tol=1e-3,
+        eps=1e-12
+):
+    x_step_size, _ = tt_pd_line_search(X_tt, Delta_X_tt)
+    z_step_size, _ = tt_pd_line_search(Z_tt, Delta_Z_tt)
+    print("Step_sze", x_step_size, z_step_size)
+    return x_step_size, z_step_size
 
 
 def tt_ipm(
@@ -426,13 +447,13 @@ def tt_ipm(
             lin_op_tt_ineq, bias_tt_ineq,
             active_ineq, op_tol=op_tol, eps=eps
         )
-        X_tt = tt_rank_reduce(tt_add(X_tt, tt_scale(x_step_size, Delta_X_tt)), eps=op_tol, rank_weighted_error=True)
-        Y_tt = tt_add(Y_tt, tt_scale(z_step_size, Delta_Y_tt))
+        X_tt = tt_rank_reduce(tt_add(X_tt, tt_scale(0.98*x_step_size, Delta_X_tt)), eps=op_tol, rank_weighted_error=True)
+        Y_tt = tt_add(Y_tt, tt_scale(0.98*z_step_size, Delta_Y_tt))
         Y_tt = tt_rank_reduce(tt_sub(Y_tt, tt_reshape(tt_fast_matrix_vec_mul(lag_maps["y"], tt_reshape(Y_tt, shape=(4, )), eps), (2, 2))), eps=op_tol, rank_weighted_error=True)
-        Z_tt = tt_rank_reduce(tt_add(Z_tt, tt_scale(z_step_size, Delta_Z_tt)), eps=op_tol, rank_weighted_error=True)
+        Z_tt = tt_rank_reduce(tt_add(Z_tt, tt_scale(0.98*z_step_size, Delta_Z_tt)), eps=op_tol, rank_weighted_error=True)
         if active_ineq:
             # FIXME: Note that T_tt should grow large on the zeros of b - L_ineq(X_tt)
-            T_tt = tt_rank_reduce(tt_add(T_tt, tt_scale(z_step_size, Delta_T_tt)), eps=op_tol, rank_weighted_error=True)
+            T_tt = tt_rank_reduce(tt_add(T_tt, tt_scale(0.98*z_step_size, Delta_T_tt)), eps=op_tol, rank_weighted_error=True)
 
         if verbose:
             print(f"Step sizes: {x_step_size}, {z_step_size}")
