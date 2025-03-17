@@ -1,14 +1,11 @@
 import sys
 import os
 import time
-
-import numpy as np
 import scipy.linalg
 
 sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
-from src.tt_eig import tt_min_eig, tt_max_eig
 from cy_src.ops_cy import *
 from src.tt_amen import _compute_phi_bck_A
 
@@ -116,7 +113,7 @@ def _tt_is_psd(A, nswp=10, x0=None, eps=1e-10, verbose=False):
         print('\t Time: ', time.time() - t0)
         print('\t Time per sweep: ', (time.time() - t0) / (swp + 1))
 
-    final_eig_val = tt_inner_prod(x_cores, tt_matrix_vec_mul(A, x_cores))
+    final_eig_val = tt_inner_prod(x_cores, tt_fast_matrix_vec_mul(A, x_cores))
     return np.greater(final_eig_val, -0.5*eps), max_res
 
 
@@ -128,7 +125,7 @@ def tt_is_psd(A, op_tol, degenerate=False, eps=1e-10, verbose=False):
 
 
 def tt_is_geq(linear_op_tt, X_tt, vec_b_tt, op_tol, nswp=10, eps=1e-10, degenerate=False, verbose=False):
-    res_tt = tt_sub(vec_b_tt, tt_matrix_vec_mul(linear_op_tt, tt_vec(X_tt)))
+    res_tt = tt_sub(vec_b_tt, tt_fast_matrix_vec_mul(linear_op_tt, tt_vec(X_tt)))
     norm = np.sqrt(tt_inner_prod(res_tt, res_tt))
     if norm > eps:
         res_tt = tt_scale(np.divide(2, norm), res_tt)
@@ -153,7 +150,7 @@ def tt_is_geq_zero(X_tt, op_tol, nswp=10, eps=1e-10, degenerate=False, verbose=F
     return True, 0.0
 
 
-def tt_pd_line_search(A, Delta, nswp=10, x0=None, eps=1e-10, verbose=False):
+def tt_pd_line_search(A, Delta, op_tol, nswp=10, x0=None, eps=1e-10, verbose=False):
     if verbose:
         print(f"Starting Eigen solve with:\n \t {eps} \n \t sweeps: {nswp}")
         t0 = time.time()
@@ -205,10 +202,13 @@ def tt_pd_line_search(A, Delta, nswp=10, x0=None, eps=1e-10, verbose=False):
                 _ = scip.linalg.cholesky(D, check_finite=False, lower=True)
                 step_size = min(step_size,  1)
             except:
-                L = scip.linalg.cholesky(B, check_finite=False, lower=True)
-                L_inv = scipy.linalg.solve_triangular(L, np.eye(L.shape[0]), lower=True)
-                local_step_size_inv, _ = scip.sparse.linalg.eigsh(-L_inv @ D @ L_inv.T, k=1, which="LA")
-                step_size = min(step_size, 1 / local_step_size_inv)
+                try:
+                    L = scip.linalg.cholesky(B, check_finite=False, lower=True)
+                    L_inv = scipy.linalg.solve_triangular(L, np.eye(L.shape[0]), lower=True)
+                    local_step_size_inv, _ = scip.sparse.linalg.eigsh(-L_inv @ D @ L_inv.T, k=1, which="LA")
+                    step_size = min(step_size, (1 - op_tol) / local_step_size_inv[0])
+                except:
+                    return 0, 0
 
             B += step_size*D
             eig_val, solution_now = scip.sparse.linalg.eigsh(B, k=1, which="SA", v0=previous_solution)
@@ -266,5 +266,7 @@ def tt_pd_line_search(A, Delta, nswp=10, x0=None, eps=1e-10, verbose=False):
         print('\t Time: ', time.time() - t0)
         print('\t Time per sweep: ', (time.time() - t0) / (swp + 1))
 
-    return step_size, max_res
+    ADelta = tt_rank_reduce(tt_add(A, tt_scale(step_size, Delta)), eps)
+    min_eig_value = tt_inner_prod(x_cores, tt_fast_matrix_vec_mul(ADelta, x_cores, eps))
+    return step_size, max(min_eig_value, 0)
 

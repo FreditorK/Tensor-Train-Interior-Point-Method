@@ -297,9 +297,12 @@ if __name__ == "__main__":
         eq_bias_tt,
         Q_ineq_op,
         Q_ineq_bias,
-        max_iter=16,
-        op_tol=1e-8,
-        verbose=True
+        max_iter=config["max_iter"],
+        verbose=True,
+        feasibility_tol=config["feasibility_tol"],
+        centrality_tol=config["centrality_tol"],
+        op_tol=config["op_tol"],
+        tau=config["tau"]
     )
     t1 = time.time()
     if args.track_mem:

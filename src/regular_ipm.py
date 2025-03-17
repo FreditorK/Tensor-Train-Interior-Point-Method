@@ -1,9 +1,5 @@
-import copy
 import sys
 import os
-from traceback import print_tb
-
-import numpy as np
 import scipy.linalg
 import scipy.optimize
 import scipy.sparse.linalg
@@ -11,10 +7,6 @@ import scipy.sparse.linalg
 sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
-from src.tt_ops import tt_rank_reduce
-from src.tt_amen import tt_block_amen,  svd_solve_local_system
-from src.tt_eig import tt_min_eig
-from src.tt_ineq_check import tt_is_geq, tt_is_geq_zero, tt_is_psd
 
 
 def vec(matrix):

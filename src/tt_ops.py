@@ -1,9 +1,9 @@
-import numpy as np
 import scipy as scp
 
 from src.ops import *
 from cy_src.tt_ops_cy import *
 from opt_einsum import contract as einsum
+from functools import reduce
 
 def E(i, j):
     E = np.zeros((1, 2, 2, 1))
@@ -224,9 +224,13 @@ def _block_diag_tensor(tensor_1: np.array, tensor_2: np.array) -> np.array:
     """
     For internal use: Concatenates two tensors to a block diagonal tensor
     """
-    column_1 = np.concatenate((tensor_1, np.zeros((tensor_2.shape[0],) + tensor_1.shape[1:])), axis=0)
-    column_2 = np.concatenate((np.zeros((tensor_1.shape[0],) + tensor_2.shape[1:]), tensor_2), axis=0)
-    return np.concatenate((column_1, column_2), axis=-1)
+    shape_1 = tensor_1.shape
+    shape_2 = tensor_2.shape
+    result = np.zeros((shape_1[0] + shape_2[0], *shape_1[1:-1], shape_1[-1] + shape_2[-1]))
+    N = tuple([slice(s) for s in shape_1[1:-1]])
+    result[(slice(0, shape_1[0]), *N, slice(0, shape_1[-1]))] =  tensor_1
+    result[(slice(shape_1[0], shape_1[0] + shape_2[0]), *N, slice(shape_1[-1], shape_1[-1] + shape_2[-1]))] = tensor_2
+    return result
 
 
 def tt_add(train_1_tt: List[np.array], train_2_tt: List[np.array]) -> List[np.array]:
@@ -244,43 +248,14 @@ def tt_sub(train_1_tt: List[np.array], train_2_tt: List[np.array]) -> List[np.ar
     return tt_add(train_1_tt, tt_scale(-1, train_2_tt))
 
 
-def _tt_train_kron(core_1: np.array, core_2: np.array) -> np.array:
-    """
-    For internal use: Computes the kronecker product between two TT-cores with appropriate dimensional
-    expansion
-    """
-    core_shape_length = len(core_1.shape)
-    axes = list(range(1, core_shape_length - 1))
-    layers = [
-        np.kron(
-            np.expand_dims(core_1[(slice(None),) + i], axis=axes),
-            np.expand_dims(core_2[(slice(None),) + i], axis=axes)
-        ) for i in product(*([[0, 1]] * (core_shape_length - 2)))
-    ]
-    return np.concatenate(layers, axis=1).reshape(
-        (core_1.shape[0] * core_2.shape[0],) + core_1.shape[1:-1] + (core_1.shape[-1] * core_2.shape[-1],)
-    )
-
-
-def tt_hadamard(train_1_tt: List[np.array], train_2_tt: List[np.array]) -> List[np.array]:
-    """
-    Computes the hadamard product/pointwise multiplication of two tensor trains
-    """
-    return [_tt_train_kron(core_1, core_2) for core_1, core_2 in zip(train_1_tt, train_2_tt)]
-
-
 def _tt_core_collapse(core_1: np.array, core_2: np.array) -> np.array:
-    # TODO: Switch kron for einsum
-    return np.sum([
-        np.kron(core_1[(slice(None),) + i], core_2[(slice(None),) + i])
-        for i in product(*([list(range(s)) for s in core_1.shape[1:-1]]))
-    ], axis=0)
+    if len(core_1.shape) == 3:
+        return einsum("rmR, lmL -> rlRL", core_1, core_2, optimize=True).reshape(core_1.shape[0]*core_2.shape[0], core_1.shape[-1]*core_2.shape[-1])
+    return einsum("rmnR, lmnL -> rlRL", core_1, core_2, optimize=True).reshape(core_1.shape[0]*core_2.shape[0], core_1.shape[-1]*core_2.shape[-1])
 
 
 def tt_inner_prod(train_1_tt: List[np.array], train_2_tt: List[np.array]) -> float:
-    return np.sum(
-        np.linalg.multi_dot([_tt_core_collapse(core_1, core_2) for core_1, core_2 in zip(train_1_tt, train_2_tt)])
-    )
+    return np.sum(reduce(np.dot, (_tt_core_collapse(core_1, core_2) for core_1, core_2 in zip(train_1_tt, train_2_tt))))
 
 
 def tt_to_tensor(tt_train):
@@ -293,19 +268,6 @@ def tt_to_tensor(tt_train):
 def tt_normalise(train_tt, radius=1):
     factor = np.divide(radius, np.sqrt(tt_inner_prod(train_tt, train_tt)))
     return tt_scale(factor, train_tt)
-
-
-def _tt_mat_core_collapse(core_op: np.array, core: np.array) -> np.array:
-    indices_op = (slice(None),) * (len(core_op.shape) - 2)
-    indices_core = (slice(None),) + (None,) * (len(core_op.shape) - len(core.shape))
-    return sum([
-        np.kron(core_op[indices_op + (i,)], core[indices_core + (i,)])
-        for i in range(core.shape[1])
-    ])
-
-
-def tt_matrix_vec_mul(matrix_tt: List[np.array], vec_tt: List[np.array]) -> List[np.array]:
-    return [_tt_mat_core_collapse(core_op, core) for core_op, core in zip(matrix_tt, vec_tt)]
 
 
 def prune_singular_vals(s, eps):
@@ -325,7 +287,7 @@ def prune_singular_vals(s, eps):
 
 def swap_cores(core_a, core_b, eps):
     if len(core_a.shape) == 3 and len(core_b.shape) == 3:
-        supercore = einsum("rms,snR->rnmR", core_a, core_b)
+        supercore = einsum("rms,snR->rnmR", core_a, core_b, optimize=True)
         u, s, v = scip.linalg.svd(np.reshape(supercore, (core_a.shape[0] * core_b.shape[1], -1)), full_matrices=False, check_finite=False)
         u = u @ np.diag(s)
         r = prune_singular_vals(s, eps)
@@ -333,7 +295,7 @@ def swap_cores(core_a, core_b, eps):
         v = v[:r, :]
         return np.reshape(u, (core_a.shape[0], core_b.shape[1], -1)), np.reshape(v,(-1, core_a.shape[1], core_b.shape[2]))
     elif len(core_a.shape) == 4 and len(core_b.shape) == 4:
-        supercore = einsum("rmas,snbR->rnbmaR", core_a, core_b)
+        supercore = einsum("rmas,snbR->rnbmaR", core_a, core_b, optimize=True)
         u, s, v = scip.linalg.svd(np.reshape(supercore, (core_a.shape[0] * core_b.shape[1] * core_b.shape[2], -1)), full_matrices=False, check_finite=False)
         u = u @ np.diag(s)
         r = prune_singular_vals(s, eps)
@@ -351,7 +313,7 @@ def tt_fast_matrix_vec_mul(matrix_tt: List[np.array], vec_tt: List[np.array], ep
 
     cores = [np.transpose(c, (2, 1, 0)) for c in vec_tt[::-1]]
     for i in range(dim):
-        cores[0] = einsum("mabk,kbn->man", matrix_tt[dim - i - 1], cores[0])
+        cores[0] = einsum("mabk,kbn->man", matrix_tt[dim - i - 1], cores[0], optimize=True)
 
         if i != dim - 1:
             for j in range(i, -1, -1):
@@ -359,26 +321,13 @@ def tt_fast_matrix_vec_mul(matrix_tt: List[np.array], vec_tt: List[np.array], ep
 
     return cores
 
-def _tt_mat_mat_collapse(mat_core_1, mat_core_2):
-    return sum([
-        np.kron(mat_core_1[:, :, None, i], mat_core_2[:, None, i])
-        for i in range(mat_core_2.shape[2])
-    ])
-
-
-def tt_mat_mat_mul(matrix_tt_1, matrix_tt_2):
-    return [
-        _tt_mat_mat_collapse(core_op_1, core_op_2) for core_op_1, core_op_2 in
-        zip(matrix_tt_1, matrix_tt_2)
-    ]
-
 def tt_fast_mat_mat_mul(matrix_tt_1, matrix_tt_2, eps=1e-18):
     dim= len(matrix_tt_1)
     eps = eps / np.sqrt(dim-1)
 
     cores = [np.transpose(c, (3, 1, 2, 0)) for c in matrix_tt_2[::-1]]
     for i in range(dim):
-        cores[0] = einsum("mabk,kbcn->macn", matrix_tt_1[dim - i - 1], cores[0])
+        cores[0] = einsum("mabk,kbcn->macn", matrix_tt_1[dim - i - 1], cores[0], optimize=True)
 
         if i != dim - 1:
             for j in range(i, -1, -1):
@@ -397,7 +346,7 @@ def tt_fast_hadammard(train_tt_1, train_tt_2, eps=1e-18):
         for i in range(dim):
             cores[0] = einsum("maAk,kbBn,AB,ab->maAn", train_tt_1[dim - i - 1], cores[0],
                                    np.eye(train_tt_1[dim - i - 1].shape[1], dtype=cores[0].dtype),
-                                   np.eye(train_tt_1[dim - i - 1].shape[1], dtype=cores[0].dtype))
+                                   np.eye(train_tt_1[dim - i - 1].shape[1], dtype=cores[0].dtype), optimize=True)
 
             if i != dim - 1:
                 for j in range(i, -1, -1):
@@ -409,7 +358,7 @@ def tt_fast_hadammard(train_tt_1, train_tt_2, eps=1e-18):
         cores = [np.transpose(c, (2, 1, 0)) for c in train_tt_2[::-1]]
         for i in range(dim):
             cores[0] = einsum("mak,kbn,ab->man", train_tt_1[dim - i - 1], cores[0],
-                                   np.eye(train_tt_1[dim - i - 1].shape[1], dtype=cores[0].dtype))
+                                   np.eye(train_tt_1[dim - i - 1].shape[1], dtype=cores[0].dtype), optimize=True)
 
             if i != dim - 1:
                 for j in range(i, -1, -1):
@@ -419,17 +368,8 @@ def tt_fast_hadammard(train_tt_1, train_tt_2, eps=1e-18):
 
 
 def tt_kron(matrix_tt_1, matrix_tt_2):
-    result_tt = [np.kron(c_1[:, None, None], c_2[:, :, :, None, None]) for c_1, c_2 in zip(matrix_tt_1, matrix_tt_2)]
-    result_tt = sum([break_core_bond(c) for c in result_tt], [])
+    result_tt = [einsum("rmnR, lijL -> rlminjRL", c_1, c_2, optimize=True).reshape(c_1.shape[0]*c_2.shape[0], c_1.shape[1]*c_2.shape[1], c_1.shape[2]*c_2.shape[2], c_1.shape[-1]*c_2.shape[-1]) for c_1, c_2 in zip(matrix_tt_1, matrix_tt_2)]
     return result_tt
-
-
-def tt_gram(matrix_tt):
-    """ Constructs the gram tensor for a linear op"""
-    matrix_tt_t = tt_transpose(matrix_tt)
-    gram = tt_mat_mat_mul(matrix_tt_t, matrix_tt)
-    gram = tt_rank_reduce(gram)
-    return gram
 
 
 def tt_trace(matrix_tt):
@@ -478,7 +418,7 @@ def tt_vec(matrix_tt):
 
 
 def tt_mat(vec_tt):
-    return [einsum("abc, cde -> abde", c_1, c_2) for c_1, c_2 in zip(vec_tt[:-1:2], vec_tt[1::2])]
+    return [einsum("abc, cde -> abde", c_1, c_2, optimize=True) for c_1, c_2 in zip(vec_tt[:-1:2], vec_tt[1::2])]
 
 
 def _tt_generalised_nystroem(tt_train, tt_gaussian_1, tt_gaussian_2):
@@ -516,7 +456,7 @@ def tt_l2_dist(train_tt_1, train_tt_2):
 
 def tt_diag(vec_tt):
     identity = np.eye(2)
-    basis = [einsum("ij, rjR -> rijR", identity, c) for c in vec_tt]
+    basis = [einsum("ij, rjR -> rijR", identity, c, optimize=True) for c in vec_tt]
     return tt_rank_reduce(basis)
 
 def tt_diagonal(matrix_tt):
@@ -535,8 +475,8 @@ def tt_reshape(train_tt, shape):
 
 def tt_merge_cores(train_tt):
     if len(train_tt[0].shape[1:-1]) == 1:
-        return [einsum("kir, rsK -> kisK", c_1, c_2) for c_1, c_2 in zip(train_tt[:-1:2], train_tt[1::2])]
-    return [einsum("kijr, rsdK -> kisjdK", c_1, c_2) for c_1, c_2 in zip(train_tt[:-1:2], train_tt[1::2])]
+        return [einsum("kir, rsK -> kisK", c_1, c_2, optimize=True) for c_1, c_2 in zip(train_tt[:-1:2], train_tt[1::2])]
+    return [einsum("kijr, rsdK -> kisjdK", c_1, c_2, optimize=True) for c_1, c_2 in zip(train_tt[:-1:2], train_tt[1::2])]
 
 
 def tt_random_rank_one(dim):

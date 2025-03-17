@@ -1,9 +1,9 @@
 dim: !!int 8
 max_rank: !!int 4
-seed: !!int 9
-op_tol: !!float 5e-5
+seed: !!int 5
+op_tol: !!float 1e-4
 feasibility_tol: !!float 5e-5
 centrality_tol: !!float 5e-3
-max_iter: !!int 35
+max_iter: !!int 20
 tau: 0.9
-direction: "XZ"
+direction: "XZ+ZX"

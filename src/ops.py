@@ -1,7 +1,4 @@
-import numpy as np
-from typing import List, Tuple
-from itertools import product
-from copy import deepcopy
+from typing import List
 from cy_src.ops_cy import *
 
 
@@ -31,7 +28,7 @@ def core_bond(core_1, core_2):
 def robust_cholesky(A, epsilon=1e-10):
     A = np.array(A)
     A_reg = A + epsilon * np.eye(A.shape[0])
-    L = np.linalg.cholesky(A_reg)
+    L = scip.linalg.cholesky(A_reg, check_finite=False, lower=True)
     return L
 
 

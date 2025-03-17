@@ -1,5 +1,4 @@
 # https://epubs.siam.org/doi/epdf/10.1137/19M1305045
-import numpy as np
 import scipy as scp
 from src.ops import *
 
@@ -34,7 +33,7 @@ def cgal(obj_matrix, constraint_matrices, bias, trace_params, duality_tol=1e-2, 
             print(f"---Step {it}---")
             print(f"Duality gap: {np.sum(duality_gap)}")
             print(f"Feasibility error: {np.linalg.norm(res)**2}")
-        if duality_gap < duality_tol and np.linalg.norm(res)**2 < feasability_tol:
+        if np.sum(duality_gap) < duality_tol and np.linalg.norm(res)**2 < feasability_tol:
             break
 
     print("Converged after {} iterations".format(it))
@@ -73,8 +72,8 @@ def sketchy_cgal(obj_matrix, constraint_matrices, bias, trace_params, R=1, duali
         lag_mul_2 = np.sqrt(it + 1)
         if verbose:
             print(f"---Step {it}---")
-            print(f"Duality gap: {duality_gap}")
-            print(f"Feasibility error: {np.sum(res.T @ res)}")
+            print(f"Est. Duality gap: {duality_gap}")
+            print(f"Est. Feasibility error: {np.sum(res.T @ res)}")
         if duality_gap < duality_tol and res.T @ res < feasability_tol:
             break
     U, Lambda = nystrom_sketch_reconstruct(S, Omega)

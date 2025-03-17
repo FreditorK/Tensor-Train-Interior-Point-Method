@@ -8,7 +8,7 @@ import tracemalloc
 sys.path.append(os.getcwd() + '/../../')
 
 from src.tt_ops import *
-from src.baselines import cgal
+from src.baselines import sketchy_cgal
 
 
 if __name__ == "__main__":
@@ -42,7 +42,7 @@ if __name__ == "__main__":
         print("Memory tracking started...")
         tracemalloc.start()  # Start memory tracking
     t2 = time.time()
-    X, duality_gaps = cgal(-J, constraint_matrices, bias, (1, 1), feasability_tol=3.2*1e-2, duality_tol=0.5, num_iter=1000*2**config["dim"], verbose=True)
+    X, duality_gaps = sketchy_cgal(-J, constraint_matrices, bias, (1, 1), feasability_tol=1e-5, duality_tol=0.71, num_iter=1000*2**config["dim"], R=2, verbose=True)
     t3 = time.time()
     if args.track_mem:
         current, peak = tracemalloc.get_traced_memory()

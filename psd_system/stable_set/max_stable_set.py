@@ -5,6 +5,7 @@ import yaml
 import argparse
 import tracemalloc
 
+
 sys.path.append(os.getcwd() + '/../../')
 
 from src.tt_ops import *
@@ -82,7 +83,9 @@ if __name__ == "__main__":
         verbose=True,
         feasibility_tol=config["feasibility_tol"],
         centrality_tol=config["centrality_tol"],
-        op_tol=config["op_tol"]
+        op_tol=config["op_tol"],
+        tau=config["tau"],
+        direction=config["direction"]
     )
     t1 = time.time()
     if args.track_mem:
@@ -95,6 +98,6 @@ if __name__ == "__main__":
     print(f"Problem solved in {t1 - t0:.3f}s")
     print(f"Objective value: {tt_inner_prod(J_tt, X_tt)}")
     print("Complementary Slackness: ", tt_inner_prod(X_tt, Z_tt))
-    primal_res = tt_sub(tt_fast_matrix_vec_mul(L_tt, tt_vec(X_tt)), tt_vec(bias_tt))
+    primal_res = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(L_tt, tt_vec(X_tt)), tt_vec(bias_tt)), rank_weighted_error=True, eps=1e-12)
     print(f"Total primal feasibility error: {np.sqrt(tt_inner_prod(primal_res,  primal_res))}")
     print(f"Ranks X_tt {tt_ranks(X_tt)} Y_tt {tt_ranks(Y_tt)} Z_tt {tt_ranks(Z_tt)} ")

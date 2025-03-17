@@ -1,15 +1,12 @@
 import sys
 import os
-
-import numpy as np
+import time
+import sklearn
+import copy
 
 sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
-from src.tt_ops import _tt_lr_random_orthogonalise
-import time
-import sklearn
-import copy
 from opt_einsum import contract as einsum
 
 
@@ -200,8 +197,7 @@ def tt_amen(A, b, nswp=50, x0=None, eps=1e-10, rmax=1024, solver_limit=500, kick
                 # shape is rzp x N x rz
                 czy = einsum('br,bnB,BR->rnR', Zb[k], b[k] * nrmsc, Zb[k + 1])
                 cz_new = czy - czA
-                uz, _, _ = scip.linalg.svd(np.reshape(cz_new, [rz[k] * N[k], rz[k + 1]]), full_matrices=False,
-                                            check_finite=False)
+                uz, _, _ = scip.linalg.svd(np.reshape(cz_new, [rz[k] * N[k], rz[k + 1]]), full_matrices=False, check_finite=False)
                 # truncate to kickrank
                 cz_new = uz[:, :min(kickrank, uz.shape[1])]
 
@@ -302,36 +298,6 @@ def _compute_phi_fwd_rhs(Phi_now, core_rhs, core):
     return Phi_next
 
 
-def tt_inv_precond(matrix_tt, target_ranks, tol=1e-10, max_iter=100, verbose=False):
-    if verbose:
-        t0 = time.time()
-    if np.all(np.array(tt_ranks(matrix_tt))== 1):
-        pinv_tt = [np.linalg.pinv(np.squeeze(m)) for m in matrix_tt]
-        return [m.reshape(1, *m.shape, 1) for m in pinv_tt], 0
-    norm = np.sqrt(tt_inner_prod(matrix_tt, matrix_tt))
-    inv_tt = tt_scale(np.divide(1, norm), tt_transpose(matrix_tt))
-    tt_gaussian = tt_random_gaussian(target_ranks, shape=matrix_tt[0].shape[1:-1])
-    identity = [np.eye(c.shape[1]).reshape(1, *c.shape[1:-1], 1) for c in matrix_tt]
-    matrix_tt_t = tt_transpose(matrix_tt)
-    prev_AG_ip = np.inf
-    alpha = 0
-    for _ in range(max_iter):
-        R = tt_sub(identity, tt_mat_mat_mul(matrix_tt, inv_tt))
-        G = tt_scale(-2, tt_mat_mat_mul(matrix_tt_t, R))
-        AG = tt_mat_mat_mul(matrix_tt, G)
-        AG_ip = tt_inner_prod(AG, AG)
-        alpha = 0.5*alpha + 0.5*tt_inner_prod(R, AG)/AG_ip
-        inv_tt = tt_add(inv_tt, tt_scale(alpha, G))
-        inv_tt = _tt_lr_random_orthogonalise(inv_tt, tt_gaussian)
-        if np.abs(AG_ip - prev_AG_ip) < tol:
-            break
-        prev_AG_ip = AG_ip
-
-    if verbose:
-        print(f"Time: {time.time()-t0}s")
-    return inv_tt
-
-
 def tt_block_amen(block_A, block_b, tols, eps=1e-10, aux_matrix_blocks=None, nswp=22, x0=None, rmax=128, local_solver=None, error_func=None, rank_weighted_error=False, verbose=False):
 
     block_size = np.max(list(k[0] for k in block_A.keys())) + 1
@@ -357,7 +323,7 @@ def tt_block_amen(block_A, block_b, tols, eps=1e-10, aux_matrix_blocks=None, nsw
 
     XAX = {key: [np.ones((1, 1, 1))] + [None] * (d - 1) + [np.ones((1, 1, 1))] for key in block_A} # size is rk x Rk x rk
     Xb = {key: [np.ones((1, 1))] + [None] * (d - 1) + [np.ones((1, 1))] for key in block_b}  # size is rk x rbk
-    Xaux_matrix_blocksX = {key: [np.ones((1, 1, 1))] + [None] * (d - 1) + [np.ones((1, 1, 1))] for key in aux_matrix_blocks}
+    Xaux_blocksX = {key: [np.ones((1, 1, 1))] + [None] * (d - 1) + [np.ones((1, 1, 1))] for key in aux_matrix_blocks}
 
     if verbose:
         t0 = time.time()
@@ -405,8 +371,8 @@ def tt_block_amen(block_A, block_b, tols, eps=1e-10, aux_matrix_blocks=None, nsw
                 XAX[(i, j)][k] /= normA[i, k - 1]
 
             for key in aux_matrix_blocks:
-                XauxX_key_k = _compute_phi_bck_A(Xaux_matrix_blocksX[key][k+1], x_cores[k], aux_matrix_blocks[key][k], x_cores[k])
-                Xaux_matrix_blocksX[key][k] = XauxX_key_k / np.linalg.norm(XauxX_key_k)
+                XauxX_key_k = _compute_phi_bck_A(Xaux_blocksX[key][k+1], x_cores[k], aux_matrix_blocks[key][k], x_cores[k])
+                Xaux_blocksX[key][k] = XauxX_key_k / np.linalg.norm(XauxX_key_k)
 
             for i in block_b:
                 Xb_i_k = _compute_phi_bck_rhs(Xb[i][k + 1], block_b[i][k], x_cores[k]) # rb[k] x rx[k]
@@ -426,22 +392,17 @@ def tt_block_amen(block_A, block_b, tols, eps=1e-10, aux_matrix_blocks=None, nsw
             m = rx[k] * N[k] * rx[k + 1]
 
             # assemble rhs
-            rhs = {}
-            for i in block_b:
-                local_rhs = einsum('br,bmB,BR->rmR', Xb[i][k], nrmsc[i] * block_b[i][k], Xb[i][k + 1])
-                rhs[i] = np.reshape(local_rhs, (-1, 1))
-            #norm_rhss = [max(np.linalg.norm(c), real_tol[k]) for c in rhs.values()]
-            #norm_rhs = np.sqrt(sum(c**2 for c in norm_rhss))
+            rhs = {i:einsum('br,bmB,BR->rmR', Xb[i][k], nrmsc[i] * block_b[i][k], Xb[i][k + 1]).reshape(m, 1) for i in block_b}
 
             # assemble lhs
-            B = {}
-            for (i, j) in block_A:
-                local_B = einsum('lsr,smnS,LSR->lmLrnR', XAX[(i, j)][k], block_A[(i, j)][k], XAX[(i, j)][k + 1])
-                B[(i, j)] = local_B.reshape(m, m)
-            local_auxs = {}
-            for key in aux_matrix_blocks:
-                local_aux_key = einsum('lsr,smnS,LSR->lmLrnR', Xaux_matrix_blocksX[key][k], aux_matrix_blocks[key][k], Xaux_matrix_blocksX[key][k + 1])
-                local_auxs[key] = local_aux_key.reshape(m, m)
+            B = {
+                (i, j): einsum('lsr,smnS,LSR->lmLrnR', XAX[(i, j)][k], block_A[(i, j)][k], XAX[(i, j)][k + 1], optimize="greedy").reshape(m, m) for (i, j) in block_A
+            }
+
+            local_auxs = {
+                key: einsum('lsr,smnS,LSR->lmLrnR', Xaux_blocksX[key][k], aux_matrix_blocks[key][k], Xaux_blocksX[key][k + 1], optimize="greedy").reshape(m, m)
+                for key in aux_matrix_blocks
+            }
 
             # Solve block system
             solution_now =  local_solver(previous_solution, B, rhs, local_auxs)
@@ -463,7 +424,7 @@ def tt_block_amen(block_A, block_b, tols, eps=1e-10, aux_matrix_blocks=None, nsw
             # solution truncation
             if k < d - 1:
                 u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False)
-                v = np.diag(s) @ v
+                v = s.reshape(-1, 1) * v
                 for r in range(u.shape[1] - 1, 0, -1):
                     solution = np.reshape(u[:, :r] @ v[:r, :], (rx[k], N[k], block_size, rx[k + 1]))
                     res = error_func(B, np.reshape(np.transpose(solution, (2, 0, 1, 3)), (-1, 1)),  rhs)
@@ -501,8 +462,8 @@ def tt_block_amen(block_A, block_b, tols, eps=1e-10, aux_matrix_blocks=None, nsw
                     XAX[(i, j)][k + 1] /= normA[i, k]
 
                 for key in aux_matrix_blocks:
-                    XauxX_key_k = _compute_phi_fwd_A(Xaux_matrix_blocksX[key][k], x_cores[k], aux_matrix_blocks[key][k], x_cores[k])
-                    Xaux_matrix_blocksX[key][k+1] = XauxX_key_k / np.linalg.norm(XauxX_key_k)
+                    XauxX_key_k = _compute_phi_fwd_A(Xaux_blocksX[key][k], x_cores[k], aux_matrix_blocks[key][k], x_cores[k])
+                    Xaux_blocksX[key][k+1] = XauxX_key_k / np.linalg.norm(XauxX_key_k)
 
                 for i in block_b:
                     Xb_i_k = _compute_phi_fwd_rhs(Xb[i][k], block_b[i][k], x_cores[k])

@@ -3,23 +3,26 @@ import sys
 import os
 import argparse
 import tracemalloc
+import yaml
 
 sys.path.append(os.getcwd() + '/../../')
 import time
 from src.tt_ops import *
-from maxcut import Config
 from src.baselines import cgal
 
 
 if __name__ == "__main__":
+    np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=4, suppress=True)
     parser = argparse.ArgumentParser(description="Script with optional memory tracking.")
     parser.add_argument("--track_mem", action="store_true", help="Enable memory tracking from a certain point.")
+    parser.add_argument("--config", type=str, required=True, help="Path to the YAML configuration file")
     args = parser.parse_args()
+    with open(os.getcwd() + '/../../' + args.config, "r") as file:
+        config = yaml.safe_load(file)
 
-    np.random.seed(Config.seed)
-    np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=4, suppress=True)
+    np.random.seed(config["seed"])
     t0 = time.time()
-    G = tt_rank_reduce(tt_random_graph(Config.dim, Config.max_rank))
+    G = tt_rank_reduce(tt_random_graph(config["dim"], config["max_rank"]))
     t1 = time.time()
     print(f"Random graph produced in {t1 - t0:.3f}s")
     C = np.round(tt_matrix_to_matrix(G))
@@ -30,7 +33,7 @@ if __name__ == "__main__":
     if args.track_mem:
         print("Memory tracking started...")
         tracemalloc.start()  # Start memory tracking
-    X, duality_gaps = cgal(-C, constraint_matrices, bias, (trace_param, trace_param), duality_tol=0.1, num_iter=100*2**Config.dim, verbose=True)
+    X, duality_gaps = cgal(-C, constraint_matrices, bias, (trace_param, trace_param), feasability_tol=config["feasibility_tol"], duality_tol=0.1, num_iter=1000*2**config["dim"], verbose=True)
     #print(np.round(X, decimals=3))
     t3 = time.time()
     if args.track_mem:
