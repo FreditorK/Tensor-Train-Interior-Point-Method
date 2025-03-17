@@ -115,7 +115,8 @@ def tt_infeasible_newton_system(
         direction,
         eps
 ):
-    mu = max(sigma * mu,  1e-3)
+    #mu = max(sigma * mu,  1e-3)
+    mu = sigma*mu
     idx_add = int(active_ineq)
     P = tt_identity(len(Z_tt))
     if direction == "XZ":
@@ -362,7 +363,6 @@ def tt_ipm(
         if (x_step_size*np.sqrt(tt_inner_prod(Delta_X_tt, Delta_X_tt)) < op_tol and z_step_size*np.sqrt(tt_inner_prod(Delta_Z_tt, Delta_Z_tt)) < op_tol) or min(permitted_err_z, permitted_err_x) < eps:
             last = True
         if np.less(max(prev_pd_error - pd_error, 0), op_tol):
-            sigma *= max(min((mu / prev_mu) ** 2, 1), 0.2)
             if np.less(pd_error, feasibility_tol) and (np.less(np.abs(mu), centrality_tol) or np.less(max(prev_mu - mu, 0), op_tol)):
                 last = True
         if x_step_size < 1 and not last:
@@ -388,6 +388,7 @@ def tt_ipm(
                 f"Ranks X_tt: {tt_ranks(X_tt)}, Z_tt: {tt_ranks(Z_tt)}, \n"
                 f"      Y_tt: {tt_ranks(Y_tt)}, T_tt: {tt_ranks(T_tt) if active_ineq else None} \n"
             )
+        sigma = 0.8*sigma + 0.2*max(min((mu / prev_mu) ** 3, 1), 0.001)
         if last:
             break
     if verbose:
