@@ -161,40 +161,52 @@ def tt_pd_line_search(A, Delta, op_tol, nswp=10, eps=1e-12, verbose=False):
     if verbose:
         print(f"Starting Eigen solve with:\n \t {eps} \n \t sweeps: {nswp}")
         t0 = time.time()
+    dtype = A[0].dtype
+    damp = 2
 
-    x_cores = tt_random_gaussian(list(np.array(tt_ranks(A))+np.array(tt_ranks(Delta))), (2, ))
-    A_partial = tt_rank_reduce([np.concatenate((A[0], Delta[0]), axis=-1)] + [_block_diag_tensor(c_1, c_2) for c_1, c_2 in zip(A[1:-1], Delta[1:-1])], eps)
+    x_cores = tt_random_gaussian(list(np.array(tt_ranks(A)) + np.array(tt_ranks(Delta))), (2,))
 
     d = len(x_cores)
     rx = np.array([1] + tt_ranks(x_cores) + [1])
     N = np.array([c.shape[1] for c in x_cores])
-    XAX = [np.ones((1, 1, 1))] + [None] * (d - 1) + [np.ones((1, 1, 1))]  # size is rk x Rk x rk
+
+    XAX = [np.ones((1, 1, 1), dtype=dtype)] + [None] * (d - 1) + [
+        np.ones((1, 1, 1), dtype=dtype)]  # size is rk x Rk x rk
+    XDX = [np.ones((1, 1, 1), dtype=dtype)] + [None] * (d - 1) + [
+        np.ones((1, 1, 1), dtype=dtype)]  # size is rk x Rk x rk
+
+    max_res = 0
     step_size = 1
+    real_tol = (eps / np.sqrt(d)) / damp
+    eig_vals = -np.inf * np.ones(d)
     for swp in range(nswp):
         x_cores = tt_rl_orthogonalise(x_cores)
         rx[1:-1] = np.array(tt_ranks(x_cores))
-        last_core = np.concatenate((A[-1], step_size * Delta[-1]), axis=0)
         for k in range(d - 1, 0, -1):
-            if k == d - 1:
-                XAX[k] = _compute_phi_bck_A(
-                    XAX[k + 1], x_cores[k], last_core, x_cores[k])
-            else:
-                XAX[k] = _compute_phi_bck_A(
-                    XAX[k + 1], x_cores[k], A_partial[k], x_cores[k])
-            norm = np.linalg.norm(XAX[k])
+            XAX[k] = _compute_phi_bck_A(
+                XAX[k + 1], x_cores[k], A[k], x_cores[k])
+            XDX[k] = _compute_phi_bck_A(
+                XDX[k + 1], x_cores[k], Delta[k], x_cores[k])
+            norm = np.sqrt(np.linalg.norm(XAX[k]) ** 2 + np.linalg.norm(XDX[k]) ** 2)
             norm = norm if norm > 0 else 1.0
             XAX[k + 1] = np.divide(XAX[k + 1], norm)
+            XDX[k + 1] = np.divide(XDX[k + 1], norm)
         max_res = 0
         for k in range(d):
-            if k == d - 1:
-                B = einsum("lsr,smnS,LSR->lmLrnR", XAX[k], last_core, XAX[k + 1], optimize=True).reshape(rx[k] * N[k] * rx[k + 1], rx[k] * N[k] * rx[k + 1])
-            else:
-                B = einsum("lsr,smnS,LSR->lmLrnR", XAX[k], A_partial[k], XAX[k + 1], optimize=True).reshape(rx[k] * N[k] * rx[k + 1], rx[k] * N[k] * rx[k + 1])
-            """
-            try:
-                _ = scip.linalg.cholesky(D, check_finite=False, lower=True)
+            previous_solution = np.reshape(x_cores[k], (-1, 1))
+            B = einsum(
+                "lsr,smnS,LSR->lmLrnR",
+                XAX[k], A[k], XAX[k + 1],
+                optimize=True
+            ).reshape(rx[k] * N[k] * rx[k + 1], rx[k] * N[k] * rx[k + 1])
+            D = einsum(
+                "lsr,smnS,LSR->lmLrnR",
+                XDX[k], Delta[k], XDX[k + 1],
+                optimize=True
+            ).reshape(rx[k] * N[k] * rx[k + 1], rx[k] * N[k] * rx[k + 1])
+            if is_psd(D):
                 step_size = min(step_size, 1)
-            except:
+            else:
                 try:
                     L = scip.linalg.cholesky(B, check_finite=False, lower=True)
                     L_inv = scipy.linalg.solve_triangular(L, np.eye(L.shape[0]), lower=True)
@@ -202,27 +214,34 @@ def tt_pd_line_search(A, Delta, op_tol, nswp=10, eps=1e-12, verbose=False):
                     step_size = min(step_size, (1 - op_tol) / local_step_size_inv[0])
                 except:
                     return 0, 0
-            """
-            previous_solution = np.reshape(x_cores[k], (-1, 1))
+
+            B += step_size * D
             eig_val, solution_now = scip.sparse.linalg.eigsh(B, k=1, which="SA", v0=previous_solution)
+            eig_vals[k] = eig_val
             max_res = max(max_res, np.linalg.norm(B @ previous_solution - eig_val * previous_solution))
+
+            solution_now = np.reshape(solution_now, (rx[k] * N[k], rx[k + 1]))
+
             if k < d - 1:
-                u, s, v = scip.linalg.svd(solution_now.reshape(rx[k] * N[k], rx[k + 1]), full_matrices=False, check_finite=False, overwrite_a=True)
-                v = s.reshape(-1, 1)*v
-                r = prune_singular_vals(s, 1e-18) #  FIXME: Why is this sensitive to eps=1e-20
-                x_cores[k + 1] = einsum('ij,jkl->ikl',v[:r, :], x_cores[k + 1], optimize=True).reshape(r, N[k + 1], rx[k + 2])
+                u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False)
+                v = s.reshape(-1, 1) * v
+                r = prune_singular_vals(s, 1e-18)
                 x_cores[k] = u[:, :r].reshape(rx[k], N[k], r)
+                x_cores[k + 1] = einsum('ij,jkl->ikl', v[:r, :], x_cores[k + 1], optimize=True).reshape(r, N[k + 1], rx[k + 2])
                 rx[k + 1] = r
-                XAX[k + 1] = compute_phi_fwd_A(XAX[k], x_cores[k], A_partial[k], x_cores[k])
-                norm = np.linalg.norm(XAX[k + 1])
+                XAX[k + 1] = compute_phi_fwd_A(XAX[k], x_cores[k], A[k], x_cores[k])
+                XDX[k + 1] = compute_phi_fwd_A(XDX[k], x_cores[k], Delta[k], x_cores[k])
+                norm = np.sqrt(np.linalg.norm(XAX[k + 1]) ** 2 + np.linalg.norm(XDX[k + 1]) ** 2)
                 norm = norm if np.greater(norm, 0) else 1.0
                 XAX[k + 1] = np.divide(XAX[k + 1], norm)
+                XDX[k + 1] = np.divide(XDX[k + 1], norm)
+
             else:
-                x_cores[k] = solution_now.reshape(rx[k], N[k], rx[k + 1])
+                x_cores[k] = np.reshape(solution_now, (rx[k], N[k], rx[k + 1]))
 
         x_cores = tt_normalise(x_cores)
 
-        if max_res < eps:
+        if max_res < eps and np.min(eig_vals) > 0:
             break
 
     if verbose:
@@ -233,11 +252,6 @@ def tt_pd_line_search(A, Delta, op_tol, nswp=10, eps=1e-12, verbose=False):
         print('\t Time: ', time.time() - t0)
         print('\t Time per sweep: ', (time.time() - t0) / (swp + 1))
 
-    ADelta = tt_add(A, tt_scale(step_size, Delta))
-    mine, vec, _ = tt_min_eig(ADelta)
-    print("hi", mine, scip.sparse.linalg.eigsh(tt_matrix_to_matrix(ADelta), k=1, which="SA")[0])
-    min_eig_value = tt_inner_prod(x_cores, tt_fast_matrix_vec_mul(ADelta, x_cores, eps))
-    print("min Eig", min_eig_value, np.linalg.norm(tt_vec_to_vec(x_cores) - tt_vec_to_vec(vec)))
-    step_size = 1
+    min_eig_value = tt_inner_prod(x_cores, tt_fast_matrix_vec_mul(A, x_cores, eps)) + step_size*tt_inner_prod(x_cores, tt_fast_matrix_vec_mul(Delta, x_cores, eps))
     return step_size, max(min_eig_value, 0)
 

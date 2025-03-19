@@ -46,3 +46,10 @@ def safe_multi_dot(matrices: List[np.array]):
     elif len(matrices) == 1:
         return matrices[0]
     return []
+
+def is_psd(matrix):
+    try:
+        _ = scip.linalg.cholesky(matrix, check_finite=False, lower=True)
+    except:
+        return False
+    return True

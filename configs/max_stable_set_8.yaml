@@ -4,8 +4,8 @@ seeds: [5]
 op_tol: !!float 2e-4
 feasibility_tol: !!float 5e-5
 centrality_tol: !!float 5e-3
-max_iter: !!int 2
-tau: 0.85
+max_iter: !!int 20
+tau: 0.9
 sigma_intp: 0.7
 direction: "XZ+ZX"
 verbose: True
