@@ -255,7 +255,13 @@ def _tt_core_collapse(core_1: np.array, core_2: np.array) -> np.array:
 
 
 def tt_inner_prod(train_1_tt: List[np.array], train_2_tt: List[np.array]) -> float:
-    return np.sum(reduce(np.dot, (_tt_core_collapse(core_1, core_2) for core_1, core_2 in zip(train_1_tt, train_2_tt))))
+    eq = 'ab,aijm,bijn->mn' if train_1_tt[0].ndim == 4 else 'ab,aim,bin->mn'
+
+    result = reduce(lambda res, c: einsum(eq, res, *c, optimize="greedy"),
+                    zip(train_1_tt, train_2_tt),
+                    np.array([[1.0]]))
+
+    return np.sum(result)
 
 
 def tt_to_tensor(tt_train):
@@ -273,10 +279,6 @@ def tt_normalise(train_tt, radius=1):
 def prune_singular_vals(s, eps):
     if np.linalg.norm(s) == 0.0:
         return 1
-
-    if eps <= 0.0:
-        return s.size
-
     sc = np.cumsum(np.abs(s[::-1]) ** 2)[::-1]
     R = np.argmax(sc < eps ** 2)
     R = max(R, 1)

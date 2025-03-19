@@ -31,6 +31,14 @@ def robust_cholesky(A, epsilon=1e-10):
     L = scip.linalg.cholesky(A_reg, check_finite=False, lower=True)
     return L
 
+def eigendecomp(matrix):
+    eigenvalues, eigenvectors = np.linalg.eigh(matrix)
+    eigenvalues[eigenvalues < 0] = 0
+    eigenvalues_sqrt = np.sqrt(eigenvalues)
+    reconstructed_matrix = eigenvectors @ np.diag(eigenvalues_sqrt) @ eigenvectors.T
+    reconstructed_matrix_inv = eigenvectors @ np.diag(1/eigenvalues_sqrt) @ eigenvectors.T
+    return reconstructed_matrix, reconstructed_matrix_inv
+
 
 def safe_multi_dot(matrices: List[np.array]):
     if len(matrices) > 1:

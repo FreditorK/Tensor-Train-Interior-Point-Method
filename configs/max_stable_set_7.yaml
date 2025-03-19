@@ -1,9 +1,11 @@
 dim: !!int 7
 max_rank: !!int 4
-seed: !!int 5
+seeds: [5, 6, 7, 8, 9]
 op_tol: !!float 8e-3
 feasibility_tol: !!float 5e-5
 centrality_tol: !!float 5e-3
 max_iter: !!int 20
 tau: 0.9
+sigma_intp: 0.9
 direction: "XZ+ZX"
+verbose: True
