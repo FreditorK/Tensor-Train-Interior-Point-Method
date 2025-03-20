@@ -133,7 +133,6 @@ def tt_infeasible_newton_system(
         # rank for operators at most double
 
     X_tt = tt_reshape(X_tt, (4, ))
-    Y_tt = tt_reshape(Y_tt, (4, ))
     Z_tt = tt_reshape(Z_tt, (4, ))
 
     if active_ineq:
@@ -230,7 +229,7 @@ def _tt_ipm_newton_step(
     )
     idx_add = int(active_ineq)
     Delta_tt, res = tt_block_gmres(lhs_matrix_tt, rhs_vec_tt, tols=0.1 * np.array([0.1 * feasibility_tol, feasibility_tol, centrality_tol]), nswp=5, aux_matrix_blocks=lag_maps, rmax=20, local_solver=local_solver, error_func=error_func, verbose=verbose, rank_weighted_error=True)
-    Delta_Y_tt = tt_rank_reduce(tt_reshape(_tt_get_block(1, Delta_tt), (2, 2)), eps=op_tol, rank_weighted_error=True)
+    Delta_Y_tt = tt_rank_reduce(_tt_get_block(1, Delta_tt), eps=op_tol, rank_weighted_error=True)
     Delta_X_tt = tt_rank_reduce(tt_reshape(_tt_get_block(0, Delta_tt), (2, 2)), eps=op_tol, rank_weighted_error=True)
     Delta_Z_tt = tt_rank_reduce(tt_reshape(_tt_get_block(2 + idx_add, Delta_tt), (2, 2)), eps=op_tol, rank_weighted_error=True)
     Delta_T_tt = None
@@ -318,20 +317,17 @@ def tt_ipm(
     else:
         lhs_skeleton[(0, 2)] = tt_reshape(tt_identity(2 * dim), (4, 4))
     X_tt = tt_identity(dim)
-    Y_tt = tt_zero_matrix(2*dim)
+    Y_tt = [np.zeros((1, 4, 1)) for _ in range(2*dim)]
     T_tt = None
     if active_ineq:
         T_tt = tt_reshape(tt_fast_matrix_vec_mul(lin_op_tt_ineq_adj, tt_reshape(tt_one_matrix(dim), (4, )), eps), (2, 2))
         T_tt = tt_normalise(T_tt)
     Z_tt = tt_identity(dim)
-    iter = 0
     sigma = 0.5
     mu = 1
-    pd_error = np.inf
     last = False
-    for iter in range(1, max_iter):
+    for iter in range(1, max_iter+1):
         prev_mu = mu
-        prev_pd_error = pd_error
         Delta_X_tt, Delta_Y_tt, Delta_T_tt, Delta_Z_tt, pd_error, mu = _tt_ipm_newton_step(
             lag_maps,
             obj_tt,
@@ -369,7 +365,7 @@ def tt_ipm(
             step_size *= tau
         X_tt = tt_rank_reduce(tt_add(X_tt, tt_scale(step_size, Delta_X_tt)), eps=op_tol, rank_weighted_error=True)
         Y_tt = tt_add(Y_tt, tt_scale(step_size, Delta_Y_tt))
-        Y_tt = tt_rank_reduce(tt_sub(Y_tt, tt_reshape(tt_fast_matrix_vec_mul(lag_maps["y"], tt_reshape(Y_tt, shape=(4, )), eps), (2, 2))), eps=op_tol, rank_weighted_error=True)
+        Y_tt = tt_rank_reduce(tt_sub(Y_tt, tt_fast_matrix_vec_mul(lag_maps["y"], Y_tt, eps)), eps=op_tol, rank_weighted_error=True)
         Z_tt = tt_rank_reduce(tt_add(Z_tt, tt_scale(step_size, Delta_Z_tt)), eps=op_tol, rank_weighted_error=True)
         if active_ineq:
             # FIXME: Note that T_tt should grow large on the zeros of b - L_ineq(X_tt)
