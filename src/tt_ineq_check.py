@@ -161,23 +161,18 @@ def tt_pd_line_search(A, Delta, op_tol, nswp=10, eps=1e-12, verbose=False):
     if verbose:
         print(f"Starting Eigen solve with:\n \t {eps} \n \t sweeps: {nswp}")
         t0 = time.time()
-    dtype = A[0].dtype
-    damp = 2
-
     x_cores = tt_random_gaussian(list(np.array(tt_ranks(A)) + np.array(tt_ranks(Delta))), (2,))
 
     d = len(x_cores)
     rx = np.array([1] + tt_ranks(x_cores) + [1])
     N = np.array([c.shape[1] for c in x_cores])
 
-    XAX = [np.ones((1, 1, 1), dtype=dtype)] + [None] * (d - 1) + [
-        np.ones((1, 1, 1), dtype=dtype)]  # size is rk x Rk x rk
-    XDX = [np.ones((1, 1, 1), dtype=dtype)] + [None] * (d - 1) + [
-        np.ones((1, 1, 1), dtype=dtype)]  # size is rk x Rk x rk
+    XAX = [np.ones((1, 1, 1))] + [None] * (d - 1) + [
+        np.ones((1, 1, 1))]  # size is rk x Rk x rk
+    XDX = copy.deepcopy(XAX)
 
     max_res = 0
     step_size = 1
-    real_tol = (eps / np.sqrt(d)) / damp
     eig_vals = -np.inf * np.ones(d)
     for swp in range(nswp):
         x_cores = tt_rl_orthogonalise(x_cores)

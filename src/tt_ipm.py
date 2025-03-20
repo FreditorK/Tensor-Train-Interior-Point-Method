@@ -10,7 +10,7 @@ sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
 from src.tt_ops import tt_rank_reduce
-from src.tt_amen import tt_block_amen
+from src.tt_amen import tt_block_gmres
 from src.tt_ineq_check import tt_pd_line_search
 
 
@@ -229,7 +229,7 @@ def _tt_ipm_newton_step(
         eps
     )
     idx_add = int(active_ineq)
-    Delta_tt, res = tt_block_amen(lhs_matrix_tt, rhs_vec_tt, tols=0.1*np.array([0.1*feasibility_tol, feasibility_tol, centrality_tol]), nswp=5, aux_matrix_blocks=lag_maps, rmax=20, local_solver=local_solver, error_func=error_func, verbose=verbose, rank_weighted_error=True)
+    Delta_tt, res = tt_block_gmres(lhs_matrix_tt, rhs_vec_tt, tols=0.1 * np.array([0.1 * feasibility_tol, feasibility_tol, centrality_tol]), nswp=5, aux_matrix_blocks=lag_maps, rmax=20, local_solver=local_solver, error_func=error_func, verbose=verbose, rank_weighted_error=True)
     Delta_Y_tt = tt_rank_reduce(tt_reshape(_tt_get_block(1, Delta_tt), (2, 2)), eps=op_tol, rank_weighted_error=True)
     Delta_X_tt = tt_rank_reduce(tt_reshape(_tt_get_block(0, Delta_tt), (2, 2)), eps=op_tol, rank_weighted_error=True)
     Delta_Z_tt = tt_rank_reduce(tt_reshape(_tt_get_block(2 + idx_add, Delta_tt), (2, 2)), eps=op_tol, rank_weighted_error=True)
@@ -328,7 +328,7 @@ def tt_ipm(
     sigma = 0.5
     mu = 1
     pd_error = np.inf
-    last = 0
+    last = False
     for iter in range(1, max_iter):
         prev_mu = mu
         prev_pd_error = pd_error
@@ -363,11 +363,8 @@ def tt_ipm(
             lin_op_tt_ineq, bias_tt_ineq,
             active_ineq, op_tol=op_tol, eps=eps
         )
-        if np.less(max(prev_pd_error - pd_error, 0), feasibility_tol):
-            if np.less(max(prev_mu - mu, 0), centrality_tol):
-                last += 1
-        else:
-            last = 0
+        if np.less(step_size*tt_norm(Delta_X_tt), 0.1*op_tol):
+            last = True
         if step_size < 1 and not last:
             step_size *= tau
         X_tt = tt_rank_reduce(tt_add(X_tt, tt_scale(step_size, Delta_X_tt)), eps=op_tol, rank_weighted_error=True)
@@ -389,7 +386,7 @@ def tt_ipm(
                 f"      Y_tt: {tt_ranks(Y_tt)}, T_tt: {tt_ranks(T_tt) if active_ineq else None} \n"
             )
         sigma = sigma_intp*sigma + (1-sigma_intp)*max(min((mu / prev_mu) ** 3, 0.999), 0.001)
-        if last > 2:
+        if last:
             break
 
     if verbose:

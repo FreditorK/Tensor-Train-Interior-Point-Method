@@ -456,6 +456,9 @@ def tt_l2_dist(train_tt_1, train_tt_2):
     diff_tt = tt_sub(train_tt_1, train_tt_2)
     return np.sqrt(tt_inner_prod(diff_tt, diff_tt))
 
+def tt_norm(train_tt):
+    return np.sqrt(tt_inner_prod(train_tt, train_tt))
+
 def tt_diag(vec_tt):
     identity = np.eye(2)
     basis = [einsum("ij, rjR -> rijR", identity, c, optimize=True) for c in vec_tt]

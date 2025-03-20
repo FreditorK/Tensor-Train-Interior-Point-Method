@@ -298,7 +298,7 @@ def _compute_phi_fwd_rhs(Phi_now, core_rhs, core):
     return Phi_next
 
 
-def tt_block_amen(block_A, block_b, tols, eps=1e-10, aux_matrix_blocks=None, nswp=22, x0=None, rmax=128, local_solver=None, error_func=None, rank_weighted_error=False, verbose=False):
+def tt_block_gmres(block_A, block_b, tols, eps=1e-10, aux_matrix_blocks=None, nswp=22, x0=None, rmax=128, local_solver=None, error_func=None, rank_weighted_error=False, verbose=False):
 
     block_size = np.max(list(k[0] for k in block_A.keys())) + 1
     model_entry = next(iter(block_b.values()))
@@ -306,9 +306,9 @@ def tt_block_amen(block_A, block_b, tols, eps=1e-10, aux_matrix_blocks=None, nsw
 
     if x0 == None:
         # TODO: Temp decreased block_size
-        x = tt_normalise([np.random.randn(1, *c.shape[1:-1], 1) for c in model_entry[:-1]]) + [np.random.randn(1, block_size, *x_shape, 1)]
+        x_cores = tt_normalise([np.random.randn(1, *c.shape[1:-1], 1) for c in model_entry[:-1]]) + [np.random.randn(1, block_size, *x_shape, 1)]
     else:
-        x = x0
+        x_cores = copy.deepcopy(x0)
 
     if local_solver is None:
         local_solver = lambda prev_sol, lhs, rhs, local_auxs: svd_solve_local_system(lhs, rhs, eps)
@@ -316,10 +316,9 @@ def tt_block_amen(block_A, block_b, tols, eps=1e-10, aux_matrix_blocks=None, nsw
     if aux_matrix_blocks is None:
         aux_matrix_blocks = {}
 
-    x_cores = copy.copy(x)
     N = [c.shape[-2] for c in x_cores]
     d = len(N)
-    rx = np.array([1] + tt_ranks(x) + [1])
+    rx = np.array([1] + tt_ranks(x_cores) + [1])
 
     XAX = {key: [np.ones((1, 1, 1))] + [None] * (d - 1) + [np.ones((1, 1, 1))] for key in block_A} # size is rk x Rk x rk
     Xb = {key: [np.ones((1, 1))] + [None] * (d - 1) + [np.ones((1, 1))] for key in block_b}  # size is rk x rbk
@@ -352,17 +351,16 @@ def tt_block_amen(block_A, block_b, tols, eps=1e-10, aux_matrix_blocks=None, nsw
             shifted_r = Qmat.shape[1]
 
             x_cores[k] = np.reshape(Qmat.T, [shifted_r, N[k], rx[k + 1]])
-            x_cores[k - 1] = einsum('rdc,cbR->rbdR', x_cores[k - 1], Rmat.T.reshape(rx[k], block_size, shifted_r))
+            x_cores[k - 1] = einsum('rdc,cbR->rbdR', x_cores[k - 1], Rmat.T.reshape(rx[k], block_size, shifted_r), optimize=True)
             norm_now = np.linalg.norm(x_cores[k-1])
             x_cores[k - 1] /= norm_now
-            normx[k-1] *= norm_now
+            normx[k - 1] *= norm_now
             rx[k] = shifted_r
 
             row_A = np.zeros(block_size)
             for (i, j) in block_A:
-                # update phis (einsum)
                 XAX_ij_k = _compute_phi_bck_A(XAX[(i, j)][k + 1], x_cores[k], block_A[(i, j)][k], x_cores[k]) # rx[k] x rA[k] x rx[k]
-                row_A[i] += np.linalg.norm(XAX_ij_k)**2
+                row_A[i] += np.sum(np.square(XAX_ij_k))
                 XAX[(i, j)][k] = XAX_ij_k
 
             row_A += (row_A < eps)
@@ -453,7 +451,7 @@ def tt_block_amen(block_A, block_b, tols, eps=1e-10, aux_matrix_blocks=None, nsw
                 row_A = np.zeros(block_size)
                 for (i, j) in block_A:
                     XAX_ij_k = _compute_phi_fwd_A(XAX[(i, j)][k], x_cores[k], block_A[(i, j)][k], x_cores[k])
-                    row_A[i] += np.linalg.norm(XAX_ij_k)**2
+                    row_A[i] += np.sum(np.square(XAX_ij_k))
                     XAX[(i, j)][k + 1] = XAX_ij_k
 
                 row_A += (row_A < eps)
