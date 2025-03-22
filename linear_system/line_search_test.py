@@ -8,7 +8,7 @@ import scipy
 sys.path.append(os.getcwd() + '/../')
 from src.tt_ops import *
 from src.tt_ops import tt_rank_reduce
-from src.tt_ineq_check import tt_pd_line_search
+from src.tt_ineq_check import tt_pd_optimal_step_size
 from src.tt_eig import tt_min_eig, tt_max_eig
 
 np.random.seed(4) # 9
@@ -33,6 +33,6 @@ print(step_size)
 print(np.linalg.eigvals(A + step_size*B))
 
 #print(tt_min_eig(tt_add(X_tt, s_matrix_tt))[0], np.linalg.eigvals(A + B))
-alpha, a = tt_pd_line_search(X_tt, s_matrix_tt, op_tol=1e-12)
+alpha, a = tt_pd_optimal_step_size(X_tt, s_matrix_tt, op_tol=1e-12)
 print(alpha, a)
 print(np.linalg.eigvals(A + alpha*B))

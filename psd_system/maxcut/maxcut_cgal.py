@@ -20,7 +20,7 @@ if __name__ == "__main__":
     with open(os.getcwd() + '/../../' + args.config, "r") as file:
         config = yaml.safe_load(file)
 
-    np.random.seed(config["seed"])
+    np.random.seed(config["seeds"][0])
     t0 = time.time()
     G = tt_rank_reduce(tt_random_graph(config["dim"], config["max_rank"]))
     t1 = time.time()

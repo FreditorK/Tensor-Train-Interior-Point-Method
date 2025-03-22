@@ -1,11 +1,11 @@
-dim: !!int 9
+dim: !!int 3
 max_rank: !!int 4
 seeds: [5]
-op_tol: !!float 5e-5
+op_tol: !!float 8e-4
 feasibility_tol: !!float 5e-5
 centrality_tol: !!float 5e-3
-max_iter: !!int 35
+max_iter: !!int 20
 tau: 0.9
-sigma_intp: 0.5
-direction: "XZ"
+sigma_intp: 0.9
+direction: "XZ+ZX"
 verbose: True

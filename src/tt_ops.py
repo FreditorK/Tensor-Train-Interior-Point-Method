@@ -138,11 +138,12 @@ def _tt_lr_random_orthogonalise(train_tt, gaussian_tt):
 def tt_rank_reduce(train_tt: List[np.array], eps=1e-18, rank_weighted_error=False):
     """ Might reduce TT-rank """
     dim = len(train_tt)
-    ranks = np.array(tt_ranks(train_tt))
+    ranks = np.array([1] + tt_ranks(train_tt) + [1])
     if dim == 1 or np.all(ranks==1):
         return train_tt
     if rank_weighted_error:
-        eps = np.sqrt(ranks/np.sum(ranks))*eps
+        weights = ranks[1:]*ranks[:-1]
+        eps = np.sqrt(weights/np.sum(weights))*eps
     else:
         eps = np.ones(dim - 1) * (eps / np.sqrt(dim - 1))
     train_tt = tt_rl_orthogonalise(train_tt)
@@ -158,7 +159,7 @@ def tt_rank_reduce(train_tt: List[np.array], eps=1e-18, rank_weighted_error=Fals
         v_t = v_t[:next_rank, :]
         train_tt[idx] = u.reshape(rank, *idx_shape[1:-1], next_rank)
         train_tt[idx + 1] = (
-            np.diag(s) @ v_t @ train_tt[idx + 1].reshape(v_t.shape[-1], -1)
+            s.reshape(-1, 1) * v_t @ train_tt[idx + 1].reshape(v_t.shape[-1], -1)
         ).reshape(next_rank, *next_idx_shape[1:-1], -1)
         rank = next_rank
     return train_tt

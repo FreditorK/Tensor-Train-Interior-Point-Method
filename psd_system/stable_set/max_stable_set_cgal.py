@@ -22,7 +22,7 @@ if __name__ == "__main__":
 
     print("Creating Problem...")
 
-    np.random.seed(config["seed"])
+    np.random.seed(config["seeds"][0])
     np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=4, suppress=True)
     t0 = time.time()
     G = tt_rank_reduce(tt_random_graph(config["dim"], config["max_rank"]))
@@ -42,14 +42,15 @@ if __name__ == "__main__":
         print("Memory tracking started...")
         tracemalloc.start()  # Start memory tracking
     t2 = time.time()
-    X, duality_gaps = cgal(-J, constraint_matrices, bias, (1, 1), feasability_tol=3.2*1e-2, duality_tol=0.5, num_iter=1000*2**config["dim"], verbose=True)
+    X, duality_gaps = cgal(-J, constraint_matrices, bias, (1, 1), feasability_tol=1e-4, duality_tol=0.5, num_iter=1000*2**config["dim"], verbose=True)
     t3 = time.time()
     if args.track_mem:
         current, peak = tracemalloc.get_traced_memory()
         print(f"Current memory usage: {current / 10 ** 6:.2f} MB")
         print(f"Peak memory usage: {peak / 10 ** 6:.2f} MB")
         tracemalloc.stop()  # Stop tracking after measuring
-    #print(np.round(X, decimals=4))
+    print(adj_matrix)
+    print(np.round(X, decimals=4))
     print(f"Problem solved in {t3 - t2:.3f}s")
     print(f"Objective value: {np.trace(J.T @ X)}")
     print(f"Total feasibility error: {np.linalg.norm([np.trace(c.T @ X) - b for c, b in zip(constraint_matrices, bias)])**2}")

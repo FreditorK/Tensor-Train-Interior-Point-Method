@@ -140,7 +140,7 @@ def tt_is_geq(linear_op_tt, X_tt, vec_b_tt, op_tol, nswp=10, eps=1e-10, degenera
         if degenerate:
             A = tt_add(A, tt_scale(2*eps, tt_identity(len(A))))
         A = tt_rank_reduce(A, op_tol, rank_weighted_error=True)
-        return tt_pd_line_search(A, nswp=nswp, eps=eps, verbose=verbose)
+        return tt_pd_optimal_step_size(A, nswp=nswp, eps=eps, verbose=verbose)
     return True, 0.0
 
 
@@ -153,11 +153,11 @@ def tt_is_geq_zero(X_tt, op_tol, nswp=10, eps=1e-10, degenerate=False, verbose=F
         if degenerate:
             A = tt_add(A, tt_scale(2*eps, tt_identity(len(A))))
         A = tt_rank_reduce(A, op_tol, rank_weighted_error=True)
-        return tt_pd_line_search(A, nswp=nswp, eps=eps, verbose=verbose)
+        return tt_pd_optimal_step_size(A, nswp=nswp, eps=eps, verbose=verbose)
     return True, 0.0
 
 
-def tt_pd_line_search(A, Delta, op_tol, nswp=10, eps=1e-12, verbose=False):
+def tt_pd_optimal_step_size(A, Delta, op_tol, nswp=10, eps=1e-12, verbose=False):
     if verbose:
         print(f"Starting Eigen solve with:\n \t {eps} \n \t sweeps: {nswp}")
         t0 = time.time()
@@ -250,3 +250,72 @@ def tt_pd_line_search(A, Delta, op_tol, nswp=10, eps=1e-12, verbose=False):
     min_eig_value = tt_inner_prod(x_cores, tt_fast_matrix_vec_mul(A, x_cores, eps)) + step_size*tt_inner_prod(x_cores, tt_fast_matrix_vec_mul(Delta, x_cores, eps))
     return step_size, max(min_eig_value, 0)
 
+
+def tt_psd_rank_reduce(A, eigen_tt, op_tol, rank_weighted_error=False):
+    d = len(eigen_tt)
+    rx = np.array([1] + tt_ranks(eigen_tt) + [1])
+    N = np.array([c.shape[1] for c in eigen_tt])
+
+    ranks = np.array([1] + tt_ranks(A) + [1])
+    if d == 1 or np.all(ranks == 1):
+        return A
+    if rank_weighted_error:
+        weights = ranks[1:]*ranks[:-1]
+        op_tol = np.sqrt(weights/np.sum(weights))*op_tol
+    else:
+        op_tol = np.ones(d - 1) * (op_tol / np.sqrt(d - 1))
+
+
+    XAX = [np.ones((1, 1, 1))] + [None] * (d - 1) + [np.ones((1, 1, 1))]  # size is rk x Rk x rk
+
+    A = tt_rl_orthogonalise(A)
+    rank = 1
+    singular_values = {}
+    for idx, tt_core in enumerate(A[:-1]):
+        idx_shape = tt_core.shape
+        next_idx_shape = A[idx + 1].shape
+        k = len(idx_shape) - 1
+        u, s, v_t = scp.linalg.svd(A[idx].reshape(rank * np.prod(idx_shape[1:k], dtype=int), -1),
+                                   full_matrices=False, check_finite=False)
+        singular_values[idx] = s
+        next_rank = u.shape[-1]
+        A[idx] = u.reshape(rank, *idx_shape[1:-1], next_rank)
+        A[idx + 1] = (
+                s.reshape(-1, 1) * v_t @ A[idx + 1].reshape(v_t.shape[-1], -1)
+        ).reshape(next_rank, *next_idx_shape[1:-1], -1)
+        rank = next_rank
+
+        x_cores = tt_rl_orthogonalise(x_cores)
+        rx[1:-1] = np.array(tt_ranks(x_cores))
+    for k in range(d - 1, 0, -1):
+        XAX[k] = _compute_phi_bck_A(
+            XAX[k + 1], x_cores[k], A[k], x_cores[k])
+        norm = np.linalg.norm(XAX[k])
+        norm = norm if norm > 0 else 1.0
+        XAX[k + 1] = np.divide(XAX[k + 1], norm)
+    next_indices = np.array([0])
+    for k in range(d):
+        XAX[k] = XAX[k][:, None, next_indices, :]
+        A[k] = A[k][None, next_indices]
+        A_bar = einsum(
+            "lsr,smnS,LSR->SlmLrnR",
+            XAX[k], A[k], XAX[k + 1],
+            optimize=True
+        ).reshape(A[k].shape[-1], rx[k] * N[k] * rx[k + 1], rx[k] * N[k] * rx[k + 1])
+
+        previous_solution = x_cores[k].flattten()
+
+        local_eigs = einsum("m, Smn, n -> S", previous_solution, A_bar, previous_solution)
+        s = singular_values[k]
+        neg_indices = np.argwhere(local_eigs < 0)
+        sc = np.cumsum(np.abs(s[neg_indices][::-1]) ** 2)[::-1]
+        next_indices_neg = neg_indices[:np.argmax(sc < op_tol[k] ** 2)]
+        temp_tol_sq = np.sum(np.abs(s[next_indices_neg]**2))
+
+        pos_indices = np.argwhere(1-(local_eigs < 0))
+        sc = np.cumsum(np.abs(s[pos_indices][::-1]) ** 2)[::-1]
+        next_indices_pos = pos_indices[:np.argmax(sc < min(temp_tol_sq, op_tol[k]**2 - temp_tol_sq))]
+        next_indices = np.sort(np.concatenate((next_indices_neg, next_indices_pos)))
+        A[k] = A[k].reshape(rank * np.prod(idx_shape[1:k], dtype=int), -1)[:, :, :, None, next_indices]
+
+    return A

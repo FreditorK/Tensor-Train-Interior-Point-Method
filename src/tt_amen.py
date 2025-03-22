@@ -325,6 +325,7 @@ def tt_block_gmres(block_A, block_b, tols, eps=1e-10, aux_matrix_blocks=None, ns
     Xaux_blocksX = [{key: np.ones((1, 1, 1)) for key in aux_matrix_blocks}] + [{key: None for key in aux_matrix_blocks} for _ in range(d-1)] + [{key: np.ones((1, 1, 1)) for key in aux_matrix_blocks}]
 
     if verbose:
+        np.set_printoptions(precision=3, suppress=False, formatter={'float': '{:.3e}'.format})
         t0 = time.time()
         print('Starting AMEn solve with:\n\tEpsilon: %g\n\tMax num of sweeps: %d' % (eps, nswp))
         A_ranks = {key: tt_ranks(block) for key, block in block_A.items()}
@@ -379,6 +380,11 @@ def tt_block_gmres(block_A, block_b, tols, eps=1e-10, aux_matrix_blocks=None, ns
 
         local_res = np.zeros((block_size, d))
         local_dx = np.zeros(d)
+
+        if rank_weighted_error:
+            weights = rx[1:] * rx[:-1]
+            rank_percent = np.sqrt(weights / np.sum(weights))
+            real_tol = tols.reshape(-1, 1) @ rank_percent.reshape(1, -1)
 
         for k in range(d):
 
@@ -456,10 +462,6 @@ def tt_block_gmres(block_A, block_b, tols, eps=1e-10, aux_matrix_blocks=None, ns
 
             else:
                 x_cores[k] = np.reshape(solution_now, (rx[k], N[k], block_size, rx[k + 1])).transpose(0, 2, 1, 3)
-
-            if rank_weighted_error:
-                rank_percent = np.sqrt(rx[1:-1] / np.sum(rx[1:-1]))
-                real_tol[:,  :-1] = tols.reshape(-1, 1) @ rank_percent.reshape(1, -1)
 
         if verbose:
             print('Starting Sweep:\n\tMax num of sweeps: %d' % swp)
