@@ -468,10 +468,13 @@ def tt_diag(vec_tt):
 def tt_diagonal(matrix_tt):
     return [np.transpose(np.diagonal(c,  axis1=1, axis2=2), (0, 2, 1)) for c in matrix_tt]
 
-def tt_sum(*args):
+def tt_sum(*args, op_tol, rank_reduce=True):
     sum_tt = args[0]
     for arg in args[1:]:
-        sum_tt =  tt_rank_reduce(tt_add(sum_tt, arg))
+        if rank_reduce:
+            sum_tt =  tt_rank_reduce(tt_add(sum_tt, arg), rank_weighted_error=True)
+        else:
+            sum_tt = tt_add(sum_tt, arg)
     return sum_tt
 
 def tt_reshape(train_tt, shape):

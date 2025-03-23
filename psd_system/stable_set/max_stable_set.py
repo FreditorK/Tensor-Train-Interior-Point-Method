@@ -85,9 +85,7 @@ if __name__ == "__main__":
             feasibility_tol=config["feasibility_tol"],
             centrality_tol=config["centrality_tol"],
             op_tol=config["op_tol"],
-            tau=config["tau"],
-            direction=config["direction"],
-            sigma_intp=config["sigma_intp"]
+            direction=config["direction"]
         )
         t1 = time.time()
         if args.track_mem:
@@ -96,8 +94,8 @@ if __name__ == "__main__":
             print(f"Peak memory usage: {peak / 10 ** 6:.2f} MB")
             tracemalloc.stop()  # Stop tracking after measuring
 
-        print("Solution: ")
-        print(np.round(tt_matrix_to_matrix(X_tt), decimals=4))
+        #print("Solution: ")
+        #print(np.round(tt_matrix_to_matrix(X_tt), decimals=4))
         print(f"Problem solved in {t1 - t0:.3f}s")
         print(f"Objective value: {tt_inner_prod(J_tt, X_tt)}")
         print("Complementary Slackness: ", np.sqrt(tt_inner_prod(X_tt, Z_tt)))
