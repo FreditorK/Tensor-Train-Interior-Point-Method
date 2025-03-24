@@ -1,6 +1,8 @@
 import sys
 import os
 import time
+
+import numpy as np
 import sklearn
 import copy
 
@@ -8,6 +10,7 @@ sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
 from opt_einsum import contract as einsum
+from scipy.special import softmax
 
 
 def _local_product(Phi_right, Phi_left, coreA, core):
@@ -298,7 +301,7 @@ def _compute_phi_fwd_rhs(Phi_now, core_rhs, core):
     return Phi_next
 
 
-def tt_block_gmres(block_A, block_b, tols, eps=1e-10, aux_matrix_blocks=None, nswp=22, x0=None, rmax=128, local_solver=None, error_func=None, rank_weighted_error=False, verbose=False):
+def tt_block_gmres(block_A, block_b, tol, eps=1e-10, aux_matrix_blocks=None, nswp=22, x0=None, rmax=128, local_solver=None, error_func=None, rank_weighted_error=False, verbose=False):
 
     block_size = np.max(list(k[0] for k in block_A.keys())) + 1
     model_entry = next(iter(block_b.values()))
@@ -339,18 +342,25 @@ def tt_block_gmres(block_A, block_b, tols, eps=1e-10, aux_matrix_blocks=None, ns
     normb = np.ones((block_size, d - 1)) # norm of each row of the rhs
     nrmsc = np.ones(block_size)
     normx = np.ones((d - 1))
-    real_tol = np.mean(tols) / np.sqrt(d) #np.outer((tols / np.sqrt(d)), np.ones(d))
+    real_tol = (tol / np.sqrt(d))*np.ones(d-1)
     normalize = lambda val: val / np.linalg.norm(val)
 
     for swp in range(nswp):
+        if rank_weighted_error:
+            weights = rx[1:-1] * rx[:-2] + rx[1:-1] * rx[2:]
+            rank_percent = np.sqrt(weights/np.sum(weights))
+            real_tol = tol*rank_percent
+            print(f"Weighting {swp}", np.round(rank_percent, decimals=2))
+
         for k in range(d - 1, 0, -1):
+            print(f"rl {k}", rx)
             if swp > 0:
                 nrmsc *= (normA[:, k - 1] * normx[k - 1]) / normb[:, k - 1]
 
             # right to left orthogonalisation of x_cores
             core = np.reshape(x_cores[k], (rx[k]*block_size, N[k]*rx[k + 1])).T
             Umat, s, Vmat = scip.linalg.svd(core, full_matrices=False, check_finite=False, overwrite_a=True)#
-            shifted_r = prune_singular_vals(s, real_tol)
+            shifted_r = prune_singular_vals(s, real_tol[k-1])
             Vmat = s[:shifted_r].reshape(-1, 1) * Vmat[:shifted_r]
 
             x_cores[k] = np.reshape(Umat[:, :shifted_r].T, (shifted_r, N[k], rx[k + 1]))
@@ -382,12 +392,9 @@ def tt_block_gmres(block_A, block_b, tols, eps=1e-10, aux_matrix_blocks=None, ns
         local_res = np.zeros((block_size, d))
         local_dx = np.zeros(d)
 
-        if rank_weighted_error:
-            weights = rx[1:] * rx[:-1]
-            rank_percent = np.sqrt(weights / np.sum(weights))
-            real_tol = 0.1*tols.reshape(-1, 1) @ rank_percent.reshape(1, -1)
-
         for k in range(d):
+            print(f"lr {k}", rx)
+
             # bring block dimension to front
             previous_solution = np.reshape(np.transpose(x_cores[k], (1, 0, 2, 3)), (-1, 1))
             m = rx[k] * N[k] * rx[k + 1]
@@ -410,7 +417,6 @@ def tt_block_gmres(block_A, block_b, tols, eps=1e-10, aux_matrix_blocks=None, ns
 
             block_res_new = error_func(B, solution_now, rhs)
             block_res_old = error_func(B, previous_solution, rhs)
-            print(block_res_new, block_res_old)
             local_res[:, k] = np.maximum(block_res_new, block_res_old)
             if  np.all(block_res_old < block_res_new):
                 solution_now = previous_solution
@@ -426,7 +432,7 @@ def tt_block_gmres(block_A, block_b, tols, eps=1e-10, aux_matrix_blocks=None, ns
             if k < d - 1:
                 u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True)
                 v = s.reshape(-1, 1) * v
-                r = prune_singular_vals(s, real_tol)
+                r = prune_singular_vals(s, real_tol[k])
                 v = einsum("rbR, Rdk -> rbdk", v[:r, :].reshape(-1, block_size, x_cores[k + 1].shape[0]), x_cores[k + 1]) #  enriched_r x b x d x rx[k+1]
 
                 nrmsc *= normA[:, k] * normx[k] / normb[:, k]
@@ -463,7 +469,7 @@ def tt_block_gmres(block_A, block_b, tols, eps=1e-10, aux_matrix_blocks=None, ns
             print('Starting Sweep:\n\tMax num of sweeps: %d' % swp)
             print(f"\tTT-sol rank: {tt_ranks(x_cores)} \n")
 
-        if np.all(local_res < real_tol) or np.all(local_dx < eps):
+        if np.all(local_res < tol) or np.all(local_dx < eps):
             break
 
 

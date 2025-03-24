@@ -322,14 +322,14 @@ def tt_ipm(
         lhs,
         rhs,
         x0=x0,
-        tols=0.1 * np.array([0.1 * feasibility_tol, feasibility_tol, centrality_tol]),
+        tol=0.1*op_tol,
         nswp=nwsp,
         aux_matrix_blocks=lag_maps,
         rmax=Rmax,
         local_solver=lambda prev_sol, lhs, rhs, local_auxs: ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, eps=eps, num_blocks=num_blocks),
         error_func=error_func,
         verbose=verbose,
-        rank_weighted_error=False
+        rank_weighted_error=True
     )
     error_func = lambda lhs, sol, rhs: ipm_error(lhs, sol, rhs, num_blocks=num_blocks)
     lhs_skeleton = {}

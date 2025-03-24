@@ -1,7 +1,7 @@
 dim: !!int 6
 max_rank: !!int 4
 seeds: [5]
-op_tol: !!float 8e-5
+op_tol: !!float 8e-4
 feasibility_tol: !!float 5e-5
 centrality_tol: !!float 5e-3
 max_iter: !!int 40
