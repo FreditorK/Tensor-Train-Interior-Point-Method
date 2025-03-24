@@ -2,13 +2,14 @@ import copy
 import sys
 import os
 
+import scipy.sparse.linalg
+
 sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
 from src.tt_ops import tt_rank_reduce
 from src.tt_amen import tt_block_gmres
 from src.tt_ineq_check import tt_pd_optimal_step_size
-
 
 def forward_backward_sub(L, b):
     y = scip.linalg.solve_triangular(L, b, lower=True, check_finite=False)
@@ -30,9 +31,7 @@ def ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, num_blocks, eps):
     primal_nonzero = 1 in rhs
     R_d = rhs[0] if dual_nonzero else 0
     R_p = rhs[1] if primal_nonzero else 0
-    K = forward_backward_sub(L_L_Z, L_X)  * inv_I.reshape(1, -1) #L_Z_inv @ L_X
-    k = -forward_backward_sub(L_L_Z, rhs[k]) # L_Z_inv @ R_c
-    KR_dmk = - (K @ R_d + k) if dual_nonzero else -k
+    KR_dmk = -forward_backward_sub(L_L_Z, ((L_X * inv_I.reshape(1, -1)) @ R_d if dual_nonzero else 0) - rhs[2])
 
     if num_blocks > 3:
         prev_t = prev_sol[2*block_dim:3*block_dim]
@@ -60,13 +59,13 @@ def ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, num_blocks, eps):
         z = -inv_I * R_dmL_eq_adj_yt
         return np.vstack((x, y, t, z))
 
-    A = lhs[(1, 0)] @ K @ lhs[(0, 1)]
+    A = lhs[(1, 0)] @ forward_backward_sub(L_L_Z, (L_X * inv_I.reshape(1, -1)) @ lhs[(0, 1)])
     A = A + 0.5*(np.linalg.norm(A)/ np.linalg.norm(local_auxs["y"]))*local_auxs["y"]
     b = -lhs[(1, 0)] @ KR_dmk + R_p - A @ prev_y
     sol = scip.linalg.solve(A, b, overwrite_a=True, overwrite_b=True, check_finite=False)
     y = sol + prev_y
     R_dmL_eq_adj_y = lhs[(0, 1)] @ y - R_d
-    x = K @ R_dmL_eq_adj_y - k
+    x = forward_backward_sub(L_L_Z, (L_X * inv_I.reshape(1, -1)) @ R_dmL_eq_adj_y + rhs[2])
     z = -inv_I * R_dmL_eq_adj_y
     return np.vstack((x, y, z))
 
@@ -240,7 +239,7 @@ def _tt_ipm_newton_step(
 
     ZX = tt_inner_prod(Z_tt, X_tt)
     sigma = ((ZX + x_step_size*z_step_size*tt_inner_prod(Delta_X_tt, Delta_Z_tt) + z_step_size*tt_inner_prod(X_tt, Delta_Z_tt) + x_step_size*tt_inner_prod(Delta_X_tt, Z_tt))/ZX)**3
-    mu = np.divide(ZX, 2**dim)
+    mu = min(np.divide(ZX, 2**dim), 0.999)
     rhs_vec_tt[2 + idx_add] = tt_rank_reduce(
         tt_add(
             tt_scale(mu_mul*sigma*mu, tt_reshape(tt_identity(len(X_tt)), (4, ))),
@@ -330,7 +329,7 @@ def tt_ipm(
         local_solver=lambda prev_sol, lhs, rhs, local_auxs: ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, eps=eps, num_blocks=num_blocks),
         error_func=error_func,
         verbose=verbose,
-        rank_weighted_error=True
+        rank_weighted_error=False
     )
     error_func = lambda lhs, sol, rhs: ipm_error(lhs, sol, rhs, num_blocks=num_blocks)
     lhs_skeleton = {}

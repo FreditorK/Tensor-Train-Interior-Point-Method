@@ -339,7 +339,7 @@ def tt_block_gmres(block_A, block_b, tols, eps=1e-10, aux_matrix_blocks=None, ns
     normb = np.ones((block_size, d - 1)) # norm of each row of the rhs
     nrmsc = np.ones(block_size)
     normx = np.ones((d - 1))
-    real_tol = np.outer((tols / np.sqrt(d)), np.ones(d))
+    real_tol = np.mean(tols) / np.sqrt(d) #np.outer((tols / np.sqrt(d)), np.ones(d))
     normalize = lambda val: val / np.linalg.norm(val)
 
     for swp in range(nswp):
@@ -349,11 +349,12 @@ def tt_block_gmres(block_A, block_b, tols, eps=1e-10, aux_matrix_blocks=None, ns
 
             # right to left orthogonalisation of x_cores
             core = np.reshape(x_cores[k], (rx[k]*block_size, N[k]*rx[k + 1])).T
-            Qmat, Rmat = np.linalg.qr(core)
-            shifted_r = Qmat.shape[1]
+            Umat, s, Vmat = scip.linalg.svd(core, full_matrices=False, check_finite=False, overwrite_a=True)#
+            shifted_r = prune_singular_vals(s, real_tol)
+            Vmat = s[:shifted_r].reshape(-1, 1) * Vmat[:shifted_r]
 
-            x_cores[k] = np.reshape(Qmat.T, (shifted_r, N[k], rx[k + 1]))
-            x_cores[k - 1] = einsum('rdc,cbR->rbdR', x_cores[k - 1], Rmat.T.reshape(rx[k], block_size, shifted_r), optimize=True)
+            x_cores[k] = np.reshape(Umat[:, :shifted_r].T, (shifted_r, N[k], rx[k + 1]))
+            x_cores[k - 1] = einsum('rdc,cbR->rbdR', x_cores[k - 1], Vmat.T.reshape(rx[k], block_size, shifted_r), optimize=True)
             norm_now = np.linalg.norm(x_cores[k-1])
             x_cores[k - 1] /= norm_now
             normx[k - 1] *= norm_now
@@ -384,10 +385,9 @@ def tt_block_gmres(block_A, block_b, tols, eps=1e-10, aux_matrix_blocks=None, ns
         if rank_weighted_error:
             weights = rx[1:] * rx[:-1]
             rank_percent = np.sqrt(weights / np.sum(weights))
-            real_tol = tols.reshape(-1, 1) @ rank_percent.reshape(1, -1)
+            real_tol = 0.1*tols.reshape(-1, 1) @ rank_percent.reshape(1, -1)
 
         for k in range(d):
-
             # bring block dimension to front
             previous_solution = np.reshape(np.transpose(x_cores[k], (1, 0, 2, 3)), (-1, 1))
             m = rx[k] * N[k] * rx[k + 1]
@@ -410,6 +410,7 @@ def tt_block_gmres(block_A, block_b, tols, eps=1e-10, aux_matrix_blocks=None, ns
 
             block_res_new = error_func(B, solution_now, rhs)
             block_res_old = error_func(B, previous_solution, rhs)
+            print(block_res_new, block_res_old)
             local_res[:, k] = np.maximum(block_res_new, block_res_old)
             if  np.all(block_res_old < block_res_new):
                 solution_now = previous_solution
@@ -425,12 +426,7 @@ def tt_block_gmres(block_A, block_b, tols, eps=1e-10, aux_matrix_blocks=None, ns
             if k < d - 1:
                 u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True)
                 v = s.reshape(-1, 1) * v
-                for r in range(u.shape[1] - 1, 0, -1):
-                    solution = np.reshape(u[:, :r] @ v[:r, :], (rx[k], N[k], block_size, rx[k + 1]))
-                    res = error_func(B, np.reshape(np.transpose(solution, (2, 0, 1, 3)), (-1, 1)), rhs)
-                    if np.any(res > np.maximum(2 * real_tol[:, k], local_res[:, k])):
-                        break
-                r = min(r+1, rmax)
+                r = prune_singular_vals(s, real_tol)
                 v = einsum("rbR, Rdk -> rbdk", v[:r, :].reshape(-1, block_size, x_cores[k + 1].shape[0]), x_cores[k + 1]) #  enriched_r x b x d x rx[k+1]
 
                 nrmsc *= normA[:, k] * normx[k] / normb[:, k]
