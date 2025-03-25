@@ -33,32 +33,6 @@ def ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, num_blocks, eps):
     R_p = rhs[1] if primal_nonzero else 0
     KR_dmk = -forward_backward_sub(L_L_Z, ((L_X * inv_I.reshape(1, -1)) @ R_d if dual_nonzero else 0) - rhs[2])
 
-    if num_blocks > 3:
-        prev_t = prev_sol[2*block_dim:3*block_dim]
-        TL_ineq = -lhs[(2, 0)]
-        L_ineq_adj = -lhs[(0, 2)]
-        R_ineq = lhs[(2, 2)]
-        R_t = -rhs[2]
-        A = lhs[(1, 0)] @ K @ lhs[(0, 1)]
-        D = R_ineq + TL_ineq @ K @ L_ineq_adj
-        alpha = 0.5*(np.linalg.norm(A)/ np.linalg.norm(local_auxs["y"]))
-        delta = 0.5*(np.linalg.norm(D) / np.linalg.norm(local_auxs["t"]))
-        A += alpha*local_auxs["y"]
-        B = -lhs[(1, 0)] @ K @ L_ineq_adj
-        C = TL_ineq @ K @ (-lhs[(0, 1)])
-        D += delta*local_auxs["t"]
-
-        u = -lhs[(1, 0)] @ KR_dmk + R_p - A @ prev_y - B @ prev_t
-        v = TL_ineq @ KR_dmk - R_t - C @ prev_y - D @ prev_t
-        D_inv = scip.linalg.inv(D, check_finite=False)
-        sol = scip.linalg.solve(A - B @ D_inv @ C, u - B @ (D_inv @ v), check_finite=False, assume_a="gen")
-        t = D_inv @ (v - C @ sol) + prev_t
-        y = sol + prev_y
-        R_dmL_eq_adj_yt = lhs[(0, 1)] @ y - L_ineq_adj @ t - R_d
-        x = K @ R_dmL_eq_adj_yt - k
-        z = -inv_I * R_dmL_eq_adj_yt
-        return np.vstack((x, y, t, z))
-
     A = lhs[(1, 0)] @ forward_backward_sub(L_L_Z, (L_X * inv_I.reshape(1, -1)) @ lhs[(0, 1)])
     A = A + 0.5*(np.linalg.norm(A)/ np.linalg.norm(local_auxs["y"]))*local_auxs["y"]
     b = -lhs[(1, 0)] @ KR_dmk + R_p - A @ prev_y
