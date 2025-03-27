@@ -336,7 +336,7 @@ def tt_block_gmres(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, local_sol
     nrmsc = np.ones(block_size)
     normx = np.ones((d - 1))
     real_tol = (tol / np.sqrt(d))*np.ones(d-1)
-    size_limit = 2*np.sqrt(d)*d
+    size_limit = 2 + 2*np.sqrt(d)*d
 
     for swp in range(nswp):
         if rank_weighted_error:

@@ -26,22 +26,23 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
     rhs[:, 1] = einsum('br,bmB,BR->rmR', Xb_k[1], nrmsc[1] * block_b_k[1], Xb_k1[1]) if 1 in block_b_k else 0
     rhs[:, 2] = einsum('br,bmB,BR->rmR', Xb_k[2], nrmsc[2] * block_b_k[2], Xb_k1[2]) if 2 in block_b_k else 0
     norm_rhs = np.linalg.norm(rhs)
-    if m <= np.inf: #size_limit:
+    if m <= size_limit:
         mR_d = rhs[:, 0].reshape(m, 1)
         mR_p = rhs[:, 1].reshape(m, 1)
         mR_c = rhs[:, 2].reshape(m, 1)
         L_L_Z = scip.linalg.cholesky(
             einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(2, 0)], block_A_k[(2, 0)], XAX_k1[(2, 0)]).reshape(m, m),
-            check_finite=False, overwrite_a=True, lower=True
+            check_finite=False, lower=True, overwrite_a=True
         )
         L_X = einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(2, 2)], block_A_k[(2, 2)], XAX_k1[(2, 2)]).reshape(m, m)
         mL_eq = einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(1, 0)], block_A_k[(1, 0)], XAX_k1[(1, 0)]).reshape(m, m)
         mL_eq_adj = einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(0, 1)], block_A_k[(0, 1)], XAX_k1[(0, 1)]).reshape(m, m)
         K = einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(1, 1)], block_A_k[(1, 1)], XAX_k1[(1, 1)]).reshape(m, m)
-        inv_I = np.divide(1, np.diagonal(einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(0, 2)], block_A_k[(0, 2)], XAX_k1[(0, 2)]).reshape(m, m))).reshape(-1, 1)
+        inv_I = np.divide(1, einsum('lsr,smnS,LSR->lmL', XAX_k[(0, 2)], block_A_k[(0, 2)], XAX_k1[(0, 2)]).reshape(1, -1))
         A = mL_eq @ forward_backward_sub(L_L_Z, L_X * inv_I) @ mL_eq_adj + K
-        b = mR_p - mL_eq @ forward_backward_sub(L_L_Z, mR_c - (L_X * inv_I.reshape(1, -1)) @ mR_d) - A @ np.transpose(previous_solution[:, None, 1], (1, 0, 2, 3)).reshape(-1, 1)
+        b = mR_p - mL_eq @ forward_backward_sub(L_L_Z, mR_c - (L_X * inv_I.reshape(1, -1)) @ mR_d) - A @ np.transpose(previous_solution, (1, 0, 2, 3))[1].reshape(-1, 1)
         y = scip.linalg.solve(A, b, check_finite=False, overwrite_a=True, overwrite_b=True)
+        y += np.transpose(previous_solution, (1, 0, 2, 3))[1].reshape(-1, 1)
         x = forward_backward_sub(L_L_Z, mR_c - (L_X * inv_I) @ (mR_d - mL_eq_adj @ y))
         z = inv_I.reshape(-1, 1) * (mR_d - mL_eq_adj @ y)
         solution_now = np.transpose(np.vstack((x, y, z)).reshape(*x_shape), (1, 0, 2, 3))
@@ -56,45 +57,14 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         solution_now, info = scipy.sparse.linalg.bicgstab(linear_op, np.transpose(
             rhs - _block_local_product(XAX_k, block_A_k, XAX_k1, previous_solution), (1, 0, 2, 3)).reshape(-1, 1),
                                                           rtol=rtol)
-        solution_now = np.transpose(solution_now.reshape(*x_shape), (1, 0, 2, 3))
+        solution_now = np.transpose(solution_now.reshape(*x_shape), (1, 0, 2, 3)) + previous_solution
 
-    solution_now += previous_solution
-    block_res_new = np.linalg.norm(
-        _block_local_product(XAX_k, block_A_k, XAX_k1, solution_now) - rhs) / norm_rhs
-    block_res_old = np.linalg.norm(
-        _block_local_product(XAX_k, block_A_k, XAX_k1, previous_solution) - rhs) / norm_rhs
+    block_res_old = np.linalg.norm(_block_local_product(XAX_k, block_A_k, XAX_k1, previous_solution) - rhs) / norm_rhs
 
-    if block_res_old < block_res_new:
+    if block_res_old < np.linalg.norm(_block_local_product(XAX_k, block_A_k, XAX_k1, solution_now) - rhs) / norm_rhs:
         solution_now = previous_solution
 
     return solution_now, block_res_old
-
-
-def ipm_solve_local_system(prev_sol, lhs, rhs, local_auxs, num_blocks, eps):
-    k =  num_blocks - 1
-    L_Z = lhs[(k, 0)]
-    block_dim = L_Z.shape[-1]
-    prev_y = prev_sol[block_dim:2*block_dim]
-
-    L_L_Z = scip.linalg.cholesky(L_Z, check_finite=False, overwrite_a=True, lower=True)
-    I = lhs[(0, k)]
-    inv_I = np.divide(1, np.diagonal(I)).reshape(-1, 1) # Don't produce diagonal matrix to save memory
-    L_X = lhs[(k, k)]
-    dual_nonzero = 0 in rhs
-    primal_nonzero = 1 in rhs
-    R_d = rhs[0] if dual_nonzero else 0
-    R_p = rhs[1] if primal_nonzero else 0
-    KR_dmk = -forward_backward_sub(L_L_Z, ((L_X * inv_I.reshape(1, -1)) @ R_d if dual_nonzero else 0) - rhs[2])
-
-    A = lhs[(1, 0)] @ forward_backward_sub(L_L_Z, (L_X * inv_I.reshape(1, -1)) @ lhs[(0, 1)])
-    A = A + 0.5*(np.linalg.norm(A)/ np.linalg.norm(local_auxs["y"]))*local_auxs["y"]
-    b = -lhs[(1, 0)] @ KR_dmk + R_p - A @ prev_y
-    sol = scip.linalg.solve(A, b, overwrite_a=True, overwrite_b=True, check_finite=False)
-    y = sol + prev_y
-    R_dmL_eq_adj_y = lhs[(0, 1)] @ y - R_d
-    x = forward_backward_sub(L_L_Z, (L_X * inv_I.reshape(1, -1)) @ R_dmL_eq_adj_y + rhs[2])
-    z = -inv_I * R_dmL_eq_adj_y
-    return np.vstack((x, y, z))
 
 
 def tt_infeasible_newton_system(
