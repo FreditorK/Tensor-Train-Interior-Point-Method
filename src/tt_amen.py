@@ -336,14 +336,13 @@ def tt_block_gmres(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, local_sol
     nrmsc = np.ones(block_size)
     normx = np.ones((d - 1))
     real_tol = (tol / np.sqrt(d))*np.ones(d-1)
-    size_limit = 2 + 2*np.sqrt(d)*d
+    size_limit = d + 2*np.sqrt(d)*d
 
     for swp in range(nswp):
         if rank_weighted_error:
             weights = rx[1:-1] * rx[:-2] + rx[1:-1] * rx[2:]
             rank_percent = np.sqrt(weights/np.sum(weights))
             real_tol = tol*rank_percent
-            print(f"Weighting {swp}", np.round(rank_percent, decimals=2))
 
         for k in range(d - 1, 0, -1):
             if swp > 0:
@@ -352,7 +351,7 @@ def tt_block_gmres(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, local_sol
             # right to left orthogonalisation of x_cores
             core = np.reshape(x_cores[k], (rx[k]*block_size, N[k]*rx[k + 1])).T
             Umat, s, Vmat = scip.linalg.svd(core, full_matrices=False, check_finite=False, overwrite_a=True)#
-            shifted_r = prune_singular_vals(s, 0)
+            shifted_r = prune_singular_vals(s, real_tol[k-1])
             Vmat = s[:shifted_r].reshape(-1, 1) * Vmat[:shifted_r]
 
             x_cores[k] = np.reshape(Umat[:, :shifted_r].T, (shifted_r, N[k], rx[k + 1]))
@@ -363,7 +362,6 @@ def tt_block_gmres(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, local_sol
             rx[k] = shifted_r
 
             XAX[k] = {(i, j):  _compute_phi_bck_A(XAX[k + 1][(i, j)], x_cores[k], block_A[k][(i, j)], x_cores[k]) for (i, j) in block_A[k]}
-
             row_A = np.zeros(block_size)
             indices, values = zip(*[(i, np.sum(np.square(XAX[k][(i, j)]))) for (i, j) in block_A[k]])
             np.add.at(row_A, np.array(indices), np.array(values))
@@ -386,9 +384,9 @@ def tt_block_gmres(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, local_sol
 
             # bring block dimension to front
             previous_solution = x_cores[k]
-            solution_now, block_res = local_solver(XAX[k], block_A[k], XAX[k+1], Xb[k], block_b[k], Xb[k+1], previous_solution, nrmsc, size_limit, real_tol[k-1])
+            solution_now, block_res_old, block_res_new, rhs, norm_rhs = local_solver(XAX[k], block_A[k], XAX[k+1], Xb[k], block_b[k], Xb[k+1], previous_solution, nrmsc, size_limit, real_tol[k-1])
 
-            local_res = max(local_res, block_res)
+            local_res = max(local_res, block_res_old)
             dx = np.linalg.norm(solution_now - previous_solution) / np.linalg.norm(solution_now)
             local_dx = max(dx, local_dx)
 
@@ -398,7 +396,12 @@ def tt_block_gmres(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, local_sol
             if k < d - 1:
                 u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True)
                 v = s.reshape(-1, 1) * v
-                r = prune_singular_vals(s, 0)
+                for r in range(u.shape[1] - 1, 0, -1):
+                    solution = np.reshape(u[:, :r] @ v[:r, :], (rx[k], N[k], block_size, rx[k + 1]))
+                    res = np.linalg.norm(_block_local_product(XAX[k], block_A[k], XAX[k+1], np.transpose(solution, (0, 2, 1, 3))) - rhs) / norm_rhs
+                    if res > max(2 * real_tol[k], block_res_new):
+                        break
+                r += 1
                 v = einsum("rbR, Rdk -> rbdk", v[:r, :].reshape(-1, block_size, x_cores[k + 1].shape[0]), x_cores[k + 1]) #  enriched_r x b x d x rx[k+1]
 
                 nrmsc *= normA[:, k] * normx[k] / normb[:, k]
@@ -409,7 +412,6 @@ def tt_block_gmres(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, local_sol
                 rx[k + 1] = r
 
                 XAX[k + 1] = {(i, j): _compute_phi_fwd_A(XAX[k][(i, j)], x_cores[k], block_A[k][(i, j)], x_cores[k]) for (i, j) in block_A[k]}
-
                 row_A = np.zeros(block_size)
                 indices, values = zip(*[(i, np.sum(np.square(XAX[k+1][(i, j)]))) for (i, j) in block_A[k]])
                 np.add.at(row_A, np.array(indices), np.array(values))
@@ -431,11 +433,11 @@ def tt_block_gmres(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, local_sol
 
         if verbose:
             print('Starting Sweep:\n\tMax num of sweeps: %d' % swp)
-            print(f'\tResidual {local_res} \n')
-            print(f"\tTT-sol rank: {tt_ranks(x_cores)} \n")
+            print(f'\tResidual {local_res}')
+            print(f"\tTT-sol rank: {tt_ranks(x_cores)}")
+            print(f"\tRank-weighting: {np.round(rank_percent, decimals=2)} \n")
 
         if local_res < tol or local_dx < eps:
-            print( local_res < tol,local_dx < eps)
             break
 
 
@@ -505,7 +507,7 @@ def _default_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, prev
     if block_res_old < block_res_new:
         solution_now = previous_solution
 
-    return solution_now, block_res_old
+    return solution_now, block_res_old, min(block_res_old, block_res_new), rhs, norm_rhs
 
 
 
