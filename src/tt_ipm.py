@@ -16,6 +16,26 @@ def forward_backward_sub(L, b):
     x = scip.linalg.solve_triangular(L.T, y, lower=False, check_finite=False, overwrite_b=True)
     return x
 
+
+def approximate_inverse(M, k):
+    # Step 1: Compute eigenvalues and eigenvectors
+    eigvals, eigvecs = scip.sparse.linalg.eigsh(M, k, which="LM")  # For symmetric M
+    min_eigval, _ = scip.sparse.linalg.eigsh(M, 1, which="SA")
+    idx = np.argsort(np.abs(eigvals))[::-1]  # Sort by absolute magnitude
+    eigvals = eigvals[idx]
+    eigvecs = eigvecs[:, idx]
+
+    lambda_k = eigvals[:k]  # Top-k eigenvalues
+    V_k = eigvecs[:, :k]  # Top-k eigenvectors
+    t = (min_eigval + eigvals[k-1])/2
+    V_k = V_k @ np.diag(np.sqrt(lambda_k))
+
+    S_inv = np.linalg.inv(t*np.eye(k) + V_k.T @ V_k)
+
+    M_inv_approx = np.eye(M.shape[0]) / t - (1/t)*V_k @ S_inv @V_k.T
+
+    return M_inv_approx
+
 def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous_solution, nrmsc, size_limit, rtol):
     x_shape = previous_solution.shape
     block_size = x_shape[1]
@@ -38,9 +58,8 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         L_X = einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(2, 2)], block_A_k[(2, 2)], XAX_k1[(2, 2)], optimize="greedy").reshape(m, m)
         mL_eq = einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(1, 0)], block_A_k[(1, 0)], XAX_k1[(1, 0)], optimize="greedy").reshape(m, m)
         mL_eq_adj = einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(0, 1)], block_A_k[(0, 1)], XAX_k1[(0, 1)], optimize="greedy").reshape(m, m)
-        K = einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(1, 1)], block_A_k[(1, 1)], XAX_k1[(1, 1)], optimize="greedy").reshape(m, m)
         inv_I = np.divide(1, einsum('lsr,smnS,LSR->lmL', XAX_k[(0, 2)], block_A_k[(0, 2)], XAX_k1[(0, 2)], optimize="greedy").reshape(1, -1))
-        A = mL_eq @ forward_backward_sub(L_L_Z, L_X * inv_I) @ mL_eq_adj + K
+        A = mL_eq @ forward_backward_sub(L_L_Z, L_X * inv_I) @ mL_eq_adj + einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(1, 1)], block_A_k[(1, 1)], XAX_k1[(1, 1)], optimize="greedy").reshape(m, m)
         b = mR_p - mL_eq @ forward_backward_sub(L_L_Z, mR_c - (L_X * inv_I.reshape(1, -1)) @ mR_d) - A @ np.transpose(previous_solution, (1, 0, 2, 3))[1].reshape(-1, 1)
         y = scip.linalg.solve(A, b, check_finite=False, overwrite_a=True, overwrite_b=True) + np.transpose(previous_solution, (1, 0, 2, 3))[1].reshape(-1, 1)
         x = forward_backward_sub(L_L_Z, mR_c - (L_X * inv_I) @ (mR_d - mL_eq_adj @ y))
@@ -58,7 +77,8 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         solution_now, info = scipy.sparse.linalg.bicgstab(
             linear_op,
             np.transpose(rhs - _block_local_product(XAX_k, block_A_k, XAX_k1, previous_solution), (1, 0, 2, 3)).reshape(-1, 1),
-            rtol=rtol
+            rtol=rtol,
+            maxiter=100
         )
         solution_now = np.transpose(solution_now.reshape(*x_shape), (1, 0, 2, 3)) + previous_solution
 
@@ -228,6 +248,28 @@ def _tt_ipm_newton_step(
         op_tol,
         rank_weighted_error=True
     )
+    m = 2**(2*dim)
+    H = np.zeros((3*m, 3*m))
+    for (i, j) in lhs_matrix_tt:
+        H[i*m:(i+1)*m, j*m:(j+1)*m] = tt_matrix_to_matrix(lhs_matrix_tt[(i, j)])
+
+    print("--------------------------")
+    print("Cond: ", np.linalg.cond(H))
+    A = H[0*m:2*m, 0*m:2*m]
+    B = H[0*m:2*m, 2*m:3*m]
+    C = H[2 * m:3 * m, 0 * m:2 * m]
+    D = H[2 * m:3 * m, 2 * m:3 * m]
+    D_inv = approximate_inverse(D, 4)
+    S_inv = np.linalg.inv(A - B @ D_inv @ C)
+    #print(np.linalg.cond(A - B @ D_inv @ C))
+    H = scip.linalg.block_diag(S_inv, D_inv) @ H
+    #approx_inv = approximate_inverse(H[2*m:(2+1)*m, 2*m:(2+1)*m], 2)
+    #H[2*m:(2+1)*m, 2*m:(2+1)*m] = approx_inv @ H[2*m:(2+1)*m, 2*m:(2+1)*m]
+    #approx_inv = approximate_inverse(H[0:2 * m, 0:2 * m], 2)
+    #H[0:2 * m, 0:2 * m] = approx_inv @ H[0:2 * m, 0:2 * m]
+    print("Cond: ", np.linalg.cond(H))
+    print("--------------------------")
+
     Delta_tt, res = solver(lhs_matrix_tt, rhs_vec_tt, Delta_tt, 4)
     Delta_X_tt = tt_rank_reduce(tt_reshape(_tt_get_block(0, Delta_tt), (2, 2)), eps=op_tol, rank_weighted_error=True)
     Delta_Y_tt = tt_rank_reduce(tt_reshape(_tt_get_block(1, Delta_tt), (2, 2)), eps=op_tol, rank_weighted_error=True)
