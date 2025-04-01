@@ -2,17 +2,10 @@ import copy
 import sys
 import os
 import time
-from types import new_class
-
-import numpy as np
-import scipy.linalg
-
-from src.tt_eig import tt_min_eig
 
 sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
-from src.tt_ops import _block_diag_tensor
 from cy_src.ops_cy import *
 from src.tt_amen import _compute_phi_bck_A
 
@@ -204,7 +197,7 @@ def tt_pd_optimal_step_size(A, Delta, op_tol, nswp=10, eps=1e-12, verbose=False)
             else:
                 try:
                     L = scip.linalg.cholesky(B, check_finite=False, lower=True)
-                    L_inv = scipy.linalg.solve_triangular(L, np.eye(L.shape[0]), lower=True)
+                    L_inv = scip.linalg.solve_triangular(L, np.eye(L.shape[0]), lower=True)
                     local_step_size_inv, _ = scip.sparse.linalg.eigsh(-L_inv @ D @ L_inv.T, k=1, which="LA")
                     step_size = min(step_size, (1 - op_tol) / local_step_size_inv[0])
                 except:

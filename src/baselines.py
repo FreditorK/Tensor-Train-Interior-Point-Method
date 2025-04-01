@@ -51,8 +51,7 @@ def sketchy_cgal(obj_matrix, constraint_matrices, bias, trace_params, R=1, duali
     p = 0
     current_trace = 0
     for it in range(1, num_iter):
-        constraint_term = sum(
-            [A.T * (y_i + lag_mul_2 * r) for A, y_i, r in zip(constraint_matrices, lag_mul_1.flatten(), res.flatten())])
+        constraint_term = sum(A.T * (y_i + lag_mul_2 * r) for A, y_i, r in zip(constraint_matrices, lag_mul_1.flatten(), res.flatten()))
         sdp_gradient = obj_matrix + constraint_term
         norm = np.linalg.norm(sdp_gradient)
         sdp_gradient = sdp_gradient / norm
@@ -79,14 +78,15 @@ def sketchy_cgal(obj_matrix, constraint_matrices, bias, trace_params, R=1, duali
     U, Lambda = nystrom_sketch_reconstruct(S, Omega)
     U = U[:, :R]
     Lambda = Lambda + (current_trace - np.trace(Lambda)) * np.eye(R) / R
-    print("Converged after {} iterations".format(it))
+    if verbose:
+        print("Converged after {} iterations".format(it))
     X = U @ Lambda @ U.T
     min_eig_val, eig = scp.sparse.linalg.eigsh(2 * np.eye(sdp_gradient.shape[0]) - sdp_gradient, k=1, which='LM')
     min_eig_val = (2 - min_eig_val) * norm
     current_trace_param = trace_params[0] if min_eig_val > 0 else trace_params[1]
     duality_gap = np.trace(obj_matrix @ X) + np.trace(constraint_term @ X) - current_trace_param * min_eig_val
     duality_gaps.append(duality_gap)
-    return X, duality_gaps
+    return X, duality_gaps, {"num_iters": it}
 
 
 def power_method(matrix, num_iter=200):

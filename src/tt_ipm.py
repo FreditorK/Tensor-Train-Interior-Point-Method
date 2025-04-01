@@ -1,13 +1,9 @@
-import copy
 import sys
 import os
-
-import scipy.sparse.linalg
 
 sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
-from src.tt_ops import tt_rank_reduce
 from src.tt_amen import tt_block_gmres, _block_local_product
 from src.tt_ineq_check import tt_pd_optimal_step_size
 
@@ -20,7 +16,7 @@ def forward_backward_sub(L, b):
 def approximate_inverse(M, k):
     # Step 1: Compute eigenvalues and eigenvectors
     eigvals, eigvecs = scip.sparse.linalg.eigsh(M, k, which="LM")  # For symmetric M
-    min_eigval, _ = scip.sparse.linalg.eigsh(M, 1, which="SA")
+    min_eigval = np.min(eigvals) / 2
     idx = np.argsort(np.abs(eigvals))[::-1]  # Sort by absolute magnitude
     eigvals = eigvals[idx]
     eigvecs = eigvecs[:, idx]
@@ -36,18 +32,54 @@ def approximate_inverse(M, k):
 
     return M_inv_approx
 
+def _block_diag_local_product(XAX_k, block_A_k, XAX_kp1, x_core, blocks):
+    result = np.zeros_like(x_core)
+    for (i, j) in blocks:
+        result[:, i % x_core.shape[1]] += einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[(i, j)], block_A_k[(i, j)], XAX_kp1[(i, j)], x_core[:, j % x_core.shape[1]],  optimize="greedy")
+    return result
+
+def _ipm_m_free_approx_inv(XAX_k, block_A_k, XAX_k1, x_shape, blocks, k):
+    block_size = x_shape[0]
+    m = np.prod(x_shape[1:])
+
+    def mat_vec(x_vec):
+        return np.transpose(_block_diag_local_product(
+            XAX_k, block_A_k, XAX_k1,
+            np.transpose(x_vec.reshape(*x_shape), (1, 0, 2, 3)),
+            blocks
+        ), (1, 0, 2, 3)).reshape(-1, 1)
+
+    linear_op = scip.sparse.linalg.LinearOperator((block_size * m, block_size * m), matvec=mat_vec)
+
+    eigvals, eigvecs = scip.sparse.linalg.eigsh(linear_op, k, which="LM")  # For symmetric M
+    min_eigval, _ = scip.sparse.linalg.eigsh(linear_op, 1, which="SA")
+    idx = np.argsort(np.abs(eigvals))[::-1]  # Sort by absolute magnitude
+    eigvals = eigvals[idx]
+    eigvecs = eigvecs[:, idx]
+
+    lambda_k = eigvals[:k]  # Top-k eigenvalues
+    V_k = eigvecs[:, :k]  # Top-k eigenvectors
+    t = (min_eigval + eigvals[k-1])/2
+    V_k = V_k @ np.diag(np.sqrt(lambda_k))
+
+    S_inv = np.linalg.inv(t*np.eye(k) + V_k.T @ V_k)
+
+    def block_inv_approx(x):
+        return (1/t)*(x - V_k @ (S_inv @ (V_k.T @ x)))
+
+    return block_inv_approx
+
 def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous_solution, nrmsc, size_limit, rtol):
     x_shape = previous_solution.shape
     block_size = x_shape[1]
     m = x_shape[0] * x_shape[2] * x_shape[3]
     x_shape = (x_shape[1], x_shape[0], x_shape[2], x_shape[3])
     rhs = np.zeros_like(previous_solution)
-    rhs[:, 0] = einsum('br,bmB,BR->rmR', Xb_k[0], nrmsc[0] * block_b_k[0], Xb_k1[0]) if 0 in block_b_k else 0
-    rhs[:, 1] = einsum('br,bmB,BR->rmR', Xb_k[1], nrmsc[1] * block_b_k[1], Xb_k1[1]) if 1 in block_b_k else 0
-    rhs[:, 2] = einsum('br,bmB,BR->rmR', Xb_k[2], nrmsc[2] * block_b_k[2], Xb_k1[2]) if 2 in block_b_k else 0
+    rhs[:, 0] = einsum('br,bmB,BR->rmR', Xb_k[0], nrmsc * block_b_k[0], Xb_k1[0], optimize="greedy") if 0 in block_b_k else 0
+    rhs[:, 1] = einsum('br,bmB,BR->rmR', Xb_k[1], nrmsc * block_b_k[1], Xb_k1[1], optimize="greedy") if 1 in block_b_k else 0
+    rhs[:, 2] = einsum('br,bmB,BR->rmR', Xb_k[2], nrmsc * block_b_k[2], Xb_k1[2], optimize="greedy") if 2 in block_b_k else 0
     norm_rhs = np.linalg.norm(rhs)
     if m <= size_limit:
-        print("Full solve!")
         mR_d = rhs[:, 0].reshape(m, 1)
         mR_p = rhs[:, 1].reshape(m, 1)
         mR_c = rhs[:, 2].reshape(m, 1)
@@ -66,15 +98,15 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         z = inv_I.reshape(-1, 1) * (mR_d - mL_eq_adj @ y)
         solution_now = np.transpose(np.vstack((x, y, z)).reshape(*x_shape), (1, 0, 2, 3))
     else:
-        print("Sparse solve!")
         def mat_vec(x_vec):
-            return np.transpose(_block_local_product(
+            x_vec = np.transpose(_block_local_product(
                 XAX_k, block_A_k, XAX_k1,
                 np.transpose(x_vec.reshape(*x_shape), (1, 0, 2, 3))
             ), (1, 0, 2, 3)).reshape(-1, 1)
+            return x_vec
 
-        linear_op = scipy.sparse.linalg.LinearOperator((block_size * m, block_size * m), matvec=mat_vec)
-        solution_now, info = scipy.sparse.linalg.bicgstab(
+        linear_op = scip.sparse.linalg.LinearOperator((block_size * m, block_size * m), matvec=mat_vec)
+        solution_now, info = scip.sparse.linalg.bicgstab(
             linear_op,
             np.transpose(rhs - _block_local_product(XAX_k, block_A_k, XAX_k1, previous_solution), (1, 0, 2, 3)).reshape(-1, 1),
             rtol=rtol,
@@ -186,7 +218,8 @@ def _tt_ipm_newton_step(
             eps,
             active_ineq,
             solver,
-            direction
+            direction,
+            verbose
 ):
     lhs_matrix_tt, rhs_vec_tt, primal_dual_error = tt_infeasible_newton_system(
         lhs_skeleton,
@@ -208,7 +241,8 @@ def _tt_ipm_newton_step(
         eps
     )
     # Predictor
-    print("--- Predictor  step ---")
+    if verbose:
+        print("--- Predictor  step ---")
     idx_add = int(active_ineq)
     Delta_tt, res = solver(lhs_matrix_tt, rhs_vec_tt, None, 5)
     Delta_X_tt = tt_rank_reduce(tt_reshape(_tt_get_block(0, Delta_tt), (2, 2)), eps=op_tol, rank_weighted_error=True)
@@ -223,7 +257,8 @@ def _tt_ipm_newton_step(
     )
 
     #Corrector
-    print("\n--- Centering-Corrector  step ---")
+    if verbose:
+        print("\n--- Centering-Corrector  step ---")
     dim = len(Z_tt)
     P = tt_identity(dim)
     if direction == "XZ":
@@ -248,27 +283,6 @@ def _tt_ipm_newton_step(
         op_tol,
         rank_weighted_error=True
     )
-    m = 2**(2*dim)
-    H = np.zeros((3*m, 3*m))
-    for (i, j) in lhs_matrix_tt:
-        H[i*m:(i+1)*m, j*m:(j+1)*m] = tt_matrix_to_matrix(lhs_matrix_tt[(i, j)])
-
-    print("--------------------------")
-    print("Cond: ", np.linalg.cond(H))
-    A = H[0*m:2*m, 0*m:2*m]
-    B = H[0*m:2*m, 2*m:3*m]
-    C = H[2 * m:3 * m, 0 * m:2 * m]
-    D = H[2 * m:3 * m, 2 * m:3 * m]
-    D_inv = approximate_inverse(D, 4)
-    S_inv = np.linalg.inv(A - B @ D_inv @ C)
-    #print(np.linalg.cond(A - B @ D_inv @ C))
-    H = scip.linalg.block_diag(S_inv, D_inv) @ H
-    #approx_inv = approximate_inverse(H[2*m:(2+1)*m, 2*m:(2+1)*m], 2)
-    #H[2*m:(2+1)*m, 2*m:(2+1)*m] = approx_inv @ H[2*m:(2+1)*m, 2*m:(2+1)*m]
-    #approx_inv = approximate_inverse(H[0:2 * m, 0:2 * m], 2)
-    #H[0:2 * m, 0:2 * m] = approx_inv @ H[0:2 * m, 0:2 * m]
-    print("Cond: ", np.linalg.cond(H))
-    print("--------------------------")
 
     Delta_tt, res = solver(lhs_matrix_tt, rhs_vec_tt, Delta_tt, 4)
     Delta_X_tt = tt_rank_reduce(tt_reshape(_tt_get_block(0, Delta_tt), (2, 2)), eps=op_tol, rank_weighted_error=True)
@@ -365,10 +379,10 @@ def tt_ipm(
         T_tt = tt_reshape(tt_fast_matrix_vec_mul(lin_op_tt_ineq_adj, tt_reshape(tt_one_matrix(dim), (4, )), eps), (2, 2))
         T_tt = tt_normalise(T_tt)
     Z_tt = tt_identity(dim)
-    iter = 0
+    iteration = 0
     last = False
     prev_pd_error = np.inf
-    for iter in range(1, max_iter):
+    for iteration in range(1, max_iter):
         x_step_size, z_step_size, Delta_X_tt, Delta_Y_tt, Delta_Z_tt, pd_error, mu, sigma = _tt_ipm_newton_step(
             obj_tt,
             lhs_skeleton,
@@ -388,18 +402,17 @@ def tt_ipm(
             active_ineq,
             solver,
             direction,
+            verbose
         )
         if (np.less(pd_error, feasibility_tol) or np.less(np.abs(prev_pd_error - pd_error), op_tol)) and np.less(mu, centrality_tol):
             last = True
-        #print("Before", scip.linalg.eigvalsh(tt_matrix_to_matrix(tt_add(X_tt, tt_scale(x_step_size, Delta_X_tt))))[0])
         X_tt = tt_rank_reduce(tt_add(X_tt, tt_scale(x_step_size, Delta_X_tt)), eps=op_tol, rank_weighted_error=True)
-        #print("After", scip.linalg.eigvalsh(tt_matrix_to_matrix(X_tt))[0])
         Y_tt = tt_add(Y_tt, tt_scale(z_step_size, Delta_Y_tt))
         Y_tt = tt_rank_reduce(tt_sub(Y_tt, tt_reshape(tt_fast_matrix_vec_mul(lag_maps["y"], tt_reshape(Y_tt, shape=(4, )), eps), (2, 2))), eps=op_tol, rank_weighted_error=True)
         Z_tt = tt_rank_reduce(tt_add(Z_tt, tt_scale(z_step_size, Delta_Z_tt)), eps=op_tol, rank_weighted_error=True)
 
         if verbose:
-            print(f"---Step {iter}---")
+            print(f"---Step {iteration}---")
             print(f"Step sizes: {x_step_size}, {z_step_size}")
             print(f"Duality Gap: {100 * np.abs(mu):.4f}%")
             print(f"Primal-Dual error: {pd_error:.8f}")
@@ -413,5 +426,5 @@ def tt_ipm(
         prev_pd_error = pd_error
     if verbose:
         print(f"---Terminated---")
-        print(f"Converged in {iter} iterations.")
-    return X_tt, Y_tt, T_tt, Z_tt
+        print(f"Converged in {iteration} iterations.")
+    return X_tt, Y_tt, T_tt, Z_tt, {"num_iters": iteration}
