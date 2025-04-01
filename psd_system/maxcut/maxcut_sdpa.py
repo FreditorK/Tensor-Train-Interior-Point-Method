@@ -35,14 +35,12 @@ if __name__ == "__main__":
         t1 = time.time()
         constraint_matrices = [np.outer(column, column) for column in np.eye(C.shape[0])]
         bias = np.ones((C.shape[0], 1))
-        trace_param = np.sum(bias)
         if args.track_mem:
             tracemalloc.start()  # Start memory tracking
         t2 = time.time()
         X = cp.Variable(C.shape, PSD=True)
         constraints = [X >> 0]
         constraints += [cp.trace(A.T @ X) == b for A, b in zip(constraint_matrices, bias.flatten())]
-        constraints += [cp.trace(X) == trace_param]
         t2 = time.time()
         prob = cp.Problem(cp.Maximize(cp.trace(C.T @ X)), constraints)
         _ = prob.solve(solver=cp.SDPA, epsilonStar=config["centrality_tol"], epsilonDash=config["feasibility_tol"])
