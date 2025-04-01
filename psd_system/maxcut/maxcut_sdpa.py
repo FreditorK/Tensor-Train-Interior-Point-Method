@@ -43,7 +43,7 @@ if __name__ == "__main__":
         constraints += [cp.trace(A.T @ X) == b for A, b in zip(constraint_matrices, bias.flatten())]
         t2 = time.time()
         prob = cp.Problem(cp.Maximize(cp.trace(C.T @ X)), constraints)
-        _ = prob.solve(solver=cp.SDPA, epsilonStar=config["centrality_tol"], epsilonDash=config["feasibility_tol"])
+        _ = prob.solve(solver=cp.SDPA, epsilonStar=0.2*config["centrality_tol"], epsilonDash=config["feasibility_tol"])
         X = X.value
         for m in prob.solution.dual_vars.values():
             if type(m) == np.ndarray:
