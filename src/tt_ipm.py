@@ -13,24 +13,21 @@ def forward_backward_sub(L, b):
     return x
 
 
-def approximate_inverse(M, k):
+def approximate(M, k):
     # Step 1: Compute eigenvalues and eigenvectors
+    k = k + 1
     eigvals, eigvecs = scip.sparse.linalg.eigsh(M, k, which="LM")  # For symmetric M
-    min_eigval = np.min(eigvals) / 2
+    min_eigval, _ = scip.sparse.linalg.eigsh(M, 1, which="SM")
     idx = np.argsort(np.abs(eigvals))[::-1]  # Sort by absolute magnitude
     eigvals = eigvals[idx]
     eigvecs = eigvecs[:, idx]
 
-    lambda_k = eigvals[:k]  # Top-k eigenvalues
-    V_k = eigvecs[:, :k]  # Top-k eigenvectors
+    #lambda_k = eigvals[:k]  # Top-k eigenvalues
+    V_k = eigvecs[:, :k-1]  # Top-k eigenvectors
     t = (min_eigval + eigvals[k-1])/2
-    V_k = V_k @ np.diag(np.sqrt(lambda_k))
+    M_approx = t*np.eye(M.shape[1]) + V_k @ (np.diag(eigvals[:k-1]) - t*np.eye(k-1)) @ V_k.T
 
-    S_inv = np.linalg.inv(t*np.eye(k) + V_k.T @ V_k)
-
-    M_inv_approx = np.eye(M.shape[0]) / t - (1/t)*V_k @ S_inv @V_k.T
-
-    return M_inv_approx
+    return M_approx
 
 def _block_diag_local_product(XAX_k, block_A_k, XAX_kp1, x_core, blocks):
     result = np.zeros_like(x_core)
@@ -110,7 +107,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
             linear_op,
             np.transpose(rhs - _block_local_product(XAX_k, block_A_k, XAX_k1, previous_solution), (1, 0, 2, 3)).reshape(-1, 1),
             rtol=rtol,
-            maxiter=100
+            maxiter=10
         )
         solution_now = np.transpose(solution_now.reshape(*x_shape), (1, 0, 2, 3)) + previous_solution
 
@@ -168,7 +165,7 @@ def tt_infeasible_newton_system(
     dual_feas = tt_sub(tt_fast_matrix_vec_mul(lin_op_tt_adj, Y_tt, eps), tt_add(Z_tt, obj_tt))
     primal_feas = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(lin_op_tt, X_tt, eps), bias_tt), op_tol, rank_weighted_error=True)  # primal feasibility
     primal_error = tt_inner_prod(primal_feas, primal_feas)
-    if primal_error > feasibility_tol:
+    if primal_error > 0.5*feasibility_tol:
         rhs[1] = primal_feas
 
     if active_ineq:
@@ -184,7 +181,7 @@ def tt_infeasible_newton_system(
 
     dual_feas = tt_rank_reduce(dual_feas, op_tol, rank_weighted_error=True)
     dual_error = tt_inner_prod(dual_feas, dual_feas)
-    if dual_error > feasibility_tol:
+    if dual_error > 0.5*feasibility_tol:
         rhs[0] = dual_feas
 
     XZ_term = tt_fast_matrix_vec_mul(L_X, Z_tt, eps)
@@ -240,6 +237,7 @@ def _tt_ipm_newton_step(
         direction,
         eps
     )
+    dim = len(Z_tt)
     # Predictor
     if verbose:
         print("--- Predictor  step ---")
@@ -255,47 +253,70 @@ def _tt_ipm_newton_step(
         Delta_X_tt, Delta_Z_tt,
         op_tol, eps
     )
-
-    #Corrector
-    if verbose:
-        print("\n--- Centering-Corrector  step ---")
-    dim = len(Z_tt)
-    P = tt_identity(dim)
-    if direction == "XZ":
-        L_Z = tt_scale(-1, tt_rank_reduce(tt_kron(Delta_Z_tt, P), eps=op_tol, rank_weighted_error=True))
-        mu_mul = 1
-        # No rank increase for operators
-    else:
-        L_Z = tt_scale(-1, tt_rank_reduce(tt_add(tt_kron(P, Delta_Z_tt), tt_kron(Delta_Z_tt, P)), eps=op_tol, rank_weighted_error=True))
-        mu_mul = 2
-
     ZX = tt_inner_prod(Z_tt, X_tt)
-    sigma = ((ZX + x_step_size*z_step_size*tt_inner_prod(Delta_X_tt, Delta_Z_tt) + z_step_size*tt_inner_prod(X_tt, Delta_Z_tt) + x_step_size*tt_inner_prod(Delta_X_tt, Z_tt))/ZX)**3
     mu = min(np.divide(ZX, 2**dim), 0.999)
-    rhs_vec_tt[2 + idx_add] = tt_rank_reduce(
-        tt_add(
-            tt_scale(mu_mul*sigma*mu, tt_reshape(tt_identity(len(X_tt)), (4, ))),
+
+    if x_step_size < 0.99 or z_step_size < 0.99:
+        # Corrector
+        if verbose:
+            print("\n--- Centering-Corrector  step ---")
+        P = tt_identity(dim)
+        if direction == "XZ":
+            L_Z = tt_scale(-1, tt_rank_reduce(tt_kron(Delta_Z_tt, P), eps=op_tol, rank_weighted_error=True))
+            mu_mul = 1
+            # No rank increase for operators
+        else:
+            L_Z = tt_scale(-1, tt_rank_reduce(tt_add(tt_kron(P, Delta_Z_tt), tt_kron(Delta_Z_tt, P)), eps=op_tol,
+                                              rank_weighted_error=True))
+            mu_mul = 2
+        sigma = ((ZX + x_step_size * z_step_size * tt_inner_prod(Delta_X_tt, Delta_Z_tt) + z_step_size * tt_inner_prod(
+            X_tt, Delta_Z_tt) + x_step_size * tt_inner_prod(Delta_X_tt, Z_tt)) / ZX) ** 3
+        rhs_vec_tt[2 + idx_add] = tt_rank_reduce(
             tt_add(
-            rhs_vec_tt[2 + idx_add],
-            tt_fast_matrix_vec_mul(L_Z, tt_reshape(Delta_X_tt, (4, )), eps)
-            )
-        ),
-        op_tol,
-        rank_weighted_error=True
-    )
+                tt_scale(mu_mul*sigma*mu, tt_reshape(tt_identity(len(X_tt)), (4, ))),
+                tt_add(
+                rhs_vec_tt[2 + idx_add],
+                tt_fast_matrix_vec_mul(L_Z, tt_reshape(Delta_X_tt, (4, )), eps)
+                )
+            ),
+            op_tol,
+            rank_weighted_error=True
+        )
+        print("--------------------------")
+        m = 2 ** (2 * dim)
+        H = np.zeros((3 * m, 3 * m))
+        for (i, j) in lhs_matrix_tt:
+            H[i * m:(i + 1) * m, j * m:(j + 1) * m] = tt_matrix_to_matrix(lhs_matrix_tt[(i, j)])
+        print("Cond: ", np.linalg.cond(H))
+        A = H[0 * m:2 * m, 0 * m:2 * m]
+        B = H[0 * m:2 * m, 2 * m:3 * m]
+        C = H[2 * m:3 * m, 0 * m:2 * m]
+        D = H[2 * m:3 * m, 2 * m:3 * m]
+        Z = H[2 * m:3 * m, 0 * m:1 * m]
+        D = approximate(D, 6)
+        Z = approximate(Z, 6)
+        # print(np.linalg.cond(A - B @ D_inv @ C))
+        H = scip.linalg.block_diag(scip.linalg.fractional_matrix_power(D, 1/2), np.eye(len(Z)), scip.linalg.fractional_matrix_power(Z, -1/2)) @ H @ scip.linalg.block_diag(scip.linalg.fractional_matrix_power(Z, -1/2), np.eye(len(Z)), scip.linalg.fractional_matrix_power(D, -1/2))
+        # approx_inv = approximate_inverse(H[2*m:(2+1)*m, 2*m:(2+1)*m], 2)
+        # H[2*m:(2+1)*m, 2*m:(2+1)*m] = approx_inv @ H[2*m:(2+1)*m, 2*m:(2+1)*m]
+        # approx_inv = approximate_inverse(H[0:2 * m, 0:2 * m], 2)
+        # H[0:2 * m, 0:2 * m] = approx_inv @ H[0:2 * m, 0:2 * m]
+        print("Cond: ", np.linalg.cond(H))
+        print("--------------------------")
 
-    Delta_tt, res = solver(lhs_matrix_tt, rhs_vec_tt, Delta_tt, 4)
-    Delta_X_tt = tt_rank_reduce(tt_reshape(_tt_get_block(0, Delta_tt), (2, 2)), eps=op_tol, rank_weighted_error=True)
+        Delta_tt, res = solver(lhs_matrix_tt, rhs_vec_tt, Delta_tt, 4)
+        Delta_X_tt = tt_rank_reduce(tt_reshape(_tt_get_block(0, Delta_tt), (2, 2)), eps=op_tol, rank_weighted_error=True)
+        Delta_Z_tt = tt_rank_reduce(tt_reshape(_tt_get_block(2 + idx_add, Delta_tt), (2, 2)), eps=op_tol, rank_weighted_error=True)
+        Delta_X_tt = _tt_symmetrise(Delta_X_tt, op_tol)
+        Delta_Z_tt = _tt_symmetrise(Delta_Z_tt, op_tol)
+        x_step_size, z_step_size, _ = _tt_line_search(
+            X_tt, Z_tt,
+            Delta_X_tt, Delta_Z_tt,
+            op_tol, eps
+        )
+    else:
+        sigma = None
     Delta_Y_tt = tt_rank_reduce(tt_reshape(_tt_get_block(1, Delta_tt), (2, 2)), eps=op_tol, rank_weighted_error=True)
-    Delta_Z_tt = tt_rank_reduce(tt_reshape(_tt_get_block(2 + idx_add, Delta_tt), (2, 2)), eps=op_tol, rank_weighted_error=True)
-    Delta_X_tt = _tt_symmetrise(Delta_X_tt, op_tol)
-    Delta_Z_tt = _tt_symmetrise(Delta_Z_tt, op_tol)
-
-    x_step_size, z_step_size, _ = _tt_line_search(
-        X_tt, Z_tt,
-        Delta_X_tt, Delta_Z_tt,
-        op_tol, eps
-    )
 
     return x_step_size, z_step_size, Delta_X_tt, Delta_Y_tt, Delta_Z_tt, primal_dual_error, mu, sigma
 
@@ -410,13 +431,13 @@ def tt_ipm(
         Y_tt = tt_add(Y_tt, tt_scale(z_step_size, Delta_Y_tt))
         Y_tt = tt_rank_reduce(tt_sub(Y_tt, tt_reshape(tt_fast_matrix_vec_mul(lag_maps["y"], tt_reshape(Y_tt, shape=(4, )), eps), (2, 2))), eps=op_tol, rank_weighted_error=True)
         Z_tt = tt_rank_reduce(tt_add(Z_tt, tt_scale(z_step_size, Delta_Z_tt)), eps=op_tol, rank_weighted_error=True)
-
+        progress_percent = np.abs(mu)
         if verbose:
             print(f"---Step {iteration}---")
             print(f"Step sizes: {x_step_size}, {z_step_size}")
-            print(f"Duality Gap: {100 * np.abs(mu):.4f}%")
+            print(f"Duality Gap: {100*progress_percent:.4f}%")
             print(f"Primal-Dual error: {pd_error:.8f}")
-            print(f"Sigma: {sigma:.4f}")
+            print(f"Sigma: {sigma}")
             print(
                 f"Ranks X_tt: {tt_ranks(X_tt)}, Z_tt: {tt_ranks(Z_tt)}, \n"
                 f"      Y_tt: {tt_ranks(Y_tt)}, T_tt: {tt_ranks(T_tt) if active_ineq else None} \n"

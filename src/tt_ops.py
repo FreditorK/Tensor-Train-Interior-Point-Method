@@ -142,7 +142,7 @@ def tt_rank_reduce(train_tt: List[np.array], eps=1e-18, rank_weighted_error=Fals
     if dim == 1 or np.all(ranks==1):
         return train_tt
     if rank_weighted_error:
-        weights = ranks[1:]*ranks[:-1]
+        weights = ranks[1:-1] * ranks[:-2] + ranks[1:-1] * ranks[2:]
         eps = np.sqrt(weights/np.sum(weights))*eps
     else:
         eps = np.ones(dim - 1) * (eps / np.sqrt(dim - 1))
@@ -494,6 +494,7 @@ def tt_random_rank_one(dim):
 
 
 def tt_random_graph(dim, max_rank, eps=1e-9):
+    max_rank = min(2**(dim-1), max_rank)
     mask_matrix = tt_sub(tt_one_matrix(dim), tt_identity(dim))
     graph = tt_zero_matrix(dim)
     rank = 0
