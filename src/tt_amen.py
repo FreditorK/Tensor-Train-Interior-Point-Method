@@ -323,7 +323,7 @@ def tt_block_gmres(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, local_sol
     nrmsc = 1.0
     normx = np.ones((d - 1))
     real_tol = (tol / np.sqrt(d))*np.ones(d-1)
-    r_max = int(d + 2*np.sqrt(d)*d)
+    r_max = block_size*int(np.sqrt(d)*d)
     size_limit = 0.25*r_max*N[0]*r_max
 
     for swp in range(nswp):
@@ -343,6 +343,7 @@ def tt_block_gmres(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, local_sol
                                                                                          previous_solution, nrmsc,
                                                                                          size_limit, eps)
 
+                print(f"Swp {k}", local_res, block_res_old, block_res_new)
                 local_res = max(local_res, block_res_old)
                 dx = np.linalg.norm(solution_now - previous_solution) / np.linalg.norm(solution_now)
                 local_dx = max(dx, local_dx)
@@ -356,12 +357,12 @@ def tt_block_gmres(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, local_sol
                 u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True)
                 v = s.reshape(-1, 1) * v
                 if swp > 0:
-                    solution = np.reshape((u @ v).T, (rx[k], block_size, N[k], rx[k + 1]))
-                    r_start = prune_singular_vals(s, real_tol[k-1])
+                    r_start = min(prune_singular_vals(s, real_tol[k-1]), r_max)
+                    solution = np.reshape((u[:, :r] @ v[:r]).T, (rx[k], block_size, N[k], rx[k + 1]))
+                    res = _block_local_product(XAX[k], block_A[k], XAX[k + 1], solution) - rhs
                     for r in range(min(r_start, r_max) - 1, 0, -1):
-                        solution -= np.reshape((u[:, None, r] @ v[None, r, :]).T, (rx[k], block_size, N[k], rx[k + 1]))
-                        res = np.linalg.norm(_block_local_product(XAX[k], block_A[k], XAX[k + 1], solution) - rhs) / norm_rhs
-                        if res > max(2 * real_tol[k-1], block_res_new):
+                        res -= _block_local_product(XAX[k], block_A[k], XAX[k + 1], np.reshape((u[:, None, r] @ v[None, r, :]).T, (rx[k], block_size, N[k], rx[k + 1])))
+                        if np.linalg.norm(res)/norm_rhs > max(2 * real_tol[k-1], block_res_new):
                             break
                     r += 1
                     nrmsc *= (normA[k - 1] * normx[k - 1]) / normb[k - 1]
@@ -386,10 +387,8 @@ def tt_block_gmres(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, local_sol
             else:
                 x_cores[k] = np.reshape(solution_now.T, (rx[k], block_size, N[k], rx[k + 1]))
 
-        if rank_weighted_error:
-            weights = rx[1:-1] * rx[:-2] + rx[1:-1] * rx[2:]
-            rank_percent = np.sqrt(weights/np.sum(weights))
-            real_tol = tol*rank_percent
+        local_res = 0
+        local_dx = 0
 
         for k in range(d):
 
@@ -398,6 +397,7 @@ def tt_block_gmres(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, local_sol
             solution_now, block_res_old, block_res_new, rhs, norm_rhs = local_solver(XAX[k], block_A[k], XAX[k+1], Xb[k], block_b[k], Xb[k+1], previous_solution, nrmsc, size_limit, eps)
 
             local_res = max(local_res, block_res_old)
+            print(f"Swp {k}", local_res, block_res_old, block_res_new)
             dx = np.linalg.norm(solution_now - previous_solution) / np.linalg.norm(solution_now)
             local_dx = max(dx, local_dx)
 
@@ -409,12 +409,12 @@ def tt_block_gmres(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, local_sol
                 v = s.reshape(-1, 1) * v
                 u = u.reshape(rx[k], N[k], -1)
                 v = v.reshape(-1,  block_size, rx[k + 1])
-                solution = einsum("rbR, Rdk -> rbdk", u, v, optimize="greedy")
-                r_start = prune_singular_vals(s, real_tol[k])
+                r_start = min(prune_singular_vals(s, real_tol[k]), r_max)
+                solution = einsum("rbR, Rdk -> rbdk", u[:, :, :r_start], v[:r_start], optimize="greedy")
+                res = _block_local_product(XAX[k], block_A[k], XAX[k+1], np.transpose(solution, (0, 2, 1, 3))) - rhs
                 for r in range(min(r_start, r_max) - 1, 0, -1):
-                    solution -= einsum("rbR, Rdk -> rbdk", u[:, :, None, r], v[None, r], optimize="greedy")
-                    res = np.linalg.norm(_block_local_product(XAX[k], block_A[k], XAX[k+1], np.transpose(solution, (0, 2, 1, 3))) - rhs) / norm_rhs
-                    if res > max(2 * real_tol[k], block_res_new):
+                    res -= _block_local_product(XAX[k], block_A[k], XAX[k+1], np.transpose(einsum("rbR, Rdk -> rbdk", u[:, :, None, r], v[None, r], optimize="greedy"), (0, 2, 1, 3)))
+                    if np.linalg.norm(res)/norm_rhs > max(2 * real_tol[k], block_res_new):
                         break
                 r += 1
 

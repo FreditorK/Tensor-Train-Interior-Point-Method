@@ -1,5 +1,6 @@
 import sys
 import os
+from traceback import print_tb
 
 import numpy as np
 import scipy.linalg
@@ -67,17 +68,27 @@ def _ipm_m_free_approx_inv(XAX_k, block_A_k, XAX_k1, x_shape, blocks, k):
 
     return block_inv_approx
 
+
+def _ipm_block_local_product(XAX_k, block_A_k, XAX_kp1, x_core, inv_I):
+    result = np.zeros_like(x_core)
+    result[0] = (
+            einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[(0, 0)], block_A_k[(0, 0)], XAX_kp1[(0, 0)], x_core[0], optimize="greedy") # K y
+            + einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[(0, 1)], block_A_k[(0, 1)], XAX_kp1[(0, 1)], x_core[1], optimize="greedy") # -L x
+    )
+    result[1] = -inv_I*einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[(1, 0)], block_A_k[(1, 0)], XAX_kp1[(1, 0)], x_core[0], optimize="greedy") # invI*L^* y
+    result[1] = einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[(2, 2)], block_A_k[(2, 2)], XAX_kp1[(2, 2)], result[1], optimize="greedy") # L_X
+    result[1] += einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[(2, 1)], block_A_k[(2, 1)], XAX_kp1[(2, 1)], x_core[1], optimize="greedy") # L_Z x
+    return result
+
 def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous_solution, nrmsc, size_limit, rtol):
     x_shape = previous_solution.shape
-    block_size = x_shape[1]
     m = x_shape[0] * x_shape[2] * x_shape[3]
-    x_shape = (x_shape[1], x_shape[0], x_shape[2], x_shape[3])
     rhs = np.zeros_like(previous_solution)
     rhs[:, 0] = einsum('br,bmB,BR->rmR', Xb_k[0], nrmsc * block_b_k[0], Xb_k1[0], optimize="greedy") if 0 in block_b_k else 0
     rhs[:, 1] = einsum('br,bmB,BR->rmR', Xb_k[1], nrmsc * block_b_k[1], Xb_k1[1], optimize="greedy") if 1 in block_b_k else 0
     rhs[:, 2] = einsum('br,bmB,BR->rmR', Xb_k[2], nrmsc * block_b_k[2], Xb_k1[2], optimize="greedy") if 2 in block_b_k else 0
     norm_rhs = np.linalg.norm(rhs)
-    if m <= size_limit:
+    if m <= 0:
         mR_p = rhs[:, 0].reshape(m, 1)
         mR_d = rhs[:, 1].reshape(m, 1)
         mR_c = rhs[:, 2].reshape(m, 1)
@@ -94,23 +105,36 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         y = scip.linalg.solve(A, b, check_finite=False, overwrite_a=True, overwrite_b=True) + np.transpose(previous_solution, (1, 0, 2, 3))[1].reshape(-1, 1)
         x = forward_backward_sub(L_L_Z, mR_c - (L_X * inv_I) @ (mR_d - mL_eq_adj @ y))
         z = inv_I.reshape(-1, 1) * (mR_d - mL_eq_adj @ y)
-        solution_now = np.transpose(np.vstack((y, x, z)).reshape(*x_shape), (1, 0, 2, 3))
+        solution_now = np.transpose(np.vstack((y, x, z)).reshape(x_shape[1], x_shape[0], x_shape[2], x_shape[3]), (1, 0, 2, 3))
     else:
+        print("--Sparse--")
+        inv_I = np.divide(1, einsum('lsr,smnS,LSR->lmL', XAX_k[(1, 2)], block_A_k[(1, 2)], XAX_k1[(1, 2)], optimize="greedy"))
         def mat_vec(x_vec):
-            x_vec = np.transpose(_block_local_product(
+            x_vec = _ipm_block_local_product(
                 XAX_k, block_A_k, XAX_k1,
-                np.transpose(x_vec.reshape(*x_shape), (1, 0, 2, 3))
-            ), (1, 0, 2, 3)).reshape(-1, 1)
+                x_vec.reshape(2, x_shape[0], x_shape[2], x_shape[3]), inv_I
+            ).reshape(-1, 1)
             return x_vec
 
-        linear_op = scip.sparse.linalg.LinearOperator((block_size * m, block_size * m), matvec=mat_vec)
-        solution_now, info = scip.sparse.linalg.bicgstab(
+        linear_op = scip.sparse.linalg.LinearOperator((2 * m, 2 * m), matvec=mat_vec)
+        local_rhs = -_ipm_block_local_product(XAX_k, block_A_k, XAX_k1, np.transpose(previous_solution[:, :2], (1, 0, 2, 3)), inv_I)
+        local_rhs[0] += rhs[:, 0]
+        local_rhs[1] += rhs[:, 2] - einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[(2, 2)], block_A_k[(2, 2)], XAX_k1[(2, 2)], inv_I*rhs[:, 1], optimize="greedy")
+        solution_now, _ = scip.sparse.linalg.bicgstab(
             linear_op,
-            np.transpose(rhs - _block_local_product(XAX_k, block_A_k, XAX_k1, previous_solution), (1, 0, 2, 3)).reshape(-1, 1),
+            local_rhs.reshape(-1, 1),
             rtol=rtol,
-            maxiter=10
+            maxiter=1000
         )
-        solution_now = np.transpose(solution_now.reshape(*x_shape), (1, 0, 2, 3)) + previous_solution
+        solution_now = np.transpose(solution_now.reshape(2, x_shape[0], x_shape[2], x_shape[3]), (1, 0, 2, 3)) + previous_solution[:, :2]
+        z = (
+                inv_I * (rhs[:, 1] - einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[(1, 0)], block_A_k[(1, 0)], XAX_k1[(1, 0)], solution_now[:, 0], optimize="greedy"))
+        ).reshape(x_shape[0], 1, x_shape[2], x_shape[3])
+        solution_now = np.concatenate((solution_now, z), axis=1)
+
+    print(np.linalg.norm((_block_local_product(XAX_k, block_A_k, XAX_k1, solution_now) - rhs)[:, 0]) / norm_rhs)
+    print(np.linalg.norm((_block_local_product(XAX_k, block_A_k, XAX_k1, solution_now) - rhs)[:, 1]) / norm_rhs)
+    print(np.linalg.norm((_block_local_product(XAX_k, block_A_k, XAX_k1, solution_now) - rhs)[:, 2]) / norm_rhs)
 
     block_res_old = np.linalg.norm(_block_local_product(XAX_k, block_A_k, XAX_k1, previous_solution) - rhs) / norm_rhs
     block_res_new = np.linalg.norm(_block_local_product(XAX_k, block_A_k, XAX_k1, solution_now) - rhs) / norm_rhs
@@ -146,8 +170,8 @@ def tt_infeasible_newton_system(
         L_Z = tt_rank_reduce(tt_kron(Z_tt, P), eps=op_tol, rank_weighted_error=True)
         L_X = tt_rank_reduce(tt_kron(P, X_tt), eps=op_tol, rank_weighted_error=True)
     else:
-        L_Z = tt_rank_reduce(tt_add(tt_kron(P, Z_tt), tt_kron(Z_tt, P)), eps=op_tol, rank_weighted_error=True)
-        L_X = tt_rank_reduce(tt_add(tt_kron(X_tt, P), tt_kron(P, X_tt)), eps=op_tol, rank_weighted_error=True)
+        L_Z = tt_rank_reduce(tt_scale(0.5, tt_add(tt_kron(P, Z_tt), tt_kron(Z_tt, P))), eps=op_tol, rank_weighted_error=True)
+        L_X = tt_rank_reduce(tt_scale(0.5, tt_add(tt_kron(X_tt, P), tt_kron(P, X_tt))), eps=op_tol, rank_weighted_error=True)
 
     X_tt = tt_reshape(X_tt, (4, ))
     Y_tt = tt_reshape(Y_tt, (4, ))
@@ -188,7 +212,7 @@ def tt_infeasible_newton_system(
     XZ_term = tt_fast_matrix_vec_mul(L_X, Z_tt, eps)
     rhs[2 + idx_add] = tt_rank_reduce(tt_scale(-1, XZ_term), op_tol, rank_weighted_error=True) # tt_rank_reduce(tt_sub(tt_scale(mu_mul*mu, tt_reshape(tt_identity(len(X_tt)), (4, ))), XZ_term), op_tol, rank_weighted_error=True)
 
-    return lhs_skeleton, rhs, primal_error + dual_error
+    return lhs_skeleton, rhs, (primal_error, dual_error)
 
 
 def _tt_symmetrise(matrix_tt, err_bound):
@@ -243,7 +267,7 @@ def _tt_ipm_newton_step(
     if verbose:
         print("--- Predictor  step ---")
     idx_add = int(active_ineq)
-    Delta_tt, res = solver(lhs_matrix_tt, rhs_vec_tt, None, 5)
+    Delta_tt, res = solver(lhs_matrix_tt, rhs_vec_tt, None, 6)
     Delta_X_tt = tt_rank_reduce(tt_reshape(_tt_get_block(1, Delta_tt), (2, 2)), eps=op_tol, rank_weighted_error=True)
     Delta_Z_tt = tt_rank_reduce(tt_reshape(_tt_get_block(2 + idx_add, Delta_tt), (2, 2)), eps=op_tol, rank_weighted_error=True)
     Delta_X_tt = _tt_symmetrise(Delta_X_tt, op_tol)
@@ -264,17 +288,15 @@ def _tt_ipm_newton_step(
         P = tt_identity(dim)
         if direction == "XZ":
             L_Z = tt_scale(-1, tt_rank_reduce(tt_kron(Delta_Z_tt, P), eps=op_tol, rank_weighted_error=True))
-            mu_mul = 1
             # No rank increase for operators
         else:
-            L_Z = tt_scale(-1, tt_rank_reduce(tt_add(tt_kron(P, Delta_Z_tt), tt_kron(Delta_Z_tt, P)), eps=op_tol,
+            L_Z = tt_scale(-0.5, tt_rank_reduce(tt_add(tt_kron(P, Delta_Z_tt), tt_kron(Delta_Z_tt, P)), eps=op_tol,
                                               rank_weighted_error=True))
-            mu_mul = 2
         sigma = ((ZX + x_step_size * z_step_size * tt_inner_prod(Delta_X_tt, Delta_Z_tt) + z_step_size * tt_inner_prod(
             X_tt, Delta_Z_tt) + x_step_size * tt_inner_prod(Delta_X_tt, Z_tt)) / ZX) ** 3
         rhs_vec_tt[2 + idx_add] = tt_rank_reduce(
             tt_add(
-                tt_scale(mu_mul*sigma*mu, tt_reshape(tt_identity(len(X_tt)), (4, ))),
+                tt_scale(sigma*mu, tt_reshape(tt_identity(len(X_tt)), (4, ))),
                 tt_add(
                 rhs_vec_tt[2 + idx_add],
                 tt_fast_matrix_vec_mul(L_Z, tt_reshape(Delta_X_tt, (4, )), eps)
@@ -284,7 +306,7 @@ def _tt_ipm_newton_step(
             rank_weighted_error=True
         )
 
-        Delta_tt, res = solver(lhs_matrix_tt, rhs_vec_tt, Delta_tt, 4)
+        Delta_tt, res = solver(lhs_matrix_tt, rhs_vec_tt, Delta_tt, 5)
         Delta_X_tt = tt_rank_reduce(tt_reshape(_tt_get_block(1, Delta_tt), (2, 2)), eps=op_tol, rank_weighted_error=True)
         Delta_Z_tt = tt_rank_reduce(tt_reshape(_tt_get_block(2 + idx_add, Delta_tt), (2, 2)), eps=op_tol, rank_weighted_error=True)
         Delta_X_tt = _tt_symmetrise(Delta_X_tt, op_tol)
@@ -332,16 +354,6 @@ def tt_ipm(
 ):
     active_ineq = lin_op_tt_ineq is not None or bias_tt_ineq is not None
     dim = len(obj_tt)
-    # Normalisation
-    factor = np.divide(1, np.sqrt(tt_inner_prod(obj_tt, obj_tt)))
-    obj_tt = tt_scale(factor, obj_tt)
-    factor = np.divide(1, np.sqrt(tt_inner_prod(lin_op_tt, lin_op_tt)))
-    lin_op_tt = tt_scale(factor, lin_op_tt)
-    bias_tt = tt_scale(factor, bias_tt)
-    if active_ineq:
-        factor = np.divide(2, np.sqrt(tt_inner_prod(lin_op_tt_ineq, lin_op_tt_ineq)))
-        lin_op_tt_ineq = tt_scale(factor, lin_op_tt_ineq)
-        bias_tt_ineq = tt_scale(factor, bias_tt_ineq)
     # -------------
     # Reshaping
     lag_maps = {key: tt_rank_reduce(tt_reshape(value, (4, 4)), eps=op_tol) for key, value in lag_maps.items()}
@@ -382,7 +394,6 @@ def tt_ipm(
     Z_tt = tt_identity(dim)
     iteration = 0
     last = False
-    prev_pd_error = np.inf
     for iteration in range(1, max_iter):
         x_step_size, z_step_size, Delta_X_tt, Delta_Y_tt, Delta_Z_tt, pd_error, mu, sigma = _tt_ipm_newton_step(
             obj_tt,
@@ -405,7 +416,7 @@ def tt_ipm(
             direction,
             verbose
         )
-        if (np.less(pd_error, feasibility_tol) or np.less(np.abs(prev_pd_error - pd_error), op_tol)) and np.less(mu, centrality_tol):
+        if np.less(np.sum(pd_error),2*feasibility_tol) and np.less(mu, centrality_tol):
             last = True
         X_tt = tt_rank_reduce(tt_add(X_tt, tt_scale(x_step_size, Delta_X_tt)), eps=op_tol, rank_weighted_error=True)
         Y_tt = tt_add(Y_tt, tt_scale(z_step_size, Delta_Y_tt))
@@ -416,7 +427,7 @@ def tt_ipm(
             print(f"---Step {iteration}---")
             print(f"Step sizes: {x_step_size}, {z_step_size}")
             print(f"Duality Gap: {100*progress_percent:.4f}%")
-            print(f"Primal-Dual error: {pd_error:.8f}")
+            print(f"Primal-Dual error: {pd_error}")
             print(f"Sigma: {sigma}")
             print(
                 f"Ranks X_tt: {tt_ranks(X_tt)}, Z_tt: {tt_ranks(Z_tt)}, \n"
@@ -424,7 +435,7 @@ def tt_ipm(
             )
         if last:
             break
-        prev_pd_error = pd_error
+        prev_pd_error = np.sum(pd_error)
     if verbose:
         print(f"---Terminated---")
         print(f"Converged in {iteration} iterations.")
