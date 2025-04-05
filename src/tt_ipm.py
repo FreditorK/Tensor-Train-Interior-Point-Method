@@ -127,10 +127,25 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
             maxiter=1000
         )
         solution_now = np.transpose(solution_now.reshape(2, x_shape[0], x_shape[2], x_shape[3]), (1, 0, 2, 3)) + previous_solution[:, :2]
-        z = (
-                inv_I * (rhs[:, 1] - einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[(1, 0)], block_A_k[(1, 0)], XAX_k1[(1, 0)], solution_now[:, 0], optimize="greedy"))
-        ).reshape(x_shape[0], 1, x_shape[2], x_shape[3])
-        solution_now = np.concatenate((solution_now, z), axis=1)
+        z = inv_I * (rhs[:, 1] - einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[(1, 0)], block_A_k[(1, 0)], XAX_k1[(1, 0)], solution_now[:, 0], optimize="greedy"))
+        def mat_vec(x_vec):
+            x_vec = einsum(
+                'lsr,smnS,LSR,rnR->lmL',
+                XAX_k[(2, 1)], block_A_k[(2, 1)], XAX_k1[(2, 1)],
+                x_vec.reshape(x_shape[0], x_shape[2], x_shape[3])
+            ).reshape(-1, 1)
+            return x_vec
+        linear_op = scip.sparse.linalg.LinearOperator((m, m), matvec=mat_vec)
+        x, _ = scip.sparse.linalg.cg(
+            linear_op,
+            (rhs[:, 2] - einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[(2, 2)], block_A_k[(2, 2)], XAX_k1[(2, 2)], z, optimize="greedy")).reshape(-1, 1),
+            x0=solution_now[:, 1].reshape(-1, 1),
+            rtol=rtol,
+            maxiter=1000
+        )
+        solution_now[:, 1] = x.reshape(x_shape[0], x_shape[2], x_shape[3])
+        print(z.shape)
+        solution_now = np.concatenate((solution_now, z.reshape(x_shape[0], 1, x_shape[2], x_shape[3])), axis=1)
 
     print(np.linalg.norm((_block_local_product(XAX_k, block_A_k, XAX_k1, solution_now) - rhs)[:, 0]) / norm_rhs)
     print(np.linalg.norm((_block_local_product(XAX_k, block_A_k, XAX_k1, solution_now) - rhs)[:, 1]) / norm_rhs)
