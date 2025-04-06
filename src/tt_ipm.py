@@ -88,7 +88,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
     rhs[:, 1] = einsum('br,bmB,BR->rmR', Xb_k[1], nrmsc * block_b_k[1], Xb_k1[1], optimize="greedy") if 1 in block_b_k else 0
     rhs[:, 2] = einsum('br,bmB,BR->rmR', Xb_k[2], nrmsc * block_b_k[2], Xb_k1[2], optimize="greedy") if 2 in block_b_k else 0
     norm_rhs = np.linalg.norm(rhs)
-    if m <= 0:
+    if m <= size_limit:
         mR_p = rhs[:, 0].reshape(m, 1)
         mR_d = rhs[:, 1].reshape(m, 1)
         mR_c = rhs[:, 2].reshape(m, 1)
@@ -107,7 +107,6 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         x = forward_backward_sub(L_L_Z, mR_c - L_X @ z)
         solution_now = np.transpose(np.vstack((y, x, z)).reshape(x_shape[1], x_shape[0], x_shape[2], x_shape[3]), (1, 0, 2, 3))
     else:
-        print("--Sparse--")
         inv_I = np.divide(1, einsum('lsr,smnS,LSR->lmL', XAX_k[(1, 2)], block_A_k[(1, 2)], XAX_k1[(1, 2)], optimize="greedy"))
         def mat_vec(x_vec):
             x_vec = _ipm_block_local_product(
@@ -124,32 +123,11 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
             linear_op,
             local_rhs.reshape(-1, 1),
             rtol=rtol,
-            maxiter=10
+            maxiter=100
         )
         solution_now = np.transpose(solution_now.reshape(2, x_shape[0], x_shape[2], x_shape[3]), (1, 0, 2, 3)) + previous_solution[:, :2]
         z = inv_I * (rhs[:, 1] - einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[(1, 0)], block_A_k[(1, 0)], XAX_k1[(1, 0)], solution_now[:, 0], optimize="greedy"))
-        def mat_vec(x_vec):
-            x_vec = einsum(
-                'lsr,smnS,LSR,rnR->lmL',
-                XAX_k[(2, 1)], block_A_k[(2, 1)], XAX_k1[(2, 1)],
-                x_vec.reshape(x_shape[0], x_shape[2], x_shape[3])
-            ).reshape(-1, 1)
-            return x_vec
-        linear_op = scip.sparse.linalg.LinearOperator((m, m), matvec=mat_vec)
-        x, _ = scip.sparse.linalg.cg(
-            linear_op,
-            (rhs[:, 2] - einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[(2, 2)], block_A_k[(2, 2)], XAX_k1[(2, 2)], z, optimize="greedy")).reshape(-1, 1),
-            x0=solution_now[:, 1].reshape(-1, 1),
-            rtol=rtol,
-            maxiter=5
-        )
-        solution_now[:, 1] = x.reshape(x_shape[0], x_shape[2], x_shape[3])
-        print(z.shape)
         solution_now = np.concatenate((solution_now, z.reshape(x_shape[0], 1, x_shape[2], x_shape[3])), axis=1)
-
-    print(np.linalg.norm((_block_local_product(XAX_k, block_A_k, XAX_k1, solution_now) - rhs)[:, 0]) / norm_rhs)
-    print(np.linalg.norm((_block_local_product(XAX_k, block_A_k, XAX_k1, solution_now) - rhs)[:, 1]) / norm_rhs)
-    print(np.linalg.norm((_block_local_product(XAX_k, block_A_k, XAX_k1, solution_now) - rhs)[:, 2]) / norm_rhs)
 
     block_res_old = np.linalg.norm(_block_local_product(XAX_k, block_A_k, XAX_k1, previous_solution) - rhs) / norm_rhs
     block_res_new = np.linalg.norm(_block_local_product(XAX_k, block_A_k, XAX_k1, solution_now) - rhs) / norm_rhs
@@ -225,10 +203,9 @@ def tt_infeasible_newton_system(
         rhs[1] = dual_feas
 
     XZ_term = tt_fast_matrix_vec_mul(L_X, Z_tt, eps)
-    rhs[2 + idx_add] = tt_rank_reduce(tt_scale(-1, XZ_term), op_tol, rank_weighted_error=True) # tt_rank_reduce(tt_sub(tt_scale(mu_mul*mu, tt_reshape(tt_identity(len(X_tt)), (4, ))), XZ_term), op_tol, rank_weighted_error=True)
+    rhs[2 + idx_add] = tt_rank_reduce(tt_scale(-1, XZ_term), op_tol, rank_weighted_error=True)
 
     return lhs_skeleton, rhs, (primal_error, dual_error)
-
 
 def _tt_symmetrise(matrix_tt, err_bound):
     return tt_rank_reduce(tt_scale(0.5, tt_add(matrix_tt, tt_transpose(matrix_tt))), eps=err_bound, rank_weighted_error=True)
