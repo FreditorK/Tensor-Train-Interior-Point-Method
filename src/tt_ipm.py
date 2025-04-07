@@ -88,6 +88,9 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
     rhs[:, 1] = einsum('br,bmB,BR->rmR', Xb_k[1], nrmsc * block_b_k[1], Xb_k1[1], optimize="greedy") if 1 in block_b_k else 0
     rhs[:, 2] = einsum('br,bmB,BR->rmR', Xb_k[2], nrmsc * block_b_k[2], Xb_k1[2], optimize="greedy") if 2 in block_b_k else 0
     norm_rhs = np.linalg.norm(rhs)
+    block_res_old = np.linalg.norm(_block_local_product(XAX_k, block_A_k, XAX_k1, previous_solution) - rhs) / norm_rhs
+    if block_res_old < rtol:
+        return previous_solution, block_res_old, block_res_old, rhs, norm_rhs
     if m <= size_limit:
         mR_p = rhs[:, 0].reshape(m, 1)
         mR_d = rhs[:, 1].reshape(m, 1)
@@ -122,14 +125,13 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         solution_now, _ = scip.sparse.linalg.bicgstab(
             linear_op,
             local_rhs.reshape(-1, 1),
-            rtol=rtol,
+            rtol=1e-3*block_res_old,
             maxiter=100
         )
         solution_now = np.transpose(solution_now.reshape(2, x_shape[0], x_shape[2], x_shape[3]), (1, 0, 2, 3)) + previous_solution[:, :2]
         z = inv_I * (rhs[:, 1] - einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[(1, 0)], block_A_k[(1, 0)], XAX_k1[(1, 0)], solution_now[:, 0], optimize="greedy"))
         solution_now = np.concatenate((solution_now, z.reshape(x_shape[0], 1, x_shape[2], x_shape[3])), axis=1)
 
-    block_res_old = np.linalg.norm(_block_local_product(XAX_k, block_A_k, XAX_k1, previous_solution) - rhs) / norm_rhs
     block_res_new = np.linalg.norm(_block_local_product(XAX_k, block_A_k, XAX_k1, solution_now) - rhs) / norm_rhs
 
     if block_res_old < block_res_new:

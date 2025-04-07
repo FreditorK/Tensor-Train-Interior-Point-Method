@@ -341,7 +341,7 @@ def tt_block_gmres(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, local_sol
                 solution_now, block_res_old, block_res_new, rhs, norm_rhs = local_solver(XAX[k], block_A[k], XAX[k + 1],
                                                                                          Xb[k], block_b[k], Xb[k + 1],
                                                                                          previous_solution, nrmsc,
-                                                                                         size_limit, min(local_res, 1e-3))
+                                                                                         size_limit, eps)
 
                 local_res = max(local_res, block_res_old)
                 dx = np.linalg.norm(solution_now - previous_solution) / np.linalg.norm(solution_now)
@@ -393,7 +393,7 @@ def tt_block_gmres(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, local_sol
 
             # bring block dimension to front
             previous_solution = x_cores[k]
-            solution_now, block_res_old, block_res_new, rhs, norm_rhs = local_solver(XAX[k], block_A[k], XAX[k+1], Xb[k], block_b[k], Xb[k+1], previous_solution, nrmsc, size_limit, min(local_res, 1e-3))
+            solution_now, block_res_old, block_res_new, rhs, norm_rhs = local_solver(XAX[k], block_A[k], XAX[k+1], Xb[k], block_b[k], Xb[k+1], previous_solution, nrmsc, size_limit, eps)
 
             local_res = max(local_res, block_res_old)
             dx = np.linalg.norm(solution_now - previous_solution) / np.linalg.norm(solution_now)
