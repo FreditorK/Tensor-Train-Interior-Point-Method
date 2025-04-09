@@ -5,7 +5,7 @@ sys.path.append(os.getcwd() + '/../')
 from src.tt_ops import *
 from src.ops import *
 from src.tt_ops import tt_rank_reduce
-from src.tt_amen import tt_amen, tt_block_gmres
+from src.tt_amen import tt_amen, tt_block_als
 
 np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=4, suppress=True)
 np.random.seed(9)
@@ -30,7 +30,7 @@ b_2_tt = tt_rank_reduce(tt_fast_matrix_vec_mul(block_11_tt, tt_random_gaussian([
 temp_x = tt_random_gaussian([4, 3, 1, 2], shape=(2,))
 b_3_tt = tt_rank_reduce(tt_add(tt_fast_matrix_vec_mul(block_21_tt, temp_x), tt_fast_matrix_vec_mul(block_22_tt, temp_x)))
 block_b_tt = {0: b_1_tt, 1: b_2_tt, 2: b_3_tt}
-sol, _ = tt_block_gmres(block_matrix_tt, block_b_tt, tol=1e-7, nswp=10, verbose=True)
+sol, _ = tt_block_als(block_matrix_tt, block_b_tt, tol=1e-7, nswp=10, verbose=True)
 block_sol_1 = sol[:-1] + [sol[-1][:, 0]]
 block_sol_2 = sol[:-1] + [sol[-1][:, 1]]
 block_sol_3 = sol[:-1] + [sol[-1][:, 2]]

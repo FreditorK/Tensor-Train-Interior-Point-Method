@@ -290,7 +290,172 @@ def _compute_phi_fwd_rhs(Phi_now, core_rhs, core):
     return Phi_next
 
 
-def tt_block_gmres(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, local_solver=None, rank_weighted_error=False, verbose=False):
+def _forward_sweep(
+        local_solver,
+        x_cores,
+        normx,
+        XAX,
+        block_A,
+        normA,
+        Xb,
+        block_b,
+        normb,
+        nrmsc,
+        rx,
+        N,
+        block_size,
+        real_tol,
+        d,
+        swp,
+        size_limit,
+        eps,
+        r_max
+):
+    local_res = np.inf if swp == 0 else 0
+    local_dx = np.inf if swp == 0 else 0
+    for k in range(d - 1, -1, -1):
+        if swp > 0:
+            previous_solution = x_cores[k]
+            solution_now, block_res_old, block_res_new, rhs, norm_rhs = local_solver(XAX[k], block_A[k], XAX[k + 1],
+                                                                                     Xb[k], block_b[k], Xb[k + 1],
+                                                                                     previous_solution, nrmsc,
+                                                                                     size_limit, eps)
+
+            local_res = max(local_res, block_res_old)
+            dx = np.linalg.norm(solution_now - previous_solution) / np.linalg.norm(solution_now)
+            local_dx = max(dx, local_dx)
+
+            solution_now = np.reshape(solution_now, (rx[k] * block_size, N[k] * rx[k + 1])).T
+
+        else:
+            solution_now = np.reshape(x_cores[k], (rx[k] * block_size, N[k] * rx[k + 1])).T
+
+        if k > 0:
+            u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True)
+            v = s.reshape(-1, 1) * v
+            if swp > 0:
+                r_start = min(prune_singular_vals(s, real_tol[k - 1]), r_max)
+                solution = np.reshape((u[:, :r_start] @ v[:r_start]).T, (rx[k], block_size, N[k], rx[k + 1]))
+                res = _block_local_product(XAX[k], block_A[k], XAX[k + 1], solution) - rhs
+                r = r_start
+                for r in range(r_start - 1, 0, -1):
+                    res -= _block_local_product(XAX[k], block_A[k], XAX[k + 1],
+                                                np.reshape((u[:, None, r] @ v[None, r, :]).T,
+                                                           (rx[k], block_size, N[k], rx[k + 1])))
+                    if np.linalg.norm(res) / norm_rhs > max(2 * real_tol[k - 1], block_res_new):
+                        break
+                r += 1
+                nrmsc *= (normA[k - 1] * normx[k - 1]) / normb[k - 1]
+            else:
+                r = prune_singular_vals(s, real_tol[k - 1])
+            x_cores[k] = np.reshape(u[:, :r].T, (r, N[k], rx[k + 1]))
+            x_cores[k - 1] = einsum('rdc,cbR->rbdR', x_cores[k - 1], v[:r].T.reshape(rx[k], block_size, r),
+                                    optimize=True)
+            norm_now = np.linalg.norm(x_cores[k - 1])
+            x_cores[k - 1] /= norm_now
+            normx[k - 1] *= norm_now
+            rx[k] = r
+
+            XAX[k] = {(i, j): _compute_phi_bck_A(XAX[k + 1][(i, j)], x_cores[k], block_A[k][(i, j)], x_cores[k]) for (i, j)
+                      in block_A[k]}
+            normA[k - 1] = max(np.sqrt(sum(np.sum(v ** 2) for v in XAX[k].values())), eps)
+            XAX[k] = {(i, j): XAX[k][(i, j)] / normA[k - 1] for (i, j) in block_A[k]}
+
+            Xb[k] = {i: _compute_phi_bck_rhs(Xb[k + 1][i], block_b[k][i], x_cores[k]) for i in block_b[k]}
+            normb[k - 1] = max(np.sqrt(sum(np.sum(v ** 2) for v in Xb[k].values())), eps)
+            Xb[k] = {i: Xb[k][i] / normb[k - 1] for i in block_b[k]}
+            nrmsc *= normb[k - 1] / (normA[k - 1] * normx[k - 1])
+        else:
+            x_cores[k] = np.reshape(solution_now.T, (rx[k], block_size, N[k], rx[k + 1]))
+
+    return x_cores, normx, XAX, normA, Xb, normb, nrmsc, rx, local_res, local_dx
+
+
+def _backward_sweep(
+        local_solver,
+        x_cores,
+        normx,
+        XAX,
+        block_A,
+        normA,
+        Xb,
+        block_b,
+        normb,
+        nrmsc,
+        rx,
+        N,
+        block_size,
+        real_tol,
+        d,
+        swp,
+        size_limit,
+        eps,
+        r_max
+):
+    local_res = np.inf if swp == 0 else 0
+    local_dx = np.inf if swp == 0 else 0
+    for k in range(d):
+        if swp > 0:
+            previous_solution = x_cores[k]
+            solution_now, block_res_old, block_res_new, rhs, norm_rhs = local_solver(XAX[k], block_A[k], XAX[k + 1], Xb[k],
+                                                                                     block_b[k], Xb[k + 1],
+                                                                                     previous_solution, nrmsc, size_limit,
+                                                                                     eps)
+
+            local_res = max(local_res, block_res_old)
+            dx = np.linalg.norm(solution_now - previous_solution) / np.linalg.norm(solution_now)
+            local_dx = max(dx, local_dx)
+
+            solution_now = np.transpose(solution_now, (0, 2, 1, 3))
+            solution_now = np.reshape(solution_now, (rx[k] * N[k], block_size * rx[k + 1]))
+        else:
+            solution_now = np.reshape(x_cores[k], (rx[k] * N[k],  block_size * rx[k + 1]))
+
+        if k < d - 1:
+            u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True)
+            v = s.reshape(-1, 1) * v
+            u = u.reshape(rx[k], N[k], -1)
+            v = v.reshape(-1, block_size, rx[k + 1])
+            if swp > 0:
+                r_start = min(prune_singular_vals(s, real_tol[k]), r_max)
+                solution = einsum("rbR, Rdk -> rbdk", u[:, :, :r_start], v[:r_start], optimize="greedy")
+                res = _block_local_product(XAX[k], block_A[k], XAX[k + 1], np.transpose(solution, (0, 2, 1, 3))) - rhs
+                r = r_start
+                for r in range(r_start - 1, 0, -1):
+                    res -= _block_local_product(XAX[k], block_A[k], XAX[k + 1], np.transpose(
+                        einsum("rbR, Rdk -> rbdk", u[:, :, None, r], v[None, r], optimize="greedy"), (0, 2, 1, 3)))
+                    if np.linalg.norm(res) / norm_rhs > max(2 * real_tol[k], block_res_new):
+                        break
+                r += 1
+                nrmsc *= normA[k] * normx[k] / normb[k]
+            else:
+                r = prune_singular_vals(s, real_tol[k])
+
+            v = einsum("rbR, Rdk -> rbdk", v[:r], x_cores[k + 1])
+            norm_now = np.linalg.norm(v)
+            normx[k] *= norm_now
+            x_cores[k] = u[:, :, :r]
+            x_cores[k + 1] = (v / norm_now).reshape(r, block_size, N[k + 1], rx[k + 2])
+            rx[k + 1] = r
+
+            XAX[k + 1] = {(i, j): _compute_phi_fwd_A(XAX[k][(i, j)], x_cores[k], block_A[k][(i, j)], x_cores[k]) for
+                          (i, j) in block_A[k]}
+            normA[k] = max(np.sqrt(sum(np.sum(v ** 2) for v in XAX[k + 1].values())), eps)
+            XAX[k + 1] = {(i, j): XAX[k + 1][(i, j)] / normA[k] for (i, j) in block_A[k]}
+
+            Xb[k + 1] = {i: _compute_phi_fwd_rhs(Xb[k][i], block_b[k][i], x_cores[k]) for i in block_b[k]}
+            normb[k] = max(np.sqrt(sum(np.sum(v ** 2) for v in Xb[k + 1].values())), eps)
+            Xb[k + 1] = {i: Xb[k + 1][i] / normb[k] for i in block_b[k]}
+
+            nrmsc *= normb[k] / (normA[k] * normx[k])
+
+        else:
+            x_cores[k] = np.reshape(solution_now, (rx[k], N[k], block_size, rx[k + 1])).transpose(0, 2, 1, 3)
+
+    return x_cores, normx, XAX, normA, Xb, normb, nrmsc, rx, local_res, local_dx
+
+
+def tt_block_als(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, local_solver=None, rank_weighted_error=False, verbose=False):
 
     block_size = np.max(list(k[0] for k in block_A.keys())) + 1
     model_entry = next(iter(block_b.values()))
@@ -299,10 +464,13 @@ def tt_block_gmres(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, local_sol
     if local_solver is None:
         local_solver = _default_local_solver
 
+    direction = 1
     if x0 == None:
         # TODO: Temp decreased block_size
         x_cores = tt_normalise([np.random.randn(1, *c.shape[1:-1], 1) for c in model_entry[:-1]]) + [np.random.randn(1, block_size, *x_shape, 1)]
     else:
+        if len(x0[0].shape) > len(x0[-1].shape):
+            direction *= -1
         x_cores = x0
 
     if verbose:
@@ -332,111 +500,51 @@ def tt_block_gmres(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, local_sol
             rank_percent = np.sqrt(weights/np.sum(weights))
             real_tol = tol*rank_percent
 
-        local_res = 0
-        local_dx = 0
 
-        for k in range(d - 1, -1, -1):
-            if swp > 0:
-                previous_solution = x_cores[k]
-                solution_now, block_res_old, block_res_new, rhs, norm_rhs = local_solver(XAX[k], block_A[k], XAX[k + 1],
-                                                                                         Xb[k], block_b[k], Xb[k + 1],
-                                                                                         previous_solution, nrmsc,
-                                                                                         size_limit, eps)
-
-                local_res = max(local_res, block_res_old)
-                dx = np.linalg.norm(solution_now - previous_solution) / np.linalg.norm(solution_now)
-                local_dx = max(dx, local_dx)
-
-                solution_now = np.reshape(solution_now, (rx[k]*block_size, N[k] * rx[k + 1])).T
-
-            else:
-                solution_now = np.reshape(x_cores[k], (rx[k]*block_size, N[k]*rx[k + 1])).T
-
-            if k > 0:
-                u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True)
-                v = s.reshape(-1, 1) * v
-                if swp > 0:
-                    r_start = min(prune_singular_vals(s, real_tol[k-1]), r_max)
-                    solution = np.reshape((u[:, :r] @ v[:r]).T, (rx[k], block_size, N[k], rx[k + 1]))
-                    res = _block_local_product(XAX[k], block_A[k], XAX[k + 1], solution) - rhs
-                    for r in range(min(r_start, r_max) - 1, 0, -1):
-                        res -= _block_local_product(XAX[k], block_A[k], XAX[k + 1], np.reshape((u[:, None, r] @ v[None, r, :]).T, (rx[k], block_size, N[k], rx[k + 1])))
-                        if np.linalg.norm(res)/norm_rhs > max(2 * real_tol[k-1], block_res_new):
-                            break
-                    r += 1
-                    nrmsc *= (normA[k - 1] * normx[k - 1]) / normb[k - 1]
-                else:
-                    r = prune_singular_vals(s, real_tol[k-1])
-                x_cores[k] = np.reshape(u[:, :r].T, (r, N[k], rx[k + 1]))
-                x_cores[k - 1] = einsum('rdc,cbR->rbdR', x_cores[k - 1], v[:r].T.reshape(rx[k], block_size, r),
-                                        optimize=True)
-                norm_now = np.linalg.norm(x_cores[k - 1])
-                x_cores[k - 1] /= norm_now
-                normx[k - 1] *= norm_now
-                rx[k] = r
-
-                XAX[k] = {(i, j):  _compute_phi_bck_A(XAX[k + 1][(i, j)], x_cores[k], block_A[k][(i, j)], x_cores[k]) for (i, j) in block_A[k]}
-                normA[k - 1] = max(np.sqrt(sum(np.sum(v**2) for v in XAX[k].values())), eps)
-                XAX[k] = {(i, j): XAX[k][(i, j)]/normA[k - 1] for (i, j) in block_A[k]}
-
-                Xb[k] = {i: _compute_phi_bck_rhs(Xb[k + 1][i], block_b[k][i], x_cores[k]) for i in block_b[k]}
-                normb[k-1] = max(np.sqrt(sum(np.sum(v**2) for v in Xb[k].values())), eps)
-                Xb[k] = {i: Xb[k][i]/normb[k-1] for i in block_b[k]}
-                nrmsc *= normb[k - 1] / (normA[k - 1] * normx[k - 1])
-            else:
-                x_cores[k] = np.reshape(solution_now.T, (rx[k], block_size, N[k], rx[k + 1]))
-
-        local_res = 0
-        local_dx = 0
-
-        for k in range(d):
-
-            # bring block dimension to front
-            previous_solution = x_cores[k]
-            solution_now, block_res_old, block_res_new, rhs, norm_rhs = local_solver(XAX[k], block_A[k], XAX[k+1], Xb[k], block_b[k], Xb[k+1], previous_solution, nrmsc, size_limit, eps)
-
-            local_res = max(local_res, block_res_old)
-            dx = np.linalg.norm(solution_now - previous_solution) / np.linalg.norm(solution_now)
-            local_dx = max(dx, local_dx)
-
-            solution_now = np.transpose(solution_now, (0, 2, 1, 3))
-            solution_now = np.reshape(solution_now, (rx[k] * N[k], block_size*rx[k + 1]))
-
-            if k < d - 1:
-                u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True)
-                v = s.reshape(-1, 1) * v
-                u = u.reshape(rx[k], N[k], -1)
-                v = v.reshape(-1,  block_size, rx[k + 1])
-                r_start = min(prune_singular_vals(s, real_tol[k]), r_max)
-                solution = einsum("rbR, Rdk -> rbdk", u[:, :, :r_start], v[:r_start], optimize="greedy")
-                res = _block_local_product(XAX[k], block_A[k], XAX[k+1], np.transpose(solution, (0, 2, 1, 3))) - rhs
-                for r in range(min(r_start, r_max) - 1, 0, -1):
-                    res -= _block_local_product(XAX[k], block_A[k], XAX[k+1], np.transpose(einsum("rbR, Rdk -> rbdk", u[:, :, None, r], v[None, r], optimize="greedy"), (0, 2, 1, 3)))
-                    if np.linalg.norm(res)/norm_rhs > max(2 * real_tol[k], block_res_new):
-                        break
-                r += 1
-
-                v = einsum("rbR, Rdk -> rbdk", v[:r], x_cores[k + 1]) #  enriched_r x b x d x rx[k+1]
-
-                nrmsc *= normA[k] * normx[k] / normb[k]
-                norm_now = np.linalg.norm(v)
-                normx[k] *= norm_now
-                x_cores[k] = u[:, :, :r]
-                x_cores[k + 1] = (v/norm_now).reshape(r, block_size, N[k + 1], rx[k + 2])
-                rx[k + 1] = r
-
-                XAX[k + 1] = {(i, j): _compute_phi_fwd_A(XAX[k][(i, j)], x_cores[k], block_A[k][(i, j)], x_cores[k]) for (i, j) in block_A[k]}
-                normA[k] = max(np.sqrt(sum(np.sum(v ** 2) for v in XAX[k+1].values())), eps)
-                XAX[k+1] = {(i, j): XAX[k+1][(i, j)] / normA[k] for (i, j) in block_A[k]}
-
-                Xb[k+1] = {i: _compute_phi_fwd_rhs(Xb[k][i], block_b[k][i], x_cores[k]) for i in block_b[k]}
-                normb[k] = max(np.sqrt(sum(np.sum(v**2) for v in Xb[k+1].values())), eps)
-                Xb[k+1] = {i: Xb[k+1][i] / normb[k] for i in block_b[k]}
-
-                nrmsc *= normb[k] / (normA[k] * normx[k])
-
-            else:
-                x_cores[k] = np.reshape(solution_now, (rx[k], N[k], block_size, rx[k + 1])).transpose(0, 2, 1, 3)
+        if direction > 0:
+            x_cores, normx, XAX, normA, Xb, normb, nrmsc, rx, local_res, local_dx = _forward_sweep(
+                local_solver,
+                x_cores,
+                normx,
+                XAX,
+                block_A,
+                normA,
+                Xb,
+                block_b,
+                normb,
+                nrmsc,
+                rx,
+                N,
+                block_size,
+                real_tol,
+                d,
+                swp,
+                size_limit,
+                eps,
+                r_max
+            )
+        else:
+            x_cores, normx, XAX, normA, Xb, normb, nrmsc, rx, local_res, local_dx = _backward_sweep(
+                local_solver,
+                x_cores,
+                normx,
+                XAX,
+                block_A,
+                normA,
+                Xb,
+                block_b,
+                normb,
+                nrmsc,
+                rx,
+                N,
+                block_size,
+                real_tol,
+                d,
+                swp,
+                size_limit,
+                eps,
+                r_max
+            )
 
         if verbose:
             print('Starting Sweep:\n\tMax num of sweeps: %d' % swp)
@@ -444,9 +552,10 @@ def tt_block_gmres(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, local_sol
             print(f"\tTT-sol rank: {tt_ranks(x_cores)}")
             if rank_weighted_error:
                 print(f"\tRank-weighting: {np.round(rank_percent**2, decimals=2)} \n")
-
         if local_res < tol or local_dx < eps:
             break
+
+        direction *= -1
 
 
     if verbose:

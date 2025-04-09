@@ -371,6 +371,7 @@ def tt_fast_hadammard(train_tt_1, train_tt_2, eps=1e-18):
 
 
 def tt_kron(matrix_tt_1, matrix_tt_2):
+    # FIXME:  DO SVD right away to not be overbearing to memory
     result_tt = [einsum("rmnR, lijL -> rlminjRL", c_1, c_2, optimize=True).reshape(c_1.shape[0]*c_2.shape[0], c_1.shape[1]*c_2.shape[1], c_1.shape[2]*c_2.shape[2], c_1.shape[-1]*c_2.shape[-1]) for c_1, c_2 in zip(matrix_tt_1, matrix_tt_2)]
     return result_tt
 

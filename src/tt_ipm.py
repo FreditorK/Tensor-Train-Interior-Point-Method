@@ -1,14 +1,12 @@
 import sys
 import os
-from traceback import print_tb
 
-import numpy as np
 import scipy.linalg
 
 sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
-from src.tt_amen import tt_block_gmres, _block_local_product
+from src.tt_amen import tt_block_als, _block_local_product
 from src.tt_ineq_check import tt_pd_optimal_step_size
 
 def forward_backward_sub(L, b):
@@ -96,7 +94,8 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         mR_d = rhs[:, 1].reshape(m, 1)
         mR_c = rhs[:, 2].reshape(m, 1)
         L_L_Z = scip.linalg.cholesky(
-            einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(2, 1)], block_A_k[(2, 1)], XAX_k1[(2, 1)], optimize="greedy").reshape(m, m),
+            einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(2, 1)], block_A_k[(2, 1)], XAX_k1[(2, 1)], optimize="greedy").reshape(
+                m, m),
             check_finite=False, lower=True, overwrite_a=True
         )
         L_X = einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(2, 2)], block_A_k[(2, 2)], XAX_k1[(2, 2)], optimize="greedy").reshape(m, m)
@@ -139,7 +138,6 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
 
     return solution_now, block_res_old, min(block_res_new, block_res_old), rhs, norm_rhs
 
-
 def tt_infeasible_newton_system(
         lhs_skeleton,
         obj_tt,
@@ -165,8 +163,10 @@ def tt_infeasible_newton_system(
         L_Z = tt_rank_reduce(tt_kron(Z_tt, P), eps=op_tol, rank_weighted_error=True)
         L_X = tt_rank_reduce(tt_kron(P, X_tt), eps=op_tol, rank_weighted_error=True)
     else:
-        L_Z = tt_rank_reduce(tt_scale(0.5, tt_add(tt_kron(P, Z_tt), tt_kron(Z_tt, P))), eps=op_tol, rank_weighted_error=True)
-        L_X = tt_rank_reduce(tt_scale(0.5, tt_add(tt_kron(X_tt, P), tt_kron(P, X_tt))), eps=op_tol, rank_weighted_error=True)
+        L_Z = tt_rank_reduce(tt_scale(0.5, tt_add(tt_kron(P, Z_tt), tt_kron(Z_tt, P))), eps=op_tol,
+                             rank_weighted_error=True)
+        L_X = tt_rank_reduce(tt_scale(0.5, tt_add(tt_kron(X_tt, P), tt_kron(P, X_tt))), eps=op_tol,
+                             rank_weighted_error=True)
 
     X_tt = tt_reshape(X_tt, (4, ))
     Y_tt = tt_reshape(Y_tt, (4, ))
@@ -214,7 +214,9 @@ def _tt_symmetrise(matrix_tt, err_bound):
 
 
 def _tt_get_block(i, block_matrix_tt):
-    return  block_matrix_tt[:-1] + [block_matrix_tt[-1][:, i]]
+    if len(block_matrix_tt[0].shape) < len(block_matrix_tt[-1].shape):
+        return block_matrix_tt[:-1] + [block_matrix_tt[-1][:, i]]
+    return [block_matrix_tt[0][:, i]] + block_matrix_tt[1:]
 
 def _tt_ipm_newton_step(
             vec_obj_tt,
@@ -261,21 +263,23 @@ def _tt_ipm_newton_step(
     if verbose:
         print("--- Predictor  step ---")
     idx_add = int(active_ineq)
-    Delta_tt, res = solver(lhs_matrix_tt, rhs_vec_tt, None, 6)
+    Delta_tt, res = solver(lhs_matrix_tt, rhs_vec_tt, None, 8)
     Delta_X_tt = tt_rank_reduce(tt_reshape(_tt_get_block(1, Delta_tt), (2, 2)), eps=op_tol, rank_weighted_error=True)
     Delta_Z_tt = tt_rank_reduce(tt_reshape(_tt_get_block(2 + idx_add, Delta_tt), (2, 2)), eps=op_tol, rank_weighted_error=True)
     Delta_X_tt = _tt_symmetrise(Delta_X_tt, op_tol)
     Delta_Z_tt = _tt_symmetrise(Delta_Z_tt, op_tol)
+
 
     x_step_size, z_step_size, _ = _tt_line_search(
         X_tt, Z_tt,
         Delta_X_tt, Delta_Z_tt,
         op_tol, eps
     )
+
     ZX = tt_inner_prod(Z_tt, X_tt)
     mu = min(np.divide(ZX, 2**dim), 0.999)
 
-    if x_step_size < 0.99 or z_step_size < 0.99:
+    if x_step_size < 1 or z_step_size < 1:
         # Corrector
         if verbose:
             print("\n--- Centering-Corrector  step ---")
@@ -285,9 +289,9 @@ def _tt_ipm_newton_step(
             # No rank increase for operators
         else:
             L_Z = tt_scale(-0.5, tt_rank_reduce(tt_add(tt_kron(P, Delta_Z_tt), tt_kron(Delta_Z_tt, P)), eps=op_tol,
-                                              rank_weighted_error=True))
+                                                rank_weighted_error=True))
         sigma = ((ZX + x_step_size * z_step_size * tt_inner_prod(Delta_X_tt, Delta_Z_tt) + z_step_size * tt_inner_prod(
-            X_tt, Delta_Z_tt) + x_step_size * tt_inner_prod(Delta_X_tt, Z_tt)) / ZX) ** 3
+            X_tt, Delta_Z_tt) + x_step_size * tt_inner_prod(Delta_X_tt, Z_tt)) / ZX) ** 2
         rhs_vec_tt[2 + idx_add] = tt_rank_reduce(
             tt_add(
                 tt_scale(sigma*mu, tt_reshape(tt_identity(len(X_tt)), (4, ))),
@@ -300,7 +304,7 @@ def _tt_ipm_newton_step(
             rank_weighted_error=True
         )
 
-        Delta_tt, res = solver(lhs_matrix_tt, rhs_vec_tt, Delta_tt, 5)
+        Delta_tt, res = solver(lhs_matrix_tt, rhs_vec_tt, Delta_tt, 6)
         Delta_X_tt = tt_rank_reduce(tt_reshape(_tt_get_block(1, Delta_tt), (2, 2)), eps=op_tol, rank_weighted_error=True)
         Delta_Z_tt = tt_rank_reduce(tt_reshape(_tt_get_block(2 + idx_add, Delta_tt), (2, 2)), eps=op_tol, rank_weighted_error=True)
         Delta_X_tt = _tt_symmetrise(Delta_X_tt, op_tol)
@@ -327,6 +331,8 @@ def _tt_line_search(
 ):
     x_step_size, permitted_err_x = tt_pd_optimal_step_size(X_tt, Delta_X_tt, op_tol, eps=eps)
     z_step_size, permitted_err_z = tt_pd_optimal_step_size(Z_tt, Delta_Z_tt, op_tol, eps=eps)
+    if x_step_size == 1 and z_step_size == 1:
+        return 1, 1, min(permitted_err_x, permitted_err_z)
     tau = 0.9 + 0.09*min(x_step_size, z_step_size)
     return tau*x_step_size, tau*z_step_size, min(permitted_err_x, permitted_err_z)
 
@@ -356,7 +362,7 @@ def tt_ipm(
     bias_tt = tt_rank_reduce(tt_reshape(bias_tt, (4, )), eps=op_tol)
     # -------------
 
-    solver = lambda lhs, rhs, x0, nwsp: tt_block_gmres(
+    solver = lambda lhs, rhs, x0, nwsp: tt_block_als(
         lhs,
         rhs,
         x0=x0,
@@ -364,7 +370,7 @@ def tt_ipm(
         tol=min(feasibility_tol, centrality_tol),
         nswp=nwsp,
         verbose=verbose,
-        rank_weighted_error=True
+        rank_weighted_error=False
     )
     lhs_skeleton = {}
     lin_op_tt_adj = tt_transpose(lin_op_tt)
@@ -429,7 +435,6 @@ def tt_ipm(
             )
         if last:
             break
-        prev_pd_error = np.sum(pd_error)
     if verbose:
         print(f"---Terminated---")
         print(f"Converged in {iteration} iterations.")
