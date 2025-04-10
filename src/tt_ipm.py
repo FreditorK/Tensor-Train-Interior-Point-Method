@@ -109,7 +109,6 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         x = forward_backward_sub(L_L_Z, mR_c - L_X @ z)
         solution_now = np.transpose(np.vstack((y, x, z)).reshape(x_shape[1], x_shape[0], x_shape[2], x_shape[3]), (1, 0, 2, 3))
     else:
-        print("Sparse solve: ")
         inv_I = np.divide(1, einsum('lsr,smnS,LSR->lmL', XAX_k[(1, 2)], block_A_k[(1, 2)], XAX_k1[(1, 2)], optimize="greedy"))
         def mat_vec(x_vec):
             x_vec = _ipm_block_local_product(
@@ -335,10 +334,6 @@ def _tt_line_search(
         op_tol,
         eps
 ):
-    #print(scip.sparse.linalg.eigsh(tt_matrix_to_matrix(X_tt), k=1, which="SA")[0])
-    #print(scip.sparse.linalg.eigsh(tt_matrix_to_matrix(Delta_X_tt), k=1, which="SA")[0])
-    #print(scip.sparse.linalg.eigsh(tt_matrix_to_matrix(Z_tt), k=1, which="SA")[0])
-    #print(scip.sparse.linalg.eigsh(tt_matrix_to_matrix(Delta_Z_tt), k=1, which="SA")[0])
     x_step_size, permitted_err_x = tt_pd_optimal_step_size(X_tt, Delta_X_tt, op_tol, eps=eps)
     z_step_size, permitted_err_z = tt_pd_optimal_step_size(Z_tt, Delta_Z_tt, op_tol, eps=eps)
     if x_step_size == 1 and z_step_size == 1:
@@ -448,13 +443,12 @@ def tt_ipm(
                 f"Ranks X_tt: {tt_ranks(X_tt)}, Z_tt: {tt_ranks(Z_tt)}, \n"
                 f"      Y_tt: {tt_ranks(Y_tt)}, T_tt: {tt_ranks(T_tt) if active_ineq else None} \n"
             )
-    if verbose:
-        print(f"---Terminated---")
-        print(f"Converged in {iteration} iterations.")
-        print(f"Duality Gap: {100 * progress_percent:.4f}")
-        print(f"Primal-Dual error: {pd_error}")
-        print(
-            f"Ranks X_tt: {tt_ranks(X_tt)}, Z_tt: {tt_ranks(Z_tt)}, \n"
-            f"      Y_tt: {tt_ranks(Y_tt)}, T_tt: {tt_ranks(T_tt) if active_ineq else None} \n"
-        )
+    print(f"---Terminated---")
+    print(f"Converged in {iteration} iterations.")
+    print(f"Duality Gap: {100 * progress_percent:.4f}")
+    print(f"Primal-Dual error: {pd_error}")
+    print(
+        f"Ranks X_tt: {tt_ranks(X_tt)}, Z_tt: {tt_ranks(Z_tt)}, \n"
+        f"      Y_tt: {tt_ranks(Y_tt)}, T_tt: {tt_ranks(T_tt) if active_ineq else None} \n"
+    )
     return X_tt, Y_tt, T_tt, Z_tt, {"num_iters": iteration}
