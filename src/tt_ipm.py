@@ -6,7 +6,7 @@ import scipy.linalg
 sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
-from src.tt_amen import tt_block_als, _block_local_product
+from src.tt_amen import tt_block_mals, _block_local_product
 from src.tt_ineq_check import tt_pd_optimal_step_size
 
 def forward_backward_sub(L, b):
@@ -109,6 +109,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         x = forward_backward_sub(L_L_Z, mR_c - L_X @ z)
         solution_now = np.transpose(np.vstack((y, x, z)).reshape(x_shape[1], x_shape[0], x_shape[2], x_shape[3]), (1, 0, 2, 3))
     else:
+        print("Sparse solve: ")
         inv_I = np.divide(1, einsum('lsr,smnS,LSR->lmL', XAX_k[(1, 2)], block_A_k[(1, 2)], XAX_k1[(1, 2)], optimize="greedy"))
         def mat_vec(x_vec):
             x_vec = _ipm_block_local_product(
@@ -153,6 +154,7 @@ def tt_infeasible_newton_system(
         bias_tt_ineq,
         op_tol,
         feasibility_tol,
+        centrality_done,
         active_ineq,
         direction,
         eps
@@ -204,8 +206,9 @@ def tt_infeasible_newton_system(
     if dual_error > 0.5*feasibility_tol:
         rhs[1] = dual_feas
 
-    XZ_term = tt_fast_matrix_vec_mul(L_X, Z_tt, eps)
-    rhs[2 + idx_add] = tt_rank_reduce(tt_scale(-1, XZ_term), op_tol, rank_weighted_error=True)
+    if not centrality_done:
+        XZ_term = tt_fast_matrix_vec_mul(L_X, Z_tt, eps)
+        rhs[2 + idx_add] = tt_rank_reduce(tt_scale(-1, XZ_term), op_tol, rank_weighted_error=True)
 
     return lhs_skeleton, rhs, (primal_error, dual_error)
 
@@ -233,12 +236,17 @@ def _tt_ipm_newton_step(
             Z_tt,
             op_tol,
             feasibility_tol,
+            centrality_tol,
             eps,
             active_ineq,
             solver,
             direction,
             verbose
 ):
+    dim = len(Z_tt)
+    ZX = tt_inner_prod(Z_tt, X_tt)
+    mu = np.divide(ZX, 2**dim)
+    centrality_done = np.less(mu, centrality_tol)
     lhs_matrix_tt, rhs_vec_tt, primal_dual_error = tt_infeasible_newton_system(
         lhs_skeleton,
         vec_obj_tt,
@@ -254,11 +262,13 @@ def _tt_ipm_newton_step(
         bias_tt_ineq,
         op_tol,
         feasibility_tol,
+        centrality_done,
         active_ineq,
         direction,
         eps
     )
-    dim = len(Z_tt)
+    if centrality_done and np.less(primal_dual_error[0], feasibility_tol) and np.less(primal_dual_error[1], feasibility_tol):
+        return 0, 0, None, None, None, primal_dual_error, mu, 1
     # Predictor
     if verbose:
         print("--- Predictor  step ---")
@@ -269,17 +279,13 @@ def _tt_ipm_newton_step(
     Delta_X_tt = _tt_symmetrise(Delta_X_tt, op_tol)
     Delta_Z_tt = _tt_symmetrise(Delta_Z_tt, op_tol)
 
-
     x_step_size, z_step_size, _ = _tt_line_search(
         X_tt, Z_tt,
         Delta_X_tt, Delta_Z_tt,
         op_tol, eps
     )
 
-    ZX = tt_inner_prod(Z_tt, X_tt)
-    mu = min(np.divide(ZX, 2**dim), 0.999)
-
-    if x_step_size < 1 or z_step_size < 1:
+    if (x_step_size < 1 or z_step_size < 1) and not centrality_done:
         # Corrector
         if verbose:
             print("\n--- Centering-Corrector  step ---")
@@ -301,7 +307,7 @@ def _tt_ipm_newton_step(
                 )
             ),
             op_tol,
-            rank_weighted_error=True
+            rank_weighted_error=False
         )
 
         Delta_tt, res = solver(lhs_matrix_tt, rhs_vec_tt, Delta_tt, 6)
@@ -329,12 +335,17 @@ def _tt_line_search(
         op_tol,
         eps
 ):
+    #print(scip.sparse.linalg.eigsh(tt_matrix_to_matrix(X_tt), k=1, which="SA")[0])
+    #print(scip.sparse.linalg.eigsh(tt_matrix_to_matrix(Delta_X_tt), k=1, which="SA")[0])
+    #print(scip.sparse.linalg.eigsh(tt_matrix_to_matrix(Z_tt), k=1, which="SA")[0])
+    #print(scip.sparse.linalg.eigsh(tt_matrix_to_matrix(Delta_Z_tt), k=1, which="SA")[0])
     x_step_size, permitted_err_x = tt_pd_optimal_step_size(X_tt, Delta_X_tt, op_tol, eps=eps)
     z_step_size, permitted_err_z = tt_pd_optimal_step_size(Z_tt, Delta_Z_tt, op_tol, eps=eps)
     if x_step_size == 1 and z_step_size == 1:
         return 1, 1, min(permitted_err_x, permitted_err_z)
-    tau = 0.9 + 0.09*min(x_step_size, z_step_size)
-    return tau*x_step_size, tau*z_step_size, min(permitted_err_x, permitted_err_z)
+    tau_x = 0.9 + 0.09*x_step_size
+    tau_z = 0.9 + 0.09*z_step_size
+    return tau_x*x_step_size, tau_z*z_step_size, min(permitted_err_x, permitted_err_z)
 
 
 def tt_ipm(
@@ -357,12 +368,12 @@ def tt_ipm(
     # -------------
     # Reshaping
     lag_maps = {key: tt_rank_reduce(tt_reshape(value, (4, 4)), eps=op_tol) for key, value in lag_maps.items()}
-    obj_tt = tt_rank_reduce(tt_reshape(obj_tt, (4, )), eps=op_tol)
+    obj_tt = tt_normalise(tt_rank_reduce(tt_reshape(obj_tt, (4, )), eps=op_tol))
     lin_op_tt = tt_rank_reduce(tt_reshape(lin_op_tt, (4, 4)), eps=op_tol)
     bias_tt = tt_rank_reduce(tt_reshape(bias_tt, (4, )), eps=op_tol)
     # -------------
 
-    solver = lambda lhs, rhs, x0, nwsp: tt_block_als(
+    solver = lambda lhs, rhs, x0, nwsp: tt_block_mals(
         lhs,
         rhs,
         x0=x0,
@@ -385,15 +396,18 @@ def tt_ipm(
         bias_tt_ineq = tt_rank_reduce(tt_reshape(bias_tt_ineq, (4, )), eps=op_tol)
     else:
         lhs_skeleton[(1, 2)] = tt_reshape(tt_identity(2 * dim), (4, 4))
-    X_tt = tt_identity(dim)
+    x_initial_step = tt_norm(bias_tt) / tt_norm(tt_diagonal(lin_op_tt))
+    X_tt = tt_scale(x_initial_step, tt_identity(dim))
     Y_tt = tt_zero_matrix(2*dim)
     T_tt = None
     if active_ineq:
         T_tt = tt_reshape(tt_fast_matrix_vec_mul(lin_op_tt_ineq_adj, tt_reshape(tt_one_matrix(dim), (4, )), eps), (2, 2))
         T_tt = tt_normalise(T_tt)
     Z_tt = tt_identity(dim)
+    Delta_Z_tt = tt_scale(-1, tt_reshape(obj_tt, (2, 2)))
+    z_inital_step, _ = tt_pd_optimal_step_size(Z_tt, Delta_Z_tt, op_tol, eps=eps)
+    Z_tt = tt_rank_reduce(tt_add(Z_tt, tt_scale(0.9*z_inital_step, Delta_Z_tt)), eps=op_tol, rank_weighted_error=True)
     iteration = 0
-    last = False
     for iteration in range(1, max_iter):
         x_step_size, z_step_size, Delta_X_tt, Delta_Y_tt, Delta_Z_tt, pd_error, mu, sigma = _tt_ipm_newton_step(
             obj_tt,
@@ -410,32 +424,37 @@ def tt_ipm(
             Z_tt,
             op_tol,
             feasibility_tol,
+            centrality_tol,
             eps,
             active_ineq,
             solver,
             direction,
             verbose
         )
-        if np.less(np.sum(pd_error),2*feasibility_tol) and np.less(mu, centrality_tol):
-            last = True
+        progress_percent = np.abs(mu)
+        if x_step_size == 0 and z_step_size == 0:
+            break
         X_tt = tt_rank_reduce(tt_add(X_tt, tt_scale(x_step_size, Delta_X_tt)), eps=op_tol, rank_weighted_error=True)
         Y_tt = tt_add(Y_tt, tt_scale(z_step_size, Delta_Y_tt))
         Y_tt = tt_rank_reduce(tt_sub(Y_tt, tt_reshape(tt_fast_matrix_vec_mul(lag_maps["y"], tt_reshape(Y_tt, shape=(4, )), eps), (2, 2))), eps=op_tol, rank_weighted_error=True)
         Z_tt = tt_rank_reduce(tt_add(Z_tt, tt_scale(z_step_size, Delta_Z_tt)), eps=op_tol, rank_weighted_error=True)
-        progress_percent = np.abs(mu)
         if verbose:
             print(f"---Step {iteration}---")
             print(f"Step sizes: {x_step_size}, {z_step_size}")
-            print(f"Duality Gap: {100*progress_percent:.4f}%")
+            print(f"Duality Gap: {100*progress_percent:.4f}")
             print(f"Primal-Dual error: {pd_error}")
             print(f"Sigma: {sigma}")
             print(
                 f"Ranks X_tt: {tt_ranks(X_tt)}, Z_tt: {tt_ranks(Z_tt)}, \n"
                 f"      Y_tt: {tt_ranks(Y_tt)}, T_tt: {tt_ranks(T_tt) if active_ineq else None} \n"
             )
-        if last:
-            break
     if verbose:
         print(f"---Terminated---")
         print(f"Converged in {iteration} iterations.")
+        print(f"Duality Gap: {100 * progress_percent:.4f}")
+        print(f"Primal-Dual error: {pd_error}")
+        print(
+            f"Ranks X_tt: {tt_ranks(X_tt)}, Z_tt: {tt_ranks(Z_tt)}, \n"
+            f"      Y_tt: {tt_ranks(Y_tt)}, T_tt: {tt_ranks(T_tt) if active_ineq else None} \n"
+        )
     return X_tt, Y_tt, T_tt, Z_tt, {"num_iters": iteration}
