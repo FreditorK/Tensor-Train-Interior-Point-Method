@@ -367,7 +367,11 @@ def tt_ipm(
     bias_tt = tt_rank_reduce(tt_reshape(bias_tt, (4, )), eps=op_tol)
     # -------------
     # Normalisation
-    obj_tt = tt_normalise(obj_tt, radius=1) # TODO: normalize by the trace of sol_X because Z approx= C in trace and magnitude, this gives better conditioning
+    scaling_factor = np.sqrt(dim)
+    obj_tt = tt_normalise(obj_tt, radius=0.5*scaling_factor) # TODO: normalize by the trace of sol_X because Z approx= C in trace and magnitude, this gives better conditioning
+    lag_maps = {key: tt_scale(scaling_factor, value) for key, value in lag_maps.items()}
+    lin_op_tt = tt_scale(scaling_factor, lin_op_tt)
+    bias_tt = tt_scale(scaling_factor, bias_tt)
 
     solver = lambda lhs, rhs, x0, nwsp: tt_block_mals(
         lhs,
