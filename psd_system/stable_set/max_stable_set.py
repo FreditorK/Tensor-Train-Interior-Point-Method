@@ -42,6 +42,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Script with optional memory tracking.")
     parser.add_argument("--track_mem", action="store_true", help="Enable memory tracking from a certain point.")
     parser.add_argument("--config", type=str, required=True, help="Path to the YAML configuration file")
+    parser.add_argument('--rank', type=int, required=False, help='An integer input', default=0)
     args = parser.parse_args()
     with open(os.getcwd() + '/../../' + args.config, "r") as file:
         config = yaml.safe_load(file)
@@ -54,7 +55,8 @@ if __name__ == "__main__":
         for seed in config["seeds"]:
             np.random.seed(seed)
             t0 = time.time()
-            G = tt_rank_reduce(tt_random_graph(config["dim"], config["max_rank"]))
+            rank = config["max_rank"] if args.rank == 0 else args.rank
+            G = tt_rank_reduce(tt_random_graph(config["dim"], rank))
             t1 = time.time()
             if args.track_mem:
                 tracemalloc.start()
