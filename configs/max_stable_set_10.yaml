@@ -7,7 +7,7 @@ centrality_tol: !!float 5e-3
 verbose: False
 # TT-IPM
 tau: 0.9
-op_tol: !!float 8e-4
+op_tol: !!float 5e-5
 max_iter: !!int 15
 direction: "XZ+ZX"
 # Sketchy CGAL
