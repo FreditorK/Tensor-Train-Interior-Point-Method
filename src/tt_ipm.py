@@ -367,7 +367,7 @@ def tt_ipm(
     bias_tt = tt_rank_reduce(tt_reshape(bias_tt, (4, )), eps=op_tol)
     # -------------
     # Normalisation
-    obj_tt = tt_normalise(obj_tt, radius=tt_norm(bias_tt)) # TODO: normalize by the trace of sol_X because Z approx= C in trace and magnitude, this gives better conditioning
+    obj_tt = tt_normalise(obj_tt, radius=1) # TODO: normalize by the trace of sol_X because Z approx= C in trace and magnitude, this gives better conditioning
 
     solver = lambda lhs, rhs, x0, nwsp: tt_block_mals(
         lhs,
