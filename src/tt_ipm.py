@@ -360,20 +360,21 @@ def tt_ipm(
 ):
     active_ineq = lin_op_tt_ineq is not None or bias_tt_ineq is not None
     dim = len(obj_tt)
-    # -------------
     # Reshaping
     lag_maps = {key: tt_rank_reduce(tt_reshape(value, (4, 4)), eps=op_tol) for key, value in lag_maps.items()}
-    obj_tt = tt_normalise(tt_rank_reduce(tt_reshape(obj_tt, (4, )), eps=op_tol))
+    obj_tt = tt_rank_reduce(tt_reshape(obj_tt, (4, )), eps=op_tol)
     lin_op_tt = tt_rank_reduce(tt_reshape(lin_op_tt, (4, 4)), eps=op_tol)
     bias_tt = tt_rank_reduce(tt_reshape(bias_tt, (4, )), eps=op_tol)
     # -------------
+    # Normalisation
+    obj_tt = tt_normalise(obj_tt, radius=tt_norm(bias_tt)) # TODO: normalize by the trace of sol_X because Z approx= C in trace and magnitude, this gives better conditioning
 
     solver = lambda lhs, rhs, x0, nwsp: tt_block_mals(
         lhs,
         rhs,
         x0=x0,
         local_solver=_ipm_local_solver,
-        tol=min(feasibility_tol, centrality_tol),
+        tol=0.5*op_tol,
         nswp=nwsp,
         verbose=verbose,
         rank_weighted_error=False

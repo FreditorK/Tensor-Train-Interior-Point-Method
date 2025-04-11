@@ -462,7 +462,7 @@ def tt_norm(train_tt):
     return np.sqrt(tt_inner_prod(train_tt, train_tt))
 
 def tt_diag(vec_tt):
-    identity = np.eye(2)
+    identity = np.eye(vec_tt[0].shape[1])
     basis = [einsum("ij, rjR -> rijR", identity, c, optimize=True) for c in vec_tt]
     return tt_rank_reduce(basis)
 
