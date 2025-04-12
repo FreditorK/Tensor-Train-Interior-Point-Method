@@ -196,7 +196,6 @@ def tt_pd_optimal_step_size(A, Delta, op_tol, nswp=10, eps=1e-12, verbose=False)
                 optimize=True
             ).reshape(rx[k] * N[k] * rx[k + 1], rx[k] * N[k] * rx[k + 1])
 
-            print(np.linalg.matrix_rank(D), len(D))
             if is_psd(D, eps):
                 step_size = min(step_size, 1)
             else:
