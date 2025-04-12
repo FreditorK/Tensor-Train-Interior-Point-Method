@@ -494,7 +494,7 @@ def tt_block_mals(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, local_solv
     normx = np.ones((d - 1))
     real_tol = (tol / np.sqrt(d))*np.ones(d-1)
     r_max = block_size*int(np.sqrt(d)*d)
-    size_limit = 0.25*r_max*N[0]*r_max
+    size_limit = 0.2*r_max*N[0]*r_max
 
     for swp in range(nswp):
         if rank_weighted_error:

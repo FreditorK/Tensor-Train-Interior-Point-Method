@@ -125,7 +125,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
             linear_op,
             local_rhs.reshape(-1, 1),
             rtol=1e-3*block_res_old,
-            maxiter=100
+            maxiter=50
         )
         solution_now = np.transpose(solution_now.reshape(2, x_shape[0], x_shape[2], x_shape[3]), (1, 0, 2, 3)) + previous_solution[:, :2]
         z = inv_I * (rhs[:, 1] - einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[(1, 0)], block_A_k[(1, 0)], XAX_k1[(1, 0)], solution_now[:, 0], optimize="greedy"))
