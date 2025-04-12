@@ -156,6 +156,9 @@ def tt_pd_optimal_step_size(A, Delta, op_tol, nswp=10, eps=1e-12, verbose=False)
         t0 = time.time()
     x_cores = tt_random_gaussian(list(np.array(tt_ranks(A)) + np.array(tt_ranks(Delta))), (2,))
 
+    scaling_factor = tt_norm(A)
+    A = tt_scale(scaling_factor, A)
+    Delta = tt_scale(scaling_factor, Delta)
     d = len(x_cores)
     rx = np.array([1] + tt_ranks(x_cores) + [1])
     N = np.array([c.shape[1] for c in x_cores])
@@ -192,19 +195,21 @@ def tt_pd_optimal_step_size(A, Delta, op_tol, nswp=10, eps=1e-12, verbose=False)
                 XDX[k], Delta[k], XDX[k + 1],
                 optimize=True
             ).reshape(rx[k] * N[k] * rx[k + 1], rx[k] * N[k] * rx[k + 1])
-            if is_psd(D):
+
+            print(np.linalg.matrix_rank(D), len(D))
+            if is_psd(D, eps):
                 step_size = min(step_size, 1)
             else:
                 try:
                     L = scip.linalg.cholesky(B, check_finite=False, lower=True)
                     L_inv = scip.linalg.solve_triangular(L, np.eye(L.shape[0]), lower=True)
-                    local_step_size_inv, _ = scip.sparse.linalg.eigsh(-L_inv @ D @ L_inv.T, k=1, which="LA")
+                    local_step_size_inv, _ = scip.sparse.linalg.eigsh(-L_inv @ D @ L_inv.T, tol=eps, k=1, which="LA")
                     step_size = min(step_size, (1 - op_tol) / local_step_size_inv[0])
                 except:
                     return 0, 0
 
             B += step_size * D
-            eig_val, solution_now = scip.sparse.linalg.eigsh(B, k=1, which="SA", v0=previous_solution)
+            eig_val, solution_now = scip.sparse.linalg.eigsh(B, tol=eps, k=1, which="SA", v0=previous_solution)
             eig_vals[k] = eig_val
             max_res = max(max_res, np.linalg.norm(B @ previous_solution - eig_val * previous_solution))
 
