@@ -9,7 +9,6 @@ sys.path.append(os.getcwd() + '/../../')
 import time
 from src.tt_ops import *
 from src.baselines import *
-from scipy.sparse import csr_matrix
 
 
 if __name__ == "__main__":

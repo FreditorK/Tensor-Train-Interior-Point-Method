@@ -53,6 +53,7 @@ if __name__ == "__main__":
         feasibility_errors = []
         num_iters = []
         for seed in config["seeds"]:
+            print("Seed: ", seed)
             try:
                 np.random.seed(seed)
                 t0 = time.time()
@@ -88,7 +89,6 @@ if __name__ == "__main__":
                     current, peak = tracemalloc.get_traced_memory()
                     tracemalloc.stop()  # Stop tracking after measuring
                     memory.append(peak / 10 ** 6)
-                problem_creation_times.append(t2 - t1)
                 runtimes.append(t3 - t2)
                 complementary_slackness.append(tt_inner_prod(X_tt, Z_tt))
                 primal_res = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(L_tt, tt_vec(X_tt)), tt_vec(bias_tt)),
@@ -96,8 +96,14 @@ if __name__ == "__main__":
 
                 feasibility_errors.append(tt_inner_prod(primal_res,  primal_res))
                 num_iters.append(info["num_iters"])
+                print(f"Converged after avg {num_iters[-1]:.1f} iterations")
+                print(f"Problem created in avg {problem_creation_times[-1]:.3f}s")
+                print(f"Problem solved in avg {runtimes[-1]:.3f}s")
+                print(f"Peak memory avg {memory[-1]:.3f} MB")
+                print(f"Complementary Slackness avg: {complementary_slackness[-1]}")
+                print(f"Total feasibility error  avg: {feasibility_errors[-1]}")
             except Exception as err:
-                print("An error occurred:", err)
+                print(f"An error occurred {seed}:", err)
         print(f"Converged after avg {np.mean(num_iters):.1f} iterations")
         print(f"Problem created in avg {np.mean(problem_creation_times):.3f}s")
         print(f"Problem solved in avg {np.mean(runtimes):.3f}s")
