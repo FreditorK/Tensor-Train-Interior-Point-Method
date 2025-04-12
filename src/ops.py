@@ -48,8 +48,4 @@ def safe_multi_dot(matrices: List[np.array]):
     return []
 
 def is_psd(matrix):
-    try:
-        _ = scip.linalg.cholesky(matrix, check_finite=False, lower=True)
-    except:
-        return False
-    return True
+    return scip.sparse.linalg.eigsh(matrix, k=1, which="SA")[0] > 0
