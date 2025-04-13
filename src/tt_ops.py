@@ -152,7 +152,7 @@ def tt_rank_reduce(train_tt: List[np.array], eps=1e-18, rank_weighted_error=Fals
         idx_shape = tt_core.shape
         next_idx_shape = train_tt[idx + 1].shape
         k = len(idx_shape) - 1
-        u, s, v_t = scp.linalg.svd(train_tt[idx].reshape(rank * np.prod(idx_shape[1:k], dtype=int), -1), full_matrices=False, check_finite=False)
+        u, s, v_t = scp.linalg.svd(train_tt[idx].reshape(rank * np.prod(idx_shape[1:k], dtype=int), -1), full_matrices=False, check_finite=False, overwrite_a=True)
         next_rank = prune_singular_vals(s, eps[idx])
         s = s[:next_rank]
         u = u[:, :next_rank]
