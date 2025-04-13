@@ -3,8 +3,8 @@ import os
 
 sys.path.append(os.getcwd() + '/../')
 from src.tt_ops import *
-from src.tt_ops import tt_rank_reduce, _tt_generalised_nystroem, _tt_mat_core_collapse
-from src.tt_ineq_check import tt_is_geq, tt_is_leq
+from src.tt_ops import tt_rank_reduce, _tt_generalised_nystroem
+from src.tt_ineq_check import tt_is_geq
 
 np.random.seed(4)
 
@@ -16,5 +16,5 @@ b_tt = tt_vec(tt_scale(-0.11, [np.ones((1, 2, 2, 1)) for _ in range(2)]))
 
 check, val, res = tt_is_geq(s_matrix_tt, X_tt, b_tt)
 print(check, val, res)
-print(np.min(np.round(tt_vec_to_vec(tt_sub(b_tt, tt_matrix_vec_mul(s_matrix_tt, tt_vec(X_tt)))), decimals=5)))
+print(np.min(np.round(tt_vec_to_vec(tt_sub(b_tt, tt_fast_matrix_vec_mul(s_matrix_tt, tt_vec(X_tt)))), decimals=5)))
 

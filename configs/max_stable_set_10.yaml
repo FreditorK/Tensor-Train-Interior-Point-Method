@@ -1,15 +1,15 @@
 # Common
 dim: !!int 10
 max_rank: !!int 4
-seeds: [7, 8]
+seeds: [7, 10]
 feasibility_tol: !!float 5e-5
 centrality_tol: !!float 1e-3
-verbose: False
+verbose: True
 # TT-IPM
 tau: 0.9
 op_tol: !!float 1e-5
 max_iter: !!int 15
 direction: "XZ+ZX"
 # Sketchy CGAL
-sketch_cgal_rank: !!int 10
+sketch_cgal_rank: !!int 50
 duality_tol: 0.5

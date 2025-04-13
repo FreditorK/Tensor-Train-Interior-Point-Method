@@ -33,6 +33,6 @@ print(step_size)
 print(np.linalg.eigvals(A + step_size*B))
 
 #print(tt_min_eig(tt_add(X_tt, s_matrix_tt))[0], np.linalg.eigvals(A + B))
-alpha, a = tt_pd_optimal_step_size(X_tt, s_matrix_tt, op_tol=1e-12)
+alpha, a = tt_pd_optimal_step_size(X_tt, s_matrix_tt, op_tol=1e-12, verbose=True)
 print(alpha, a)
 print(np.linalg.eigvals(A + alpha*B))

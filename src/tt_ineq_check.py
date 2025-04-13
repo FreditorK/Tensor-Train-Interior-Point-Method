@@ -3,6 +3,8 @@ import sys
 import os
 import time
 
+from scipy.constants import sigma
+
 sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
@@ -185,11 +187,6 @@ def tt_pd_optimal_step_size(A, Delta, op_tol, nswp=10, eps=1e-12, verbose=False)
         max_res = 0
         for k in range(d):
             previous_solution = np.reshape(x_cores[k], (-1, 1))
-            B = einsum(
-                "lsr,smnS,LSR->lmLrnR",
-                XAX[k], A[k], XAX[k + 1],
-                optimize=True
-            ).reshape(rx[k] * N[k] * rx[k + 1], rx[k] * N[k] * rx[k + 1])
             D = einsum(
                 "lsr,smnS,LSR->lmLrnR",
                 XDX[k], Delta[k], XDX[k + 1],
@@ -198,19 +195,31 @@ def tt_pd_optimal_step_size(A, Delta, op_tol, nswp=10, eps=1e-12, verbose=False)
 
             if is_psd(D, eps):
                 step_size = min(step_size, 1)
+                D += einsum(
+                    "lsr,smnS,LSR->lmLrnR",XAX[k], A[k], XAX[k + 1], optimize="greedy"
+                ).reshape(rx[k] * N[k] * rx[k + 1], rx[k] * N[k] * rx[k + 1])
+                eig_val, solution_now = scip.sparse.linalg.eigsh(D, tol=0.1 * eps, k=1, which="SM",
+                                                                 v0=previous_solution)
             else:
                 try:
-                    L = scip.linalg.cholesky(B, check_finite=False, lower=True)
-                    L_inv = scip.linalg.solve_triangular(L, np.eye(L.shape[0]), lower=True)
-                    local_step_size_inv, _ = scip.sparse.linalg.eigsh(-L_inv @ D @ L_inv.T, tol=eps, k=1, which="LA")
+                    L = scip.linalg.cholesky(
+                        einsum(
+                            "lsr,smnS,LSR->lmLrnR",XAX[k], A[k], XAX[k + 1], optimize="greedy"
+                        ).reshape(rx[k] * N[k] * rx[k + 1], rx[k] * N[k] * rx[k + 1]), check_finite=False, lower=True, overwrite_a=True
+                    )
+                    L_inv = scip.linalg.solve_triangular(L, np.eye(L.shape[0]), lower=True,  overwrite_b=True, check_finite=False)
+                    local_step_size_inv, solution_now = scip.sparse.linalg.eigsh(-L_inv @ D @ L_inv.T, tol=0.1*eps, k=1, which="LA")
                     step_size = min(step_size, (1 - op_tol) / local_step_size_inv[0])
+                    eig_val, solution_now = scip.sparse.linalg.eigsh(L_inv @ D @ L_inv.T, tol=0.1 * eps, k=1, which="SA")
+                    eig_val = 1 + step_size*eig_val[0]
+                    solution_now = L_inv.T @ solution_now
+                    solution_now /= np.linalg.norm(solution_now)
                 except:
                     return 0, 0
 
-            B += step_size * D
-            eig_val, solution_now = scip.sparse.linalg.eigsh(B, tol=eps, k=1, which="SA", v0=previous_solution)
+
             eig_vals[k] = eig_val
-            max_res = max(max_res, np.linalg.norm(B @ previous_solution - eig_val * previous_solution))
+            max_res = max(max_res, 1- np.sum(np.abs(solution_now.T @ previous_solution)))
 
             solution_now = np.reshape(solution_now, (rx[k] * N[k], rx[k + 1]))
 
