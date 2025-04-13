@@ -293,7 +293,8 @@ def swap_cores(core_a, core_b, eps):
         supercore = einsum("rms,snR->rnmR", core_a, core_b, optimize=True)
         if np.linalg.norm(supercore) < eps:
             return np.zeros((core_a.shape[0], core_b.shape[1], 1)), np.zeros((1, core_a.shape[1], core_b.shape[2]))
-        u, s, v = scip.linalg.svd(np.reshape(supercore, (core_a.shape[0] * core_b.shape[1], -1)), full_matrices=False, check_finite=False)
+        print(np.reshape(supercore, (core_a.shape[0] * core_b.shape[1], -1)))
+        u, s, v = scip.linalg.svd(np.reshape(supercore, (core_a.shape[0] * core_b.shape[1], -1)), full_matrices=False, check_finite=False, overwrite_a=True)
         u = u @ np.diag(s)
         r = prune_singular_vals(s, eps)
         u = u[:, :r]
@@ -303,7 +304,7 @@ def swap_cores(core_a, core_b, eps):
         supercore = einsum("rmas,snbR->rnbmaR", core_a, core_b, optimize=True)
         if np.linalg.norm(supercore) < eps:
             return np.zeros((core_a.shape[0], core_b.shape[1], core_b.shape[2], 1)), np.zeros((1, core_a.shape[1], core_a.shape[2], core_b.shape[3]))
-        u, s, v = scip.linalg.svd(np.reshape(supercore, (core_a.shape[0] * core_b.shape[1] * core_b.shape[2], -1)), full_matrices=False, check_finite=False)
+        u, s, v = scip.linalg.svd(np.reshape(supercore, (core_a.shape[0] * core_b.shape[1] * core_b.shape[2], -1)), full_matrices=False, check_finite=False, overwrite_a=True)
         u = u @ np.diag(s)
         r = prune_singular_vals(s, eps)
         u = u[:, :r]

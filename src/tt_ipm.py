@@ -206,7 +206,6 @@ def tt_infeasible_newton_system(
         rhs[1] = dual_feas
 
     if not centrality_done:
-        print(tt_norm(X_tt), tt_norm(Z_tt))
         XZ_term = tt_fast_matrix_vec_mul(L_X, Z_tt, eps)
         rhs[2 + idx_add] = tt_rank_reduce(tt_scale(-1, XZ_term), op_tol, rank_weighted_error=True)
 
