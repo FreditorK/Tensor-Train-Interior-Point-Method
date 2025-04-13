@@ -183,7 +183,6 @@ def tt_infeasible_newton_system(
     lhs_skeleton[(2 + idx_add, 2 + idx_add)] = L_X
 
     rhs = {}
-    print(tt_rank_reduce(tt_add(Z_tt, obj_tt), eps, rank_weighted_error=True))
     dual_feas = tt_sub(tt_fast_matrix_vec_mul(lin_op_tt_adj, Y_tt, eps), tt_rank_reduce(tt_add(Z_tt, obj_tt), eps, rank_weighted_error=True))
     primal_feas = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(lin_op_tt, X_tt, eps), bias_tt), op_tol, rank_weighted_error=True)  # primal feasibility
     primal_error = tt_inner_prod(primal_feas, primal_feas)
@@ -207,6 +206,7 @@ def tt_infeasible_newton_system(
         rhs[1] = dual_feas
 
     if not centrality_done:
+        print(tt_norm(X_tt), tt_norm(Z_tt))
         XZ_term = tt_fast_matrix_vec_mul(L_X, Z_tt, eps)
         rhs[2 + idx_add] = tt_rank_reduce(tt_scale(-1, XZ_term), op_tol, rank_weighted_error=True)
 
