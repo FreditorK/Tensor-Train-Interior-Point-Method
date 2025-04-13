@@ -183,7 +183,7 @@ def tt_infeasible_newton_system(
     lhs_skeleton[(2 + idx_add, 2 + idx_add)] = L_X
 
     rhs = {}
-    dual_feas = tt_sub(tt_fast_matrix_vec_mul(lin_op_tt_adj, Y_tt, eps), tt_rank_reduce(tt_add(Z_tt, obj_tt), eps, rank_weighted_error=True))
+    dual_feas = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(lin_op_tt_adj, Y_tt, eps), tt_rank_reduce(tt_add(Z_tt, obj_tt), eps, rank_weighted_error=True)), op_tol, rank_weighted_error=True)
     primal_feas = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(lin_op_tt, X_tt, eps), bias_tt), op_tol, rank_weighted_error=True)  # primal feasibility
     primal_error = tt_inner_prod(primal_feas, primal_feas)
     if primal_error > 0.5*feasibility_tol:
@@ -200,14 +200,12 @@ def tt_infeasible_newton_system(
         #primal_ineq_error = tt_inner_prod(primal_feas_ineq, primal_feas_ineq)
         rhs[2] = primal_feas_ineq
 
-    dual_feas = tt_rank_reduce(dual_feas, op_tol, rank_weighted_error=True)
     dual_error = tt_inner_prod(dual_feas, dual_feas)
     if dual_error > 0.5*feasibility_tol:
         rhs[1] = dual_feas
 
     if not centrality_done:
-        XZ_term = tt_fast_matrix_vec_mul(L_X, Z_tt, eps)
-        rhs[2 + idx_add] = tt_rank_reduce(tt_scale(-1, XZ_term), op_tol, rank_weighted_error=True)
+        rhs[2 + idx_add] = tt_rank_reduce(tt_scale(-1, tt_fast_matrix_vec_mul(L_Z, X_tt, eps)), op_tol, rank_weighted_error=True)
 
     return lhs_skeleton, rhs, (primal_error, dual_error)
 
@@ -288,12 +286,10 @@ def _tt_ipm_newton_step(
         # Corrector
         if verbose:
             print("\n--- Centering-Corrector  step ---")
-        P = tt_identity(dim)
         if direction == "XZ":
-            L_Z = tt_scale(-1, tt_rank_reduce(tt_kron(Delta_Z_tt, P), eps=op_tol, rank_weighted_error=True))
-            # No rank increase for operators
+            Delta_XZ_term = tt_scale(-1, tt_rank_reduce(tt_fast_mat_mat_mul(Delta_Z_tt, Delta_X_tt, eps), eps=op_tol, rank_weighted_error=True))
         else:
-            L_Z = tt_scale(-0.5, tt_rank_reduce(tt_add(tt_kron(P, Delta_Z_tt), tt_kron(Delta_Z_tt, P)), eps=op_tol,
+            Delta_XZ_term = tt_scale(-0.5, tt_rank_reduce(tt_add(tt_fast_mat_mat_mul(Delta_X_tt, Delta_Z_tt, eps), tt_fast_mat_mat_mul(Delta_Z_tt, Delta_X_tt, eps)), eps=op_tol,
                                                 rank_weighted_error=True))
         sigma = ((ZX + x_step_size * z_step_size * tt_inner_prod(Delta_X_tt, Delta_Z_tt) + z_step_size * tt_inner_prod(
             X_tt, Delta_Z_tt) + x_step_size * tt_inner_prod(Delta_X_tt, Z_tt)) / ZX) ** 2
@@ -302,7 +298,7 @@ def _tt_ipm_newton_step(
                 tt_scale(sigma*mu, tt_reshape(tt_identity(len(X_tt)), (4, ))),
                 tt_add(
                 rhs_vec_tt[2 + idx_add],
-                tt_fast_matrix_vec_mul(L_Z, tt_reshape(Delta_X_tt, (4, )), eps)
+                tt_reshape(Delta_XZ_term, (4, ))
                 )
             ),
             op_tol,
@@ -435,8 +431,8 @@ def tt_ipm(
         if x_step_size == 0 and z_step_size == 0:
             break
         X_tt = tt_rank_reduce(tt_add(X_tt, tt_scale(x_step_size, Delta_X_tt)), eps=op_tol, rank_weighted_error=True)
-        Y_tt = tt_add(Y_tt, tt_scale(z_step_size, Delta_Y_tt))
-        Y_tt = tt_rank_reduce(tt_sub(Y_tt, tt_reshape(tt_fast_matrix_vec_mul(lag_maps["y"], tt_reshape(Y_tt, shape=(4, )), eps), (2, 2))), eps=op_tol, rank_weighted_error=True)
+        Y_tt =  tt_rank_reduce(tt_add(Y_tt, tt_scale(z_step_size, Delta_Y_tt)), eps=0.5*op_tol, rank_weighted_error=True)
+        Y_tt = tt_rank_reduce(tt_sub(Y_tt, tt_reshape(tt_fast_matrix_vec_mul(lag_maps["y"], tt_reshape(Y_tt, shape=(4, )), eps), (2, 2))), eps=0.5*op_tol, rank_weighted_error=True)
         Z_tt = tt_rank_reduce(tt_add(Z_tt, tt_scale(z_step_size, Delta_Z_tt)), eps=op_tol, rank_weighted_error=True)
         if verbose:
             print(f"---Step {iteration}---")

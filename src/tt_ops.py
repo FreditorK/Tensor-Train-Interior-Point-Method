@@ -290,21 +290,20 @@ def prune_singular_vals(s, eps):
 
 def swap_cores(core_a, core_b, eps):
     if len(core_a.shape) == 3 and len(core_b.shape) == 3:
-        supercore = einsum("rms,snR->rnmR", core_a, core_b, optimize=True)
+        supercore = einsum("rms,snR->rnmR", core_a, core_b, optimize="greedy")
         if np.linalg.norm(supercore) < eps:
             return np.zeros((core_a.shape[0], core_b.shape[1], 1)), np.zeros((1, core_a.shape[1], core_b.shape[2]))
-        print(np.reshape(supercore, (core_a.shape[0] * core_b.shape[1], -1)))
-        u, s, v = scip.linalg.svd(np.reshape(supercore, (core_a.shape[0] * core_b.shape[1], -1)), full_matrices=False, check_finite=False, overwrite_a=True)
+        u, s, v = scip.linalg.svd(np.reshape(supercore, (core_a.shape[0] * core_b.shape[1], -1)), full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
         u = u @ np.diag(s)
         r = prune_singular_vals(s, eps)
         u = u[:, :r]
         v = v[:r, :]
         return np.reshape(u, (core_a.shape[0], core_b.shape[1], -1)), np.reshape(v,(-1, core_a.shape[1], core_b.shape[2]))
     elif len(core_a.shape) == 4 and len(core_b.shape) == 4:
-        supercore = einsum("rmas,snbR->rnbmaR", core_a, core_b, optimize=True)
+        supercore = einsum("rmas,snbR->rnbmaR", core_a, core_b, optimize="greedy")
         if np.linalg.norm(supercore) < eps:
             return np.zeros((core_a.shape[0], core_b.shape[1], core_b.shape[2], 1)), np.zeros((1, core_a.shape[1], core_a.shape[2], core_b.shape[3]))
-        u, s, v = scip.linalg.svd(np.reshape(supercore, (core_a.shape[0] * core_b.shape[1] * core_b.shape[2], -1)), full_matrices=False, check_finite=False, overwrite_a=True)
+        u, s, v = scip.linalg.svd(np.reshape(supercore, (core_a.shape[0] * core_b.shape[1] * core_b.shape[2], -1)), full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
         u = u @ np.diag(s)
         r = prune_singular_vals(s, eps)
         u = u[:, :r]
@@ -321,7 +320,7 @@ def tt_fast_matrix_vec_mul(matrix_tt: List[np.array], vec_tt: List[np.array], ep
 
     cores = [np.transpose(c, (2, 1, 0)) for c in vec_tt[::-1]]
     for i in range(dim):
-        cores[0] = einsum("mabk,kbn->man", matrix_tt[dim - i - 1], cores[0], optimize=True)
+        cores[0] = einsum("mabk,kbn->man", matrix_tt[dim - i - 1], cores[0], optimize="greedy")
 
         if i != dim - 1:
             for j in range(i, -1, -1):

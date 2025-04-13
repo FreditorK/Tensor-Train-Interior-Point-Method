@@ -331,10 +331,13 @@ def _forward_sweep(
             solution_now = np.reshape(x_cores[k], (rx[k] * block_size, N[k] * rx[k + 1])).T
 
         if k > 0:
-            u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True)
+            if min(rx[k] * block_size, N[k] * rx[k + 1]) > r_max:
+                u, s, v = scip.sparse.linalg.svds(solution_now, k=r_max, tol=eps, which="LM")
+            else:
+                u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True)
             v = s.reshape(-1, 1) * v
             if swp > 0:
-                r_start = min(prune_singular_vals(s, real_tol[k - 1]), r_max)
+                r_start = prune_singular_vals(s, real_tol[k - 1])
                 solution = np.reshape((u[:, :r_start] @ v[:r_start]).T, (rx[k], block_size, N[k], rx[k + 1]))
                 res = _block_local_product(XAX[k], block_A[k], XAX[k + 1], solution) - rhs
                 r = r_start
@@ -414,12 +417,15 @@ def _backward_sweep(
             solution_now = np.reshape(x_cores[k], (rx[k] * N[k],  block_size * rx[k + 1]))
 
         if k < d - 1:
-            u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True)
+            if min(rx[k] * N[k],  block_size * rx[k + 1]) > r_max:
+                u, s, v = scip.sparse.linalg.svds(solution_now, k=r_max, tol=eps, which="LM")
+            else:
+                u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True)
             v = s.reshape(-1, 1) * v
             u = u.reshape(rx[k], N[k], -1)
             v = v.reshape(-1, block_size, rx[k + 1])
             if swp > 0:
-                r_start = min(prune_singular_vals(s, real_tol[k]), r_max)
+                r_start = prune_singular_vals(s, real_tol[k])
                 solution = einsum("rbR, Rdk -> rbdk", u[:, :, :r_start], v[:r_start], optimize="greedy")
                 res = _block_local_product(XAX[k], block_A[k], XAX[k + 1], np.transpose(solution, (0, 2, 1, 3))) - rhs
                 r = r_start
