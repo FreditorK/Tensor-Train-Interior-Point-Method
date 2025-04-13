@@ -338,8 +338,8 @@ def _forward_sweep(
             v = s.reshape(-1, 1) * v
             if swp > 0:
                 r_start = prune_singular_vals(s, real_tol[k - 1])
-                solution = np.reshape((u[:, :r_start] @ v[:r_start]).T, (rx[k], block_size, N[k], rx[k + 1]))
-                res = _block_local_product(XAX[k], block_A[k], XAX[k + 1], solution) - rhs
+                solution_now = np.reshape((u[:, :r_start] @ v[:r_start]).T, (rx[k], block_size, N[k], rx[k + 1]))
+                res = _block_local_product(XAX[k], block_A[k], XAX[k + 1], solution_now) - rhs
                 r = r_start
                 for r in range(r_start - 1, 0, -1):
                     res -= _block_local_product(XAX[k], block_A[k], XAX[k + 1],
@@ -426,8 +426,8 @@ def _backward_sweep(
             v = v.reshape(-1, block_size, rx[k + 1])
             if swp > 0:
                 r_start = prune_singular_vals(s, real_tol[k])
-                solution = einsum("rbR, Rdk -> rbdk", u[:, :, :r_start], v[:r_start], optimize="greedy")
-                res = _block_local_product(XAX[k], block_A[k], XAX[k + 1], np.transpose(solution, (0, 2, 1, 3))) - rhs
+                solution_now = einsum("rbR, Rdk -> rbdk", u[:, :, :r_start], v[:r_start], optimize="greedy")
+                res = _block_local_product(XAX[k], block_A[k], XAX[k + 1], np.transpose(solution_now, (0, 2, 1, 3))) - rhs
                 r = r_start
                 for r in range(r_start - 1, 0, -1):
                     res -= _block_local_product(XAX[k], block_A[k], XAX[k + 1], np.transpose(

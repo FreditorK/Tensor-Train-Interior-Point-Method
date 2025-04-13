@@ -11,5 +11,5 @@ op_tol: !!float 4e-4
 max_iter: !!int 15
 direction: "XZ+ZX"
 # Sketchy CGAL
-sketch_cgal_rank: !!int 10
+sketch_cgal_rank: !!int 20
 duality_tol: 0.5

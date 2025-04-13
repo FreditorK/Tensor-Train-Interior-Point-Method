@@ -38,53 +38,50 @@ if __name__ == "__main__":
     num_iters = []
     for seed in config["seeds"]:
         print("Seed: ", seed)
-        try:
-            np.random.seed(seed)
-            t0 = time.time()
-            rank = config["max_rank"] if args.rank == 0 else args.rank
-            G_tt = tt_rank_reduce(tt_random_graph(config["dim"], rank))
-            t1 = time.time()
-            if args.track_mem:
-                tracemalloc.start()
-            L_tt = tt_diag_op(config["dim"])
-            bias_tt = tt_identity(config["dim"])
+        np.random.seed(seed)
+        t0 = time.time()
+        rank = config["max_rank"] if args.rank == 0 else args.rank
+        G_tt = tt_rank_reduce(tt_random_graph(config["dim"], rank))
+        t1 = time.time()
+        if args.track_mem:
+            tracemalloc.start()
+        L_tt = tt_diag_op(config["dim"])
+        bias_tt = tt_identity(config["dim"])
 
-            lag_maps = {"y": tt_rank_reduce(tt_diag(tt_vec(tt_sub(tt_one_matrix(config["dim"]), tt_identity(config["dim"])))))}
+        lag_maps = {"y": tt_rank_reduce(tt_diag(tt_vec(tt_sub(tt_one_matrix(config["dim"]), tt_identity(config["dim"])))))}
 
-            t2 = time.time()
-            X_tt, Y_tt, T_tt, Z_tt, info = tt_ipm(
-                lag_maps,
-                G_tt,
-                L_tt,
-                bias_tt,
-                max_iter=config["max_iter"],
-                verbose=config["verbose"],
-                feasibility_tol=config["feasibility_tol"],
-                centrality_tol=config["centrality_tol"],
-                op_tol=config["op_tol"],
-                direction=config["direction"]
-            )
-            t3 = time.time()
-            if args.track_mem:
-                current, peak = tracemalloc.get_traced_memory()
-                tracemalloc.stop()  # Stop tracking after measuring
-                memory.append(peak / 10 ** 6)
-            problem_creation_times.append(t2 - t1)
-            runtimes.append(t3 - t2)
-            complementary_slackness.append(tt_inner_prod(X_tt, Z_tt))
-            primal_res = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(L_tt, tt_vec(X_tt)), tt_vec(bias_tt)),
-                                        rank_weighted_error=True, eps=1e-12)
+        t2 = time.time()
+        X_tt, Y_tt, T_tt, Z_tt, info = tt_ipm(
+            lag_maps,
+            G_tt,
+            L_tt,
+            bias_tt,
+            max_iter=config["max_iter"],
+            verbose=config["verbose"],
+            feasibility_tol=config["feasibility_tol"],
+            centrality_tol=config["centrality_tol"],
+            op_tol=config["op_tol"],
+            direction=config["direction"]
+        )
+        t3 = time.time()
+        if args.track_mem:
+            current, peak = tracemalloc.get_traced_memory()
+            tracemalloc.stop()  # Stop tracking after measuring
+            memory.append(peak / 10 ** 6)
+        problem_creation_times.append(t2 - t1)
+        runtimes.append(t3 - t2)
+        complementary_slackness.append(tt_inner_prod(X_tt, Z_tt))
+        primal_res = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(L_tt, tt_vec(X_tt)), tt_vec(bias_tt)),
+                                    rank_weighted_error=True, eps=1e-12)
 
-            feasibility_errors.append(tt_inner_prod(primal_res, primal_res))
-            num_iters.append(info["num_iters"])
-            print(f"Converged after {num_iters[-1]:.1f} iterations")
-            print(f"Problem created in {problem_creation_times[-1]:.3f}s")
-            print(f"Problem solved in {runtimes[-1]:.3f}s")
-            print(f"Peak memory avg {memory[-1]:.3f} MB")
-            print(f"Complementary Slackness: {complementary_slackness[-1]}")
-            print(f"Total feasibility error: {feasibility_errors[-1]}")
-        except Exception as err:
-            print(f"An error occurred {seed}:", err)
+        feasibility_errors.append(tt_inner_prod(primal_res, primal_res))
+        num_iters.append(info["num_iters"])
+        print(f"Converged after {num_iters[-1]:.1f} iterations")
+        print(f"Problem created in {problem_creation_times[-1]:.3f}s")
+        print(f"Problem solved in {runtimes[-1]:.3f}s")
+        print(f"Peak memory avg {memory[-1]:.3f} MB")
+        print(f"Complementary Slackness: {complementary_slackness[-1]}")
+        print(f"Total feasibility error: {feasibility_errors[-1]}")
     print(f"Converged after avg {np.mean(num_iters):.1f} iterations")
     print(f"Problem created in avg {np.mean(problem_creation_times):.3f}s")
     print(f"Problem solved in avg {np.mean(runtimes):.3f}s")

@@ -2,6 +2,7 @@ import sys
 import os
 
 import scipy.linalg
+from typing_extensions import override
 
 sys.path.append(os.getcwd() + '/../')
 
@@ -85,6 +86,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
     rhs[:, 0] = einsum('br,bmB,BR->rmR', Xb_k[0], nrmsc * block_b_k[0], Xb_k1[0], optimize="greedy") if 0 in block_b_k else 0
     rhs[:, 1] = einsum('br,bmB,BR->rmR', Xb_k[1], nrmsc * block_b_k[1], Xb_k1[1], optimize="greedy") if 1 in block_b_k else 0
     rhs[:, 2] = einsum('br,bmB,BR->rmR', Xb_k[2], nrmsc * block_b_k[2], Xb_k1[2], optimize="greedy") if 2 in block_b_k else 0
+    inv_I = np.divide(1, einsum('lsr,smnS,LSR->lmL', XAX_k[(1, 2)], block_A_k[(1, 2)], XAX_k1[(1, 2)], optimize="greedy"))
     norm_rhs = np.linalg.norm(rhs)
     block_res_old = np.linalg.norm(_block_local_product(XAX_k, block_A_k, XAX_k1, previous_solution) - rhs) / norm_rhs
     if block_res_old < rtol:
@@ -94,14 +96,13 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         mR_d = rhs[:, 1].reshape(m, 1)
         mR_c = rhs[:, 2].reshape(m, 1)
         L_L_Z = scip.linalg.cholesky(
-            einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(2, 1)], block_A_k[(2, 1)], XAX_k1[(2, 1)], optimize="greedy").reshape(
-                m, m),
+            einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(2, 1)], block_A_k[(2, 1)], XAX_k1[(2, 1)], optimize="greedy").reshape(m, m),
             check_finite=False, lower=True, overwrite_a=True
         )
         L_X = einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(2, 2)], block_A_k[(2, 2)], XAX_k1[(2, 2)], optimize="greedy").reshape(m, m)
         mL_eq = einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(0, 1)], block_A_k[(0, 1)], XAX_k1[(0, 1)], optimize="greedy").reshape(m, m)
         mL_eq_adj = einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(1, 0)], block_A_k[(1, 0)], XAX_k1[(1, 0)], optimize="greedy").reshape(m, m)
-        inv_I = np.divide(1, einsum('lsr,smnS,LSR->lmL', XAX_k[(1, 2)], block_A_k[(1, 2)], XAX_k1[(1, 2)], optimize="greedy").reshape(1, -1))
+        inv_I = inv_I.reshape(1, -1)
         A = mL_eq @ forward_backward_sub(L_L_Z, L_X * inv_I) @ mL_eq_adj + einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(0, 0)], block_A_k[(0, 0)], XAX_k1[(0, 0)], optimize="greedy").reshape(m, m)
         b = mR_p - mL_eq @ forward_backward_sub(L_L_Z, mR_c - (L_X * inv_I.reshape(1, -1)) @ mR_d) - A @ np.transpose(previous_solution, (1, 0, 2, 3))[1].reshape(-1, 1)
         y = scip.linalg.solve(A, b, check_finite=False, overwrite_a=True, overwrite_b=True) + np.transpose(previous_solution, (1, 0, 2, 3))[1].reshape(-1, 1)
@@ -109,7 +110,6 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         x = forward_backward_sub(L_L_Z, mR_c - L_X @ z)
         solution_now = np.transpose(np.vstack((y, x, z)).reshape(x_shape[1], x_shape[0], x_shape[2], x_shape[3]), (1, 0, 2, 3))
     else:
-        inv_I = np.divide(1, einsum('lsr,smnS,LSR->lmL', XAX_k[(1, 2)], block_A_k[(1, 2)], XAX_k1[(1, 2)], optimize="greedy"))
         def mat_vec(x_vec):
             x_vec = _ipm_block_local_product(
                 XAX_k, block_A_k, XAX_k1,

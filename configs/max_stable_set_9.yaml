@@ -1,7 +1,7 @@
 # Common
 dim: !!int 9
 max_rank: !!int 4
-seeds: [5, 8]
+seeds: [5, 9]
 feasibility_tol: !!float 5e-5
 centrality_tol: !!float 1e-3
 verbose: False
