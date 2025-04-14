@@ -7,6 +7,9 @@ sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
 from opt_einsum import contract as einsum
+from opt_einsum import contract_expression
+from functools import lru_cache
+
 
 
 def _local_product(Phi_right, Phi_left, coreA, core):
@@ -268,26 +271,28 @@ def tt_amen(A, b, nswp=50, x0=None, eps=1e-10, rmax=1024, solver_limit=500, kick
     return x_cores, max_res
 
 
+@lru_cache(maxsize=1024)
+def get_contract_expr_cached(equation: str, shapes: tuple):
+    return contract_expression(equation, *shapes, optimize='greedy')
+
+def cached_einsum(equation: str, *operands):
+    expr = get_contract_expr_cached(equation, tuple(op.shape for op in operands))
+    return expr(*operands)
+
 def _compute_phi_bck_A(Phi_now, core_left, core_A, core_right):
-    Phi = einsum('LSR,lML,sMNS,rNR->lsr', Phi_now,
-                      core_left, core_A, core_right)
-    return Phi
+    return cached_einsum('LSR,lML,sMNS,rNR->lsr', Phi_now, core_left, core_A, core_right)
 
 
 def _compute_phi_fwd_A(Phi_now, core_left, core_A, core_right):
-    Phi_next = einsum('lsr,lML,sMNS,rNR->LSR',
-                           Phi_now, core_left, core_A, core_right)
-    return Phi_next
+    return cached_einsum('lsr,lML,sMNS,rNR->LSR',Phi_now, core_left, core_A, core_right)
 
 
 def _compute_phi_bck_rhs(Phi_now, core_b, core):
-    Phi = einsum('BR,bnB,rnR->br', Phi_now, core_b, core)
-    return Phi
+    return cached_einsum('BR,bnB,rnR->br', Phi_now, core_b, core)
 
 
 def _compute_phi_fwd_rhs(Phi_now, core_rhs, core):
-    Phi_next = einsum('br,bnB,rnR->BR', Phi_now, core_rhs, core)
-    return Phi_next
+    return cached_einsum('br,bnB,rnR->BR', Phi_now, core_rhs, core)
 
 
 def _forward_sweep(
@@ -331,13 +336,17 @@ def _forward_sweep(
             solution_now = np.reshape(x_cores[k], (rx[k] * block_size, N[k] * rx[k + 1])).T
 
         if k > 0:
-            if min(rx[k] * block_size, N[k] * rx[k + 1]) > r_max:
+            if min(rx[k] * block_size, N[k] * rx[k + 1]) > 2*r_max:
                 u, s, v = scip.sparse.linalg.svds(solution_now, k=r_max, tol=eps, which="LM")
+                idx = np.argsort(s)[::-1]  # descending order
+                s = s[idx]
+                u = u[:, idx]
+                v = v[idx, :]
             else:
                 u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True)
             v = s.reshape(-1, 1) * v
             if swp > 0:
-                r_start = prune_singular_vals(s, real_tol[k - 1])
+                r_start = min(prune_singular_vals(s, real_tol[k - 1]), r_max)
                 solution_now = np.reshape((u[:, :r_start] @ v[:r_start]).T, (rx[k], block_size, N[k], rx[k + 1]))
                 res = _block_local_product(XAX[k], block_A[k], XAX[k + 1], solution_now) - rhs
                 r = r_start
@@ -352,8 +361,7 @@ def _forward_sweep(
             else:
                 r = min(prune_singular_vals(s, real_tol[k - 1]), r_max)
             x_cores[k] = np.reshape(u[:, :r].T, (r, N[k], rx[k + 1]))
-            x_cores[k - 1] = einsum('rdc,cbR->rbdR', x_cores[k - 1], v[:r].T.reshape(rx[k], block_size, r),
-                                    optimize=True)
+            x_cores[k - 1] = einsum('rdc,cbR->rbdR', x_cores[k - 1], v[:r].T.reshape(rx[k], block_size, r), optimize="greedy")
             norm_now = np.linalg.norm(x_cores[k - 1])
             x_cores[k - 1] /= norm_now
             normx[k - 1] *= norm_now
@@ -417,15 +425,19 @@ def _backward_sweep(
             solution_now = np.reshape(x_cores[k], (rx[k] * N[k],  block_size * rx[k + 1]))
 
         if k < d - 1:
-            if min(rx[k] * N[k],  block_size * rx[k + 1]) > r_max:
+            if min(rx[k] * N[k],  block_size * rx[k + 1]) > 2*r_max:
                 u, s, v = scip.sparse.linalg.svds(solution_now, k=r_max, tol=eps, which="LM")
+                idx = np.argsort(s)[::-1]  # descending order
+                s = s[idx]
+                u = u[:, idx]
+                v = v[idx, :]
             else:
                 u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True)
             v = s.reshape(-1, 1) * v
             u = u.reshape(rx[k], N[k], -1)
             v = v.reshape(-1, block_size, rx[k + 1])
             if swp > 0:
-                r_start = prune_singular_vals(s, real_tol[k])
+                r_start = min(prune_singular_vals(s, real_tol[k]), r_max)
                 solution_now = einsum("rbR, Rdk -> rbdk", u[:, :, :r_start], v[:r_start], optimize="greedy")
                 res = _block_local_product(XAX[k], block_A[k], XAX[k + 1], np.transpose(solution_now, (0, 2, 1, 3))) - rhs
                 r = r_start
@@ -439,7 +451,7 @@ def _backward_sweep(
             else:
                 r = min(prune_singular_vals(s, real_tol[k]), r_max)
 
-            v = einsum("rbR, Rdk -> rbdk", v[:r], x_cores[k + 1])
+            v = einsum("rbR, Rdk -> rbdk", v[:r], x_cores[k + 1], optimize="greedy")
             norm_now = np.linalg.norm(v)
             normx[k] *= norm_now
             x_cores[k] = u[:, :, :r]
@@ -593,7 +605,7 @@ def tt_divide(vec_tt_1, vec_tt_2, degenerate=False, eps=1e-10):
 def _block_local_product(XAX_k, block_A_k, XAX_kp1, x_core):
     result = np.zeros_like(x_core)
     for (i, j) in block_A_k:
-        result[:, i] += einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[(i, j)], block_A_k[(i, j)], XAX_kp1[(i, j)], x_core[:, j], optimize="greedy")
+        result[:, i] += cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[(i, j)], block_A_k[(i, j)], XAX_kp1[(i, j)], x_core[:, j])
     return result
 
 def _default_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous_solution, nrmsc, size_limit, rtol):
@@ -603,12 +615,12 @@ def _default_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, prev
     rhs = np.zeros_like(previous_solution)
     x_shape = (x_shape[1], x_shape[0], x_shape[2], x_shape[3])
     for i in block_b_k:
-        rhs[:, i] = einsum('br,bmB,BR->rmR', Xb_k[i], nrmsc * block_b_k[i], Xb_k1[i], optimize="greedy")
+        rhs[:, i] = cached_einsum('br,bmB,BR->rmR', Xb_k[i], nrmsc * block_b_k[i], Xb_k1[i])
     norm_rhs = np.linalg.norm(rhs)
     if m <= size_limit:
         B = np.zeros((block_size * m, block_size * m))
         for (i, j) in block_A_k:
-            local_B = einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(i, j)], block_A_k[(i, j)], XAX_k1[(i, j)], optimize="greedy")
+            local_B = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(i, j)], block_A_k[(i, j)], XAX_k1[(i, j)])
             B[m * i:m * (i + 1), m * j:m * (j + 1)] = local_B.reshape(m, m)
 
         solution_now = np.transpose(scip.linalg.solve(B, np.transpose(rhs, (1, 0, 2, 3)).reshape(-1, 1) - B @ np.transpose(previous_solution, (1, 0, 2, 3)).reshape(-1, 1), check_finite=False).reshape(*x_shape), (1, 0, 2, 3))

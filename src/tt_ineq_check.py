@@ -3,13 +3,11 @@ import sys
 import os
 import time
 
-from scipy.constants import sigma
-
 sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
 from cy_src.ops_cy import *
-from src.tt_amen import _compute_phi_bck_A
+from src.tt_amen import _compute_phi_bck_A, cached_einsum
 
 
 
@@ -171,7 +169,6 @@ def tt_pd_optimal_step_size(A, Delta, op_tol, nswp=10, eps=1e-12, verbose=False)
 
     max_res = 0
     step_size = 1
-    eig_vals = -np.inf * np.ones(d)
     for swp in range(nswp):
         x_cores = tt_rl_orthogonalise(x_cores)
         rx[1:-1] = np.array(tt_ranks(x_cores))
@@ -195,30 +192,26 @@ def tt_pd_optimal_step_size(A, Delta, op_tol, nswp=10, eps=1e-12, verbose=False)
 
             if is_psd(D, eps):
                 step_size = min(step_size, 1)
-                D += einsum(
-                    "lsr,smnS,LSR->lmLrnR",XAX[k], A[k], XAX[k + 1], optimize="greedy"
+                D += cached_einsum(
+                    "lsr,smnS,LSR->lmLrnR",XAX[k], A[k], XAX[k + 1]
                 ).reshape(rx[k] * N[k] * rx[k + 1], rx[k] * N[k] * rx[k + 1])
-                eig_val, solution_now = scip.sparse.linalg.eigsh(D, tol=0.1 * eps, k=1, which="SM",
-                                                                 v0=previous_solution)
+                _, solution_now = scip.sparse.linalg.eigsh(D, tol=0.1 * eps, k=1, which="SM", v0=previous_solution)
             else:
                 try:
                     L = scip.linalg.cholesky(
-                        einsum(
-                            "lsr,smnS,LSR->lmLrnR",XAX[k], A[k], XAX[k + 1], optimize="greedy"
+                        cached_einsum(
+                            "lsr,smnS,LSR->lmLrnR",XAX[k], A[k], XAX[k + 1]
                         ).reshape(rx[k] * N[k] * rx[k + 1], rx[k] * N[k] * rx[k + 1]), check_finite=False, lower=True, overwrite_a=True
                     )
                     L_inv = scip.linalg.solve_triangular(L, np.eye(L.shape[0]), lower=True,  overwrite_b=True, check_finite=False)
-                    local_step_size_inv, solution_now = scip.sparse.linalg.eigsh(-L_inv @ D @ L_inv.T, tol=0.1*eps, k=1, which="LA")
+                    local_step_size_inv, solution_now = scip.sparse.linalg.eigsh(-L_inv @ D @ L_inv.T, tol=0.1*eps, k=1, which="LA", v0= L.T @ previous_solution)
                     step_size = min(step_size, (1 - op_tol) / local_step_size_inv[0])
-                    eig_val, solution_now = scip.sparse.linalg.eigsh(L_inv @ D @ L_inv.T, tol=0.1 * eps, k=1, which="SA")
-                    eig_val = 1 + step_size*eig_val[0]
                     solution_now = L_inv.T @ solution_now
                     solution_now /= np.linalg.norm(solution_now)
                 except:
                     return 0, 0
 
 
-            eig_vals[k] = eig_val
             max_res = max(max_res, 1- np.sum(np.abs(solution_now.T @ previous_solution)))
 
             solution_now = np.reshape(solution_now, (rx[k] * N[k], rx[k + 1]))
@@ -228,7 +221,7 @@ def tt_pd_optimal_step_size(A, Delta, op_tol, nswp=10, eps=1e-12, verbose=False)
                 v = s.reshape(-1, 1) * v
                 r = prune_singular_vals(s, 1e-18)
                 x_cores[k] = u[:, :r].reshape(rx[k], N[k], r)
-                x_cores[k + 1] = einsum('ij,jkl->ikl', v[:r, :], x_cores[k + 1], optimize=True).reshape(r, N[k + 1], rx[k + 2])
+                x_cores[k + 1] = einsum('ij,jkl->ikl', v[:r, :], x_cores[k + 1], optimize="greedy").reshape(r, N[k + 1], rx[k + 2])
                 rx[k + 1] = r
                 XAX[k + 1] = compute_phi_fwd_A(XAX[k], x_cores[k], A[k], x_cores[k])
                 XDX[k + 1] = compute_phi_fwd_A(XDX[k], x_cores[k], Delta[k], x_cores[k])
@@ -242,7 +235,7 @@ def tt_pd_optimal_step_size(A, Delta, op_tol, nswp=10, eps=1e-12, verbose=False)
 
         x_cores = tt_normalise(x_cores)
 
-        if max_res < eps and np.min(eig_vals) > 0:
+        if max_res < eps:
             break
 
     if verbose:

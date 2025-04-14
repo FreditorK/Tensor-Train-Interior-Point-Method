@@ -334,7 +334,7 @@ def tt_fast_mat_mat_mul(matrix_tt_1, matrix_tt_2, eps=1e-18):
 
     cores = [np.transpose(c, (3, 1, 2, 0)) for c in matrix_tt_2[::-1]]
     for i in range(dim):
-        cores[0] = einsum("mabk,kbcn->macn", matrix_tt_1[dim - i - 1], cores[0], optimize=True)
+        cores[0] = einsum("mabk,kbcn->macn", matrix_tt_1[dim - i - 1], cores[0], optimize="greedy")
 
         if i != dim - 1:
             for j in range(i, -1, -1):
@@ -353,7 +353,7 @@ def tt_fast_hadammard(train_tt_1, train_tt_2, eps=1e-18):
         for i in range(dim):
             cores[0] = einsum("maAk,kbBn,AB,ab->maAn", train_tt_1[dim - i - 1], cores[0],
                                    np.eye(train_tt_1[dim - i - 1].shape[1], dtype=cores[0].dtype),
-                                   np.eye(train_tt_1[dim - i - 1].shape[1], dtype=cores[0].dtype), optimize=True)
+                                   np.eye(train_tt_1[dim - i - 1].shape[1], dtype=cores[0].dtype), optimize="greedy")
 
             if i != dim - 1:
                 for j in range(i, -1, -1):
@@ -365,7 +365,7 @@ def tt_fast_hadammard(train_tt_1, train_tt_2, eps=1e-18):
         cores = [np.transpose(c, (2, 1, 0)) for c in train_tt_2[::-1]]
         for i in range(dim):
             cores[0] = einsum("mak,kbn,ab->man", train_tt_1[dim - i - 1], cores[0],
-                                   np.eye(train_tt_1[dim - i - 1].shape[1], dtype=cores[0].dtype), optimize=True)
+                                   np.eye(train_tt_1[dim - i - 1].shape[1], dtype=cores[0].dtype), optimize="greedy")
 
             if i != dim - 1:
                 for j in range(i, -1, -1):
@@ -489,8 +489,8 @@ def tt_reshape(train_tt, shape):
 
 def tt_merge_cores(train_tt):
     if len(train_tt[0].shape[1:-1]) == 1:
-        return [einsum("kir, rsK -> kisK", c_1, c_2, optimize=True) for c_1, c_2 in zip(train_tt[:-1:2], train_tt[1::2])]
-    return [einsum("kijr, rsdK -> kisjdK", c_1, c_2, optimize=True) for c_1, c_2 in zip(train_tt[:-1:2], train_tt[1::2])]
+        return [einsum("kir, rsK -> kisK", c_1, c_2, optimize="greedy") for c_1, c_2 in zip(train_tt[:-1:2], train_tt[1::2])]
+    return [einsum("kijr, rsdK -> kisjdK", c_1, c_2, optimize="greedy") for c_1, c_2 in zip(train_tt[:-1:2], train_tt[1::2])]
 
 
 def tt_random_rank_one(dim):
