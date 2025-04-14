@@ -7,7 +7,7 @@ import numpy as np
 
 sys.path.append(os.getcwd() + '/../../')
 
-from graph_matching import *
+from graphm import *
 from src.regular_ipm import ipm
 import time
 

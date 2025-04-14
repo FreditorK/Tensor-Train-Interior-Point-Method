@@ -5,12 +5,8 @@ import yaml
 import tracemalloc
 import argparse
 
-import numpy as np
-from opt_einsum.backends.torch import einsum
-
 sys.path.append(os.getcwd() + '/../../')
 
-from dataclasses import dataclass
 from src.tt_ops import *
 from src.tt_ops import tt_random_gaussian, tt_mat, tt_matrix_to_matrix, E
 from src.tt_ipm import tt_ipm
@@ -180,7 +176,6 @@ def create_problem(n, seed, max_rank):
 
     print("Objective matrix: ")
     C_tt = [-E(0, 0)] + tt_kron(G_B, G_A)
-    print(np.round(tt_matrix_to_matrix(tt_kron(G_B, G_A)), decimals=2))
 
     # Equality Operator
     # IV
@@ -239,7 +234,7 @@ def create_problem(n, seed, max_rank):
     Q_ineq_op = tt_ineq_op(2 * n)
     Q_ineq_op_adj = tt_ineq_op_adj(2 * n)
     Q_ineq_bias = tt_rank_reduce(
-        tt_scale(0.05, tt_mat(tt_matrix_vec_mul(Q_ineq_op_adj, [np.ones((1, 2, 1)) for _ in range(2 * (2 * n + 1))])))
+        tt_scale(0.05, tt_mat(tt_fast_matrix_vec_mul(Q_ineq_op_adj, [np.ones((1, 2, 1)) for _ in range(2 * (2 * n + 1))])))
     )
 
     # ---
