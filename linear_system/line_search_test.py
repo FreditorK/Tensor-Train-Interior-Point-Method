@@ -9,14 +9,13 @@ sys.path.append(os.getcwd() + '/../')
 from src.tt_ops import *
 from src.tt_ops import tt_rank_reduce
 from src.tt_ineq_check import tt_pd_optimal_step_size
-from src.tt_eig import tt_min_eig, tt_max_eig
 
 np.random.seed(4) # 9
 
-X_tt = tt_random_gaussian([2, 3, 3], shape=(2, 2))
+X_tt = tt_random_gaussian([2, 9, 3, 7, 6], shape=(2, 2))
 X_tt = tt_fast_mat_mat_mul(tt_transpose(X_tt), X_tt)
 
-s_matrix_tt = tt_random_gaussian([4, 2, 2], shape=(2, 2))
+s_matrix_tt = tt_random_gaussian([4, 2, 2, 3, 5], shape=(2, 2))
 s_matrix_tt = tt_add(tt_rank_reduce(tt_add(s_matrix_tt, tt_transpose(s_matrix_tt)), eps=0), X_tt)
 
 

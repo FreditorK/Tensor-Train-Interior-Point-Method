@@ -150,12 +150,20 @@ def tt_is_geq_zero(X_tt, op_tol, nswp=10, eps=1e-10, degenerate=False, verbose=F
     return True, 0.0
 
 
+def symmetric_powers_of_two(length):
+    half = length // 2
+    first_half = [2**i for i in range(1, half + 1)]
+    if length % 2 == 0:
+        return first_half + first_half[::-1]
+    else:
+        return first_half + [2**(half + 1)] + first_half[::-1]
+
+
 def tt_pd_optimal_step_size(A, Delta, op_tol, nswp=10, eps=1e-12, verbose=False):
     if verbose:
         print(f"Starting Eigen solve with:\n \t {eps} \n \t sweeps: {nswp}")
         t0 = time.time()
-    x_cores = tt_random_gaussian(list(np.array(tt_ranks(A)) + np.array(tt_ranks(Delta))), (2,))
-
+    x_cores = tt_random_gaussian(symmetric_powers_of_two(len(A)-1), (2,))
     scaling_factor = tt_norm(A)
     A = tt_scale(scaling_factor, A)
     Delta = tt_scale(scaling_factor, Delta)
@@ -184,10 +192,9 @@ def tt_pd_optimal_step_size(A, Delta, op_tol, nswp=10, eps=1e-12, verbose=False)
         max_res = 0
         for k in range(d):
             previous_solution = np.reshape(x_cores[k], (-1, 1))
-            D = einsum(
+            D = cached_einsum(
                 "lsr,smnS,LSR->lmLrnR",
-                XDX[k], Delta[k], XDX[k + 1],
-                optimize=True
+                XDX[k], Delta[k], XDX[k + 1]
             ).reshape(rx[k] * N[k] * rx[k + 1], rx[k] * N[k] * rx[k + 1])
 
             if is_psd(D, eps):
@@ -217,9 +224,9 @@ def tt_pd_optimal_step_size(A, Delta, op_tol, nswp=10, eps=1e-12, verbose=False)
             solution_now = np.reshape(solution_now, (rx[k] * N[k], rx[k + 1]))
 
             if k < d - 1:
-                u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False)
+                u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True)
                 v = s.reshape(-1, 1) * v
-                r = prune_singular_vals(s, 1e-18)
+                r = prune_singular_vals(s, eps)
                 x_cores[k] = u[:, :r].reshape(rx[k], N[k], r)
                 x_cores[k + 1] = einsum('ij,jkl->ikl', v[:r, :], x_cores[k + 1], optimize="greedy").reshape(r, N[k + 1], rx[k + 2])
                 rx[k + 1] = r

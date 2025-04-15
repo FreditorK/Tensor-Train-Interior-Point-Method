@@ -1,4 +1,7 @@
 from typing import List
+
+import scipy
+
 from cy_src.ops_cy import *
 
 
@@ -8,7 +11,7 @@ def break_core_bond(core, err_bound=1e-18):
     shape = core.shape
     k = len(shape) // 2
     A = core.reshape(np.prod(shape[:k]), -1)
-    U, S, V_T = np.linalg.svd(A)
+    U, S, V_T = scipy.linalg.svd(A, full_matrices=False, check_finite=False, overwrite_a=True)
     non_sing_eig_idxs = np.asarray(np.abs(S) > err_bound).nonzero()[0]
     if len(non_sing_eig_idxs) == 0:
         non_sing_eig_idxs = np.array([0])

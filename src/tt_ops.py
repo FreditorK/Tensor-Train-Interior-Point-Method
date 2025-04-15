@@ -4,12 +4,22 @@ from src.ops import *
 from cy_src.tt_ops_cy import *
 from opt_einsum import contract as einsum
 from functools import reduce
+from functools import lru_cache
+from opt_einsum import contract_expression
 
 def E(i, j):
     E = np.zeros((1, 2, 2, 1))
     E[:, i, j] += 1
     return E
 
+
+@lru_cache(maxsize=2048)
+def get_contract_expr_cached(equation: str, shapes: tuple):
+    return contract_expression(equation, *shapes, optimize='greedy')
+
+def cached_einsum(equation: str, *operands):
+    expr = get_contract_expr_cached(equation, tuple(op.shape for op in operands))
+    return expr(*operands)
 
 def tt_random_binary(target_ranks: List[int], shape=(2,)):
     """
@@ -251,14 +261,14 @@ def tt_sub(train_1_tt: List[np.array], train_2_tt: List[np.array]) -> List[np.ar
 
 def _tt_core_collapse(core_1: np.array, core_2: np.array) -> np.array:
     if len(core_1.shape) == 3:
-        return einsum("rmR, lmL -> rlRL", core_1, core_2, optimize=True).reshape(core_1.shape[0]*core_2.shape[0], core_1.shape[-1]*core_2.shape[-1])
-    return einsum("rmnR, lmnL -> rlRL", core_1, core_2, optimize=True).reshape(core_1.shape[0]*core_2.shape[0], core_1.shape[-1]*core_2.shape[-1])
+        return cached_einsum("rmR, lmL -> rlRL", core_1, core_2).reshape(core_1.shape[0]*core_2.shape[0], core_1.shape[-1]*core_2.shape[-1])
+    return cached_einsum("rmnR, lmnL -> rlRL", core_1, core_2).reshape(core_1.shape[0]*core_2.shape[0], core_1.shape[-1]*core_2.shape[-1])
 
 
 def tt_inner_prod(train_1_tt: List[np.array], train_2_tt: List[np.array]) -> float:
     eq = 'ab,aijm,bijn->mn' if train_1_tt[0].ndim == 4 else 'ab,aim,bin->mn'
 
-    result = reduce(lambda res, c: einsum(eq, res, *c, optimize="greedy"),
+    result = reduce(lambda res, c: cached_einsum(eq, res, *c),
                     zip(train_1_tt, train_2_tt),
                     np.array([[1.0]]))
 
@@ -290,22 +300,27 @@ def prune_singular_vals(s, eps):
 
 def swap_cores(core_a, core_b, eps):
     if len(core_a.shape) == 3 and len(core_b.shape) == 3:
-        supercore = einsum("rms,snR->rnmR", core_a, core_b, optimize="greedy")
+        supercore = cached_einsum("rms,snR->rnmR", core_a, core_b)
         if np.linalg.norm(supercore) < eps:
             return np.zeros((core_a.shape[0], core_b.shape[1], 1)), np.zeros((1, core_a.shape[1], core_b.shape[2]))
+        print(supercore.shape)
         u, s, v = scip.linalg.svd(np.reshape(supercore, (core_a.shape[0] * core_b.shape[1], -1)), full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
         u = u @ np.diag(s)
         r = prune_singular_vals(s, eps)
+        print("Rank ", r)
         u = u[:, :r]
         v = v[:r, :]
         return np.reshape(u, (core_a.shape[0], core_b.shape[1], -1)), np.reshape(v,(-1, core_a.shape[1], core_b.shape[2]))
     elif len(core_a.shape) == 4 and len(core_b.shape) == 4:
-        supercore = einsum("rmas,snbR->rnbmaR", core_a, core_b, optimize="greedy")
+        # TODO: Can we split them up before
+        supercore = cached_einsum("rmas,snbR->rnbmaR", core_a, core_b)
+        print(supercore.shape)
         if np.linalg.norm(supercore) < eps:
             return np.zeros((core_a.shape[0], core_b.shape[1], core_b.shape[2], 1)), np.zeros((1, core_a.shape[1], core_a.shape[2], core_b.shape[3]))
         u, s, v = scip.linalg.svd(np.reshape(supercore, (core_a.shape[0] * core_b.shape[1] * core_b.shape[2], -1)), full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
         u = u @ np.diag(s)
         r = prune_singular_vals(s, eps)
+        print("Rank ", r)
         u = u[:, :r]
         v = v[:r, :]
         return np.reshape(u, (core_a.shape[0], core_b.shape[1], core_b.shape[2], -1)), np.reshape(v, (-1, core_a.shape[1], core_a.shape[2], core_b.shape[3]))
@@ -320,7 +335,7 @@ def tt_fast_matrix_vec_mul(matrix_tt: List[np.array], vec_tt: List[np.array], ep
 
     cores = [np.transpose(c, (2, 1, 0)) for c in vec_tt[::-1]]
     for i in range(dim):
-        cores[0] = einsum("mabk,kbn->man", matrix_tt[dim - i - 1], cores[0], optimize="greedy")
+        cores[0] = cached_einsum("mabk,kbn->man", matrix_tt[dim - i - 1], cores[0])
 
         if i != dim - 1:
             for j in range(i, -1, -1):
@@ -334,7 +349,7 @@ def tt_fast_mat_mat_mul(matrix_tt_1, matrix_tt_2, eps=1e-18):
 
     cores = [np.transpose(c, (3, 1, 2, 0)) for c in matrix_tt_2[::-1]]
     for i in range(dim):
-        cores[0] = einsum("mabk,kbcn->macn", matrix_tt_1[dim - i - 1], cores[0], optimize="greedy")
+        cores[0] = cached_einsum("mabk,kbcn->macn", matrix_tt_1[dim - i - 1], cores[0])
 
         if i != dim - 1:
             for j in range(i, -1, -1):
@@ -351,9 +366,9 @@ def tt_fast_hadammard(train_tt_1, train_tt_2, eps=1e-18):
 
         cores = [np.transpose(c, (3, 1, 2, 0)) for c in train_tt_2[::-1]]
         for i in range(dim):
-            cores[0] = einsum("maAk,kbBn,AB,ab->maAn", train_tt_1[dim - i - 1], cores[0],
+            cores[0] = cached_einsum("maAk,kbBn,AB,ab->maAn", train_tt_1[dim - i - 1], cores[0],
                                    np.eye(train_tt_1[dim - i - 1].shape[1], dtype=cores[0].dtype),
-                                   np.eye(train_tt_1[dim - i - 1].shape[1], dtype=cores[0].dtype), optimize="greedy")
+                                   np.eye(train_tt_1[dim - i - 1].shape[1], dtype=cores[0].dtype))
 
             if i != dim - 1:
                 for j in range(i, -1, -1):
@@ -364,8 +379,8 @@ def tt_fast_hadammard(train_tt_1, train_tt_2, eps=1e-18):
 
         cores = [np.transpose(c, (2, 1, 0)) for c in train_tt_2[::-1]]
         for i in range(dim):
-            cores[0] = einsum("mak,kbn,ab->man", train_tt_1[dim - i - 1], cores[0],
-                                   np.eye(train_tt_1[dim - i - 1].shape[1], dtype=cores[0].dtype), optimize="greedy")
+            cores[0] = cached_einsum("mak,kbn,ab->man", train_tt_1[dim - i - 1], cores[0],
+                                   np.eye(train_tt_1[dim - i - 1].shape[1], dtype=cores[0].dtype))
 
             if i != dim - 1:
                 for j in range(i, -1, -1):
@@ -376,7 +391,7 @@ def tt_fast_hadammard(train_tt_1, train_tt_2, eps=1e-18):
 
 def tt_kron(matrix_tt_1, matrix_tt_2):
     # FIXME:  DO SVD right away to not be overbearing to memory
-    result_tt = [einsum("rmnR, lijL -> rlminjRL", c_1, c_2, optimize=True).reshape(c_1.shape[0]*c_2.shape[0], c_1.shape[1]*c_2.shape[1], c_1.shape[2]*c_2.shape[2], c_1.shape[-1]*c_2.shape[-1]) for c_1, c_2 in zip(matrix_tt_1, matrix_tt_2)]
+    result_tt = [cached_einsum("rmnR, lijL -> rlminjRL", c_1, c_2).reshape(c_1.shape[0]*c_2.shape[0], c_1.shape[1]*c_2.shape[1], c_1.shape[2]*c_2.shape[2], c_1.shape[-1]*c_2.shape[-1]) for c_1, c_2 in zip(matrix_tt_1, matrix_tt_2)]
     return result_tt
 
 
@@ -467,7 +482,7 @@ def tt_norm(train_tt):
 
 def tt_diag(vec_tt):
     identity = np.eye(vec_tt[0].shape[1])
-    basis = [einsum("ij, rjR -> rijR", identity, c, optimize=True) for c in vec_tt]
+    basis = [einsum("ij, rjR -> rijR", identity, c, optimize="greedy") for c in vec_tt]
     return tt_rank_reduce(basis)
 
 def tt_diagonal(matrix_tt):
@@ -489,8 +504,8 @@ def tt_reshape(train_tt, shape):
 
 def tt_merge_cores(train_tt):
     if len(train_tt[0].shape[1:-1]) == 1:
-        return [einsum("kir, rsK -> kisK", c_1, c_2, optimize="greedy") for c_1, c_2 in zip(train_tt[:-1:2], train_tt[1::2])]
-    return [einsum("kijr, rsdK -> kisjdK", c_1, c_2, optimize="greedy") for c_1, c_2 in zip(train_tt[:-1:2], train_tt[1::2])]
+        return [cached_einsum("kir, rsK -> kisK", c_1, c_2) for c_1, c_2 in zip(train_tt[:-1:2], train_tt[1::2])]
+    return [cached_einsum("kijr, rsdK -> kisjdK", c_1, c_2) for c_1, c_2 in zip(train_tt[:-1:2], train_tt[1::2])]
 
 
 def tt_random_rank_one(dim):

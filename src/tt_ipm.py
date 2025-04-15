@@ -239,6 +239,7 @@ def _tt_ipm_newton_step(
         else:
             Delta_XZ_term = tt_scale(-0.5, tt_rank_reduce(tt_add(tt_fast_mat_mat_mul(Delta_X_tt, Delta_Z_tt, eps), tt_fast_mat_mat_mul(Delta_Z_tt, Delta_X_tt, eps)), eps=op_tol,
                                                 rank_weighted_error=True))
+            print("Delta ranks: ", tt_ranks(Delta_XZ_term))
         sigma = ((ZX + x_step_size * z_step_size * tt_inner_prod(Delta_X_tt, Delta_Z_tt) + z_step_size * tt_inner_prod(
             X_tt, Delta_Z_tt) + x_step_size * tt_inner_prod(Delta_X_tt, Z_tt)) / ZX) ** 2
         rhs_vec_tt[2 + idx_add] = tt_rank_reduce(

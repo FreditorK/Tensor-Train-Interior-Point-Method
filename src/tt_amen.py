@@ -7,8 +7,6 @@ sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
 from opt_einsum import contract as einsum
-from opt_einsum import contract_expression
-from functools import lru_cache
 
 
 
@@ -269,15 +267,6 @@ def tt_amen(A, b, nswp=50, x0=None, eps=1e-10, rmax=1024, solver_limit=500, kick
         x_cores[k] = x_cores[k] * normx
 
     return x_cores, max_res
-
-
-@lru_cache(maxsize=1024)
-def get_contract_expr_cached(equation: str, shapes: tuple):
-    return contract_expression(equation, *shapes, optimize='greedy')
-
-def cached_einsum(equation: str, *operands):
-    expr = get_contract_expr_cached(equation, tuple(op.shape for op in operands))
-    return expr(*operands)
 
 def _compute_phi_bck_A(Phi_now, core_left, core_A, core_right):
     return cached_einsum('LSR,lML,sMNS,rNR->lsr', Phi_now, core_left, core_A, core_right)
