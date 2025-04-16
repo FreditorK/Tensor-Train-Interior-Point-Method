@@ -117,9 +117,7 @@ def tt_infeasible_newton_system(
         L_X = tt_rank_reduce(tt_scale(0.5, tt_add(tt_kron(X_tt, P), tt_kron(P, X_tt))), eps=op_tol,
                              rank_weighted_error=True)
         if not centrality_done:
-            rhs[2 + idx_add] = tt_reshape(tt_scale(-0.5, tt_rank_reduce(
-                tt_add(tt_fast_mat_mat_mul(X_tt, Z_tt, eps), tt_fast_mat_mat_mul(Z_tt, X_tt, eps)), eps=op_tol,
-                rank_weighted_error=True)), (4, ))
+            rhs[2 + idx_add] = tt_reshape(tt_scale(-1, _tt_symmetrise(tt_fast_mat_mat_mul(X_tt, Z_tt, 0.5*op_tol), 0.5*op_tol)), (4, ))
 
     X_tt = tt_reshape(X_tt, (4, ))
     Y_tt = tt_reshape(Y_tt, (4, ))
@@ -237,8 +235,8 @@ def _tt_ipm_newton_step(
         if direction == "XZ":
             Delta_XZ_term = tt_scale(-1, tt_fast_mat_mat_mul(Delta_Z_tt, Delta_X_tt, op_tol))
         else:
-            Delta_XZ_term = tt_scale(-0.5, tt_rank_reduce(tt_add(tt_fast_mat_mat_mul(Delta_X_tt, Delta_Z_tt, op_tol/3), tt_fast_mat_mat_mul(Delta_Z_tt, Delta_X_tt, op_tol/3)), eps=op_tol/3,
-                                                rank_weighted_error=True))
+            Delta_XZ_term = tt_scale(-1, _tt_symmetrise(tt_fast_mat_mat_mul(Delta_X_tt, Delta_Z_tt, 0.5*op_tol), 0.5*op_tol))
+
         sigma = ((ZX + x_step_size * z_step_size * tt_inner_prod(Delta_X_tt, Delta_Z_tt) + z_step_size * tt_inner_prod(
             X_tt, Delta_Z_tt) + x_step_size * tt_inner_prod(Delta_X_tt, Z_tt)) / ZX) ** 2
         rhs_vec_tt[2 + idx_add] = tt_rank_reduce(

@@ -2,7 +2,6 @@ import copy
 import sys
 import os
 
-import numpy as np
 import yaml
 import argparse
 import tracemalloc
