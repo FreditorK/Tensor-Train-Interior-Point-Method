@@ -42,7 +42,7 @@ def tt_rl_orthogonalise(train_tt: List[np.array]):
     for idx in range(dim - 1, 0, -1):
         shape_p1 = train_tt[idx].shape
         shape = train_tt[idx - 1].shape
-        Q_T, R = np.linalg.qr(train_tt[idx].reshape(shape_p1[0], -1).T)
+        Q_T, R = scp.linalg.qr(train_tt[idx].reshape(shape_p1[0], -1).T, overwrite_a=True, check_finite=False, mode="economic")
         train_tt[idx] = Q_T.T.reshape(-1, *shape_p1[1:-1], shape_p1[-1])
         train_tt[idx - 1] = (train_tt[idx - 1].reshape(-1, R.shape[-1]) @ R.T).reshape(-1, *shape[1:-1],
                                                                                        train_tt[idx].shape[0])
@@ -298,32 +298,83 @@ def prune_singular_vals(s, eps):
     return R
 
 
+def _large_supercore_svd(core_a, core_b, eps):
+    shape_a = core_a.shape # rmas
+    shape_b = core_b.shape # snbR
+    rml, las = scp.linalg.qr(core_a.reshape(shape_a[0] * shape_a[1], -1), overwrite_a=True, check_finite=False, mode="economic")
+    rml = rml.reshape(shape_a[0], shape_a[1], -1)
+    las = las.reshape(-1, shape_a[2], shape_a[3])
+    snL, LbR = scp.linalg.qr(core_b.reshape(core_b.shape[0] * core_b.shape[1], -1), overwrite_a=True, check_finite=False, mode="economic")
+    snL = snL.reshape(shape_b[0], shape_b[1], -1)
+    LbR = LbR.reshape(-1, shape_b[2], shape_b[3])
+    lnaL = cached_einsum("las, snL->lnaL", las, snL)
+    del las,  snL
+    shape_lnaL = lnaL.shape
+    lns, saL = scp.linalg.qr(lnaL.reshape(lnaL.shape[0] * lnaL.shape[1], -1), overwrite_a=True, check_finite=False, mode="economic")
+    lns = lns.reshape(shape_lnaL[0], lnaL.shape[1], -1)
+    saL = saL.reshape(-1, shape_lnaL[2], shape_lnaL[3])
+    rnms = cached_einsum("rml, lns->rnms", rml, lns)
+    del rml, lns
+    rnms_shape = rnms.shape
+    rnl, lms = scp.linalg.qr(rnms.reshape(rnms.shape[0] * rnms.shape[1], -1), overwrite_a=True, check_finite=False, mode="economic")
+    rnl = rnl.reshape(rnms_shape[0], rnms_shape[1], -1)
+    lms = lms.reshape(-1, rnms_shape[2], rnms_shape[3])
+    sbaR = cached_einsum("saL, LbR->sbaR", saL, LbR)
+    del saL, LbR
+    sbaR_shape = sbaR.shape
+    sbL, LaR = scp.linalg.qr(sbaR.reshape(sbaR.shape[0] * sbaR.shape[1], -1), overwrite_a=True, check_finite=False, mode="economic")
+    sbL = sbL.reshape(sbaR_shape[0], sbaR_shape[1], -1)
+    LaR = LaR.reshape(-1, sbaR_shape[2], sbaR_shape[3])
+    lbmL = cached_einsum("lms, sbL->lbmL", lms, sbL)
+    del lms, sbL
+    lbmL_shape = lbmL.shape
+    lbs, smL = scp.linalg.qr(lbmL.reshape(lbmL.shape[0] * lbmL.shape[1], -1), overwrite_a=True, check_finite=False, mode="economic")
+
+
+    lbs = lbs.reshape(lbmL_shape[0], lbmL_shape[1], -1)
+    smL = smL.reshape(-1, lbmL_shape[2], lbmL_shape[3])
+    rnbs = cached_einsum("rnl, lbs->rnbs", rnl, lbs)
+    del rnl, lbs
+    smaR = cached_einsum("smL, LaR->smaR", smL, LaR)
+    del smL, LaR
+    u, s, v = scip.linalg.svd(rnbs.reshape(rnbs.shape[0] * rnbs.shape[1] * rnbs.shape[2], -1), full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
+    u = u @ np.diag(s)
+    r = prune_singular_vals(s, eps)
+    u = u[:, :r]
+    v = v[:r, :]
+    KmaR = cached_einsum("Ks, smaR->KmaR", v, smaR)
+    del v, smaR
+    rnbK = u.reshape(shape_a[0], shape_b[1], shape_b[2], -1)
+    return rnbK, KmaR
+
+
+
+
 def swap_cores(core_a, core_b, eps):
     if len(core_a.shape) == 3 and len(core_b.shape) == 3:
         supercore = cached_einsum("rms,snR->rnmR", core_a, core_b)
         if np.linalg.norm(supercore) < eps:
             return np.zeros((core_a.shape[0], core_b.shape[1], 1)), np.zeros((1, core_a.shape[1], core_b.shape[2]))
-        print(supercore.shape)
         u, s, v = scip.linalg.svd(np.reshape(supercore, (core_a.shape[0] * core_b.shape[1], -1)), full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
         u = u @ np.diag(s)
         r = prune_singular_vals(s, eps)
-        print("Rank ", r)
         u = u[:, :r]
         v = v[:r, :]
         return np.reshape(u, (core_a.shape[0], core_b.shape[1], -1)), np.reshape(v,(-1, core_a.shape[1], core_b.shape[2]))
     elif len(core_a.shape) == 4 and len(core_b.shape) == 4:
         # TODO: Can we split them up before
+        """
         supercore = cached_einsum("rmas,snbR->rnbmaR", core_a, core_b)
-        print(supercore.shape)
         if np.linalg.norm(supercore) < eps:
             return np.zeros((core_a.shape[0], core_b.shape[1], core_b.shape[2], 1)), np.zeros((1, core_a.shape[1], core_a.shape[2], core_b.shape[3]))
         u, s, v = scip.linalg.svd(np.reshape(supercore, (core_a.shape[0] * core_b.shape[1] * core_b.shape[2], -1)), full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
         u = u @ np.diag(s)
         r = prune_singular_vals(s, eps)
-        print("Rank ", r)
         u = u[:, :r]
         v = v[:r, :]
         return np.reshape(u, (core_a.shape[0], core_b.shape[1], core_b.shape[2], -1)), np.reshape(v, (-1, core_a.shape[1], core_a.shape[2], core_b.shape[3]))
+        """
+        return _large_supercore_svd(core_a, core_b, eps)
     else:
         raise Exception("The cores must be wither 3d or 4d tensors.")
 
