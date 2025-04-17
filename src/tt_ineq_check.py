@@ -249,7 +249,7 @@ def tt_pd_optimal_step_size(A, Delta, op_tol, nswp=10, eps=1e-12, verbose=False)
             if k < d - 1:
                 u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True)
                 v = s.reshape(-1, 1) * v
-                r = prune_singular_vals(s, eps)
+                r = prune_singular_vals(s, eps) if swp > 0 else len(s)
                 x_cores[k] = u[:, :r].reshape(rx[k], N[k], r)
                 x_cores[k + 1] = einsum('ij,jkl->ikl', v[:r, :], x_cores[k + 1], optimize="greedy").reshape(r, N[k + 1], rx[k + 2])
                 rx[k + 1] = r
