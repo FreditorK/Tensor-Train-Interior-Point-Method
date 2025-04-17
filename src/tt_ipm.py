@@ -175,7 +175,7 @@ def _tt_ipm_newton_step(
     dim = len(Z_tt)
     ZX = tt_inner_prod(Z_tt, X_tt)
     mu = np.divide(ZX, 2**dim)
-    centrality_done = np.less(mu, centrality_tol)
+    centrality_done = np.less(ZX, centrality_tol)
     lhs_matrix_tt, rhs_vec_tt, primal_dual_error = tt_infeasible_newton_system(
         lhs_skeleton,
         vec_obj_tt,
@@ -273,6 +273,12 @@ def _tt_line_search(
     return tau_x*x_step_size, tau_z*z_step_size, min(permitted_err_x, permitted_err_z)
 
 
+def _update(x_step_size, z_step_size, X_tt, Z_tt, Delta_X_tt, Delta_Z_tt, op_tol):
+    X_tt = tt_rank_reduce(tt_add(X_tt, tt_scale(x_step_size, Delta_X_tt)), eps=op_tol, rank_weighted_error=True)
+    Z_tt = tt_rank_reduce(tt_add(Z_tt, tt_scale(z_step_size, Delta_Z_tt)), eps=op_tol, rank_weighted_error=True)
+    return X_tt, Z_tt
+
+
 def tt_ipm(
     lag_maps,
     obj_tt,
@@ -353,11 +359,12 @@ def tt_ipm(
         )
         progress_percent = np.abs(mu)
         if x_step_size == 0 and z_step_size == 0:
+            if Delta_X_tt is not None and Delta_Z_tt is not None:
+                X_tt, Z_tt = _update(op_tol, op_tol, X_tt, Z_tt, Delta_X_tt, Delta_Z_tt, eps)
             break
-        X_tt = tt_rank_reduce(tt_add(X_tt, tt_scale(x_step_size, Delta_X_tt)), eps=op_tol, rank_weighted_error=True)
-        Y_tt =  tt_rank_reduce(tt_add(Y_tt, tt_scale(z_step_size, Delta_Y_tt)), eps=0.5*op_tol, rank_weighted_error=True)
-        Y_tt = tt_rank_reduce(tt_sub(Y_tt, tt_reshape(tt_fast_matrix_vec_mul(lag_maps["y"], tt_reshape(Y_tt, shape=(4, )), eps), (2, 2))), eps=0.5*op_tol, rank_weighted_error=True)
-        Z_tt = tt_rank_reduce(tt_add(Z_tt, tt_scale(z_step_size, Delta_Z_tt)), eps=op_tol, rank_weighted_error=True)
+        X_tt, Z_tt = _update(x_step_size, z_step_size, X_tt, Z_tt, Delta_X_tt, Delta_Z_tt, op_tol)
+        Y_tt = tt_rank_reduce(tt_add(Y_tt, tt_scale(z_step_size, Delta_Y_tt)), eps=0.5 * op_tol, rank_weighted_error=True)
+        Y_tt = tt_rank_reduce(tt_sub(Y_tt, tt_reshape(tt_fast_matrix_vec_mul(lag_maps["y"], tt_reshape(Y_tt, shape=(4,)), eps), (2, 2))), eps=0.5 * op_tol, rank_weighted_error=True)
         if verbose:
             print(f"---Step {iteration}---")
             print(f"Step sizes: {x_step_size:.4f}, {z_step_size:.4f}")
