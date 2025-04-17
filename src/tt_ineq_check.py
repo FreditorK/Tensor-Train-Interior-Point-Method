@@ -197,9 +197,6 @@ def tt_pd_optimal_step_size(A, Delta, op_tol, nswp=10, eps=1e-12, verbose=False)
         print(f"Starting Eigen solve with:\n \t {eps} \n \t sweeps: {nswp}")
         t0 = time.time()
     x_cores = tt_random_gaussian(symmetric_powers_of_two(len(A)-1), (2,))
-    scaling_factor = tt_norm(A)
-    A = tt_scale(scaling_factor, A)
-    Delta = tt_scale(scaling_factor, Delta)
     d = len(x_cores)
     rx = np.array([1] + tt_ranks(x_cores) + [1])
     N = np.array([c.shape[1] for c in x_cores])
@@ -297,10 +294,8 @@ def tt_psd_rank_reduce(A, eigen_tt, op_tol, rank_weighted_error=False):
     else:
         op_tol = np.ones(d - 1) * (op_tol / np.sqrt(d - 1))
 
-
     XAX = [np.ones((1, 1, 1))] + [None] * (d - 1) + [np.ones((1, 1, 1))]  # size is rk x Rk x rk
 
-    A = tt_rl_orthogonalise(A)
     rank = 1
     singular_values = {}
     for idx, tt_core in enumerate(A[:-1]):
