@@ -188,6 +188,7 @@ def _step_size_local_solve(previous_solution, XDX, Delta, XAX, A, rx, N, step_si
             solution_now /= np.linalg.norm(solution_now)
         except:
             solution_now = previous_solution
+            step_size = 0
     return solution_now, step_size
 
 
@@ -223,15 +224,13 @@ def tt_pd_optimal_step_size(A, Delta, op_tol, nswp=10, eps=1e-12, verbose=False)
             if k > 0:
                 u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True)
                 v = s.reshape(-1, 1) * v
-                r = prune_singular_vals(s, eps)
+                r = prune_singular_vals(s, eps) if swp > 0 else len(s)
                 x_cores[k] = np.reshape(u[:, :r].T, (r, N[k], rx[k + 1]))
                 x_cores[k - 1] = einsum('rdc,cR->rdR', x_cores[k - 1], v[:r].T, optimize="greedy")
                 rx[k] = r
 
-                XAX[k] = _compute_phi_bck_A(
-                    XAX[k + 1], x_cores[k], A[k], x_cores[k])
-                XDX[k] = _compute_phi_bck_A(
-                    XDX[k + 1], x_cores[k], Delta[k], x_cores[k])
+                XAX[k] = _compute_phi_bck_A(XAX[k + 1], x_cores[k], A[k], x_cores[k])
+                XDX[k] = _compute_phi_bck_A(XDX[k + 1], x_cores[k], Delta[k], x_cores[k])
                 norm = np.sqrt(np.linalg.norm(XAX[k]) ** 2 + np.linalg.norm(XDX[k]) ** 2)
                 norm = norm if norm > 0 else 1.0
                 XAX[k] = np.divide(XAX[k], norm)
@@ -304,8 +303,7 @@ def tt_psd_rank_reduce(A, eigen_tt, op_tol, rank_weighted_error=False):
         idx_shape = tt_core.shape
         next_idx_shape = A[idx + 1].shape
         k = len(idx_shape) - 1
-        u, s, v_t = scp.linalg.svd(A[idx].reshape(rank * np.prod(idx_shape[1:k], dtype=int), -1),
-                                   full_matrices=False, check_finite=False)
+        u, s, v_t = scp.linalg.svd(A[idx].reshape(rank * np.prod(idx_shape[1:k], dtype=int), -1), full_matrices=False, check_finite=False)
         singular_values[idx] = s
         next_rank = u.shape[-1]
         A[idx] = u.reshape(rank, *idx_shape[1:-1], next_rank)
