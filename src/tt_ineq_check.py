@@ -211,7 +211,7 @@ def tt_pd_optimal_step_size(A, Delta, op_tol, nswp=10, eps=1e-12, verbose=False)
     max_res = 0
     step_size = 1
     for swp in range(nswp):
-        max_res = 0
+        max_res = np.inf if swp == 0 else 0
         for k in range(d - 1, -1, -1):
             if swp > 0:
                 previous_solution = np.reshape(x_cores[k], (-1, 1))
@@ -239,6 +239,10 @@ def tt_pd_optimal_step_size(A, Delta, op_tol, nswp=10, eps=1e-12, verbose=False)
             else:
                 x_cores[k] = np.reshape(solution_now, (rx[k], N[k], rx[k + 1]))
 
+        x_cores = tt_normalise(x_cores)
+        if max_res < eps:
+            break
+        max_res = 0
         for k in range(d):
             previous_solution = np.reshape(x_cores[k], (-1, 1))
             solution_now, step_size = _step_size_local_solve(previous_solution, XDX, Delta, XAX, A, rx, N, step_size, k, op_tol, eps)

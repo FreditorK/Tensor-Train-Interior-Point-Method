@@ -94,7 +94,6 @@ def tt_infeasible_newton_system(
         bias_tt,
         lin_op_tt_ineq,
         lin_op_tt_ineq_adj,
-        bias_tt_ineq,
         op_tol,
         feasibility_tol,
         centrality_done,
@@ -172,7 +171,6 @@ def _tt_ipm_newton_step(
             bias_tt,
             lin_op_tt_ineq,
             lin_op_tt_ineq_adj,
-            bias_tt_ineq,
             X_tt,
             Y_tt,
             T_tt,
@@ -202,7 +200,6 @@ def _tt_ipm_newton_step(
         bias_tt,
         lin_op_tt_ineq,
         lin_op_tt_ineq_adj,
-        bias_tt_ineq,
         op_tol,
         feasibility_tol,
         centrality_done,
@@ -291,7 +288,6 @@ def tt_ipm(
     lin_op_tt,
     bias_tt,
     lin_op_tt_ineq=None,
-    bias_tt_ineq=None,
     max_iter=100,
     feasibility_tol=1e-5,
     centrality_tol=1e-3,
@@ -300,7 +296,7 @@ def tt_ipm(
     direction = "XZ",
     eps=1e-12
 ):
-    active_ineq = lin_op_tt_ineq is not None or bias_tt_ineq is not None
+    active_ineq = lin_op_tt_ineq is not None
     dim = len(obj_tt)
     # Reshaping
     lag_maps = {key: tt_rank_reduce(tt_reshape(value, (4, 4)), eps=op_tol) for key, value in lag_maps.items()}
@@ -332,10 +328,8 @@ def tt_ipm(
     lhs_skeleton[(0, 0)] = lag_maps["y"]
     lin_op_tt_ineq_adj = None
     if active_ineq:
-        lin_op_tt_ineq_adj = tt_scale(-1, tt_transpose(lin_op_tt_ineq))
-        lhs_skeleton[(0, 2)] = tt_rank_reduce(tt_reshape(tt_scale(-1, lin_op_tt_ineq_adj), (4, 4)), eps=op_tol)
-        lhs_skeleton[(0, 3)] = tt_reshape(tt_identity(2 * dim), (4, 4))
-        bias_tt_ineq = tt_rank_reduce(tt_reshape(bias_tt_ineq, (4, )), eps=op_tol)
+        lhs_skeleton[(2, 2)] = lag_maps["t"]
+        lhs_skeleton[(1, 2)] = tt_reshape(tt_identity(2 * dim), (4, 4))
     else:
         lhs_skeleton[(1, 2)] = tt_reshape(tt_identity(2 * dim), (4, 4))
     x_initial_step = tt_norm(bias_tt) / tt_norm(tt_diagonal(lin_op_tt))
@@ -359,7 +353,6 @@ def tt_ipm(
             bias_tt,
             lin_op_tt_ineq,
             lin_op_tt_ineq_adj,
-            bias_tt_ineq,
             X_tt,
             Y_tt,
             T_tt,
