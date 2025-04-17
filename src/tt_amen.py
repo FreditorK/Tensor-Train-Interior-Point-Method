@@ -3,6 +3,8 @@ import os
 import time
 import copy
 
+import numpy as np
+
 sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
@@ -502,15 +504,14 @@ def tt_block_mals(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, local_solv
     real_tol = (tol / np.sqrt(d))*np.ones(d-1)
     r_max_final = block_size*int(np.sqrt(d)*d)
     size_limit = 0.2*r_max_final*N[0]*r_max_final
-    r_max_part = max(r_max_final // nswp, 1)
+    r_max_part = int(r_max_final // (nswp-1))
 
     for swp in range(nswp):
-        r_max = (swp+1)*r_max_part
+        r_max = min((swp+1)*r_max_part, r_max_final)
         if rank_weighted_error:
             weights = rx[1:-1] * rx[:-2] + rx[1:-1] * rx[2:]
             rank_percent = np.sqrt(weights/np.sum(weights))
             real_tol = tol*rank_percent
-
 
         if direction > 0:
             x_cores, normx, XAX, normA, Xb, normb, nrmsc, rx, local_res, local_dx = _bck_sweep(

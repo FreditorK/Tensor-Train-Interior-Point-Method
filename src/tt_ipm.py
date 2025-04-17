@@ -248,7 +248,7 @@ def _tt_ipm_newton_step(
                 )
             ),
             op_tol,
-            rank_weighted_error=False
+            rank_weighted_error=True
         )
 
         Delta_tt, res = solver(lhs_matrix_tt, rhs_vec_tt, Delta_tt, 6)
