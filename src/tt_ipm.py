@@ -274,8 +274,14 @@ def _tt_line_search(
 
 
 def _update(x_step_size, z_step_size, X_tt, Z_tt, Delta_X_tt, Delta_Z_tt, op_tol):
-    X_tt = tt_rank_reduce(tt_add(X_tt, tt_scale(x_step_size, Delta_X_tt)), eps=op_tol, rank_weighted_error=True)
-    Z_tt = tt_rank_reduce(tt_add(Z_tt, tt_scale(z_step_size, Delta_Z_tt)), eps=op_tol, rank_weighted_error=True)
+    if x_step_size == 0:
+        X_tt = tt_rank_reduce(tt_add(X_tt, tt_scale(0.5*op_tol, tt_identity(len(X_tt)))), eps=op_tol, rank_weighted_error=True)
+    else:
+        X_tt = tt_rank_reduce(tt_add(X_tt, tt_scale(x_step_size, Delta_X_tt)), eps=op_tol, rank_weighted_error=True)
+    if z_step_size == 0:
+        Z_tt = tt_rank_reduce(tt_add(Z_tt, tt_scale(0.5 * op_tol, tt_identity(len(Z_tt)))), eps=op_tol, rank_weighted_error=True)
+    else:
+        Z_tt = tt_rank_reduce(tt_add(Z_tt, tt_scale(z_step_size, Delta_Z_tt)), eps=op_tol, rank_weighted_error=True)
     return X_tt, Z_tt
 
 
@@ -335,7 +341,7 @@ def tt_ipm(
     T_tt = None
     if ineq_mask is not None:
         T_tt = tt_rank_reduce(ineq_mask, eps=op_tol, rank_weighted_error=True)
-    XZ_bound = 0.5*2**dim
+    XZ_bound = int(np.sqrt(dim)*dim)
     direction = "XZ+ZX"
     iteration = 0
     for iteration in range(1, max_iter):
