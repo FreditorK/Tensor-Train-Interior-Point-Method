@@ -39,21 +39,25 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         mR_p = rhs[:, 0].reshape(m, 1)
         mR_d = rhs[:, 1].reshape(m, 1)
         mR_c = rhs[:, 2].reshape(m, 1)
-        L_L_Z = scip.linalg.cholesky(
-            cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(2, 1)], block_A_k[(2, 1)], XAX_k1[(2, 1)]).reshape(m, m),
-            check_finite=False, lower=True, overwrite_a=True
-        )
-        L_X = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(2, 2)], block_A_k[(2, 2)], XAX_k1[(2, 2)]).reshape(m, m)
-        mL_eq = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(0, 1)], block_A_k[(0, 1)], XAX_k1[(0, 1)]).reshape(m, m)
-        mL_eq_adj = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(1, 0)], block_A_k[(1, 0)], XAX_k1[(1, 0)]).reshape(m, m)
-        inv_I = inv_I.reshape(1, -1)
-        A = mL_eq @ forward_backward_sub(L_L_Z, L_X * inv_I) @ mL_eq_adj + cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(0, 0)], block_A_k[(0, 0)], XAX_k1[(0, 0)]).reshape(m, m)
-        b = mR_p - mL_eq @ forward_backward_sub(L_L_Z, mR_c - (L_X * inv_I.reshape(1, -1)) @ mR_d) - A @ np.transpose(previous_solution, (1, 0, 2, 3))[1].reshape(-1, 1)
-        y = scip.linalg.solve(A, b, check_finite=False, overwrite_a=True, overwrite_b=True) + np.transpose(previous_solution, (1, 0, 2, 3))[1].reshape(-1, 1)
-        z = inv_I.reshape(-1, 1) * (mR_d - mL_eq_adj @ y)
-        x = forward_backward_sub(L_L_Z, mR_c - L_X @ z)
-        solution_now = np.transpose(np.vstack((y, x, z)).reshape(x_shape[1], x_shape[0], x_shape[2], x_shape[3]), (1, 0, 2, 3))
-    else:
+        try:
+            L_L_Z = scip.linalg.cholesky(
+                cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(2, 1)], block_A_k[(2, 1)], XAX_k1[(2, 1)]).reshape(m, m),
+                check_finite=False, lower=True, overwrite_a=True
+            )
+            L_X = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(2, 2)], block_A_k[(2, 2)], XAX_k1[(2, 2)]).reshape(m, m)
+            mL_eq = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(0, 1)], block_A_k[(0, 1)], XAX_k1[(0, 1)]).reshape(m, m)
+            mL_eq_adj = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(1, 0)], block_A_k[(1, 0)], XAX_k1[(1, 0)]).reshape(m, m)
+            inv_I = inv_I.reshape(1, -1)
+            A = mL_eq @ forward_backward_sub(L_L_Z, L_X * inv_I) @ mL_eq_adj + cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(0, 0)], block_A_k[(0, 0)], XAX_k1[(0, 0)]).reshape(m, m)
+            b = mR_p - mL_eq @ forward_backward_sub(L_L_Z, mR_c - (L_X * inv_I.reshape(1, -1)) @ mR_d) - A @ np.transpose(previous_solution, (1, 0, 2, 3))[1].reshape(-1, 1)
+            y = scip.linalg.solve(A, b, check_finite=False, overwrite_a=True, overwrite_b=True) + np.transpose(previous_solution, (1, 0, 2, 3))[1].reshape(-1, 1)
+            z = inv_I.reshape(-1, 1) * (mR_d - mL_eq_adj @ y)
+            x = forward_backward_sub(L_L_Z, mR_c - L_X @ z)
+            solution_now = np.transpose(np.vstack((y, x, z)).reshape(x_shape[1], x_shape[0], x_shape[2], x_shape[3]), (1, 0, 2, 3))
+        except:
+            size_limit = 0
+
+    if m > size_limit:
         def mat_vec(x_vec):
             x_vec = _ipm_block_local_product(
                 XAX_k, block_A_k, XAX_k1,
@@ -260,8 +264,8 @@ def _tt_line_search(
         op_tol,
         eps
 ):
-    x_step_size, permitted_err_x = tt_pd_optimal_step_size(X_tt, Delta_X_tt, op_tol, eps=eps, verbose=True)
-    z_step_size, permitted_err_z = tt_pd_optimal_step_size(Z_tt, Delta_Z_tt, op_tol, eps=eps, verbose=True)
+    x_step_size, permitted_err_x = tt_pd_optimal_step_size(X_tt, Delta_X_tt, op_tol, eps=eps)
+    z_step_size, permitted_err_z = tt_pd_optimal_step_size(Z_tt, Delta_Z_tt, op_tol, eps=eps)
     if x_step_size == 1 and z_step_size == 1:
         return 1, 1, min(permitted_err_x, permitted_err_z)
     tau_x = 0.9 + 0.09*x_step_size
@@ -356,7 +360,7 @@ def tt_ipm(
         Z_tt = tt_rank_reduce(tt_add(Z_tt, tt_scale(z_step_size, Delta_Z_tt)), eps=op_tol, rank_weighted_error=True)
         if verbose:
             print(f"---Step {iteration}---")
-            print(f"Step sizes: {x_step_size}, {z_step_size}")
+            print(f"Step sizes: {x_step_size:.4f}, {z_step_size:.4f}")
             print(f"Duality Gap: {100*progress_percent:.4f}")
             print(f"Primal-Dual error: {pd_error}")
             print(f"Sigma: {sigma}")
