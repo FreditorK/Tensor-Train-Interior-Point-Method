@@ -360,7 +360,7 @@ def tt_ipm(
         progress_percent = np.abs(mu)
         if x_step_size == 0 and z_step_size == 0:
             if Delta_X_tt is not None and Delta_Z_tt is not None:
-                X_tt, Z_tt = _update(op_tol, op_tol, X_tt, Z_tt, Delta_X_tt, Delta_Z_tt, eps)
+                X_tt, Z_tt = _update(0.5*op_tol, 0.5*op_tol, X_tt, Z_tt, Delta_X_tt, Delta_Z_tt, eps)
             break
         X_tt, Z_tt = _update(x_step_size, z_step_size, X_tt, Z_tt, Delta_X_tt, Delta_Z_tt, op_tol)
         Y_tt = tt_rank_reduce(tt_add(Y_tt, tt_scale(z_step_size, Delta_Y_tt)), eps=0.5 * op_tol, rank_weighted_error=True)
