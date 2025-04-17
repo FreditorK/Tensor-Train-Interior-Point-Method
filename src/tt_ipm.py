@@ -273,8 +273,8 @@ def _tt_line_search(
         op_tol,
         eps
 ):
-    x_step_size, permitted_err_x = tt_pd_optimal_step_size(X_tt, Delta_X_tt, op_tol, eps=1e-8)
-    z_step_size, permitted_err_z = tt_pd_optimal_step_size(Z_tt, Delta_Z_tt, op_tol, eps=1e-8)
+    x_step_size, permitted_err_x = tt_pd_optimal_step_size(X_tt, Delta_X_tt, op_tol, eps=eps, verbose=True)
+    z_step_size, permitted_err_z = tt_pd_optimal_step_size(Z_tt, Delta_Z_tt, op_tol, eps=eps, verbose=True)
     if x_step_size == 1 and z_step_size == 1:
         return 1, 1, min(permitted_err_x, permitted_err_z)
     tau_x = 0.9 + 0.09*x_step_size
