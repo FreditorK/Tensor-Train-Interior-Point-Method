@@ -159,6 +159,38 @@ def symmetric_powers_of_two(length):
         return first_half + [2**(half + 1)] + first_half[::-1]
 
 
+def _step_size_local_solve(previous_solution, XDX, Delta, XAX, A, rx, N, step_size, k, op_tol, eps):
+    D = cached_einsum(
+        "lsr,smnS,LSR->lmLrnR",
+        XDX[k], Delta[k], XDX[k + 1]
+    ).reshape(rx[k] * N[k] * rx[k + 1], rx[k] * N[k] * rx[k + 1])
+
+    if is_psd(D, eps):
+        step_size = min(step_size, 1)
+        D += cached_einsum(
+            "lsr,smnS,LSR->lmLrnR", XAX[k], A[k], XAX[k + 1]
+        ).reshape(rx[k] * N[k] * rx[k + 1], rx[k] * N[k] * rx[k + 1])
+        _, solution_now = scip.sparse.linalg.eigsh(D, tol=0.1 * eps, k=1, which="SM", v0=previous_solution)
+    else:
+        try:
+            L = scip.linalg.cholesky(
+                cached_einsum(
+                    "lsr,smnS,LSR->lmLrnR", XAX[k], A[k], XAX[k + 1]
+                ).reshape(rx[k] * N[k] * rx[k + 1], rx[k] * N[k] * rx[k + 1]), check_finite=False, lower=True,
+                overwrite_a=True
+            )
+            L_inv = scip.linalg.solve_triangular(L, np.eye(L.shape[0]), lower=True, overwrite_b=True,
+                                                 check_finite=False)
+            local_step_size_inv, solution_now = scip.sparse.linalg.eigsh(-L_inv @ D @ L_inv.T, tol=0.1 * eps, k=1,
+                                                                         which="LA", v0=L.T @ previous_solution)
+            step_size = min(step_size, (1 - op_tol) / local_step_size_inv[0])
+            solution_now = L_inv.T @ solution_now
+            solution_now /= np.linalg.norm(solution_now)
+        except:
+            solution_now = previous_solution
+    return solution_now, step_size
+
+
 def tt_pd_optimal_step_size(A, Delta, op_tol, nswp=10, eps=1e-12, verbose=False):
     if verbose:
         print(f"Starting Eigen solve with:\n \t {eps} \n \t sweeps: {nswp}")
@@ -178,49 +210,40 @@ def tt_pd_optimal_step_size(A, Delta, op_tol, nswp=10, eps=1e-12, verbose=False)
     max_res = 0
     step_size = 1
     for swp in range(nswp):
-        x_cores = tt_rl_orthogonalise(x_cores)
-        rx[1:-1] = np.array(tt_ranks(x_cores))
-        for k in range(d - 1, 0, -1):
-            XAX[k] = _compute_phi_bck_A(
-                XAX[k + 1], x_cores[k], A[k], x_cores[k])
-            XDX[k] = _compute_phi_bck_A(
-                XDX[k + 1], x_cores[k], Delta[k], x_cores[k])
-            norm = np.sqrt(np.linalg.norm(XAX[k]) ** 2 + np.linalg.norm(XDX[k]) ** 2)
-            norm = norm if norm > 0 else 1.0
-            XAX[k + 1] = np.divide(XAX[k + 1], norm)
-            XDX[k + 1] = np.divide(XDX[k + 1], norm)
         max_res = 0
+        for k in range(d - 1, -1, -1):
+            if swp > 0:
+                previous_solution = np.reshape(x_cores[k], (-1, 1))
+                solution_now, step_size = _step_size_local_solve(previous_solution, XDX, Delta, XAX, A, rx, N, step_size, k, op_tol, eps)
+                max_res = max(max_res, 1 - np.sum(np.abs(solution_now.T @ previous_solution)))
+                solution_now = np.reshape(solution_now, (rx[k], N[k] * rx[k + 1])).T
+            else:
+                solution_now = np.reshape(x_cores[k], (rx[k], N[k] * rx[k + 1])).T
+
+            if k > 0:
+                u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True)
+                v = s.reshape(-1, 1) * v
+                r = prune_singular_vals(s, eps)
+                x_cores[k] = np.reshape(u[:, :r].T, (r, N[k], rx[k + 1]))
+                x_cores[k - 1] = einsum('rdc,cR->rdR', x_cores[k - 1], v[:r].T, optimize="greedy")
+                rx[k] = r
+
+                XAX[k] = _compute_phi_bck_A(
+                    XAX[k + 1], x_cores[k], A[k], x_cores[k])
+                XDX[k] = _compute_phi_bck_A(
+                    XDX[k + 1], x_cores[k], Delta[k], x_cores[k])
+                norm = np.sqrt(np.linalg.norm(XAX[k]) ** 2 + np.linalg.norm(XDX[k]) ** 2)
+                norm = norm if norm > 0 else 1.0
+                XAX[k] = np.divide(XAX[k], norm)
+                XDX[k] = np.divide(XDX[k], norm)
+
+            else:
+                x_cores[k] = np.reshape(solution_now, (rx[k], N[k], rx[k + 1]))
+
         for k in range(d):
             previous_solution = np.reshape(x_cores[k], (-1, 1))
-            D = cached_einsum(
-                "lsr,smnS,LSR->lmLrnR",
-                XDX[k], Delta[k], XDX[k + 1]
-            ).reshape(rx[k] * N[k] * rx[k + 1], rx[k] * N[k] * rx[k + 1])
-
-            if is_psd(D, eps):
-                step_size = min(step_size, 1)
-                D += cached_einsum(
-                    "lsr,smnS,LSR->lmLrnR",XAX[k], A[k], XAX[k + 1]
-                ).reshape(rx[k] * N[k] * rx[k + 1], rx[k] * N[k] * rx[k + 1])
-                _, solution_now = scip.sparse.linalg.eigsh(D, tol=0.1 * eps, k=1, which="SM", v0=previous_solution)
-            else:
-                try:
-                    L = scip.linalg.cholesky(
-                        cached_einsum(
-                            "lsr,smnS,LSR->lmLrnR",XAX[k], A[k], XAX[k + 1]
-                        ).reshape(rx[k] * N[k] * rx[k + 1], rx[k] * N[k] * rx[k + 1]), check_finite=False, lower=True, overwrite_a=True
-                    )
-                    L_inv = scip.linalg.solve_triangular(L, np.eye(L.shape[0]), lower=True,  overwrite_b=True, check_finite=False)
-                    local_step_size_inv, solution_now = scip.sparse.linalg.eigsh(-L_inv @ D @ L_inv.T, tol=0.1*eps, k=1, which="LA", v0= L.T @ previous_solution)
-                    step_size = min(step_size, (1 - op_tol) / local_step_size_inv[0])
-                    solution_now = L_inv.T @ solution_now
-                    solution_now /= np.linalg.norm(solution_now)
-                except:
-                    return 0, 0
-
-
+            solution_now, step_size = _step_size_local_solve(previous_solution, XDX, Delta, XAX, A, rx, N, step_size, k, op_tol, eps)
             max_res = max(max_res, 1- np.sum(np.abs(solution_now.T @ previous_solution)))
-
             solution_now = np.reshape(solution_now, (rx[k] * N[k], rx[k + 1]))
 
             if k < d - 1:

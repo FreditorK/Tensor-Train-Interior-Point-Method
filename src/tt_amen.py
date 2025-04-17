@@ -284,7 +284,7 @@ def _compute_phi_fwd_rhs(Phi_now, core_rhs, core):
     return cached_einsum('br,bnB,rnR->BR', Phi_now, core_rhs, core)
 
 
-def _forward_sweep(
+def _bck_sweep(
         local_solver,
         x_cores,
         normx,
@@ -352,8 +352,8 @@ def _forward_sweep(
             x_cores[k] = np.reshape(u[:, :r].T, (r, N[k], rx[k + 1]))
             x_cores[k - 1] = einsum('rdc,cbR->rbdR', x_cores[k - 1], v[:r].T.reshape(rx[k], block_size, r), optimize="greedy")
             norm_now = np.linalg.norm(x_cores[k - 1])
-            x_cores[k - 1] /= norm_now
             normx[k - 1] *= norm_now
+            x_cores[k - 1] /= norm_now
             rx[k] = r
 
             XAX[k] = {(i, j): _compute_phi_bck_A(XAX[k + 1][(i, j)], x_cores[k], block_A[k][(i, j)], x_cores[k]) for (i, j)
@@ -371,7 +371,7 @@ def _forward_sweep(
     return x_cores, normx, XAX, normA, Xb, normb, nrmsc, rx, local_res, local_dx
 
 
-def _backward_sweep(
+def _fwd_sweep(
         local_solver,
         x_cores,
         normx,
@@ -513,7 +513,7 @@ def tt_block_mals(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, local_solv
 
 
         if direction > 0:
-            x_cores, normx, XAX, normA, Xb, normb, nrmsc, rx, local_res, local_dx = _forward_sweep(
+            x_cores, normx, XAX, normA, Xb, normb, nrmsc, rx, local_res, local_dx = _bck_sweep(
                 local_solver,
                 x_cores,
                 normx,
@@ -535,7 +535,7 @@ def tt_block_mals(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, local_solv
                 r_max
             )
         else:
-            x_cores, normx, XAX, normA, Xb, normb, nrmsc, rx, local_res, local_dx = _backward_sweep(
+            x_cores, normx, XAX, normA, Xb, normb, nrmsc, rx, local_res, local_dx = _fwd_sweep(
                 local_solver,
                 x_cores,
                 normx,
@@ -561,7 +561,7 @@ def tt_block_mals(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, local_solv
             print('Starting Sweep:\n\tMax num of sweeps: %d' % swp)
             print(f'\tDirection {direction}')
             print(f'\tResidual {local_res}')
-            print(f"\tTT-sol rank: {tt_ranks(x_cores)}")
+            print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
             if rank_weighted_error:
                 print(f"\tRank-weighting: {np.round(rank_percent**2, decimals=2)} \n")
         if local_res < tol or local_dx < eps:
@@ -576,7 +576,7 @@ def tt_block_mals(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, local_solv
         print('\tResidual ', local_res)
         print('\tNumber of sweeps', swp+1)
         print('\tTime: ', time.time() - t0)
-        print('\tTime per sweep: ', (time.time() - t0) / (swp+1))
+        print('\tTime per sweep: ', (time.time() - t0) / (swp+1), flush=True)
 
     normx = np.exp(np.sum(np.log(normx)) / d)
 
