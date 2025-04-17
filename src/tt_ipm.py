@@ -290,7 +290,6 @@ def tt_ipm(
     centrality_tol=1e-3,
     op_tol=1e-5,
     verbose=False,
-    direction = "XZ",
     eps=1e-12
 ):
     dim = len(obj_tt)
@@ -336,6 +335,8 @@ def tt_ipm(
     T_tt = None
     if ineq_mask is not None:
         T_tt = tt_rank_reduce(ineq_mask, eps=op_tol, rank_weighted_error=True)
+    XZ_bound = 0.5*2**dim
+    direction = "XZ+ZX"
     iteration = 0
     for iteration in range(1, max_iter):
         x_step_size, z_step_size, Delta_X_tt, Delta_Y_tt, Delta_Z_tt, Delta_T_tt, pd_error, mu, sigma = _tt_ipm_newton_step(
@@ -360,13 +361,14 @@ def tt_ipm(
         progress_percent = np.abs(mu)
         if x_step_size == 0 and z_step_size == 0:
             if Delta_X_tt is not None and Delta_Z_tt is not None:
-                X_tt, Z_tt = _update(0.5*op_tol, 0.5*op_tol, X_tt, Z_tt, Delta_X_tt, Delta_Z_tt, eps)
+                X_tt, Z_tt = _update(0.5*op_tol, 0.5*op_tol, X_tt, Z_tt, Delta_X_tt, Delta_Z_tt, op_tol)
             break
         X_tt, Z_tt = _update(x_step_size, z_step_size, X_tt, Z_tt, Delta_X_tt, Delta_Z_tt, op_tol)
         Y_tt = tt_rank_reduce(tt_add(Y_tt, tt_scale(z_step_size, Delta_Y_tt)), eps=0.5 * op_tol, rank_weighted_error=True)
         Y_tt = tt_rank_reduce(tt_sub(Y_tt, tt_reshape(tt_fast_matrix_vec_mul(lag_maps["y"], tt_reshape(Y_tt, shape=(4,)), eps), (2, 2))), eps=0.5 * op_tol, rank_weighted_error=True)
         if verbose:
             print(f"---Step {iteration}---")
+            print(f"Direction: {direction}")
             print(f"Step sizes: {x_step_size:.4f}, {z_step_size:.4f}")
             print(f"Duality Gap: {100*progress_percent:.4f}")
             print(f"Primal-Dual error: {pd_error}")
@@ -375,6 +377,7 @@ def tt_ipm(
                 f"Ranks X_tt: {tt_ranks(X_tt)}, Z_tt: {tt_ranks(Z_tt)}, \n"
                 f"      Y_tt: {tt_ranks(Y_tt)}, T_tt: {tt_ranks(T_tt) if T_tt else None} \n"
             )
+        direction = "XZ" if np.max(tt_ranks(X_tt)) > XZ_bound or np.max(tt_ranks(Z_tt)) > XZ_bound  else "XZ+ZX"
     print(f"---Terminated---")
     print(f"Converged in {iteration} iterations.")
     print(f"Duality Gap: {100 * progress_percent:.4f}")

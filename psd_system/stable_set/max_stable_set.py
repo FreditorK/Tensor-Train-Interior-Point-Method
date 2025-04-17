@@ -79,8 +79,7 @@ if __name__ == "__main__":
                 verbose=config["verbose"],
                 feasibility_tol=config["feasibility_tol"],
                 centrality_tol=config["centrality_tol"],
-                op_tol=config["op_tol"],
-                direction=config["direction"]
+                op_tol=config["op_tol"]
             )
             t3 = time.time()
             if args.track_mem:
