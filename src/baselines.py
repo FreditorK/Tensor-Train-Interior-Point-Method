@@ -41,6 +41,7 @@ def cgal(obj_matrix, constraint_matrices, bias, trace_params, duality_tol=1e-2, 
 
 
 def sketchy_cgal(obj_matrix, constraint_matrices, bias, trace_params, R=1, duality_tol=1e-2, feasability_tol=1e-5, num_iter=100, verbose=False):
+    # TODO: scaling needed
     Omega, S = nystrom_sketch_init(obj_matrix.shape[0], R)
     res = -bias
     lag_mul_1 = np.zeros((len(constraint_matrices), 1))

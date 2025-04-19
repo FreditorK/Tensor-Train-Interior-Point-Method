@@ -61,8 +61,14 @@ if __name__ == "__main__":
             if args.track_mem:
                 tracemalloc.start()
             G_entry_tt_op = tt_G_entrywise_mask_op(G)
+            G_entry_tt_op_norm = tt_norm(G_entry_tt_op)
             tr_tt_op = tt_tr_op(config["dim"])
+            tr_tt_op_norm = tt_norm(tr_tt_op)
+            norm_factor = min(G_entry_tt_op_norm, tr_tt_op_norm)
+            G_entry_tt_op = tt_scale(norm_factor/G_entry_tt_op_norm, G_entry_tt_op)
+            tr_tt_op = tt_scale(norm_factor/tr_tt_op_norm, tr_tt_op)
             tr_bias_tt = [E(0, 0) for _ in range(config["dim"])]
+            tr_bias_tt = tt_scale(norm_factor/tr_tt_op_norm, tr_bias_tt)
             J_tt = tt_one_matrix(config["dim"])
             lag_maps = {
                 "y": tt_rank_reduce(tt_diag(tt_vec(tt_sub(tt_one_matrix(config["dim"]), tt_add(G, tr_bias_tt)))))
@@ -97,12 +103,14 @@ if __name__ == "__main__":
             print(f"Converged after {num_iters[-1]:.1f} iterations")
             print(f"Problem created in {problem_creation_times[-1]:.3f}s")
             print(f"Problem solved in {runtimes[-1]:.3f}s")
-            print(f"Peak memory {memory[-1]:.3f} MB")
+            if args.track_mem:
+                print(f"Peak memory {memory[-1]:.3f} MB")
             print(f"Complementary Slackness: {complementary_slackness[-1]}")
             print(f"Total feasibility error: {feasibility_errors[-1]}")
         print(f"Converged after avg {np.mean(num_iters):.1f} iterations")
         print(f"Problem created in avg {np.mean(problem_creation_times):.3f}s")
         print(f"Problem solved in avg {np.mean(runtimes):.3f}s")
-        print(f"Peak memory avg {np.mean(memory):.3f} MB")
+        if args.track_mem:
+            print(f"Peak memory avg {np.mean(memory):.3f} MB")
         print(f"Complementary Slackness avg: {np.mean(complementary_slackness)}")
         print(f"Total feasibility error  avg: {np.mean(feasibility_errors)}")

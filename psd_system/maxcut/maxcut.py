@@ -78,12 +78,14 @@ if __name__ == "__main__":
         print(f"Converged after {num_iters[-1]:.1f} iterations")
         print(f"Problem created in {problem_creation_times[-1]:.3f}s")
         print(f"Problem solved in {runtimes[-1]:.3f}s")
-        print(f"Peak memory avg {memory[-1]:.3f} MB")
+        if args.track_mem:
+            print(f"Peak memory avg {memory[-1]:.3f} MB")
         print(f"Complementary Slackness: {complementary_slackness[-1]}")
         print(f"Total feasibility error: {feasibility_errors[-1]}")
     print(f"Converged after avg {np.mean(num_iters):.1f} iterations")
     print(f"Problem created in avg {np.mean(problem_creation_times):.3f}s")
     print(f"Problem solved in avg {np.mean(runtimes):.3f}s")
-    print(f"Peak memory avg {np.mean(memory):.3f} MB")
+    if args.track_mem:
+        print(f"Peak memory avg {np.mean(memory):.3f} MB")
     print(f"Complementary Slackness avg: {np.mean(complementary_slackness)}")
     print(f"Total feasibility error avg: {np.mean(feasibility_errors)}")

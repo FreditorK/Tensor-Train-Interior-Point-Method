@@ -9,7 +9,6 @@ verbose: False
 tau: 0.9
 op_tol: !!float 2e-4
 max_iter: !!int 15
-direction: "XZ+ZX"
 # Sketchy CGAL
 sketch_cgal_rank: !!int 50
 duality_tol: 0.5

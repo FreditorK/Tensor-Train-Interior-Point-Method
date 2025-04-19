@@ -114,7 +114,7 @@ def _tt_lr_random_orthogonalise(train_tt, gaussian_tt):
         shape_i1 = train_tt[i + 1].shape
         core_z = train_tt[i].reshape(-1, shape_i1[0])  # R_i * 2 x R_{i+1}
         core_y = core_z @ core_w  # R_i * 2 x target_r
-        Q_T, _ = np.linalg.qr(core_y)  # R_i * 2 x unknown
+        Q_T, _ = scp.linalg.qr(core_y, check_finite=False, mode="economic", overwrite_a=True)  # R_i * 2 x unknown
         train_tt[i] = Q_T.reshape(*train_tt[i].shape[:-1], -1)  # R_i * 2 x unknown
         core_m = Q_T.T @ core_z  # unknown x R_{i+1}
         train_tt[i + 1] = (
