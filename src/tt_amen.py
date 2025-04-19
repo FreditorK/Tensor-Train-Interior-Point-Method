@@ -337,7 +337,7 @@ def _bck_sweep(
                 u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True)
             v = s.reshape(-1, 1) * v
             if swp > 0:
-                r_start = min(prune_singular_vals(s, real_tol[k - 1]), r_max)
+                r_start = min(prune_singular_vals(s, real_tol), r_max)
                 solution_now = np.reshape((u[:, :r_start] @ v[:r_start]).T, (rx[k], block_size, N[k], rx[k + 1]))
                 res = _block_local_product(XAX[k], block_A[k], XAX[k + 1], solution_now) - rhs
                 r = r_start
@@ -345,12 +345,12 @@ def _bck_sweep(
                     res -= _block_local_product(XAX[k], block_A[k], XAX[k + 1],
                                                 np.reshape((u[:, None, r] @ v[None, r, :]).T,
                                                            (rx[k], block_size, N[k], rx[k + 1])))
-                    if np.linalg.norm(res) / norm_rhs > max(2 * real_tol[k - 1], block_res_new):
+                    if np.linalg.norm(res) / norm_rhs > max(2 * real_tol, block_res_new):
                         break
                 r += 1
                 nrmsc *= (normA[k - 1] * normx[k - 1]) / normb[k - 1]
             else:
-                r = min(prune_singular_vals(s, real_tol[k - 1]), r_max)
+                r = min(prune_singular_vals(s, real_tol), r_max)
             x_cores[k] = np.reshape(u[:, :r].T, (r, N[k], rx[k + 1]))
             x_cores[k - 1] = einsum('rdc,cbR->rbdR', x_cores[k - 1], v[:r].T.reshape(rx[k], block_size, r), optimize="greedy")
             norm_now = np.linalg.norm(x_cores[k - 1])
@@ -428,19 +428,19 @@ def _fwd_sweep(
             u = u.reshape(rx[k], N[k], -1)
             v = v.reshape(-1, block_size, rx[k + 1])
             if swp > 0:
-                r_start = min(prune_singular_vals(s, real_tol[k]), r_max)
+                r_start = min(prune_singular_vals(s, real_tol), r_max)
                 solution_now = einsum("rbR, Rdk -> rbdk", u[:, :, :r_start], v[:r_start], optimize="greedy")
                 res = _block_local_product(XAX[k], block_A[k], XAX[k + 1], np.transpose(solution_now, (0, 2, 1, 3))) - rhs
                 r = r_start
                 for r in range(r_start - 1, 0, -1):
                     res -= _block_local_product(XAX[k], block_A[k], XAX[k + 1], np.transpose(
                         einsum("rbR, Rdk -> rbdk", u[:, :, None, r], v[None, r], optimize="greedy"), (0, 2, 1, 3)))
-                    if np.linalg.norm(res) / norm_rhs > max(2 * real_tol[k], block_res_new):
+                    if np.linalg.norm(res) / norm_rhs > max(2 * real_tol, block_res_new):
                         break
                 r += 1
                 nrmsc *= normA[k] * normx[k] / normb[k]
             else:
-                r = min(prune_singular_vals(s, real_tol[k]), r_max)
+                r = min(prune_singular_vals(s, real_tol), r_max)
 
             v = einsum("rbR, Rdk -> rbdk", v[:r], x_cores[k + 1], optimize="greedy")
             norm_now = np.linalg.norm(v)
@@ -466,7 +466,7 @@ def _fwd_sweep(
     return x_cores, normx, XAX, normA, Xb, normb, nrmsc, rx, local_res, local_dx
 
 
-def tt_block_mals(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, local_solver=None, rank_weighted_error=False, verbose=False):
+def tt_block_mals(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, local_solver=None, verbose=False):
 
     block_size = np.max(list(k[0] for k in block_A.keys())) + 1
     model_entry = next(iter(block_b.values()))
@@ -501,18 +501,13 @@ def tt_block_mals(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, local_solv
     normb = np.ones(d - 1) # norm of each row of the rhs
     nrmsc = 1.0
     normx = np.ones((d - 1))
-    real_tol = (tol / np.sqrt(d))*np.ones(d-1)
+    real_tol = (tol / np.sqrt(d))
     r_max_final = block_size*int(np.sqrt(d)*d)
     size_limit = 0.1*r_max_final*N[0]*r_max_final
     r_max_part = int(r_max_final // (nswp-1))
 
     for swp in range(nswp):
         r_max = min((swp+1)*r_max_part, r_max_final)
-        if rank_weighted_error:
-            weights = rx[1:-1] * rx[:-2] + rx[1:-1] * rx[2:]
-            rank_percent = np.sqrt(weights/np.sum(weights))
-            real_tol = tol*rank_percent
-
         if direction > 0:
             x_cores, normx, XAX, normA, Xb, normb, nrmsc, rx, local_res, local_dx = _bck_sweep(
                 local_solver,
@@ -563,8 +558,6 @@ def tt_block_mals(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, local_solv
             print(f'\tDirection {direction}')
             print(f'\tResidual {local_res}')
             print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
-            if rank_weighted_error:
-                print(f"\tRank-weighting: {np.round(rank_percent**2, decimals=2)} \n")
         if local_res < tol or local_dx < eps:
             break
 

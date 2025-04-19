@@ -94,7 +94,7 @@ if __name__ == "__main__":
                 memory.append(peak / 10 ** 6)
             runtimes.append(t3 - t2)
             problem_creation_times.append(t2 - t1)
-            complementary_slackness.append(tt_inner_prod(X_tt, Z_tt))
+            complementary_slackness.append(abs(tt_inner_prod(X_tt, Z_tt)))
             primal_res = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(L_tt, tt_vec(X_tt)), tt_vec(bias_tt)),
                                         rank_weighted_error=True, eps=1e-12)
 

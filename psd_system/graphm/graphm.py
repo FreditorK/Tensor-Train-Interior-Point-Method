@@ -1,4 +1,3 @@
-import copy
 import sys
 import os
 import yaml
@@ -8,9 +7,7 @@ import argparse
 sys.path.append(os.getcwd() + '/../../')
 
 from src.tt_ops import *
-from src.tt_ops import tt_random_gaussian, tt_mat, tt_matrix_to_matrix, E
 from src.tt_ipm import tt_ipm
-from src.tt_eig import tt_elementwise_max
 import time
 
 
@@ -112,24 +109,6 @@ def tt_padding_op(dim):
     return tt_rank_reduce(basis)
 
 # ------------------------------------------------------------------------------
-# Constraint 10 ----------------------------------------------------------------
-def half_space_projection(primal_variable):
-    Q_first_core =  copy.copy(primal_variable[0][:, 0, 0, :])
-    primal_variable[0][:, 0, 0, :] = 0
-    Q_primal_variable = [einsum("rR, Refk -> refk",Q_first_core,  primal_variable[1])] + primal_variable[2:]
-    Q_primal_variable = tt_mat(tt_elementwise_max(tt_vec(Q_primal_variable), -1e-6))
-    primal_variable = tt_rank_reduce(tt_add([E(0, 0)] + Q_primal_variable, primal_variable), 1e-10)
-    return  primal_variable
-# ------------------------------------------------------------------------------
-# Constraint 10 ----------------------------------------------------------------
-def tt_ineq_op(dim):
-    matrix_tt = [-E(0, 0)] + [np.ones((1, 2, 2, 1)) for _ in range(dim)]
-    basis = tt_diag(tt_vec(matrix_tt))
-    return tt_rank_reduce(basis)
-
-def tt_ineq_op_adj(dim):
-    return tt_scale(-1, tt_ineq_op(dim))
-# ------------------------------------------------------------------------------
 
 """
         [Q   P  0 ]
@@ -175,67 +154,54 @@ def create_problem(n, seed, max_rank):
     print(np.round(tt_matrix_to_matrix(G_B), decimals=2))
 
     print("Objective matrix: ")
-    C_tt = [-E(0, 0)] + tt_kron(G_B, G_A)
+    C_tt = [-E(0, 0)] + G_B + G_A
+    print(np.round(tt_matrix_to_matrix(C_tt), decimals=2))
 
     # Equality Operator
     # IV
     partial_tr_op = tt_partial_trace_op(n, 2 * n)
-    partial_tr_op_adj = tt_transpose(partial_tr_op)
     partial_tr_op_bias = tt_zero_matrix(2 * n + 1)
 
     L_op_tt = partial_tr_op
-    L_op_tt_adj = partial_tr_op_adj
     eq_bias_tt = partial_tr_op_bias
     # ---
     # V
     partial_tr_J_op = tt_partial_J_trace_op(n, 2 * n)
-    partial_tr_J_op_adj = tt_transpose(partial_tr_J_op)
     partial_tr_J_op_bias = ([E(0, 0)]
                             + tt_sub(tt_one_matrix(n), [E(0, 0) for _ in range(n)])
                             + [E(1, 1) for _ in range(n)])
 
     L_op_tt = tt_rank_reduce(tt_add(L_op_tt, partial_tr_J_op))
-    L_op_tt_adj = tt_rank_reduce(tt_add(L_op_tt_adj, partial_tr_J_op_adj))
     eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, partial_tr_J_op_bias))
 
     # ---
     # VI
     diag_block_sum_op = tt_diag_block_sum_linear_op(n, 2 * n)
-    diag_block_sum_op_adj = tt_transpose(diag_block_sum_op)
     diag_block_sum_op_bias = [E(0, 0) for _ in range(n + 1)] + tt_identity(n)
 
     L_op_tt = tt_rank_reduce(tt_add(L_op_tt, diag_block_sum_op))
-    L_op_tt_adj = tt_rank_reduce(tt_add(L_op_tt_adj, diag_block_sum_op_adj))
     eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, diag_block_sum_op_bias))
 
     # ---
     # VII
     Q_m_P_op = tt_Q_m_P_op(2 * n)
-    Q_m_P_op_adj = tt_transpose(Q_m_P_op)
     Q_m_P_op_bias = tt_zero_matrix(2 * n + 1)
 
     L_op_tt = tt_rank_reduce(tt_add(L_op_tt, Q_m_P_op))
-    L_op_tt_adj = tt_rank_reduce(tt_add(L_op_tt_adj, Q_m_P_op_adj))
     eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, Q_m_P_op_bias))
 
     # ---
     # IX
     padding_op = tt_padding_op(2 * n)
-    padding_op_adj = tt_transpose(padding_op)
     padding_op_bias = [E(1, 1)] + tt_identity(2 * n)
 
     L_op_tt = tt_rank_reduce(tt_add(L_op_tt, padding_op))
-    L_op_tt_adj = tt_rank_reduce(tt_add(L_op_tt_adj, padding_op_adj))
     eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, padding_op_bias))
 
     # ---
     # Inequality Operator
     # X
-    Q_ineq_op = tt_ineq_op(2 * n)
-    Q_ineq_op_adj = tt_ineq_op_adj(2 * n)
-    Q_ineq_bias = tt_rank_reduce(
-        tt_scale(0.05, tt_mat(tt_fast_matrix_vec_mul(Q_ineq_op_adj, [np.ones((1, 2, 1)) for _ in range(2 * (2 * n + 1))])))
-    )
+    ineq_mask = [E(0, 0)] + [np.ones((1, 2, 2, 1)) for _ in range(2*n)]
 
     # ---
 
@@ -265,7 +231,7 @@ def create_problem(n, seed, max_rank):
         "t": tt_rank_reduce(
             tt_diag(tt_vec([E(0, 1) + E(1, 0) + E(1, 1)] + tt_one_matrix(2 * n))))
     }
-    return C_tt, L_op_tt, eq_bias_tt, Q_ineq_op, Q_ineq_bias, lag_maps
+    return C_tt, L_op_tt, eq_bias_tt, ineq_mask, lag_maps
 
 if __name__ == "__main__":
     np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=4, suppress=True)
@@ -276,7 +242,7 @@ if __name__ == "__main__":
     with open(os.getcwd() + '/../../' + args.config, "r") as file:
         config = yaml.safe_load(file)
 
-    C_tt, L_op_tt, eq_bias_tt, Q_ineq_op, Q_ineq_bias, lag_maps = create_problem(config["dim"], config["seed"], config["max_rank"])
+    C_tt, L_op_tt, eq_bias_tt, ineq_mask, lag_maps = create_problem(config["dim"], config["seeds"][0], config["max_rank"])
     print("...Problem created!")
     print(f"Objective TT-ranks: {tt_ranks(C_tt)}")
     print(f"Eq Op-rank: {tt_ranks(L_op_tt)}")
@@ -285,19 +251,17 @@ if __name__ == "__main__":
         print("Memory tracking started...")
         tracemalloc.start()  # Start memory tracking
     t0 = time.time()
-    X_tt, Y_tt, T_tt, Z_tt = tt_ipm(
+    X_tt, Y_tt, T_tt, Z_tt, info = tt_ipm(
         lag_maps,
         C_tt,
         L_op_tt,
         eq_bias_tt,
-        Q_ineq_op,
-        Q_ineq_bias,
+        ineq_mask,
         max_iter=config["max_iter"],
-        verbose=True,
+        verbose=config["verbose"],
         feasibility_tol=config["feasibility_tol"],
         centrality_tol=config["centrality_tol"],
-        op_tol=config["op_tol"],
-        tau=config["tau"]
+        op_tol=config["op_tol"]
     )
     t1 = time.time()
     if args.track_mem:

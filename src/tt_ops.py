@@ -437,15 +437,15 @@ def tt_l2_dist(train_tt_1, train_tt_2):
 def tt_norm(train_tt):
     return np.sqrt(tt_inner_prod(train_tt, train_tt))
 
-def tt_diag(vec_tt):
+def tt_diag(vec_tt, eps=1e-18):
     identity = np.eye(vec_tt[0].shape[1])
     basis = [einsum("ij, rjR -> rijR", identity, c, optimize="greedy") for c in vec_tt]
-    return tt_rank_reduce(basis)
+    return tt_rank_reduce(basis, eps)
 
 def tt_diagonal(matrix_tt):
     return [np.transpose(np.diagonal(c,  axis1=1, axis2=2), (0, 2, 1)) for c in matrix_tt]
 
-def tt_sum(*args, op_tol, rank_reduce=True):
+def tt_sum(*args, op_tol=1e-18, rank_reduce=True):
     sum_tt = args[0]
     for arg in args[1:]:
         if rank_reduce:
