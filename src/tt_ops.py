@@ -471,6 +471,8 @@ def tt_random_rank_one(dim):
 
 
 def tt_random_graph(dim, max_rank, eps=1e-9):
+    if dim == 1:
+        return [np.array([[0, np.round(np.random.rand())], [np.round(np.random.rand()), 1]]).reshape(1, 2, 2, 1)]
     max_rank = min(2**(dim-1), max_rank)
     mask_matrix = tt_sub(tt_one_matrix(dim), tt_identity(dim))
     graph = tt_zero_matrix(dim)

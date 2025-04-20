@@ -228,8 +228,7 @@ def create_problem(n, seed, max_rank):
                 )
             )
         ))),
-        "t": tt_rank_reduce(
-            tt_diag(tt_vec([E(0, 1) + E(1, 0) + E(1, 1)] + tt_one_matrix(2 * n))))
+        "t": tt_rank_reduce(tt_diag(tt_vec(tt_sub(tt_one_matrix(2 * n+1), ineq_mask))))
     }
     return C_tt, L_op_tt, eq_bias_tt, ineq_mask, lag_maps
 
@@ -269,8 +268,8 @@ if __name__ == "__main__":
         print(f"Current memory usage: {current / 10 ** 6:.2f} MB")
         print(f"Peak memory usage: {peak / 10 ** 6:.2f} MB")
         tracemalloc.stop()  # Stop tracking after measuring
-    #print("Solution: ")
-    #print(np.round(tt_matrix_to_matrix(X_tt), decimals=2))
+    print("Solution: ")
+    print(np.round(tt_matrix_to_matrix(X_tt), decimals=2))
     print(f"Objective value: {tt_inner_prod(C_tt, X_tt)}")
     print("Complementary Slackness: ", tt_inner_prod(X_tt, Z_tt))
     primal_res = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(L_op_tt, tt_vec(X_tt)), tt_vec(eq_bias_tt)), eps=1e-10)

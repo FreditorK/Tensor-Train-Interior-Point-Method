@@ -192,11 +192,19 @@ def _step_size_local_solve(previous_solution, XDX, Delta, XAX, A, rx, N, step_si
     return solution_now, step_size
 
 
-def tt_pd_optimal_step_size(A, Delta, op_tol, nswp=10, eps=1e-12, verbose=False):
+def tt_ineq_optimal_step_size(A, Delta, op_tol, nswp=10, eps=1e-12, verbose=False):
+    x_cores = tt_random_gaussian([1]*(len(A) - 1), (2,))
+    return tt_pd_optimal_step_size(A, Delta, op_tol, x0=x_cores, nswp=nswp, eps=eps, verbose=verbose)
+
+
+def tt_pd_optimal_step_size(A, Delta, op_tol, x0=None, nswp=10, eps=1e-12, verbose=False):
     if verbose:
         print(f"Starting Eigen solve with:\n \t {eps} \n \t sweeps: {nswp}")
         t0 = time.time()
-    x_cores = tt_random_gaussian(symmetric_powers_of_two(len(A)-1), (2,))
+    if x0 is None:
+        x_cores = tt_random_gaussian(symmetric_powers_of_two(len(A)-1), (2,))
+    else:
+        x_cores = x0
     d = len(x_cores)
     rx = np.array([1] + tt_ranks(x_cores) + [1])
     N = np.array([c.shape[1] for c in x_cores])
