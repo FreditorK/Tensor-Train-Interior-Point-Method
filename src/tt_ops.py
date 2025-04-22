@@ -488,7 +488,7 @@ def tt_random_graph(dim, max_rank, eps=1e-9):
 
 def tt_entrywise_sum(train_tt):
     eq = 'ab,aijm,bijn->mn' if train_tt[0].ndim == 4 else 'ab,aim,bin->mn'
-    one = np.ones_like(train_tt[0])
+    one = np.ones((1, *train_tt[0].shape[1:-1], 1))
 
     result = reduce(
         lambda res, c: cached_einsum(eq, res, *(c, one)),

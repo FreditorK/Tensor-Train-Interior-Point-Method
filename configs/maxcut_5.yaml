@@ -8,7 +8,7 @@ verbose: True
 # TT-IPM
 tau: 0.9
 op_tol: !!float 1e-3
-max_iter: !!int 20
+max_iter: !!int 10
 # Sketchy CGAL
 sketch_cgal_rank: !!int 10
 duality_tol: 0.5
