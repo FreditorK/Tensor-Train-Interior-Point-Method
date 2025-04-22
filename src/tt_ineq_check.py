@@ -193,7 +193,7 @@ def _step_size_local_solve(previous_solution, XDX, Delta, XAX, A, rx, N, step_si
 
 
 def tt_ineq_optimal_step_size(A, Delta, op_tol, nswp=10, eps=1e-12, verbose=False):
-    x_cores = tt_random_gaussian([1]*(len(A) - 1), (2,))
+    x_cores =  tt_random_gaussian(symmetric_powers_of_two(len(A)-1), (2,))
     return tt_pd_optimal_step_size(A, Delta, op_tol, x0=x_cores, nswp=nswp, eps=eps, verbose=verbose)
 
 

@@ -33,7 +33,6 @@ if __name__ == "__main__":
         n = 2**config["dim"]
         G_A = np.round(tt_matrix_to_matrix(tt_random_graph(config["dim"], config["max_rank"])), decimals=1)
         G_B = np.round(tt_matrix_to_matrix(tt_random_graph(config["dim"], config["max_rank"])), decimals=1)
-        C = np.kron(G_B, G_A)
         t1 = time.time()
         if args.track_mem:
             tracemalloc.start()  # Start memory tracking
@@ -46,7 +45,7 @@ if __name__ == "__main__":
 
         # Objective
         kron_prod = np.kron(G_B, G_A)
-        objective = cp.Minimize(cp.trace(kron_prod @ Q))
+        objective = cp.Maximize(cp.trace(kron_prod @ Q))
 
         constraints = []
 
@@ -110,3 +109,4 @@ if __name__ == "__main__":
     print(f"Peak memory avg {np.mean(memory):.3f} MB")
     print(f"Complementary Slackness avg: {np.mean(complementary_slackness)}")
     print(f"Total feasibility error avg: {np.mean(feasibility_errors)}")
+    print(X)

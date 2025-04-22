@@ -60,6 +60,8 @@ if __name__ == "__main__":
             np.linalg.norm([np.trace(c.T @ X) - b for c, b in zip(constraint_matrices, bias.flatten())]) ** 2)
     print(f"Problem created in avg {np.mean(problem_creation_times):.3f}s")
     print(f"Problem solved in avg {np.mean(runtimes):.3f}s")
-    print(f"Peak memory avg {np.mean(memory):.3f} MB")
+    if args.track_mem:
+        print(f"Peak memory avg {np.mean(memory):.3f} MB")
     print(f"Complementary Slackness avg: {np.mean(complementary_slackness)}")
     print(f"Total feasibility error avg: {np.mean(feasibility_errors)}")
+    print(X)

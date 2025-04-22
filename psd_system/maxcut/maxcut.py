@@ -43,13 +43,13 @@ if __name__ == "__main__":
         rank = config["max_rank"] if args.rank == 0 else args.rank
         G_tt = tt_rank_reduce(tt_random_graph(config["dim"], rank))
         t1 = time.time()
-        if args.track_mem:
-            tracemalloc.start()
         L_tt = tt_diag_op(config["dim"])
         bias_tt = tt_identity(config["dim"])
 
         lag_maps = {"y": tt_rank_reduce(tt_diag(tt_vec(tt_sub(tt_one_matrix(config["dim"]), tt_identity(config["dim"])))))}
 
+        if args.track_mem:
+            tracemalloc.start()
         t2 = time.time()
         X_tt, Y_tt, T_tt, Z_tt, info = tt_ipm(
             lag_maps,
@@ -89,3 +89,4 @@ if __name__ == "__main__":
         print(f"Peak memory avg {np.mean(memory):.3f} MB")
     print(f"Complementary Slackness avg: {np.mean(complementary_slackness)}")
     print(f"Total feasibility error avg: {np.mean(feasibility_errors)}")
+    print(tt_matrix_to_matrix(X_tt))

@@ -142,9 +142,8 @@ def tt_padding_op(dim):
         8r and 8c implied by other constraints
 """
 
-def create_problem(n, seed, max_rank):
+def create_problem(n, max_rank):
     print("Creating Problem...")
-    np.random.seed(seed)
     G_A = tt_random_graph(n, max_rank)
     print("Graph A: ")
     print(np.round(tt_matrix_to_matrix(G_A), decimals=2))
@@ -237,43 +236,64 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Script with optional memory tracking.")
     parser.add_argument("--track_mem", action="store_true", help="Enable memory tracking from a certain point.")
     parser.add_argument("--config", type=str, required=True, help="Path to the YAML configuration file")
+    parser.add_argument('--rank', type=int, required=False, help='An integer input', default=0)
     args = parser.parse_args()
     with open(os.getcwd() + '/../../' + args.config, "r") as file:
         config = yaml.safe_load(file)
 
-    C_tt, L_op_tt, eq_bias_tt, ineq_mask, lag_maps = create_problem(config["dim"], config["seeds"][0], config["max_rank"])
-    print("...Problem created!")
-    print(f"Objective TT-ranks: {tt_ranks(C_tt)}")
-    print(f"Eq Op-rank: {tt_ranks(L_op_tt)}")
-    print(f"Eq Bias-rank: {tt_ranks(eq_bias_tt)}")
+    problem_creation_times = []
+    runtimes = []
+    memory = []
+    complementary_slackness = []
+    feasibility_errors = []
+    num_iters = []
+    for seed in config["seeds"]:
+        print("Seed: ", seed)
+        np.random.seed(seed)
+        t0 = time.time()
+        rank = config["max_rank"] if args.rank == 0 else args.rank
+        G_tt = tt_rank_reduce(tt_random_graph(config["dim"], rank))
+        t1 = time.time()
+        C_tt, L_op_tt, eq_bias_tt, ineq_mask, lag_maps = create_problem(config["dim"], config["max_rank"])
+        if args.track_mem:
+            tracemalloc.start()
+        t2 = time.time()
+        X_tt, Y_tt, T_tt, Z_tt, info = tt_ipm(
+            lag_maps,
+            C_tt,
+            L_op_tt,
+            eq_bias_tt,
+            ineq_mask,
+            max_iter=config["max_iter"],
+            verbose=config["verbose"],
+            feasibility_tol=config["feasibility_tol"],
+            centrality_tol=config["centrality_tol"],
+            op_tol=config["op_tol"]
+        )
+        t3 = time.time()
+        if args.track_mem:
+            current, peak = tracemalloc.get_traced_memory()
+            tracemalloc.stop()  # Stop tracking after measuring
+            memory.append(peak / 10 ** 6)
+        problem_creation_times.append(t2 - t1)
+        runtimes.append(t3 - t2)
+        complementary_slackness.append(abs(tt_inner_prod(X_tt, Z_tt)))
+        primal_res = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(L_op_tt, tt_vec(X_tt)), tt_vec(eq_bias_tt)))
+        feasibility_errors.append(tt_inner_prod(primal_res, primal_res))
+        num_iters.append(info["num_iters"])
+        print(f"Converged after {num_iters[-1]:.1f} iterations")
+        print(f"Problem created in {problem_creation_times[-1]:.3f}s")
+        print(f"Problem solved in {runtimes[-1]:.3f}s")
+        if args.track_mem:
+            print(f"Peak memory avg {memory[-1]:.3f} MB")
+        print(f"Complementary Slackness: {complementary_slackness[-1]}")
+        print(f"Total feasibility error: {feasibility_errors[-1]}")
+    print(f"Converged after avg {np.mean(num_iters):.1f} iterations")
+    print(f"Problem created in avg {np.mean(problem_creation_times):.3f}s")
+    print(f"Problem solved in avg {np.mean(runtimes):.3f}s")
     if args.track_mem:
-        print("Memory tracking started...")
-        tracemalloc.start()  # Start memory tracking
-    t0 = time.time()
-    X_tt, Y_tt, T_tt, Z_tt, info = tt_ipm(
-        lag_maps,
-        C_tt,
-        L_op_tt,
-        eq_bias_tt,
-        ineq_mask,
-        max_iter=config["max_iter"],
-        verbose=config["verbose"],
-        feasibility_tol=config["feasibility_tol"],
-        centrality_tol=config["centrality_tol"],
-        op_tol=config["op_tol"]
-    )
-    t1 = time.time()
-    if args.track_mem:
-        current, peak = tracemalloc.get_traced_memory()
-        print(f"Current memory usage: {current / 10 ** 6:.2f} MB")
-        print(f"Peak memory usage: {peak / 10 ** 6:.2f} MB")
-        tracemalloc.stop()  # Stop tracking after measuring
+        print(f"Peak memory avg {np.mean(memory):.3f} MB")
+    print(f"Complementary Slackness avg: {np.mean(complementary_slackness)}")
+    print(f"Total feasibility error avg: {np.mean(feasibility_errors)}")
     print("Solution: ")
     print(np.round(tt_matrix_to_matrix(X_tt), decimals=2))
-    print(f"Objective value: {tt_inner_prod(C_tt, X_tt)}")
-    print("Complementary Slackness: ", tt_inner_prod(X_tt, Z_tt))
-    primal_res = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(L_op_tt, tt_vec(X_tt)), tt_vec(eq_bias_tt)), eps=1e-10)
-    print(f"Total primal feasibility error: {np.sqrt(np.abs(tt_inner_prod(primal_res, primal_res)))}")
-    print(f"Ranks X_tt: {tt_ranks(X_tt)}, Y_tt: {tt_ranks(Y_tt)}, \n "
-          f"     T_tt: {tt_ranks(T_tt)}, Z_tt: {tt_ranks(Z_tt)} ")
-    print(f"Time: {t1 - t0}s")

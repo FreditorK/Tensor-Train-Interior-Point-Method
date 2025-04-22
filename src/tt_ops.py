@@ -484,3 +484,16 @@ def tt_random_graph(dim, max_rank, eps=1e-9):
         rank = np.max(tt_ranks(graph)) - (tt_inner_prod(graph,  graph) == 0)
 
     return graph
+
+
+def tt_entrywise_sum(train_tt):
+    eq = 'ab,aijm,bijn->mn' if train_tt[0].ndim == 4 else 'ab,aim,bin->mn'
+    one = np.ones_like(train_tt[0])
+
+    result = reduce(
+        lambda res, c: cached_einsum(eq, res, *(c, one)),
+        train_tt,
+        np.array([[1.0]])
+    )
+
+    return np.sum(result)

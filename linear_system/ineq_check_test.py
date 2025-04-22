@@ -2,19 +2,25 @@ import sys
 import os
 
 sys.path.append(os.getcwd() + '/../')
-from src.tt_ops import *
-from src.tt_ops import tt_rank_reduce, _tt_generalised_nystroem
-from src.tt_ineq_check import tt_is_geq
+from src.tt_ineq_check import *
 
 np.random.seed(4)
+np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=6, suppress=True)
 
-s_matrix_tt = tt_random_gaussian([4, 4, 4], shape=(2, 2))
-s_matrix_tt = tt_rank_reduce(tt_add(s_matrix_tt, tt_transpose(s_matrix_tt)), eps=0)
+matrix_tt_1 = tt_random_gaussian([6, 4, 5, 7, 3], shape=(2, 2))
+matrix_tt_1 = tt_add(tt_scale(0.1, tt_one_matrix(6)), tt_fast_hadammard(matrix_tt_1, matrix_tt_1))
+matrix_tt_1 = tt_diag(tt_vec(matrix_tt_1))
+matrix_tt_2 = tt_diag(tt_vec(tt_add(tt_scale(0.05, tt_one_matrix(6)), tt_random_gaussian([6, 4, 5, 3, 4], shape=(2, 2)))))
 
-X_tt = tt_random_gaussian([2], shape=(2, 2))
-b_tt = tt_vec(tt_scale(-0.11, [np.ones((1, 2, 2, 1)) for _ in range(2)]))
-
-check, val, res = tt_is_geq(s_matrix_tt, X_tt, b_tt)
-print(check, val, res)
-print(np.min(np.round(tt_vec_to_vec(tt_sub(b_tt, tt_fast_matrix_vec_mul(s_matrix_tt, tt_vec(X_tt)))), decimals=5)))
+step_size, _ = tt_ineq_optimal_step_size(matrix_tt_1, matrix_tt_2, 0, eps=1e-12, verbose=True)
+A = np.diagonal(tt_matrix_to_matrix(matrix_tt_1))
+B = np.diagonal(tt_matrix_to_matrix(matrix_tt_2))
+print(step_size)
+print(A+step_size*B, np.min(A+step_size*B))
+true_step_size = -A/B
+true_step_size = np.min(true_step_size[true_step_size > 0])
+print("----True")
+print("True step size: ", true_step_size)
+print(A+true_step_size*B, np.min(A+true_step_size*B))
+print(np.argmin(A+true_step_size*B))
 
