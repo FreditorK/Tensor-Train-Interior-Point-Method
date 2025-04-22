@@ -153,7 +153,7 @@ def create_problem(n, max_rank):
     print(np.round(tt_matrix_to_matrix(G_B), decimals=2))
 
     print("Objective matrix: ")
-    C_tt = [-E(0, 0)] + G_B + G_A
+    C_tt = [E(0, 0)] + G_B + G_A
     print(np.round(tt_matrix_to_matrix(C_tt), decimals=2))
 
     # Equality Operator
