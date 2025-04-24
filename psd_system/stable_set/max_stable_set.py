@@ -59,14 +59,8 @@ if __name__ == "__main__":
             G = tt_rank_reduce(tt_random_graph(config["dim"], rank))
             t1 = time.time()
             G_entry_tt_op = tt_G_entrywise_mask_op(G)
-            G_entry_tt_op_norm = tt_norm(G_entry_tt_op)
             tr_tt_op = tt_tr_op(config["dim"])
-            tr_tt_op_norm = tt_norm(tr_tt_op)
-            norm_factor = min(G_entry_tt_op_norm, tr_tt_op_norm)
-            G_entry_tt_op = tt_scale(norm_factor/G_entry_tt_op_norm, G_entry_tt_op)
-            tr_tt_op = tt_scale(norm_factor/tr_tt_op_norm, tr_tt_op)
             tr_bias_tt = [E(0, 0) for _ in range(config["dim"])]
-            tr_bias_tt = tt_scale(norm_factor/tr_tt_op_norm, tr_bias_tt)
             J_tt = tt_one_matrix(config["dim"])
             lag_maps = {
                 "y": tt_rank_reduce(tt_diag(tt_vec(tt_sub(tt_one_matrix(config["dim"]), tt_add(G, tr_bias_tt)))))

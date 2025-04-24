@@ -200,7 +200,7 @@ def create_problem(n, max_rank):
     # ---
     # Inequality Operator
     # X
-    ineq_mask = [E(0, 0)] + [np.ones((1, 2, 2, 1)) for _ in range(2*n)]
+    ineq_mask = [E(0, 0)] + tt_rank_reduce(tt_sub(tt_one_matrix(2*n), tt_identity(2*n)))
 
     # ---
 
@@ -255,6 +255,8 @@ if __name__ == "__main__":
         G_tt = tt_rank_reduce(tt_random_graph(config["dim"], rank))
         t1 = time.time()
         C_tt, L_op_tt, eq_bias_tt, ineq_mask, lag_maps = create_problem(config["dim"], config["max_rank"])
+        C_tt = tt_rank_reduce(tt_add(tt_scale(0.1, ineq_mask), C_tt)) # alternatively a penalty
+        # TODO: Duality error persists even without the inequality, so T_tt is not necessarily causing it
         if args.track_mem:
             tracemalloc.start()
         t2 = time.time()
@@ -263,7 +265,6 @@ if __name__ == "__main__":
             C_tt,
             L_op_tt,
             eq_bias_tt,
-            ineq_mask,
             max_iter=config["max_iter"],
             verbose=config["verbose"],
             feasibility_tol=config["feasibility_tol"],
