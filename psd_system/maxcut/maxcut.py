@@ -48,6 +48,11 @@ if __name__ == "__main__":
 
         lag_maps = {"y": tt_rank_reduce(tt_diag(tt_vec(tt_sub(tt_one_matrix(config["dim"]), tt_identity(config["dim"])))))}
 
+        lag_maps = {key: tt_reshape(value, (4, 4)) for key, value in lag_maps.items()}
+        G_tt = tt_reshape(G_tt, (4,))
+        L_tt = tt_reshape(L_tt, (4, 4))
+        bias_tt = tt_reshape(bias_tt, (4,))
+
         if args.track_mem:
             tracemalloc.start()
         t2 = time.time()
@@ -70,7 +75,7 @@ if __name__ == "__main__":
         problem_creation_times.append(t2 - t1)
         runtimes.append(t3 - t2)
         complementary_slackness.append(abs(tt_inner_prod(X_tt, Z_tt)))
-        primal_res = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(L_tt, tt_vec(X_tt)), tt_vec(bias_tt)),
+        primal_res = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(L_tt, tt_reshape(X_tt, (4,))), bias_tt),
                                     rank_weighted_error=True, eps=1e-12)
 
         feasibility_errors.append(tt_inner_prod(primal_res, primal_res))

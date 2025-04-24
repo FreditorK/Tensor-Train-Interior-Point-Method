@@ -24,10 +24,6 @@ def tt_G_entrywise_mask_op(G):
         basis.append(core)
     return tt_rank_reduce(basis)
 
-def tt_G_entrywise_mask_op_adj(G):
-    return tt_G_entrywise_mask_op(G)
-
-
 def tt_tr_op(dim):
     op =[]
     for i, c in enumerate(tt_vec(tt_identity(dim))):
@@ -67,6 +63,12 @@ if __name__ == "__main__":
             }
             L_tt = tt_rank_reduce(tt_add(G_entry_tt_op, tr_tt_op))
             bias_tt = tr_bias_tt
+
+            lag_maps = {key: tt_reshape(value, (4, 4)) for key, value in lag_maps.items()}
+            J_tt = tt_reshape(J_tt, (4,))
+            L_tt = tt_reshape(L_tt, (4, 4))
+            bias_tt = tt_reshape(bias_tt, (4,))
+
             if args.track_mem:
                 tracemalloc.start()
             t2 = time.time()
@@ -89,7 +91,7 @@ if __name__ == "__main__":
             runtimes.append(t3 - t2)
             problem_creation_times.append(t2 - t1)
             complementary_slackness.append(abs(tt_inner_prod(X_tt, Z_tt)))
-            primal_res = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(L_tt, tt_vec(X_tt)), tt_vec(bias_tt)),
+            primal_res = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(L_tt, tt_reshape(X_tt, (4, ))), bias_tt),
                                         rank_weighted_error=True, eps=1e-12)
 
             feasibility_errors.append(tt_inner_prod(primal_res,  primal_res))

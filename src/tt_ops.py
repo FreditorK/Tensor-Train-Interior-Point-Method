@@ -472,7 +472,10 @@ def tt_random_rank_one(dim):
 
 def tt_random_graph(dim, max_rank, eps=1e-9):
     if dim == 1:
-        return [np.array([[0, np.round(np.random.rand())], [np.round(np.random.rand()), 1]]).reshape(1, 2, 2, 1)]
+        a = np.round(np.random.rand())
+        b = np.round(np.random.rand())
+        c = np.round(np.random.rand())
+        return [np.array([[b, a], [a, c]]).reshape(1, 2, 2, 1)]
     max_rank = min(2**(dim-1), max_rank)
     mask_matrix = tt_sub(tt_one_matrix(dim), tt_identity(dim))
     graph = tt_zero_matrix(dim)
@@ -497,3 +500,8 @@ def tt_entrywise_sum(train_tt):
     )
 
     return np.sum(result)
+
+def tt_skew_zero_op(op_tt, eps):
+    transpose_op = [np.eye(4)[[0, 2, 1, 3]].reshape(1, 4, 4, 1) for _ in op_tt]
+    op_tt_t = tt_fast_mat_mat_mul(op_tt, transpose_op, eps)
+    return tt_rank_reduce(tt_scale(0.5, tt_add(op_tt, op_tt_t)), eps)

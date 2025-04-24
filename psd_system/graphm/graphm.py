@@ -156,16 +156,24 @@ def create_problem(n, max_rank):
     C_tt = [E(0, 0)] + G_B + G_A
     print(np.round(tt_matrix_to_matrix(C_tt), decimals=2))
 
+    test_matrix = tt_random_gaussian([2]*(n+1), (2, 2))
+    test_matrix_t = tt_transpose(test_matrix)
+    test_matrix = tt_reshape(test_matrix, (4, ))
+    test_matrix_t = tt_reshape(test_matrix_t, (4, ))
+
+    #print(tt_matrix_to_matrix(tt_reshape(test_matrix, (2, 2))))
+    #print(tt_matrix_to_matrix(tt_reshape(tt_fast_matrix_vec_mul([np.array([[1, 0, 0, 0], [0, 0, 1, 0], [0, 1, 0, 0], [0, 0, 0, 1]]).reshape(1, 4, 4, 1) for _ in range(n+2)], test_matrix), (2, 2))))
+
     # Equality Operator
     # IV
-    partial_tr_op = tt_partial_trace_op(n, 2 * n)
+    partial_tr_op = tt_reshape(tt_partial_trace_op(n, 2 * n), (4, 4))
     partial_tr_op_bias = tt_zero_matrix(2 * n + 1)
 
     L_op_tt = partial_tr_op
     eq_bias_tt = partial_tr_op_bias
     # ---
     # V
-    partial_tr_J_op = tt_partial_J_trace_op(n, 2 * n)
+    partial_tr_J_op = tt_reshape(tt_partial_J_trace_op(n, 2 * n), (4, 4))
     partial_tr_J_op_bias = ([E(0, 0)]
                             + tt_sub(tt_one_matrix(n), [E(0, 0) for _ in range(n)])
                             + [E(1, 1) for _ in range(n)])
@@ -175,7 +183,7 @@ def create_problem(n, max_rank):
 
     # ---
     # VI
-    diag_block_sum_op = tt_diag_block_sum_linear_op(n, 2 * n)
+    diag_block_sum_op = tt_reshape(tt_diag_block_sum_linear_op(n, 2 * n), (4, 4))
     diag_block_sum_op_bias = [E(0, 0) for _ in range(n + 1)] + tt_identity(n)
 
     L_op_tt = tt_rank_reduce(tt_add(L_op_tt, diag_block_sum_op))
@@ -183,7 +191,7 @@ def create_problem(n, max_rank):
 
     # ---
     # VII
-    Q_m_P_op = tt_Q_m_P_op(2 * n)
+    Q_m_P_op = tt_reshape(tt_Q_m_P_op(2 * n), (4, 4))
     Q_m_P_op_bias = tt_zero_matrix(2 * n + 1)
 
     L_op_tt = tt_rank_reduce(tt_add(L_op_tt, Q_m_P_op))
@@ -191,7 +199,7 @@ def create_problem(n, max_rank):
 
     # ---
     # IX
-    padding_op = tt_padding_op(2 * n)
+    padding_op = tt_reshape(tt_padding_op(2 * n), (4, 4))
     padding_op_bias = [E(1, 1)] + tt_identity(2 * n)
 
     L_op_tt = tt_rank_reduce(tt_add(L_op_tt, padding_op))
@@ -229,6 +237,7 @@ def create_problem(n, max_rank):
         ))),
         "t": tt_rank_reduce(tt_diag(tt_vec(tt_sub(tt_one_matrix(2 * n+1), ineq_mask))))
     }
+
     return C_tt, L_op_tt, eq_bias_tt, ineq_mask, lag_maps
 
 if __name__ == "__main__":
@@ -257,6 +266,10 @@ if __name__ == "__main__":
         C_tt, L_op_tt, eq_bias_tt, ineq_mask, lag_maps = create_problem(config["dim"], config["max_rank"])
         C_tt = tt_rank_reduce(tt_add(tt_scale(0.1, ineq_mask), C_tt)) # alternatively a penalty
         # TODO: Duality error persists even without the inequality, so T_tt is not necessarily causing it
+        lag_maps = {key: tt_reshape(value, (4, 4)) for key, value in lag_maps.items()}
+        C_tt = tt_reshape(C_tt, (4,))
+        #L_op_tt = tt_reshape(L_op_tt, (4, 4))
+        eq_bias_tt = tt_reshape(eq_bias_tt, (4,))
         if args.track_mem:
             tracemalloc.start()
         t2 = time.time()
@@ -279,7 +292,8 @@ if __name__ == "__main__":
         problem_creation_times.append(t2 - t1)
         runtimes.append(t3 - t2)
         complementary_slackness.append(abs(tt_inner_prod(X_tt, Z_tt)))
-        primal_res = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(L_op_tt, tt_vec(X_tt)), tt_vec(eq_bias_tt)))
+        primal_res = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(L_op_tt, tt_reshape(X_tt, (4,))), eq_bias_tt),
+                                    rank_weighted_error=True, eps=1e-12)
         feasibility_errors.append(tt_inner_prod(primal_res, primal_res))
         num_iters.append(info["num_iters"])
         print(f"Converged after {num_iters[-1]:.1f} iterations")
