@@ -2,8 +2,8 @@
 dim: !!int 1
 max_rank: !!int 1
 seeds: [5]
-feasibility_tol: !!float 1.8e-3
-centrality_tol: !!float 1.8e-3
+feasibility_tol: !!float 1e-3
+centrality_tol: !!float 1e-3
 verbose: True
 # TT-IPM
 tau: 0.9

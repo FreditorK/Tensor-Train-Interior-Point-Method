@@ -80,7 +80,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         z = inv_I * (rhs[:, 1] - cached_einsum('lsr,smnS,LSR,lmL->rnR', XAX_k[(0, 1)], block_A_k[(0, 1)], XAX_k1[(0, 1)], solution_now[:, 0]))
         solution_now = np.concatenate((solution_now, z.reshape(x_shape[0], 1, x_shape[2], x_shape[3])), axis=1)
 
-    block_res_new = np.linalg.norm(_block_local_product(XAX_k, block_A_k, XAX_k1, solution_now) - rhs) / norm_rhs
+    block_res_new = np.linalg.norm(_block_local_product(XAX_k, block_A_k, XAX_k1, solution_now).__isub__(rhs)) / norm_rhs
 
     if block_res_old < block_res_new:
         solution_now = previous_solution
@@ -174,21 +174,27 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
             return x_vec
 
         linear_op = scip.sparse.linalg.LinearOperator((3 * m, 3 * m), matvec=mat_vec)
-        local_rhs = -_ipm_block_local_product_ineq(XAX_k, block_A_k, XAX_k1, np.transpose(previous_solution[:, [0, 1, 3]], (1, 0, 2, 3)), inv_I)
+        local_rhs = -_ipm_block_local_product_ineq(XAX_k, block_A_k, XAX_k1,
+                                                   np.transpose(previous_solution[:, [0, 1, 3]], (1, 0, 2, 3)), inv_I)
         local_rhs[0] += rhs[:, 0]
-        local_rhs[1] += rhs[:, 2] - cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[(2, 2)], block_A_k[(2, 2)], XAX_k1[(2, 2)], inv_I*rhs[:, 1])
+        local_rhs[1] += rhs[:, 2] - cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[(2, 2)], block_A_k[(2, 2)],
+                                                  XAX_k1[(2, 2)], inv_I * rhs[:, 1])
         local_rhs[2] += rhs[:, 3]
         solution_now, _ = scip.sparse.linalg.bicgstab(
             linear_op,
             local_rhs.reshape(-1, 1),
-            rtol=1e-3*block_res_old,
+            rtol=1e-3 * block_res_old,
             maxiter=50
         )
-        solution_now = np.transpose(solution_now.reshape(3, x_shape[0], x_shape[2], x_shape[3]), (1, 0, 2, 3)) + previous_solution[:, [0, 1, 3]]
-        z = inv_I * (rhs[:, 1] - cached_einsum('lsr,smnS,LSR,lmL->rnR', XAX_k[(0, 1)], block_A_k[(0, 1)], XAX_k1[(0, 1)], solution_now[:, 0])) - solution_now[:, 2]
-        solution_now = np.concatenate((solution_now[:, :2], z.reshape(x_shape[0], 1, x_shape[2], x_shape[3]), solution_now[:, None, -1]), axis=1)
+        solution_now = np.transpose(solution_now.reshape(3, x_shape[0], x_shape[2], x_shape[3]),
+                                    (1, 0, 2, 3)) + previous_solution[:, [0, 1, 3]]
+        z = inv_I * (
+                    rhs[:, 1] - cached_einsum('lsr,smnS,LSR,lmL->rnR', XAX_k[(0, 1)], block_A_k[(0, 1)], XAX_k1[(0, 1)],
+                                              solution_now[:, 0])) - solution_now[:, 2]
+        solution_now = np.concatenate(
+            (solution_now[:, :2], z.reshape(x_shape[0], 1, x_shape[2], x_shape[3]), solution_now[:, None, -1]), axis=1)
 
-    block_res_new = np.linalg.norm(_block_local_product(XAX_k, block_A_k, XAX_k1, solution_now) - rhs) / norm_rhs
+    block_res_new = np.linalg.norm(_block_local_product(XAX_k, block_A_k, XAX_k1, solution_now).__isub__(rhs)) / norm_rhs
 
     if block_res_old < block_res_new:
         solution_now = previous_solution
@@ -208,51 +214,48 @@ def tt_infeasible_newton_system(
         ineq_mask,
         status
 ):
-    P = tt_identity(len(Z_tt))
     rhs = {}
     if status.aho_direction:
-        L_Z = tt_rank_reduce(tt_scale(0.5, tt_add(tt_kron(P, Z_tt), tt_kron(Z_tt, P))), eps=status.op_tol, rank_weighted_error=True)
-        L_X = tt_rank_reduce(tt_scale(0.5, tt_add(tt_kron(X_tt, P), tt_kron(P, X_tt))), eps=status.op_tol, rank_weighted_error=True)
-        if not status.is_central:
-            rhs[2] = tt_reshape(tt_scale(-1, _tt_symmetrise(tt_fast_mat_mat_mul(X_tt, Z_tt, status.eps), status.op_tol)), (4, ))
+        lhs[(2, 1)] = tt_rank_reduce(tt_scale(0.5, tt_add(tt_IkronM(Z_tt), tt_MkronI(Z_tt))), eps=status.op_tol, rank_weighted_error=True)
+        lhs[(2, 2)] = tt_rank_reduce(tt_scale(0.5, tt_add(tt_MkronI(X_tt), tt_IkronM(X_tt))), eps=status.op_tol, rank_weighted_error=True)
     else:
-        L_Z = tt_rank_reduce(tt_kron(Z_tt, P), eps=status.op_tol, rank_weighted_error=True)
-        L_X = tt_rank_reduce(tt_kron(P, X_tt), eps=status.op_tol, rank_weighted_error=True)
-        if not status.is_central:
-            rhs[2] = tt_reshape(tt_scale(-1, tt_rank_reduce(tt_fast_mat_mat_mul(Z_tt, X_tt, status.eps), eps=status.op_tol, rank_weighted_error=True)), (4, ))
-    lhs[(2, 1)] = L_Z
-    lhs[(2, 2)] = L_X
+        lhs[(2, 1)] = tt_rank_reduce(tt_MkronI(Z_tt), eps=status.op_tol, rank_weighted_error=True)
+        lhs[(2, 2)] = tt_rank_reduce(tt_IkronM(X_tt), eps=status.op_tol, rank_weighted_error=True)
 
-    X_tt = tt_reshape(X_tt, (4, ))
-    Y_tt = tt_reshape(Y_tt, (4, ))
-    Z_tt = tt_reshape(Z_tt, (4, ))
-
-    dual_feas = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(lin_op_tt_adj, Y_tt, status.eps), tt_rank_reduce(tt_add(Z_tt, obj_tt), status.eps)), status.eps if status.with_ineq else status.op_tol, rank_weighted_error=not status.with_ineq)
-    primal_feas = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(lin_op_tt, X_tt, status.eps), bias_tt), status.op_tol, rank_weighted_error=True)  # primal feasibility
+    # Check primal feasibility and compute residual
+    primal_feas = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(lin_op_tt, tt_reshape(X_tt, (4, )), status.eps), bias_tt), status.op_tol, rank_weighted_error=True)  # primal feasibility
     status.primal_error = tt_norm(primal_feas) / status.primal_error_normalisation
     status.is_primal_feasible = status.primal_error < status.feasibility_tol
-    if not status.is_primal_feasible:
-        rhs[0] = primal_feas
+
+    # Check dual feasibility and compute residual
+    dual_feas = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(lin_op_tt_adj, Y_tt, status.eps), tt_rank_reduce(tt_add(tt_reshape(Z_tt, (4, )), obj_tt), status.eps)), status.eps if status.with_ineq else status.op_tol, rank_weighted_error=not status.with_ineq)
     if status.with_ineq:
         dual_feas = tt_rank_reduce(tt_sub(dual_feas, tt_reshape(T_tt, (4, ))), status.op_tol, rank_weighted_error=True)
     status.dual_error = tt_norm(dual_feas) / status.dual_error_normalisation
     status.is_dual_feasible = status.dual_error < status.feasibility_tol
-    if not status.is_dual_feasible:
-        rhs[1] = dual_feas
 
     status.is_last_iter = status.is_last_iter or (status.is_primal_feasible and status.is_dual_feasible and status.is_central)
-    if status.is_last_iter:
+
+    if not status.is_primal_feasible or status.is_last_iter:
         rhs[0] = primal_feas
+
+    if not status.is_dual_feasible or status.is_last_iter:
         rhs[1] = dual_feas
-        rhs[2] = tt_scale(-1, tt_rank_reduce(tt_fast_matrix_vec_mul(L_Z, X_tt, status.eps), eps=status.op_tol, rank_weighted_error=True))
+
+    if not status.is_central or status.is_last_iter:
+        if status.aho_direction:
+            rhs[2] = tt_reshape(tt_scale(-1, _tt_symmetrise(tt_fast_mat_mat_mul(X_tt, Z_tt, status.eps), status.op_tol)), (4, ))
+        else:
+            rhs[2] = tt_reshape(tt_scale(-1, tt_rank_reduce(tt_fast_mat_mat_mul(Z_tt, X_tt, status.eps), eps=status.op_tol, rank_weighted_error=True)), (4,))
 
     if status.with_ineq:
-        X_tt = tt_reshape(X_tt, (2, 2))
-        lhs[(3, 1)] =  tt_rank_reduce(tt_reshape(tt_diag(tt_vec(T_tt)), (4, 4)), eps=status.op_tol, rank_weighted_error=True)
+        # TODO: There might be room to optimise the tt_diag(tt_split_bonds(.))-expression
+        lhs[(3, 1)] =  tt_rank_reduce(tt_reshape(tt_diag(tt_split_bonds(T_tt)), (4, 4)), eps=status.op_tol, rank_weighted_error=True)
         masked_X_tt = tt_rank_reduce(tt_add(tt_scale(status.boundary_val, ineq_mask), tt_fast_hadammard(ineq_mask, X_tt, status.eps)), eps=status.eps)
-        lhs[(3, 3)] = tt_rank_reduce(tt_add(status.lag_map_t, tt_reshape(tt_diag(tt_vec(masked_X_tt)), (4, 4))), eps=status.op_tol, rank_weighted_error=True)
+        lhs[(3, 3)] = tt_rank_reduce(tt_add(status.lag_map_t, tt_reshape(tt_diag(tt_split_bonds(masked_X_tt)), (4, 4))), eps=status.op_tol, rank_weighted_error=True)
         XT_term = tt_rank_reduce(tt_scale(-1, tt_fast_hadammard(masked_X_tt, T_tt, status.eps)), eps=status.op_tol, rank_weighted_error=True)
-        rhs[3] = tt_reshape(XT_term, (4, ))
+        if not status.is_central or status.is_last_iter:
+            rhs[3] = tt_reshape(XT_term, (4, ))
 
     return lhs, rhs, status
 
@@ -283,8 +286,8 @@ def _tt_ipm_newton_step(
     Delta_tt, res = solver(lhs_matrix_tt, rhs_vec_tt, None, 8 + status.is_last_iter*2)
     Delta_X_tt = _tt_symmetrise(tt_reshape(_tt_get_block(1, Delta_tt), (2, 2)), status.op_tol)
     Delta_Z_tt = _tt_symmetrise(tt_reshape(_tt_get_block(2, Delta_tt), (2, 2)), status.op_tol)
-    Delta_Y_tt = tt_rank_reduce(tt_reshape(_tt_get_block(0, Delta_tt), (2, 2)), eps=status.op_tol, rank_weighted_error=True)
-    Delta_Y_tt = tt_rank_reduce(tt_sub(Delta_Y_tt, tt_reshape(tt_fast_matrix_vec_mul(status.lag_map_y, tt_reshape(Delta_Y_tt, shape=(4,)), status.eps), (2, 2))), eps=status.op_tol, rank_weighted_error=True)
+    Delta_Y_tt = tt_rank_reduce(_tt_get_block(0, Delta_tt), eps=status.op_tol, rank_weighted_error=True)
+    Delta_Y_tt = tt_rank_reduce(tt_sub(Delta_Y_tt, tt_fast_matrix_vec_mul(status.lag_map_y, Delta_Y_tt, status.eps)), eps=status.op_tol, rank_weighted_error=True)
 
     Delta_T_tt = tt_rank_reduce(tt_fast_hadammard(ineq_mask, tt_reshape(_tt_get_block(3, Delta_tt), (2, 2)), status.eps), eps=status.op_tol, rank_weighted_error=True) if status.with_ineq else None
 
@@ -370,10 +373,8 @@ def _tt_ipm_newton_step(
             ineq_mask,
             status
         )
-        Delta_Y_tt_cc = tt_rank_reduce(tt_reshape(_tt_get_block(0, Delta_tt_cc), (2, 2)), eps=status.eps)
-        Delta_Y_tt_cc = tt_rank_reduce(tt_sub(Delta_Y_tt_cc, tt_reshape(
-            tt_fast_matrix_vec_mul(status.lag_map_y, tt_reshape(Delta_Y_tt_cc, shape=(4,)), status.eps), (2, 2))),
-                                    eps=status.op_tol, rank_weighted_error=True)
+        Delta_Y_tt_cc = tt_rank_reduce(_tt_get_block(0, Delta_tt_cc), eps=status.eps)
+        Delta_Y_tt_cc = tt_rank_reduce(tt_sub(Delta_Y_tt_cc, tt_fast_matrix_vec_mul(status.lag_map_y, Delta_Y_tt_cc, status.eps)), eps=status.op_tol, rank_weighted_error=True)
 
         Delta_Y_tt = tt_rank_reduce(tt_add(Delta_Y_tt_cc, Delta_Y_tt), eps=status.op_tol, rank_weighted_error=True)
     else:
@@ -398,8 +399,8 @@ def _tt_line_search(
         permitted_err_x = 1
         permitted_err_z = 1
     else:
-        x_step_size, permitted_err_x = tt_pd_optimal_step_size(X_tt, Delta_X_tt, status.op_tol, eps=status.eps)
-        z_step_size, permitted_err_z = tt_pd_optimal_step_size(Z_tt, Delta_Z_tt, status.op_tol, eps=status.eps)
+        x_step_size, permitted_err_x = tt_pd_optimal_step_size(X_tt, Delta_X_tt, status.op_tol, tol=status.eps)
+        z_step_size, permitted_err_z = tt_pd_optimal_step_size(Z_tt, Delta_Z_tt, status.op_tol, tol=status.eps)
     if status.with_ineq:
         x_step_size, z_step_size = _tt_line_search_ineq(x_step_size, z_step_size, X_tt, T_tt, Delta_X_tt, Delta_T_tt, ineq_mask, status)
     if x_step_size == 1 and z_step_size == 1:
@@ -411,29 +412,33 @@ def _tt_line_search(
 
 def _tt_line_search_ineq(x_step_size, z_step_size, X_tt, T_tt, Delta_X_tt, Delta_T_tt, ineq_mask, status):
     print("Before: ", x_step_size, z_step_size)
-    compl_ineq_mask = tt_sub(tt_one_matrix(len(X_tt)), ineq_mask)
     if x_step_size > 0:
-        masked_X_tt = tt_rank_reduce(tt_add(tt_fast_hadammard(ineq_mask, X_tt, status.eps), tt_scale(status.boundary_val, tt_one_matrix(len(X_tt)))), status.op_tol, rank_weighted_error=True)
-        masked_Delta_X_tt = tt_rank_reduce(tt_add(tt_scale(x_step_size, tt_fast_hadammard(ineq_mask, Delta_X_tt, status.eps)), compl_ineq_mask), status.op_tol, rank_weighted_error=True)
+        degeneracy_helper = tt_scale(status.boundary_val, tt_one_matrix(len(X_tt)))
+        masked_X_tt = tt_rank_reduce(tt_add(tt_fast_hadammard(ineq_mask, X_tt, status.eps), tt_scale(0.9, degeneracy_helper)), status.op_tol, rank_weighted_error=True)
+        masked_Delta_X_tt = tt_rank_reduce(tt_add(tt_scale(x_step_size, tt_fast_hadammard(ineq_mask, Delta_X_tt, status.eps)), tt_scale(0.1, degeneracy_helper)), status.op_tol, rank_weighted_error=True)
         A = tt_matrix_to_matrix(masked_X_tt)
         B = tt_matrix_to_matrix(masked_Delta_X_tt)
         true_step_size = -A / B
-        true_step_size = min(np.min(true_step_size[true_step_size > 0]), 1)
+        true_step_size = min(np.min((true_step_size > 0)*true_step_size + (true_step_size <= 0)*1), 1)
         print("True step size: ", true_step_size)
-        x_ineq_step_size, _ = tt_ineq_optimal_step_size(tt_diag(tt_vec(masked_X_tt), status.eps),tt_diag(tt_vec(masked_Delta_X_tt), status.eps), status.op_tol, eps=status.eps)
-        x_step_size *= true_step_size #x_ineq_step_size
+        x_ineq_step_size, _ = tt_ineq_optimal_step_size(tt_diag(tt_split_bonds(masked_X_tt), status.eps),
+                                                        tt_diag(tt_split_bonds(masked_Delta_X_tt), status.eps), status.op_tol)
+        x_step_size *= true_step_size  # x_ineq_step_size
         print(f"Reduction x by *{x_ineq_step_size} ==> {x_step_size}")
 
-    if z_step_size  > 0:
-        masked_T_tt = tt_rank_reduce(tt_add(T_tt, compl_ineq_mask), status.op_tol, rank_weighted_error=True)
-        masked_Delta_T_tt = tt_rank_reduce(tt_add(tt_scale(z_step_size, Delta_T_tt), compl_ineq_mask), status.op_tol, rank_weighted_error=True)
+    if z_step_size > 0:
+        masked_T_tt = tt_rank_reduce(tt_add(T_tt, status.compl_ineq_mask), status.op_tol, rank_weighted_error=True)
+        masked_Delta_T_tt = tt_rank_reduce(tt_add(tt_scale(z_step_size, Delta_T_tt), status.compl_ineq_mask), status.op_tol,
+                                           rank_weighted_error=True)
         A = tt_matrix_to_matrix(masked_T_tt)
         B = tt_matrix_to_matrix(masked_Delta_T_tt)
         true_step_size = -A / B
-        true_step_size = min(np.min(np.concatenate((true_step_size[true_step_size > 0], np.array([1.0])))), 1)
+        true_step_size = min(np.min((true_step_size > 0) * true_step_size + (true_step_size <= 0) * 1), 1)
         print("True step size: ", true_step_size)
-        t_step_size, permitted_error_t = tt_ineq_optimal_step_size(tt_diag(tt_vec(masked_T_tt), status.op_tol), tt_diag(tt_vec(masked_Delta_T_tt), status.op_tol), status.op_tol, eps=status.eps)
-        z_step_size *= true_step_size #t_step_size
+        t_step_size, permitted_error_t = tt_ineq_optimal_step_size(tt_diag(tt_split_bonds(masked_T_tt), status.op_tol),
+                                                                   tt_diag(tt_split_bonds(masked_Delta_T_tt), status.op_tol),
+                                                                   status.op_tol)
+        z_step_size *= true_step_size  # t_step_size
         print(f"Reduction z by *{t_step_size} ==> {z_step_size}", permitted_error_t)
 
     return x_step_size, z_step_size
@@ -471,11 +476,12 @@ class IPMStatus:
     primal_error_normalisation: float
     dual_error_normalisation: float
 
-    boundary_val: float = 0.04
+    boundary_val: float = 0.01
     sigma: float = 0.5
     num_ineq_constraints: float = 0
     lag_map_t: list = None
     lag_map_y: list = None
+    compl_ineq_mask = None
 
 
 def tt_ipm(
@@ -559,13 +565,14 @@ def tt_ipm(
     # Variable initialisation
     x_initial_step = tt_norm(bias_tt) / tt_norm(tt_diagonal(lin_op_tt))
     X_tt = tt_scale(x_initial_step, tt_identity(dim))
-    Y_tt = tt_zero_matrix(dim)
+    Y_tt = [np.zeros((1, 4, 1)) for _ in range(dim)]
     Z_tt = tt_scale(1/x_initial_step, tt_identity(dim))
 
     if status.with_ineq:
         status.lag_map_t = lag_maps["t"]
         lhs_skeleton[(1, 3)] = tt_reshape(tt_identity(2 * dim), (4, 4))
         T_tt = tt_scale(1/(status.boundary_val + x_initial_step), ineq_mask)
+        status.compl_ineq_mask = tt_sub(tt_one_matrix(dim), ineq_mask)
 
     XZ_bound = int(np.sqrt(dim)*dim)
     iteration = 0

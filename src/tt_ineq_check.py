@@ -3,6 +3,9 @@ import sys
 import os
 import time
 
+import numpy as np
+import scipy.sparse.linalg
+
 sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
@@ -125,7 +128,7 @@ def tt_is_psd(A, op_tol, degenerate=False, eps=1e-10, verbose=False):
 
 
 def tt_is_geq(linear_op_tt, X_tt, vec_b_tt, op_tol, nswp=10, eps=1e-10, degenerate=False, verbose=False):
-    res_tt = tt_sub(vec_b_tt, tt_fast_matrix_vec_mul(linear_op_tt, tt_vec(X_tt)))
+    res_tt = tt_sub(vec_b_tt, tt_fast_matrix_vec_mul(linear_op_tt, tt_split_bonds(X_tt)))
     norm = np.sqrt(tt_inner_prod(res_tt, res_tt))
     if norm > eps:
         res_tt = tt_scale(np.divide(2, norm), res_tt)
@@ -133,12 +136,12 @@ def tt_is_geq(linear_op_tt, X_tt, vec_b_tt, op_tol, nswp=10, eps=1e-10, degenera
         if degenerate:
             A = tt_add(A, tt_scale(2*eps, tt_identity(len(A))))
         A = tt_rank_reduce(A, op_tol, rank_weighted_error=True)
-        return tt_pd_optimal_step_size(A, nswp=nswp, eps=eps, verbose=verbose)
+        return tt_pd_optimal_step_size(A, nswp=nswp, tol=eps, verbose=verbose)
     return True, 0.0
 
 
 def tt_is_geq_zero(X_tt, op_tol, nswp=10, eps=1e-10, degenerate=False, verbose=False):
-    res_tt = tt_vec(X_tt)
+    res_tt = tt_split_bonds(X_tt)
     norm = np.sqrt(tt_inner_prod(res_tt, res_tt))
     if norm > eps:
         res_tt = tt_scale(np.divide(2, norm), res_tt)
@@ -146,7 +149,7 @@ def tt_is_geq_zero(X_tt, op_tol, nswp=10, eps=1e-10, degenerate=False, verbose=F
         if degenerate:
             A = tt_add(A, tt_scale(2*eps, tt_identity(len(A))))
         A = tt_rank_reduce(A, op_tol, rank_weighted_error=True)
-        return tt_pd_optimal_step_size(A, nswp=nswp, eps=eps, verbose=verbose)
+        return tt_pd_optimal_step_size(A, nswp=nswp, tol=eps, verbose=verbose)
     return True, 0.0
 
 
@@ -159,52 +162,73 @@ def symmetric_powers_of_two(length):
         return first_half + [2**(half + 1)] + first_half[::-1]
 
 
-def _step_size_local_solve(previous_solution, XDX, Delta, XAX, A, rx, N, step_size, k, op_tol, eps):
-    D = cached_einsum(
-        "lsr,smnS,LSR->lmLrnR",
-        XDX[k], Delta[k], XDX[k + 1]
-    ).reshape(rx[k] * N[k] * rx[k + 1], rx[k] * N[k] * rx[k + 1])
 
-    if is_psd(D, eps):
-        step_size = min(step_size, 1)
-        D += cached_einsum(
-            "lsr,smnS,LSR->lmLrnR", XAX[k], A[k], XAX[k + 1]
-        ).reshape(rx[k] * N[k] * rx[k + 1], rx[k] * N[k] * rx[k + 1])
-        _, solution_now = scip.sparse.linalg.eigsh(D, tol=0.1 * eps, k=1, which="SM", v0=previous_solution)
-    else:
+
+def _step_size_local_solve(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k, A_k, XAX_k1, m, step_size, op_tol, size_limit, eps):
+    if m <= size_limit:
+        previous_solution = previous_solution.reshape(-1, 1)
+        D = cached_einsum(
+            "lsr,smnS,LSR->lmLrnR",
+            XDX_k, Delta_k, XDX_k1
+        ).reshape(m, m)
+        A = cached_einsum("lsr,smnS,LSR->lmLrnR", XAX_k, A_k, XAX_k1).reshape(m, m)
         try:
-            L = scip.linalg.cholesky(
-                cached_einsum(
-                    "lsr,smnS,LSR->lmLrnR", XAX[k], A[k], XAX[k + 1]
-                ).reshape(rx[k] * N[k] * rx[k + 1], rx[k] * N[k] * rx[k + 1]), check_finite=False, lower=True,
-                overwrite_a=True
-            )
-            L_inv = scip.linalg.solve_triangular(L, np.eye(L.shape[0]), lower=True, overwrite_b=True,
-                                                 check_finite=False)
-            local_step_size_inv, solution_now = scip.sparse.linalg.eigsh(-L_inv @ D @ L_inv.T, tol=0.1 * eps, k=1,
-                                                                         which="LA", v0=L.T @ previous_solution)
-            step_size = min(step_size, (1 - op_tol) / local_step_size_inv[0])
-            solution_now = L_inv.T @ solution_now
-            solution_now /= np.linalg.norm(solution_now)
-        except:
+            eig_val, solution_now = scip.sparse.linalg.eigsh((1/step_size)*A + D, tol=eps, k=1, which="SA", v0=previous_solution)
+        except Exception as e:
+            eig_val = previous_solution.T @ ((1/step_size)*A + D)  @ previous_solution
             solution_now = previous_solution
-            step_size = 0
-    return solution_now, step_size
+        if eig_val < 0:
+            try:
+                eig_val, solution_now = scip.sparse.linalg.eigsh(-D, M=A, tol=eps, k=1, which="LA", v0=previous_solution)
+                step_size = max(0, min(step_size, (1 - op_tol) / eig_val[0]))
+            except Exception as e:
+                solution_now = previous_solution
+        return solution_now, step_size
+
+    x_shape = previous_solution.shape
+    mat_vec_A = lambda x_vec: cached_einsum('lsr,smnS,LSR,rnR->lmL',XAX_k, A_k, XAX_k1, x_vec.reshape(*x_shape)).reshape(-1, 1)
+    A_op = scip.sparse.linalg.LinearOperator((m, m), matvec=mat_vec_A)
+    mat_vec_D = lambda x_vec: -cached_einsum('lsr,smnS,LSR,rnR->lmL', XDX_k, Delta_k, XDX_k1, x_vec.reshape(*x_shape)).reshape(-1, 1)
+    D_op = scip.sparse.linalg.LinearOperator((m, m), matvec=mat_vec_D)
+    AD_op = scip.sparse.linalg.LinearOperator((m, m), matvec=lambda x_vec: mat_vec_A(x_vec) / step_size - mat_vec_D(x_vec))
+
+    try:
+        eig_val, solution_now = scip.sparse.linalg.eigsh(AD_op, tol=eps, k=1, which="SA", v0=previous_solution)
+    except Exception as e:
+        eig_val = previous_solution.reshape(-1, 1).T @ AD_op(previous_solution)
+        solution_now = previous_solution
+    if eig_val < 0:
+        try:
+            eig_val, solution_now = scip.sparse.linalg.eigsh(D_op, M=A_op, tol=eps, k=1, which="LA", v0=previous_solution)
+            step_size = max(0, min(step_size, (1 - op_tol) / eig_val[0]))
+        except Exception as e:
+            solution_now = previous_solution
+
+    return solution_now.reshape(-1, 1), step_size
 
 
-def tt_ineq_optimal_step_size(A, Delta, op_tol, nswp=10, eps=1e-12, verbose=False):
-    x_cores =  tt_random_gaussian(symmetric_powers_of_two(len(A)-1), (2,))
-    return tt_pd_optimal_step_size(A, Delta, op_tol, x0=x_cores, nswp=nswp, eps=eps, verbose=verbose)
+def tt_ineq_optimal_step_size(A, Delta, op_tol, nswp=10, verbose=False):
+    x_cores =  tt_random_gaussian([2]*(len(A)-1), (2,))
+    return tt_pd_optimal_step_size(A, Delta, op_tol, x0=x_cores, nswp=nswp, tol=0.1*op_tol, verbose=verbose)
 
 
-def tt_pd_optimal_step_size(A, Delta, op_tol, x0=None, nswp=10, eps=1e-12, verbose=False):
+def _add_kick_rank(u, v, r_add=2):
+    uk = np.random.randn(u.shape[0], r_add)  # rx_k x N_k x rz_k+1
+    u, Rmat = scp.linalg.qr(np.concatenate((u, uk), 1), check_finite=False, mode="economic", overwrite_a=True)
+    v = np.concatenate((v, np.random.randn(r_add, v.shape[-1])), 0)
+    v = Rmat @ v
+    return u, v, u.shape[-1]
+
+
+def tt_pd_optimal_step_size(A, Delta, op_tol, x0=None, nswp=10, tol=1e-12, verbose=False):
     if verbose:
-        print(f"Starting Eigen solve with:\n \t {eps} \n \t sweeps: {nswp}")
+        print(f"Starting Eigen solve with:\n \t {tol} \n \t sweeps: {nswp}")
         t0 = time.time()
     if x0 is None:
-        x_cores = tt_random_gaussian(symmetric_powers_of_two(len(A)-1), (2,))
+        x_cores = tt_random_gaussian([2]*(len(A)-1), (2,))
     else:
         x_cores = x0
+    kick_rank = max(int(2**(len(A)/2) / (2*nswp)), 1)
     d = len(x_cores)
     rx = np.array([1] + tt_ranks(x_cores) + [1])
     N = np.array([c.shape[1] for c in x_cores])
@@ -215,13 +239,15 @@ def tt_pd_optimal_step_size(A, Delta, op_tol, x0=None, nswp=10, eps=1e-12, verbo
 
     max_res = 0
     step_size = 1
+    last = False
+    size_limit = 0.1 * N[0] * (int(np.sqrt(d) * d))**2
     for swp in range(nswp):
         max_res = np.inf if swp == 0 else 0
         for k in range(d - 1, -1, -1):
             if swp > 0:
-                previous_solution = np.reshape(x_cores[k], (-1, 1))
-                solution_now, step_size = _step_size_local_solve(previous_solution, XDX, Delta, XAX, A, rx, N, step_size, k, op_tol, eps)
-                max_res = max(max_res, 1 - np.sum(np.abs(solution_now.T @ previous_solution)))
+                previous_solution = x_cores[k]
+                solution_now, step_size = _step_size_local_solve(previous_solution, XDX[k], Delta[k], XDX[k+1], XAX[k], A[k], XAX[k+1], rx[k] * N[k] * rx[k + 1], step_size, op_tol, size_limit, tol)
+                max_res = max(max_res, 1 - np.sum(np.abs(solution_now.T @ previous_solution.reshape(-1, 1))))
                 solution_now = np.reshape(solution_now, (rx[k], N[k] * rx[k + 1])).T
             else:
                 solution_now = np.reshape(x_cores[k], (rx[k], N[k] * rx[k + 1])).T
@@ -229,9 +255,14 @@ def tt_pd_optimal_step_size(A, Delta, op_tol, x0=None, nswp=10, eps=1e-12, verbo
             if k > 0:
                 u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True)
                 v = s.reshape(-1, 1) * v
-                r = prune_singular_vals(s, 1e-18) if swp > 0 else len(s)
-                x_cores[k] = np.reshape(u[:, :r].T, (r, N[k], rx[k + 1]))
-                x_cores[k - 1] = einsum('rdc,cR->rdR', x_cores[k - 1], v[:r].T, optimize="greedy")
+                r = prune_singular_vals(s, 0.1*tol) if swp > 0 else len(s)
+                if not last:
+                    u, v, r = _add_kick_rank(u[:, :r], v[:r], kick_rank)
+                else:
+                    u = u[:, :r]
+                    v = v[:r]
+                x_cores[k] = np.reshape(u.T, (r, N[k], rx[k + 1]))
+                x_cores[k - 1] = einsum('rdc,cR->rdR', x_cores[k - 1], v.T, optimize="greedy")
                 rx[k] = r
 
                 XAX[k] = _compute_phi_bck_A(XAX[k + 1], x_cores[k], A[k], x_cores[k])
@@ -245,21 +276,27 @@ def tt_pd_optimal_step_size(A, Delta, op_tol, x0=None, nswp=10, eps=1e-12, verbo
                 x_cores[k] = np.reshape(solution_now, (rx[k], N[k], rx[k + 1]))
 
         x_cores = tt_normalise(x_cores)
-        if max_res < eps:
+        if step_size == 0 or last:
             break
+        if max_res < tol or swp == nswp - 1:
+            last = True
         max_res = 0
         for k in range(d):
-            previous_solution = np.reshape(x_cores[k], (-1, 1))
-            solution_now, step_size = _step_size_local_solve(previous_solution, XDX, Delta, XAX, A, rx, N, step_size, k, op_tol, eps)
-            max_res = max(max_res, 1- np.sum(np.abs(solution_now.T @ previous_solution)))
+            previous_solution = x_cores[k]
+            solution_now, step_size = _step_size_local_solve(previous_solution, XDX[k], Delta[k], XDX[k+1], XAX[k], A[k], XAX[k+1], rx[k] * N[k] * rx[k + 1], step_size, op_tol, size_limit, tol)
+            max_res = max(max_res, 1- np.sum(np.abs(solution_now.T @ previous_solution.reshape(-1, 1))))
             solution_now = np.reshape(solution_now, (rx[k] * N[k], rx[k + 1]))
-
             if k < d - 1:
                 u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True)
                 v = s.reshape(-1, 1) * v
-                r = prune_singular_vals(s, 1e-18) if swp > 0 else len(s)
-                x_cores[k] = u[:, :r].reshape(rx[k], N[k], r)
-                x_cores[k + 1] = einsum('ij,jkl->ikl', v[:r, :], x_cores[k + 1], optimize="greedy").reshape(r, N[k + 1], rx[k + 2])
+                r = prune_singular_vals(s, 0.1*tol) if swp > 0 else len(s)
+                if not last:
+                    u, v, r = _add_kick_rank(u[:, :r], v[:r, :], kick_rank)
+                else:
+                    u = u[:, :r]
+                    v = v[:r, :]
+                x_cores[k] = u.reshape(rx[k], N[k], r)
+                x_cores[k + 1] = einsum('ij,jkl->ikl', v, x_cores[k + 1], optimize="greedy").reshape(r, N[k + 1], rx[k + 2])
                 rx[k + 1] = r
                 XAX[k + 1] = compute_phi_fwd_A(XAX[k], x_cores[k], A[k], x_cores[k])
                 XDX[k + 1] = compute_phi_fwd_A(XDX[k], x_cores[k], Delta[k], x_cores[k])
@@ -268,13 +305,15 @@ def tt_pd_optimal_step_size(A, Delta, op_tol, x0=None, nswp=10, eps=1e-12, verbo
                 XAX[k + 1] = np.divide(XAX[k + 1], norm)
                 XDX[k + 1] = np.divide(XDX[k + 1], norm)
 
+
             else:
                 x_cores[k] = np.reshape(solution_now, (rx[k], N[k], rx[k + 1]))
 
         x_cores = tt_normalise(x_cores)
-
-        if max_res < eps:
+        if step_size == 0 or last:
             break
+        if max_res < tol:
+            last = True
 
     if verbose:
         print("\t -----")
@@ -284,7 +323,7 @@ def tt_pd_optimal_step_size(A, Delta, op_tol, x0=None, nswp=10, eps=1e-12, verbo
         print('\t Time: ', time.time() - t0)
         print('\t Time per sweep: ', (time.time() - t0) / (swp + 1))
 
-    min_eig_value = tt_inner_prod(x_cores, tt_fast_matrix_vec_mul(A, x_cores, eps)) + step_size*tt_inner_prod(x_cores, tt_fast_matrix_vec_mul(Delta, x_cores, eps))
+    min_eig_value = tt_inner_prod(x_cores, tt_fast_matrix_vec_mul(A, x_cores, tol)) + step_size * tt_inner_prod(x_cores, tt_fast_matrix_vec_mul(Delta, x_cores, tol))
     return step_size, max(min_eig_value, 0)
 
 

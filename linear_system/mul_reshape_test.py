@@ -14,7 +14,7 @@ matrix_tt_2 = tt_random_gaussian([4, 4], shape=(2, 2))
 print([c.shape for c in op_tt])
 print([c.shape for c in matrix_tt_2])
 print("Ground truth: ")
-print(tt_matrix_to_matrix(tt_mat(tt_fast_matrix_vec_mul(op_tt, tt_vec(matrix_tt_2)))))
+print(tt_matrix_to_matrix(tt_merge_bonds(tt_fast_matrix_vec_mul(op_tt, tt_split_bonds(matrix_tt_2)))))
 
 op_tt = tt_merge_cores(op_tt)
 print([c.shape for c in op_tt])

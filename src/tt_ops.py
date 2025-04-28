@@ -370,7 +370,7 @@ def tt_matrix_svd(matrix, err_bound=1e-18):
     n = len(tensor.shape)
     axes = sum([list(t) for t in zip([i for i in range(n // 2)], [i for i in range(n // 2, n)])], [])
     tensor = np.transpose(tensor, axes=axes)
-    return tt_mat(tt_svd(tensor, err_bound))
+    return tt_merge_bonds(tt_svd(tensor, err_bound))
 
 
 def tt_vec_to_vec(vec_tt):
@@ -393,11 +393,11 @@ def tt_sketch(shape, target_ranks):
     ]
 
 
-def tt_vec(matrix_tt):
+def tt_split_bonds(matrix_tt):
     return sum([break_core_bond(c) for c in matrix_tt], [])
 
 
-def tt_mat(vec_tt):
+def tt_merge_bonds(vec_tt):
     return [einsum("abc, cde -> abde", c_1, c_2, optimize=True) for c_1, c_2 in zip(vec_tt[:-1:2], vec_tt[1::2])]
 
 
@@ -505,3 +505,12 @@ def tt_skew_zero_op(op_tt, eps):
     transpose_op = [np.eye(4)[[0, 2, 1, 3]].reshape(1, 4, 4, 1) for _ in op_tt]
     op_tt_t = tt_fast_mat_mat_mul(op_tt, transpose_op, eps)
     return tt_rank_reduce(tt_scale(0.5, tt_add(op_tt, op_tt_t)), eps)
+
+
+def tt_IkronM(matrix_tt):
+    I = np.eye(2).reshape(1, 2, 2, 1)
+    return [cached_einsum("rmnR, lijL -> rlminjRL", I, c).reshape(c.shape[0], 4, 4, c.shape[-1]) for c in matrix_tt]
+
+def tt_MkronI(matrix_tt):
+    I = np.eye(2).reshape(1, 2, 2, 1)
+    return [cached_einsum("rmnR, lijL -> rlminjRL", c, I).reshape(c.shape[0], 4, 4, c.shape[-1]) for c in matrix_tt]

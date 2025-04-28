@@ -2,13 +2,13 @@
 dim: !!int 2
 max_rank: !!int 2
 seeds: [5]
-feasibility_tol: !!float 5e-5
-centrality_tol: !!float 5e-3
+feasibility_tol: !!float 1e-3
+centrality_tol: !!float 1e-3
 verbose: True
 # TT-IPM
 tau: 0.9
-op_tol: !!float 1e-3
-max_iter: !!int 8
+op_tol: !!float 1e-4
+max_iter: !!int 12
 # Sketchy CGAL
 sketch_cgal_rank: !!int 10
 duality_tol: 0.5

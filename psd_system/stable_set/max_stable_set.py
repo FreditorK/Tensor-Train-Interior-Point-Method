@@ -15,7 +15,7 @@ import time
 
 
 def tt_G_entrywise_mask_op(G):
-    vec_g_copy = tt_vec(copy.deepcopy(G))
+    vec_g_copy = tt_split_bonds(copy.deepcopy(G))
     basis = []
     for g_core in vec_g_copy:
         core = np.zeros((g_core.shape[0], 2, 2, g_core.shape[-1]))
@@ -26,7 +26,7 @@ def tt_G_entrywise_mask_op(G):
 
 def tt_tr_op(dim):
     op =[]
-    for i, c in enumerate(tt_vec(tt_identity(dim))):
+    for i, c in enumerate(tt_split_bonds(tt_identity(dim))):
         core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
         core[:, 0] = c
         op.append(core)
@@ -59,7 +59,7 @@ if __name__ == "__main__":
             tr_bias_tt = [E(0, 0) for _ in range(config["dim"])]
             J_tt = tt_one_matrix(config["dim"])
             lag_maps = {
-                "y": tt_rank_reduce(tt_diag(tt_vec(tt_sub(tt_one_matrix(config["dim"]), tt_add(G, tr_bias_tt)))))
+                "y": tt_rank_reduce(tt_diag(tt_split_bonds(tt_sub(tt_one_matrix(config["dim"]), tt_add(G, tr_bias_tt)))))
             }
             L_tt = tt_rank_reduce(tt_add(G_entry_tt_op, tr_tt_op))
             bias_tt = tr_bias_tt

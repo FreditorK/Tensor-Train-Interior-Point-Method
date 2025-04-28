@@ -13,7 +13,7 @@ from src.tt_ipm import tt_ipm
 
 def tt_diag_op(dim):
     identity = tt_identity(dim)
-    basis = tt_diag(tt_vec(identity))
+    basis = tt_diag(tt_split_bonds(identity))
     return basis
 
 def tt_diag_op_adj(dim):
@@ -46,7 +46,7 @@ if __name__ == "__main__":
         L_tt = tt_diag_op(config["dim"])
         bias_tt = tt_identity(config["dim"])
 
-        lag_maps = {"y": tt_rank_reduce(tt_diag(tt_vec(tt_sub(tt_one_matrix(config["dim"]), tt_identity(config["dim"])))))}
+        lag_maps = {"y": tt_rank_reduce(tt_diag(tt_split_bonds(tt_sub(tt_one_matrix(config["dim"]), tt_identity(config["dim"])))))}
 
         lag_maps = {key: tt_reshape(value, (4, 4)) for key, value in lag_maps.items()}
         G_tt = tt_reshape(G_tt, (4,))

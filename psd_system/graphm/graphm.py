@@ -18,12 +18,12 @@ Q_PREFIX = [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1), np.array([[1
 
 def tt_partial_trace_op(block_size, dim):
     op_tt = []
-    for i, c in enumerate(tt_vec(tt_sub(tt_one_matrix(dim - block_size), tt_identity(dim - block_size)))):
+    for i, c in enumerate(tt_split_bonds(tt_sub(tt_one_matrix(dim - block_size), tt_identity(dim - block_size)))):
         core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
         core[:, (i+1) % 2] = c
         op_tt.append(core)
     block_op = []
-    for i, c in enumerate(tt_vec(tt_identity(block_size))):
+    for i, c in enumerate(tt_split_bonds(tt_identity(block_size))):
         core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
         core[:, 0] = c
         block_op.append(core)
@@ -35,19 +35,19 @@ def tt_partial_trace_op(block_size, dim):
 def tt_partial_J_trace_op(block_size, dim):
     matrix_tt = tt_sub(tt_identity(dim - block_size), [E(0, 0) for _  in range(dim-block_size)])
     block_op_0 = []
-    for i, c in enumerate(tt_vec(tt_identity(block_size))):
+    for i, c in enumerate(tt_split_bonds(tt_identity(block_size))):
         core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
         core[:, 1] = c
         block_op_0.append(core)
-    op_tt_0 = tt_diag(tt_vec(matrix_tt)) + block_op_0
+    op_tt_0 = tt_diag(tt_split_bonds(matrix_tt)) + block_op_0
 
     matrix_tt = tt_sub(tt_one_matrix(dim-block_size), tt_identity(dim-block_size))
     block_op_1 = []
-    for i, c in enumerate(tt_vec(tt_sub(tt_one_matrix(block_size), tt_identity(block_size)))):
+    for i, c in enumerate(tt_split_bonds(tt_sub(tt_one_matrix(block_size), tt_identity(block_size)))):
         core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
         core[:, 1] = c
         block_op_1.append(core)
-    op_tt_1 = tt_diag(tt_vec(matrix_tt)) + block_op_1
+    op_tt_1 = tt_diag(tt_split_bonds(matrix_tt)) + block_op_1
     return tt_rank_reduce(Q_PREFIX + tt_sum(op_tt_0, op_tt_1))
 
 # ------------------------------------------------------------------------------
@@ -55,20 +55,20 @@ def tt_partial_J_trace_op(block_size, dim):
 
 def tt_diag_block_sum_linear_op(block_size, dim):
     op_tt = []
-    for c in tt_vec(tt_identity(dim-block_size)):
+    for c in tt_split_bonds(tt_identity(dim - block_size)):
         core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
         core[:, 0, :] = c
         op_tt.append(core)
     block_matrix = tt_identity(block_size)
-    op_tt = op_tt + tt_diag(tt_vec(block_matrix))
+    op_tt = op_tt + tt_diag(tt_split_bonds(block_matrix))
 
     op_tt_2 = []
-    for c in tt_vec(tt_identity(dim - block_size)):
+    for c in tt_split_bonds(tt_identity(dim - block_size)):
         core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
         core[:, 0, :] = c
         op_tt_2.append(core)
     block_matrix = []
-    for i, c in enumerate(tt_vec(tt_sub(tt_one_matrix(block_size), tt_identity(block_size)))):
+    for i, c in enumerate(tt_split_bonds(tt_sub(tt_one_matrix(block_size), tt_identity(block_size)))):
         core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
         core[:, (i+1) % 2, :] = c
         block_matrix.append(core)
@@ -85,7 +85,7 @@ def tt_Q_m_P_op(dim):
         core_1 = np.concatenate((E(0, 0), E(1, 1)), axis=-1)
         core_2 = np.concatenate((E(0,0), E(0,  1)), axis=0)
         Q_part.extend([core_1, core_2])
-    P_part = [-0.5*E(0, 0), E(1, 1)] + tt_diag(tt_vec([E(0,  0) + E(1,  0) for _ in range(dim)]))
+    P_part = [-0.5*E(0, 0), E(1, 1)] + tt_diag(tt_split_bonds([E(0, 0) + E(1, 0) for _ in range(dim)]))
     P_supplement = [-0.5*E(0, 1), E(1, 0)]
     for i in range(dim):
         core_1 = np.concatenate((E(0, 0), E(1,  0)), axis=-1)
@@ -105,7 +105,7 @@ def tt_padding_op(dim):
     matrix_tt = [E(0, 1) + E(1, 0) +  E(1, 1)] + tt_one_matrix(dim)
     matrix_tt  = tt_sub(matrix_tt, [E(0, 1)] + [E(0, 0) + E(1, 0) for _ in range(dim)])
     matrix_tt = tt_sub(matrix_tt, [E(1,  0)] + [E(0, 0) + E(0, 1) for _ in range(dim)])
-    basis = tt_diag(tt_vec(matrix_tt))
+    basis = tt_diag(tt_split_bonds(matrix_tt))
     return tt_rank_reduce(basis)
 
 # ------------------------------------------------------------------------------
@@ -208,7 +208,7 @@ def create_problem(n, max_rank):
     # ---
     # Inequality Operator
     # X
-    ineq_mask = [E(0, 0)] + tt_rank_reduce(tt_sub(tt_one_matrix(2*n), tt_identity(2*n)))
+    ineq_mask = [E(0, 0)] + tt_one_matrix(2*n)
 
     # ---
 
@@ -218,7 +218,7 @@ def create_problem(n, max_rank):
     pad = tt_sub(pad, [E(1, 0)] + [E(0, 0) + E(0, 1) for _ in range(2 * n)])
 
     lag_maps = {
-        "y": tt_rank_reduce(tt_diag(tt_vec(
+        "y": tt_rank_reduce(tt_diag(tt_split_bonds(
             tt_sub(
                 tt_one_matrix(2 * n + 1),
                 tt_sum(
@@ -235,7 +235,7 @@ def create_problem(n, max_rank):
                 )
             )
         ))),
-        "t": tt_rank_reduce(tt_diag(tt_vec(tt_sub(tt_one_matrix(2 * n+1), ineq_mask))))
+        "t": tt_rank_reduce(tt_diag(tt_split_bonds(tt_sub(tt_one_matrix(2 * n + 1), ineq_mask))))
     }
 
     return C_tt, L_op_tt, eq_bias_tt, ineq_mask, lag_maps
@@ -264,8 +264,6 @@ if __name__ == "__main__":
         G_tt = tt_rank_reduce(tt_random_graph(config["dim"], rank))
         t1 = time.time()
         C_tt, L_op_tt, eq_bias_tt, ineq_mask, lag_maps = create_problem(config["dim"], config["max_rank"])
-        C_tt = tt_rank_reduce(tt_add(tt_scale(0.1, ineq_mask), C_tt)) # alternatively a penalty
-        # TODO: Duality error persists even without the inequality, so T_tt is not necessarily causing it
         lag_maps = {key: tt_reshape(value, (4, 4)) for key, value in lag_maps.items()}
         C_tt = tt_reshape(C_tt, (4,))
         #L_op_tt = tt_reshape(L_op_tt, (4, 4))
@@ -278,6 +276,7 @@ if __name__ == "__main__":
             C_tt,
             L_op_tt,
             eq_bias_tt,
+            ineq_mask,
             max_iter=config["max_iter"],
             verbose=config["verbose"],
             feasibility_tol=config["feasibility_tol"],
