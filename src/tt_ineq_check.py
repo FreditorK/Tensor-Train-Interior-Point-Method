@@ -183,7 +183,8 @@ def _step_size_local_solve(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k, A_k
                 step_size = max(0, min(step_size, (1 - op_tol) / eig_val[0]))
             except Exception as e:
                 solution_now = previous_solution
-        return solution_now, step_size
+        old_res = np.linalg.norm(previous_solution.reshape(-1, 1).T @ ((1/step_size)*A + D) @ previous_solution * previous_solution.reshape(-1, 1) - ((1/step_size)*A + D) @ previous_solution)
+        return solution_now, step_size, old_res
 
     x_shape = previous_solution.shape
     mat_vec_A = lambda x_vec: cached_einsum('lsr,smnS,LSR,rnR->lmL',XAX_k, A_k, XAX_k1, x_vec.reshape(*x_shape)).reshape(-1, 1)
@@ -204,7 +205,9 @@ def _step_size_local_solve(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k, A_k
         except Exception as e:
             solution_now = previous_solution
 
-    return solution_now.reshape(-1, 1), step_size
+    old_res = np.linalg.norm(previous_solution.reshape(-1, 1).T @ AD_op(previous_solution) * previous_solution.reshape(-1, 1) - AD_op(previous_solution))
+
+    return solution_now.reshape(-1, 1), step_size, old_res
 
 
 def tt_ineq_optimal_step_size(A, Delta, op_tol, nswp=10, verbose=False):
@@ -213,10 +216,10 @@ def tt_ineq_optimal_step_size(A, Delta, op_tol, nswp=10, verbose=False):
 
 
 def _add_kick_rank(u, v, r_add=2):
+    old_r = u.shape[-1]
     uk = np.random.randn(u.shape[0], r_add)  # rx_k x N_k x rz_k+1
     u, Rmat = scp.linalg.qr(np.concatenate((u, uk), 1), check_finite=False, mode="economic", overwrite_a=True)
-    v = np.concatenate((v, np.random.randn(r_add, v.shape[-1])), 0)
-    v = Rmat @ v
+    v = Rmat[:, :old_r] @ v
     return u, v, u.shape[-1]
 
 
@@ -233,21 +236,20 @@ def tt_pd_optimal_step_size(A, Delta, op_tol, x0=None, nswp=10, tol=1e-12, verbo
     rx = np.array([1] + tt_ranks(x_cores) + [1])
     N = np.array([c.shape[1] for c in x_cores])
 
-    XAX = [np.ones((1, 1, 1))] + [None] * (d - 1) + [
-        np.ones((1, 1, 1))]  # size is rk x Rk x rk
+    XAX = [np.ones((1, 1, 1))] + [None] * (d - 1) + [np.ones((1, 1, 1))]  # size is rk x Rk x rk
     XDX = copy.deepcopy(XAX)
 
     max_res = 0
     step_size = 1
     last = False
-    size_limit = 0.1 * N[0] * (int(np.sqrt(d) * d))**2
+    size_limit = 0.4 * N[0] * (int(np.sqrt(d) * d))**2
     for swp in range(nswp):
         max_res = np.inf if swp == 0 else 0
         for k in range(d - 1, -1, -1):
             if swp > 0:
                 previous_solution = x_cores[k]
-                solution_now, step_size = _step_size_local_solve(previous_solution, XDX[k], Delta[k], XDX[k+1], XAX[k], A[k], XAX[k+1], rx[k] * N[k] * rx[k + 1], step_size, op_tol, size_limit, tol)
-                max_res = max(max_res, 1 - np.sum(np.abs(solution_now.T @ previous_solution.reshape(-1, 1))))
+                solution_now, step_size, local_res = _step_size_local_solve(previous_solution, XDX[k], Delta[k], XDX[k+1], XAX[k], A[k], XAX[k+1], rx[k] * N[k] * rx[k + 1], step_size, op_tol, size_limit, tol)
+                max_res = max(max_res, local_res)
                 solution_now = np.reshape(solution_now, (rx[k], N[k] * rx[k + 1])).T
             else:
                 solution_now = np.reshape(x_cores[k], (rx[k], N[k] * rx[k + 1])).T
@@ -255,7 +257,7 @@ def tt_pd_optimal_step_size(A, Delta, op_tol, x0=None, nswp=10, tol=1e-12, verbo
             if k > 0:
                 u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True)
                 v = s.reshape(-1, 1) * v
-                r = prune_singular_vals(s, 0.1*tol) if swp > 0 else len(s)
+                r = prune_singular_vals(s, 0.5*tol)
                 if not last:
                     u, v, r = _add_kick_rank(u[:, :r], v[:r], kick_rank)
                 else:
@@ -280,16 +282,21 @@ def tt_pd_optimal_step_size(A, Delta, op_tol, x0=None, nswp=10, tol=1e-12, verbo
             break
         if max_res < tol or swp == nswp - 1:
             last = True
+        if verbose:
+            print('Starting Sweep:\n\tMax num of sweeps: %d' % swp)
+            print(f"\tDirection: {-1}")
+            print(f'\tResidual {max_res}')
+            print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
         max_res = 0
         for k in range(d):
             previous_solution = x_cores[k]
-            solution_now, step_size = _step_size_local_solve(previous_solution, XDX[k], Delta[k], XDX[k+1], XAX[k], A[k], XAX[k+1], rx[k] * N[k] * rx[k + 1], step_size, op_tol, size_limit, tol)
-            max_res = max(max_res, 1- np.sum(np.abs(solution_now.T @ previous_solution.reshape(-1, 1))))
+            solution_now, step_size, local_res = _step_size_local_solve(previous_solution, XDX[k], Delta[k], XDX[k+1], XAX[k], A[k], XAX[k+1], rx[k] * N[k] * rx[k + 1], step_size, op_tol, size_limit, tol)
+            max_res = max(max_res, local_res)
             solution_now = np.reshape(solution_now, (rx[k] * N[k], rx[k + 1]))
             if k < d - 1:
                 u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True)
                 v = s.reshape(-1, 1) * v
-                r = prune_singular_vals(s, 0.1*tol) if swp > 0 else len(s)
+                r = prune_singular_vals(s, 0.5*tol)
                 if not last:
                     u, v, r = _add_kick_rank(u[:, :r], v[:r, :], kick_rank)
                 else:
@@ -304,8 +311,6 @@ def tt_pd_optimal_step_size(A, Delta, op_tol, x0=None, nswp=10, tol=1e-12, verbo
                 norm = norm if np.greater(norm, 0) else 1.0
                 XAX[k + 1] = np.divide(XAX[k + 1], norm)
                 XDX[k + 1] = np.divide(XDX[k + 1], norm)
-
-
             else:
                 x_cores[k] = np.reshape(solution_now, (rx[k], N[k], rx[k + 1]))
 
@@ -314,6 +319,11 @@ def tt_pd_optimal_step_size(A, Delta, op_tol, x0=None, nswp=10, tol=1e-12, verbo
             break
         if max_res < tol:
             last = True
+        if verbose:
+            print('Starting Sweep:\n\tMax num of sweeps: %d' % swp)
+            print(f"\tDirection: {1}")
+            print(f'\tResidual {max_res}')
+            print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
 
     if verbose:
         print("\t -----")

@@ -145,16 +145,16 @@ def tt_padding_op(dim):
 def create_problem(n, max_rank):
     print("Creating Problem...")
     G_A = tt_random_graph(n, max_rank)
-    print("Graph A: ")
-    print(np.round(tt_matrix_to_matrix(G_A), decimals=2))
+    #print("Graph A: ")
+    #print(np.round(tt_matrix_to_matrix(G_A), decimals=2))
 
     G_B = tt_random_graph(n, max_rank)
-    print("Graph B: ")
-    print(np.round(tt_matrix_to_matrix(G_B), decimals=2))
+    #print("Graph B: ")
+    #print(np.round(tt_matrix_to_matrix(G_B), decimals=2))
 
-    print("Objective matrix: ")
+    #print("Objective matrix: ")
     C_tt = [E(0, 0)] + G_B + G_A
-    print(np.round(tt_matrix_to_matrix(C_tt), decimals=2))
+    #print(np.round(tt_matrix_to_matrix(C_tt), decimals=2))
 
     test_matrix = tt_random_gaussian([2]*(n+1), (2, 2))
     test_matrix_t = tt_transpose(test_matrix)
@@ -208,7 +208,7 @@ def create_problem(n, max_rank):
     # ---
     # Inequality Operator
     # X
-    ineq_mask = [E(0, 0)] + tt_one_matrix(2*n)
+    ineq_mask = [E(0, 0)] + tt_sub(tt_one_matrix(2*n), tt_identity(2*n))
 
     # ---
 
@@ -309,5 +309,5 @@ if __name__ == "__main__":
         print(f"Peak memory avg {np.mean(memory):.3f} MB")
     print(f"Complementary Slackness avg: {np.mean(complementary_slackness)}")
     print(f"Total feasibility error avg: {np.mean(feasibility_errors)}")
-    print("Solution: ")
-    print(np.round(tt_matrix_to_matrix(X_tt), decimals=2))
+    #print("Solution: ")
+    #print(np.round(tt_matrix_to_matrix(X_tt), decimals=2))

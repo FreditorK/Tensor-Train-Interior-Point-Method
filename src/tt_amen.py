@@ -502,7 +502,7 @@ def tt_block_mals(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, local_solv
     nrmsc = 1.0
     normx = np.ones((d - 1))
     real_tol = (tol / np.sqrt(d))
-    r_max_final = block_size*int(np.sqrt(d)*d)
+    r_max_final = block_size*int(np.sqrt(d)*d) + block_size
     size_limit = 0.1*r_max_final*N[0]*r_max_final
     r_max_part = int(r_max_final // (nswp-1))
 
