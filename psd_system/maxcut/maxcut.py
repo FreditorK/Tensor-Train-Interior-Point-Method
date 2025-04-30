@@ -20,6 +20,11 @@ def tt_diag_op_adj(dim):
     return tt_diag_op(dim)
 
 
+def tt_obj_matrix(rank, dim):
+    graph = tt_rank_reduce(tt_random_graph(dim, rank))
+    return tt_normalise(graph, radius=2**(dim/2))
+
+
 if __name__ == "__main__":
     np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=4, suppress=True)
     parser = argparse.ArgumentParser(description="Script with optional memory tracking.")
@@ -41,7 +46,7 @@ if __name__ == "__main__":
         np.random.seed(seed)
         t0 = time.time()
         rank = config["max_rank"] if args.rank == 0 else args.rank
-        G_tt = tt_rank_reduce(tt_random_graph(config["dim"], rank))
+        G_tt = tt_obj_matrix(rank, config["dim"])
         t1 = time.time()
         L_tt = tt_diag_op(config["dim"])
         bias_tt = tt_identity(config["dim"])
@@ -65,7 +70,8 @@ if __name__ == "__main__":
             verbose=config["verbose"],
             feasibility_tol=config["feasibility_tol"],
             centrality_tol=config["centrality_tol"],
-            op_tol=config["op_tol"]
+            op_tol=config["op_tol"],
+            aho_direction=False
         )
         t3 = time.time()
         if args.track_mem:

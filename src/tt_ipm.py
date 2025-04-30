@@ -120,7 +120,7 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
         try:
             L_L_Z = scip.linalg.cholesky(
                 cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(2, 1)], block_A_k[(2, 1)], XAX_k1[(2, 1)]).reshape(m, m),
-                check_finite=False, lower=True
+                check_finite=False, lower=True, overwrite_a=True
             )
             mR_p = rhs[:, 0].reshape(m, 1)
             mR_d = rhs[:, 1].reshape(m, 1)
@@ -129,16 +129,10 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
             L_Z_inv_L_X = forward_backward_sub(L_L_Z, cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(2, 2)], block_A_k[(2, 2)], XAX_k1[(2, 2)]).reshape(m, m), overwrite_b=True)
             mL_eq = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(0, 1)], block_A_k[(0, 1)], XAX_k1[(0, 1)]).reshape(m,m)
             T_op = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(3, 1)], block_A_k[(3, 1)], XAX_k1[(3, 1)]).reshape(m, m)
-            A = (
-                    mL_eq @ (L_Z_inv_L_X * inv_I.reshape(1, -1)) @ mL_eq.T
-                    + cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(0, 0)], block_A_k[(0, 0)],XAX_k1[(0, 0)]).reshape(m, m)
-            )
+            A = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(0, 0)], block_A_k[(0, 0)],XAX_k1[(0, 0)]).reshape(m, m).__iadd__(mL_eq @ (L_Z_inv_L_X * inv_I.reshape(1, -1)) @ mL_eq.T)
             B = mL_eq @ L_Z_inv_L_X
             C = T_op @ (L_Z_inv_L_X * inv_I.reshape(1, -1)) @ mL_eq.T
-            D = (
-                cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(3, 3)], block_A_k[(3, 3)], XAX_k1[(3, 3)]).reshape(m, m)
-                + T_op @ L_Z_inv_L_X
-            )
+            D = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(3, 3)], block_A_k[(3, 3)], XAX_k1[(3, 3)]).reshape(m, m).__iadd__(T_op @ L_Z_inv_L_X)
 
             u = (
                     mR_p - mL_eq @ (L_L_Z_inv_mR_c - (L_Z_inv_L_X * inv_I.reshape(1, -1)) @ mR_d)
@@ -288,7 +282,7 @@ def _tt_ipm_newton_step(
     Delta_Z_tt = _tt_symmetrise(tt_reshape(_tt_get_block(2, Delta_tt), (2, 2)), status.op_tol)
     Delta_Y_tt = tt_rank_reduce(_tt_get_block(0, Delta_tt), eps=status.op_tol, rank_weighted_error=True)
     Delta_Y_tt = tt_rank_reduce(tt_sub(Delta_Y_tt, tt_fast_matrix_vec_mul(status.lag_map_y, Delta_Y_tt, status.eps)), eps=status.op_tol, rank_weighted_error=True)
-    Delta_T_tt = tt_rank_reduce(tt_fast_hadammard(ineq_mask, tt_reshape(_tt_get_block(3, Delta_tt), (2, 2)), status.eps), eps=status.op_tol, rank_weighted_error=True) if status.with_ineq else None
+    Delta_T_tt = tt_rank_reduce(tt_fast_hadammard(ineq_mask, tt_reshape(_tt_get_block(3, Delta_tt), (2, 2)), status.eps), eps=0.1*status.op_tol, rank_weighted_error=True) if status.with_ineq else None
 
     x_step_size, z_step_size, permitted_error = _tt_line_search(
         X_tt,
@@ -361,7 +355,7 @@ def _tt_ipm_newton_step(
         Delta_Z_tt = tt_rank_reduce(tt_add(Delta_Z_tt_cc, Delta_Z_tt), eps=status.op_tol)
         if status.with_ineq:
             Delta_T_tt_cc = tt_rank_reduce(tt_fast_hadammard(ineq_mask, tt_reshape(_tt_get_block(3, Delta_tt_cc), (2, 2)), status.eps), eps=status.eps, rank_weighted_error=True)
-            Delta_T_tt = tt_rank_reduce(tt_add(Delta_T_tt_cc, Delta_T_tt), eps=status.op_tol, rank_weighted_error=True)
+            Delta_T_tt = tt_rank_reduce(tt_add(Delta_T_tt_cc, Delta_T_tt), eps=0.1*status.op_tol, rank_weighted_error=True)
 
         x_step_size, z_step_size, permitted_error = _tt_line_search(
             X_tt,
@@ -547,9 +541,7 @@ def tt_ipm(
     # Normalisation
     # We normalise the objective to the scale of the average constraint
     status.primal_error_normalisation = 1 + tt_norm(bias_tt)
-    normalisation = np.divide(np.sqrt(tt_inner_prod(lin_op_tt, lin_op_tt) + status.num_ineq_constraints), 2 ** dim + status.num_ineq_constraints)
-    status.dual_error_normalisation = 1 + normalisation
-    obj_tt = tt_normalise(obj_tt, radius=normalisation)
+    status.dual_error_normalisation = 1 + tt_norm(obj_tt)
 
     # KKT-system prep
     lhs_skeleton = {}
@@ -629,7 +621,7 @@ def tt_ipm(
         X_tt, Z_tt = _update(x_step_size, z_step_size, X_tt, Z_tt, Delta_X_tt, Delta_Z_tt, op_tol, permitted_error)
         Y_tt = tt_rank_reduce(tt_add(Y_tt, tt_scale(z_step_size, Delta_Y_tt)), eps=op_tol, rank_weighted_error=True)
         if status.with_ineq:
-            T_tt = tt_rank_reduce(tt_add(T_tt, tt_scale(z_step_size, Delta_T_tt)), eps=op_tol, rank_weighted_error=True)
+            T_tt = tt_rank_reduce(tt_add(T_tt, tt_scale(z_step_size, Delta_T_tt)), eps=0.1*op_tol, rank_weighted_error=True)
         if status.is_last_iter:
             finishing_steps -= 1
 

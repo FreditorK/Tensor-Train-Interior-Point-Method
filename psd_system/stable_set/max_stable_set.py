@@ -32,6 +32,9 @@ def tt_tr_op(dim):
         op.append(core)
     return tt_rank_reduce(op)
 
+def tt_obj_matrix(dim):
+    return [0.5*np.ones((1, 2, 2, 1)) for _ in range(dim)]
+
 if __name__ == "__main__":
     np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=4, suppress=True)
     parser = argparse.ArgumentParser(description="Script with optional memory tracking.")
@@ -57,7 +60,7 @@ if __name__ == "__main__":
             G_entry_tt_op = tt_G_entrywise_mask_op(G)
             tr_tt_op = tt_tr_op(config["dim"])
             tr_bias_tt = [E(0, 0) for _ in range(config["dim"])]
-            J_tt = tt_one_matrix(config["dim"])
+            J_tt = tt_obj_matrix(config["dim"])
             lag_maps = {
                 "y": tt_rank_reduce(tt_diag(tt_split_bonds(tt_sub(tt_one_matrix(config["dim"]), tt_add(G, tr_bias_tt)))))
             }

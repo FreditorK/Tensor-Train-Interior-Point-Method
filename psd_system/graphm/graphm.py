@@ -110,6 +110,21 @@ def tt_padding_op(dim):
 
 # ------------------------------------------------------------------------------
 
+
+def tt_obj_matrix(rank, dim):
+    G_A = tt_random_graph(dim, rank)
+    # print("Graph A: ")
+    # print(np.round(tt_matrix_to_matrix(G_A), decimals=2))
+
+    G_B = tt_random_graph(dim, rank)
+    # print("Graph B: ")
+    # print(np.round(tt_matrix_to_matrix(G_B), decimals=2))
+
+    # print("Objective matrix: ")
+    C_tt = [E(0, 0)] + G_B + G_A
+    # print(np.round(tt_matrix_to_matrix(C_tt), decimals=2))
+    return tt_normalise(C_tt, radius=2**(dim/2))
+
 """
         [Q   P  0 ]
     X = [P^T 1  0 ]
@@ -144,17 +159,8 @@ def tt_padding_op(dim):
 
 def create_problem(n, max_rank):
     print("Creating Problem...")
-    G_A = tt_random_graph(n, max_rank)
-    #print("Graph A: ")
-    #print(np.round(tt_matrix_to_matrix(G_A), decimals=2))
 
-    G_B = tt_random_graph(n, max_rank)
-    #print("Graph B: ")
-    #print(np.round(tt_matrix_to_matrix(G_B), decimals=2))
-
-    #print("Objective matrix: ")
-    C_tt = [E(0, 0)] + G_B + G_A
-    #print(np.round(tt_matrix_to_matrix(C_tt), decimals=2))
+    C_tt = tt_obj_matrix(max_rank, n)
 
     test_matrix = tt_random_gaussian([2]*(n+1), (2, 2))
     test_matrix_t = tt_transpose(test_matrix)
@@ -199,7 +205,7 @@ def create_problem(n, max_rank):
 
     # ---
     # IX
-    kappa = 0.0 # Relaxing the psd  condition a little bit to come closer to boundary
+    kappa = 1e-3 # Relaxing the psd  condition a little bit to come closer to boundary
     padding_op = tt_reshape(tt_padding_op(2 * n), (4, 4))
     padding_op_bias = [(1+kappa)*E(1, 1)] + tt_identity(2 * n)
 
@@ -262,7 +268,6 @@ if __name__ == "__main__":
         np.random.seed(seed)
         t0 = time.time()
         rank = config["max_rank"] if args.rank == 0 else args.rank
-        G_tt = tt_rank_reduce(tt_random_graph(config["dim"], rank))
         t1 = time.time()
         C_tt, L_op_tt, eq_bias_tt, ineq_mask, lag_maps = create_problem(config["dim"], config["max_rank"])
         lag_maps = {key: tt_reshape(value, (4, 4)) for key, value in lag_maps.items()}
@@ -311,6 +316,12 @@ if __name__ == "__main__":
     print(f"Complementary Slackness avg: {np.mean(complementary_slackness)}")
     print(f"Total feasibility error avg: {np.mean(feasibility_errors)}")
     print("Solution: ")
-    X_tt = tt_rank_reduce(X_tt, 1e-2)
-    print(tt_ranks(X_tt))
     print(np.round(tt_matrix_to_matrix(X_tt), decimals=2))
+    #print(tt_inner_prod(tt_reshape(C_tt, (2, 2)), X_tt))
+    #dual_feas = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(tt_transpose(L_op_tt), Y_tt, 1e-10),
+                                     # tt_rank_reduce(tt_add(tt_reshape(Z_tt, (4,)), C_tt), 1e-10)), 1e-5)
+    #dual_feas = tt_rank_reduce(tt_sub(dual_feas, tt_reshape(T_tt, (4,))), 1e-5)
+    #print(np.round(tt_matrix_to_matrix(tt_reshape(dual_feas, (2, 2))), decimals=2))
+    #n = config["dim"]
+    #op = tt_reshape(tt_partial_J_trace_op(n, 2 * n), (4, 4))
+    #print(tt_matrix_to_matrix(tt_reshape(tt_fast_matrix_vec_mul(op, tt_reshape(X_tt, (4,))), (2, 2))))
