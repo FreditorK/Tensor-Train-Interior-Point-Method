@@ -199,8 +199,9 @@ def create_problem(n, max_rank):
 
     # ---
     # IX
+    kappa = 0.01 # Relaxing the psd  condition a little bit to come closer to boundary
     padding_op = tt_reshape(tt_padding_op(2 * n), (4, 4))
-    padding_op_bias = [E(1, 1)] + tt_identity(2 * n)
+    padding_op_bias = [(1+kappa)*E(1, 1)] + tt_identity(2 * n)
 
     L_op_tt = tt_rank_reduce(tt_add(L_op_tt, padding_op))
     eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, padding_op_bias))
