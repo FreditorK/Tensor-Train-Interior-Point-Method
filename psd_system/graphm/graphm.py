@@ -199,7 +199,7 @@ def create_problem(n, max_rank):
 
     # ---
     # IX
-    kappa = 0.01 # Relaxing the psd  condition a little bit to come closer to boundary
+    kappa = 0.0 # Relaxing the psd  condition a little bit to come closer to boundary
     padding_op = tt_reshape(tt_padding_op(2 * n), (4, 4))
     padding_op_bias = [(1+kappa)*E(1, 1)] + tt_identity(2 * n)
 
@@ -311,4 +311,6 @@ if __name__ == "__main__":
     print(f"Complementary Slackness avg: {np.mean(complementary_slackness)}")
     print(f"Total feasibility error avg: {np.mean(feasibility_errors)}")
     print("Solution: ")
+    X_tt = tt_rank_reduce(X_tt, 1e-2)
+    print(tt_ranks(X_tt))
     print(np.round(tt_matrix_to_matrix(X_tt), decimals=2))
