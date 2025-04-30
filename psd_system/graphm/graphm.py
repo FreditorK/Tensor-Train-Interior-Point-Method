@@ -309,5 +309,5 @@ if __name__ == "__main__":
         print(f"Peak memory avg {np.mean(memory):.3f} MB")
     print(f"Complementary Slackness avg: {np.mean(complementary_slackness)}")
     print(f"Total feasibility error avg: {np.mean(feasibility_errors)}")
-    #print("Solution: ")
-    #print(np.round(tt_matrix_to_matrix(X_tt), decimals=2))
+    print("Solution: ")
+    print(np.round(tt_matrix_to_matrix(X_tt), decimals=2))
