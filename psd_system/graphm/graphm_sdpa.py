@@ -89,7 +89,7 @@ if __name__ == "__main__":
         t2 = time.time()
         # Solve the problem
         prob = cp.Problem(objective, constraints)
-        _ = prob.solve(solver=cp.SDPA, epsilonStar=0.1*config["centrality_tol"], epsilonDash=config["feasibility_tol"], verbose=True)
+        _ = prob.solve(solver=cp.SDPA, epsilonStar=0.1*config["centrality_tol"], epsilonDash=config["feasibility_tol"], verbose=True, numThreads=1)
         X = QP_mat.value
         for m in prob.solution.dual_vars.values():
             if type(m) == np.ndarray:

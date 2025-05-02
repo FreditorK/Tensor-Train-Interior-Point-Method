@@ -3,7 +3,6 @@ import sys
 import os
 import time
 
-import numpy as np
 import scipy.sparse.linalg
 
 sys.path.append(os.getcwd() + '/../')
@@ -212,7 +211,7 @@ def _step_size_local_solve(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k, A_k
 
 def tt_ineq_optimal_step_size(A, Delta, op_tol, nswp=10, verbose=False):
     x_cores =  tt_random_gaussian([2]*(len(A)-1), (2,))
-    return tt_pd_optimal_step_size(A, Delta, op_tol, x0=x_cores, nswp=nswp, tol=0.1*op_tol, verbose=verbose)
+    return tt_pd_optimal_step_size(A, Delta, op_tol, kick_rank=max(int(2 ** (len(A) / 4) / (2 * nswp)), 1), x0=x_cores, nswp=nswp, tol=0.1*op_tol, verbose=verbose)
 
 
 def _add_kick_rank(u, v, r_add=2):
@@ -223,7 +222,7 @@ def _add_kick_rank(u, v, r_add=2):
     return u, v, u.shape[-1]
 
 
-def tt_pd_optimal_step_size(A, Delta, op_tol, x0=None, nswp=10, tol=1e-12, verbose=False):
+def tt_pd_optimal_step_size(A, Delta, op_tol, x0=None, kick_rank=None, nswp=10, tol=1e-12, verbose=False):
     if verbose:
         print(f"Starting Eigen solve with:\n \t {tol} \n \t sweeps: {nswp}")
         t0 = time.time()
@@ -231,7 +230,8 @@ def tt_pd_optimal_step_size(A, Delta, op_tol, x0=None, nswp=10, tol=1e-12, verbo
         x_cores = tt_random_gaussian([2]*(len(A)-1), (2,))
     else:
         x_cores = x0
-    kick_rank = max(int(2**(len(A)/2) / (2*nswp)), 1)
+    if kick_rank is None:
+        kick_rank = max(int(2 ** (len(A) / 2) / (2 * nswp)), 1)
     d = len(x_cores)
     rx = np.array([1] + tt_ranks(x_cores) + [1])
     N = np.array([c.shape[1] for c in x_cores])
