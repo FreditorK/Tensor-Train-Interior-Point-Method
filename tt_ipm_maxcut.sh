@@ -36,19 +36,15 @@ for dim in $(seq $START_DIM $END_DIM); do
     echo -e "\n▶ Running dim=$dim with config=$CONFIG at $(date)"
     CURRENT_TIMEOUT=$((BASE_TIMEOUT * dim))
 
-    if [ -f "$CONFIG" ]; then
-        timeout "$CURRENT_TIMEOUT" python maxcut.py --config "$CONFIG" --track_mem
-        status=$?
+    timeout "$CURRENT_TIMEOUT" python maxcut.py --config "$CONFIG" --track_mem
+    status=$?
 
-        if [ $status -eq 124 ]; then
-            echo "⏱ Timeout reached for dim=$dim"
-        elif [ $status -ne 0 ]; then
-            echo "❌ Error occurred for dim=$dim (exit code $status)"
-        else
-            echo "✅ Completed dim=$dim successfully"
-        fi
+    if [ $status -eq 124 ]; then
+        echo "⏱ Timeout reached for dim=$dim"
+    elif [ $status -ne 0 ]; then
+        echo "❌ Error occurred for dim=$dim (exit code $status)"
     else
-        echo "⚠️ Config file not found: $CONFIG"
+        echo "✅ Completed dim=$dim successfully"
     fi
 done
 

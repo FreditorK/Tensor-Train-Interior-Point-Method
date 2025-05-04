@@ -1,0 +1,23 @@
+==== Maxcut TT-IPM Batch Run Started at Sun May  4 01:46:15 PM BST 2025 ====
+
+▶ Running dim=6 with config=configs/maxcut_6.yaml at Sun May  4 01:46:15 PM BST 2025
+python: can't open file '/home/fred/Projects/TT-IPM/maxcut.py': [Errno 2] No such file or directory
+❌ Error occurred for dim=6 (exit code 2)
+
+▶ Running dim=7 with config=configs/maxcut_7.yaml at Sun May  4 01:46:15 PM BST 2025
+python: can't open file '/home/fred/Projects/TT-IPM/maxcut.py': [Errno 2] No such file or directory
+❌ Error occurred for dim=7 (exit code 2)
+
+▶ Running dim=8 with config=configs/maxcut_8.yaml at Sun May  4 01:46:15 PM BST 2025
+python: can't open file '/home/fred/Projects/TT-IPM/maxcut.py': [Errno 2] No such file or directory
+❌ Error occurred for dim=8 (exit code 2)
+
+▶ Running dim=9 with config=configs/maxcut_9.yaml at Sun May  4 01:46:15 PM BST 2025
+python: can't open file '/home/fred/Projects/TT-IPM/maxcut.py': [Errno 2] No such file or directory
+❌ Error occurred for dim=9 (exit code 2)
+
+▶ Running dim=10 with config=configs/maxcut_10.yaml at Sun May  4 01:46:15 PM BST 2025
+python: can't open file '/home/fred/Projects/TT-IPM/maxcut.py': [Errno 2] No such file or directory
+❌ Error occurred for dim=10 (exit code 2)
+
+==== All runs completed at Sun May  4 01:46:15 PM BST 2025 ====
