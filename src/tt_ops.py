@@ -514,3 +514,9 @@ def tt_IkronM(matrix_tt):
 def tt_MkronI(matrix_tt):
     I = np.eye(2).reshape(1, 2, 2, 1)
     return [cached_einsum("rmnR, lijL -> rlminjRL", c, I).reshape(c.shape[0], 4, 4, c.shape[-1]) for c in matrix_tt]
+
+
+def tt_diag_op(matrix_tt, eps=1e-18, rank_weighted_error=False):
+    identity = np.eye(matrix_tt[0].shape[1]*matrix_tt[0].shape[2])
+    basis = [einsum("ij, rjR -> rijR", identity, c.reshape(c.shape[0], c.shape[1]*c.shape[2], c.shape[3]), optimize="greedy") for c in matrix_tt]
+    return tt_rank_reduce(basis, eps, rank_weighted_error)

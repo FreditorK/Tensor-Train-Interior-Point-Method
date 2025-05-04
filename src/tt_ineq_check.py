@@ -173,19 +173,20 @@ def _step_size_local_solve(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k, A_k
         A = cached_einsum("lsr,smnS,LSR->lmLrnR", XAX_k, A_k, XAX_k1).reshape(m, m)
         try:
             eig_val, solution_now = scip.sparse.linalg.eigsh((1/step_size)*A + D, tol=eps, k=1, which="SA", v0=previous_solution)
-        except Exception as e:
+        except:
             eig_val = previous_solution.T @ ((1/step_size)*A + D)  @ previous_solution
             solution_now = previous_solution
         if eig_val < 0:
             try:
                 eig_val, solution_now = scip.sparse.linalg.eigsh(-D, M=A, tol=eps, k=1, which="LA", v0=previous_solution)
                 step_size = max(0, min(step_size, (1 - op_tol) / eig_val[0]))
-            except Exception as e:
+            except:
                 solution_now = previous_solution
         old_res = np.linalg.norm(previous_solution.reshape(-1, 1).T @ ((1/step_size)*A + D) @ previous_solution * previous_solution.reshape(-1, 1) - ((1/step_size)*A + D) @ previous_solution)
         return solution_now, step_size, old_res
 
     x_shape = previous_solution.shape
+    previous_solution = previous_solution.reshape(-1, 1)
     mat_vec_A = lambda x_vec: cached_einsum('lsr,smnS,LSR,rnR->lmL',XAX_k, A_k, XAX_k1, x_vec.reshape(*x_shape)).reshape(-1, 1)
     A_op = scip.sparse.linalg.LinearOperator((m, m), matvec=mat_vec_A)
     mat_vec_D = lambda x_vec: -cached_einsum('lsr,smnS,LSR,rnR->lmL', XDX_k, Delta_k, XDX_k1, x_vec.reshape(*x_shape)).reshape(-1, 1)
@@ -194,23 +195,23 @@ def _step_size_local_solve(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k, A_k
 
     try:
         eig_val, solution_now = scip.sparse.linalg.eigsh(AD_op, tol=eps, k=1, which="SA", v0=previous_solution)
-    except Exception as e:
-        eig_val = previous_solution.reshape(-1, 1).T @ AD_op(previous_solution)
+    except:
+        eig_val = previous_solution.T @ AD_op(previous_solution)
         solution_now = previous_solution
     if eig_val < 0:
         try:
             eig_val, solution_now = scip.sparse.linalg.eigsh(D_op, M=A_op, tol=eps, k=1, which="LA", v0=previous_solution)
             step_size = max(0, min(step_size, (1 - op_tol) / eig_val[0]))
-        except Exception as e:
+        except:
             solution_now = previous_solution
 
-    old_res = np.linalg.norm(previous_solution.reshape(-1, 1).T @ AD_op(previous_solution) * previous_solution.reshape(-1, 1) - AD_op(previous_solution))
+    old_res = np.linalg.norm(previous_solution.reshape(-1, 1).T @ AD_op(previous_solution.reshape(-1, 1)) * previous_solution.reshape(-1, 1) - AD_op(previous_solution.reshape(-1, 1)))
 
     return solution_now.reshape(-1, 1), step_size, old_res
 
 
 def tt_ineq_optimal_step_size(A, Delta, op_tol, nswp=10, verbose=False):
-    x_cores =  tt_random_gaussian([2]*(len(A)-1), (2,))
+    x_cores =  tt_random_gaussian([2]*(len(A)-1), (A[0].shape[2],))
     return tt_pd_optimal_step_size(A, Delta, op_tol, kick_rank=max(int(2 ** (len(A) / 4) / (2 * nswp)), 1), x0=x_cores, nswp=nswp, tol=0.1*op_tol, verbose=verbose)
 
 
@@ -227,7 +228,7 @@ def tt_pd_optimal_step_size(A, Delta, op_tol, x0=None, kick_rank=None, nswp=10, 
         print(f"Starting Eigen solve with:\n \t {tol} \n \t sweeps: {nswp}")
         t0 = time.time()
     if x0 is None:
-        x_cores = tt_random_gaussian([2]*(len(A)-1), (2,))
+        x_cores = tt_random_gaussian([2]*(len(A)-1), (A[0].shape[2],))
     else:
         x_cores = x0
     if kick_rank is None:

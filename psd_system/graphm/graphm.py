@@ -123,7 +123,7 @@ def tt_obj_matrix(rank, dim):
     # print("Objective matrix: ")
     C_tt = [E(0, 0)] + G_B + G_A
     # print(np.round(tt_matrix_to_matrix(C_tt), decimals=2))
-    return tt_normalise(C_tt, radius=2**(dim/2))
+    return C_tt #tt_normalise(C_tt, radius=2**(dim/2))
 
 """
         [Q   P  0 ]
@@ -215,7 +215,7 @@ def create_problem(n, max_rank):
     # ---
     # Inequality Operator
     # X
-    ineq_mask = [E(0, 0)] + tt_sub(tt_one_matrix(2*n), tt_identity(2*n))
+    ineq_mask = [E(0, 0)] + tt_sub(tt_one_matrix(2*n), tt_identity(2*n)) #tt_one_matrix(2*n)
 
     # ---
 
@@ -315,8 +315,9 @@ if __name__ == "__main__":
         print(f"Peak memory avg {np.mean(memory):.3f} MB")
     print(f"Complementary Slackness avg: {np.mean(complementary_slackness)}")
     print(f"Total feasibility error avg: {np.mean(feasibility_errors)}")
-    print("Solution: ")
-    print(np.round(tt_matrix_to_matrix(X_tt), decimals=2))
+    #print("Solution: ")
+    #print(np.round(tt_matrix_to_matrix(X_tt), decimals=2))
+    #print(np.round(tt_matrix_to_matrix(Z_tt), decimals=2))
     #print(tt_inner_prod(tt_reshape(C_tt, (2, 2)), X_tt))
     #dual_feas = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(tt_transpose(L_op_tt), Y_tt, 1e-10),
                                      # tt_rank_reduce(tt_add(tt_reshape(Z_tt, (4,)), C_tt), 1e-10)), 1e-5)
