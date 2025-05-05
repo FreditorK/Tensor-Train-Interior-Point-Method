@@ -111,3 +111,5 @@ if __name__ == "__main__":
     print(f"Complementary Slackness avg: {np.mean(complementary_slackness)}")
     print(f"Total feasibility error avg: {np.mean(feasibility_errors)}")
     print(X)
+    print(Z)
+    print(np.linalg.norm(X), np.linalg.norm(Z))

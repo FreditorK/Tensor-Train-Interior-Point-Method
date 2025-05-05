@@ -25,8 +25,8 @@ echo "==== Graph Matching TT-IPM Batch Run Started at $(date) ===="
 # Parameters
 # ---------------------------
 BASE_TIMEOUT=1800  # 30 minutes
-START_DIM=6
-END_DIM=10
+START_DIM=3
+END_DIM=4
 
 # ---------------------------
 # Loop through configs

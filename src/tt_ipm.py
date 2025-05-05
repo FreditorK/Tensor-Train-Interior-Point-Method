@@ -415,7 +415,7 @@ def _tt_line_search_ineq(x_step_size, z_step_size, X_tt, T_tt, Delta_X_tt, Delta
         x_ineq_step_size, _ = tt_ineq_optimal_step_size(
             tt_diag_op(masked_X_tt, status.eps),
             tt_diag_op(masked_Delta_X_tt, status.eps),
-            status.op_tol, verbose=True
+            status.op_tol, verbose=status.verbose
         )
         x_step_size *= x_ineq_step_size
 
@@ -429,7 +429,7 @@ def _tt_line_search_ineq(x_step_size, z_step_size, X_tt, T_tt, Delta_X_tt, Delta
         t_step_size, permitted_error_t = tt_ineq_optimal_step_size(
             tt_diag_op(masked_T_tt, status.op_tol),
             tt_diag_op(masked_Delta_T_tt, status.op_tol),
-            status.op_tol, verbose=True
+            status.op_tol, verbose=status.verbose
         )
         z_step_size *= t_step_size
 

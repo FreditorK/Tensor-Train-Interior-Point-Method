@@ -1,13 +1,13 @@
 # Common
 dim: !!int 10
 max_rank: !!int 4
-seeds: [8]
+seeds: [5, 6, 7, 8, 9]
 feasibility_tol: !!float 8e-4
 centrality_tol: !!float 8e-4
 verbose: False
 # TT-IPM
 op_tol: !!float 1e-4
-max_iter: !!int 20
+max_iter: !!int 25
 # Sketchy CGAL
 sketch_cgal_rank: !!int 100
 duality_tol: 0.5

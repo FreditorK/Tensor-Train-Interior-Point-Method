@@ -21,8 +21,9 @@ def tt_diag_op_adj(dim):
 
 
 def tt_obj_matrix(rank, dim):
-    graph = tt_rank_reduce(tt_random_graph(dim, rank))
-    return tt_normalise(graph, radius=1)
+    graph_tt = tt_rank_reduce(tt_random_graph(dim, rank))
+    laplacian_tt = tt_sub(tt_diag(tt_fast_matrix_vec_mul(graph_tt, [np.ones((1, 2, 1)) for _ in range(dim)],  1e-12)), graph_tt)
+    return tt_normalise(laplacian_tt, radius=1)
 
 
 if __name__ == "__main__":
@@ -100,3 +101,6 @@ if __name__ == "__main__":
         print(f"Peak memory avg {np.mean(memory):.3f} MB", flush=True)
     print(f"Complementary Slackness avg: {np.mean(complementary_slackness)}", flush=True)
     print(f"Total feasibility error avg: {np.mean(feasibility_errors)}", flush=True)
+    print(tt_trace(X_tt), tt_trace(Z_tt))
+    print(tt_matrix_to_matrix(X_tt))
+    print(tt_inner_prod(tt_reshape(G_tt, (2, 2)), X_tt))

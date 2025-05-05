@@ -7,7 +7,7 @@ centrality_tol: !!float 8e-4
 verbose: False
 # TT-IPM
 op_tol: !!float 4e-4
-max_iter: !!int 20
+max_iter: !!int 25
 # Sketchy CGAL
 sketch_cgal_rank: !!int 10
 duality_tol: 0.5

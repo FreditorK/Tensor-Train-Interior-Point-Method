@@ -17,6 +17,7 @@ Q_PREFIX = [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1), np.array([[1
 # Constraint 4 -----------------------------------------------------------------
 
 def tt_partial_trace_op(block_size, dim):
+    # 4.9
     op_tt = []
     for i, c in enumerate(tt_split_bonds(tt_sub(tt_one_matrix(dim - block_size), tt_identity(dim - block_size)))):
         core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
@@ -33,6 +34,7 @@ def tt_partial_trace_op(block_size, dim):
 # Constraint 5 -----------------------------------------------------------------
 
 def tt_partial_J_trace_op(block_size, dim):
+    #4.11
     matrix_tt = tt_sub(tt_identity(dim - block_size), [E(0, 0) for _  in range(dim-block_size)])
     block_op_0 = []
     for i, c in enumerate(tt_split_bonds(tt_identity(block_size))):
@@ -40,7 +42,7 @@ def tt_partial_J_trace_op(block_size, dim):
         core[:, 1] = c
         block_op_0.append(core)
     op_tt_0 = tt_diag(tt_split_bonds(matrix_tt)) + block_op_0
-
+    # 4.10
     matrix_tt = tt_sub(tt_one_matrix(dim-block_size), tt_identity(dim-block_size))
     block_op_1 = []
     for i, c in enumerate(tt_split_bonds(tt_sub(tt_one_matrix(block_size), tt_identity(block_size)))):
@@ -54,6 +56,7 @@ def tt_partial_J_trace_op(block_size, dim):
 # Constraint 6 -----------------------------------------------------------------
 
 def tt_diag_block_sum_linear_op(block_size, dim):
+    # 4.12
     op_tt = []
     for c in tt_split_bonds(tt_identity(dim - block_size)):
         core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
@@ -61,7 +64,7 @@ def tt_diag_block_sum_linear_op(block_size, dim):
         op_tt.append(core)
     block_matrix = tt_identity(block_size)
     op_tt = op_tt + tt_diag(tt_split_bonds(block_matrix))
-
+    # 4.13
     op_tt_2 = []
     for c in tt_split_bonds(tt_identity(dim - block_size)):
         core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
@@ -80,6 +83,7 @@ def tt_diag_block_sum_linear_op(block_size, dim):
 # Constraint 7 -----------------------------------------------------------------
 
 def tt_Q_m_P_op(dim):
+    #4.14
     Q_part = [E(0,  0), E(1,  0)]
     for i in range(dim):
         core_1 = np.concatenate((E(0, 0), E(1, 1)), axis=-1)
@@ -123,7 +127,7 @@ def tt_obj_matrix(rank, dim):
     # print("Objective matrix: ")
     C_tt = [E(0, 0)] + G_B + G_A
     # print(np.round(tt_matrix_to_matrix(C_tt), decimals=2))
-    return C_tt #tt_normalise(C_tt, radius=2**(dim/2))
+    return C_tt
 
 """
         [Q   P  0 ]
@@ -205,7 +209,7 @@ def create_problem(n, max_rank):
 
     # ---
     # IX
-    kappa = 1e-3 # Relaxing the psd  condition a little bit to come closer to boundary
+    kappa = 1e-3 # Relaxing the psd-condition a little bit to come closer to boundary
     padding_op = tt_reshape(tt_padding_op(2 * n), (4, 4))
     padding_op_bias = [(1+kappa)*E(1, 1)] + tt_identity(2 * n)
 
@@ -315,3 +319,5 @@ if __name__ == "__main__":
         print(f"Peak memory avg {np.mean(memory):.3f} MB", flush=True)
     print(f"Complementary Slackness avg: {np.mean(complementary_slackness)}", flush=True)
     print(f"Total feasibility error avg: {np.mean(feasibility_errors)}", flush=True)
+    print(tt_matrix_to_matrix(Z_tt))
+    print(tt_norm(X_tt), tt_norm(Y_tt), tt_norm(T_tt), tt_norm(Z_tt))
