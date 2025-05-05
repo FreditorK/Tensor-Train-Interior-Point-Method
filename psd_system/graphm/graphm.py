@@ -65,16 +65,8 @@ def tt_diag_block_sum_linear_op(block_size, dim):
     block_matrix = tt_identity(block_size)
     op_tt = op_tt + tt_diag(tt_split_bonds(block_matrix))
     # 4.13
-    op_tt_2 = []
-    for c in tt_split_bonds(tt_identity(dim - block_size)):
-        core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
-        core[:, 0, :] = c
-        op_tt_2.append(core)
-    block_matrix = []
-    for i, c in enumerate(tt_split_bonds(tt_sub(tt_one_matrix(block_size), tt_identity(block_size)))):
-        core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
-        core[:, (i+1) % 2, :] = c
-        block_matrix.append(core)
+    op_tt_2 = tt_diag(tt_split_bonds(tt_identity(dim - block_size)))
+    block_matrix = tt_diag(tt_split_bonds(tt_sub(tt_one_matrix(block_size), tt_identity(block_size))))
     op_tt_2 = op_tt_2 + block_matrix
 
     return tt_rank_reduce(Q_PREFIX + tt_add(op_tt, op_tt_2))
@@ -146,11 +138,11 @@ def tt_obj_matrix(rank, dim):
         [   0    0    0    0 |    0 |   0    0    1]
 
 
-        [ 6  0  | 0  0  | 7 | 0 0 0]
+        [ 6  6  | 0  0  | 7 | 0 0 0]
         [ 6  6  | 0  5  | 7 | 0 0 0]
         [--------------------------]
-        [ 4  0  | 0  0  | 7 | 0 0 0]
-        [ 0  5  | 0  5  | 7 | 0 0 0]
+        [ 4  0  | 0  6  | 7 | 0 0 0]
+        [ 0  5  | 6  5  | 7 | 0 0 0]
     Y = [--------------------------]
         [ 0  0  | 0  0  | P | 0 0 0]
         [--------------------------]
@@ -165,14 +157,6 @@ def create_problem(n, max_rank):
     print("Creating Problem...")
 
     C_tt = tt_obj_matrix(max_rank, n)
-
-    test_matrix = tt_random_gaussian([2]*(n+1), (2, 2))
-    test_matrix_t = tt_transpose(test_matrix)
-    test_matrix = tt_reshape(test_matrix, (4, ))
-    test_matrix_t = tt_reshape(test_matrix_t, (4, ))
-
-    #print(tt_matrix_to_matrix(tt_reshape(test_matrix, (2, 2))))
-    #print(tt_matrix_to_matrix(tt_reshape(tt_fast_matrix_vec_mul([np.array([[1, 0, 0, 0], [0, 0, 1, 0], [0, 1, 0, 0], [0, 0, 0, 1]]).reshape(1, 4, 4, 1) for _ in range(n+2)], test_matrix), (2, 2))))
 
     # Equality Operator
     # IV
@@ -209,7 +193,7 @@ def create_problem(n, max_rank):
 
     # ---
     # IX
-    kappa = 1e-3 # Relaxing the psd-condition a little bit to come closer to boundary
+    kappa = 0 #1e-3 # Relaxing the psd-condition a little bit to come closer to boundary
     padding_op = tt_reshape(tt_padding_op(2 * n), (4, 4))
     padding_op_bias = [(1+kappa)*E(1, 1)] + tt_identity(2 * n)
 
@@ -219,7 +203,7 @@ def create_problem(n, max_rank):
     # ---
     # Inequality Operator
     # X
-    ineq_mask = [E(0, 0)] + tt_sub(tt_one_matrix(2*n), tt_identity(2*n)) #tt_one_matrix(2*n)
+    ineq_mask = [E(0, 0)] + tt_sub(tt_one_matrix(n), tt_identity(n)) + tt_one_matrix(n) #tt_one_matrix(2*n)
 
     # ---
 
@@ -237,7 +221,7 @@ def create_problem(n, max_rank):
                     [E(0, 1)] + [E(0, 0) + E(1, 0) for _ in range(2 * n)],  # 7
                     [E(0, 0)] + [E(0, 0) for _ in range(n)] + tt_identity(n),
                     # 6.1
-                    [E(0, 0)] + [E(0, 0) for _ in range(n)] + [E(1, 0) for _ in range(n)],  # 6.2
+                    [E(0, 0)] + tt_identity(n) + tt_sub(tt_one_matrix(n), tt_identity(n)),  # 6.2
                     [E(0, 0)] + tt_sub(
                         tt_one_matrix(n) + [E(1, 1) for _ in range(n)],
                         [E(0, 0) for _ in range(n)] + [E(1, 1) for _ in range(n)]),  # 5
@@ -248,7 +232,6 @@ def create_problem(n, max_rank):
         ))),
         "t": tt_rank_reduce(tt_diag(tt_split_bonds(tt_sub(tt_one_matrix(2 * n + 1), ineq_mask))))
     }
-
     return C_tt, L_op_tt, eq_bias_tt, ineq_mask, lag_maps
 
 if __name__ == "__main__":
@@ -319,5 +302,6 @@ if __name__ == "__main__":
         print(f"Peak memory avg {np.mean(memory):.3f} MB", flush=True)
     print(f"Complementary Slackness avg: {np.mean(complementary_slackness)}", flush=True)
     print(f"Total feasibility error avg: {np.mean(feasibility_errors)}", flush=True)
-    print(tt_matrix_to_matrix(Z_tt))
+    print(tt_matrix_to_matrix(X_tt))
+    print(tt_matrix_to_matrix(tt_reshape(Y_tt, (2, 2))))
     print(tt_norm(X_tt), tt_norm(Y_tt), tt_norm(T_tt), tt_norm(Z_tt))
