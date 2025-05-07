@@ -18,16 +18,8 @@ Q_PREFIX = [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1), np.array([[1
 
 def tt_partial_trace_op(block_size, dim):
     # 4.9
-    op_tt = []
-    for i, c in enumerate(tt_split_bonds(tt_sub(tt_one_matrix(dim - block_size), tt_identity(dim - block_size)))):
-        core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
-        core[:, (i+1) % 2] = c
-        op_tt.append(core)
-    block_op = []
-    for i, c in enumerate(tt_split_bonds(tt_identity(block_size))):
-        core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
-        core[:, 0] = c
-        block_op.append(core)
+    op_tt = tt_diag(tt_split_bonds(tt_sub(tt_one_matrix(dim - block_size), tt_identity(dim - block_size))))
+    block_op = tt_diag(tt_split_bonds(tt_identity(block_size)))
     return tt_rank_reduce(Q_PREFIX + op_tt + block_op)
 
 # ------------------------------------------------------------------------------
@@ -47,7 +39,7 @@ def tt_partial_J_trace_op(block_size, dim):
     block_op_1 = []
     for i, c in enumerate(tt_split_bonds(tt_sub(tt_one_matrix(block_size), tt_identity(block_size)))):
         core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
-        core[:, 1] = c
+        core[:, (i+1) % 2] = c
         block_op_1.append(core)
     op_tt_1 = tt_diag(tt_split_bonds(matrix_tt)) + block_op_1
     return tt_rank_reduce(Q_PREFIX + tt_sum(op_tt_0, op_tt_1))
@@ -119,7 +111,7 @@ def tt_obj_matrix(rank, dim):
     # print("Objective matrix: ")
     C_tt = [E(0, 0)] + G_B + G_A
     # print(np.round(tt_matrix_to_matrix(C_tt), decimals=2))
-    return C_tt
+    return tt_normalise(C_tt, radius=1)
 
 """
         [Q   P  0 ]
@@ -138,11 +130,11 @@ def tt_obj_matrix(rank, dim):
         [   0    0    0    0 |    0 |   0    0    1]
 
 
-        [ 6  6  | 0  0  | 7 | 0 0 0]
-        [ 6  6  | 0  5  | 7 | 0 0 0]
+        [ 6  6  | 4  0  | 7 | 0 0 0]
+        [ 6  6  | 5  4  | 7 | 0 0 0]
         [--------------------------]
         [ 4  0  | 0  6  | 7 | 0 0 0]
-        [ 0  5  | 6  5  | 7 | 0 0 0]
+        [ 5  4  | 6  5  | 7 | 0 0 0]
     Y = [--------------------------]
         [ 0  0  | 0  0  | P | 0 0 0]
         [--------------------------]
@@ -168,9 +160,9 @@ def create_problem(n, max_rank):
     # ---
     # V
     partial_tr_J_op = tt_reshape(tt_partial_J_trace_op(n, 2 * n), (4, 4))
-    partial_tr_J_op_bias = ([E(0, 0)]
-                            + tt_sub(tt_one_matrix(n), [E(0, 0) for _ in range(n)])
-                            + [E(1, 1) for _ in range(n)])
+    partial_tr_J_op_bias = [E(0, 0)] + tt_sub(tt_one_matrix(n), tt_identity(n)) + [E(1, 0) for _ in range(n)]
+    partial_tr_J_op_bias = tt_rank_reduce(tt_add(partial_tr_J_op_bias, [E(0, 0)] + tt_sub(tt_identity(n), [E(0, 0) for _ in range(n)]) + [E(1, 1) for _ in range(n)]))
+
 
     L_op_tt = tt_rank_reduce(tt_add(L_op_tt, partial_tr_J_op))
     eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, partial_tr_J_op_bias))
@@ -193,7 +185,7 @@ def create_problem(n, max_rank):
 
     # ---
     # IX
-    kappa = 0 #1e-3 # Relaxing the psd-condition a little bit to come closer to boundary
+    kappa = 0#1e-3 # Relaxing the psd-condition a little bit to come closer to boundary
     padding_op = tt_reshape(tt_padding_op(2 * n), (4, 4))
     padding_op_bias = [(1+kappa)*E(1, 1)] + tt_identity(2 * n)
 
@@ -203,7 +195,7 @@ def create_problem(n, max_rank):
     # ---
     # Inequality Operator
     # X
-    ineq_mask = [E(0, 0)] + tt_sub(tt_one_matrix(n), tt_identity(n)) + tt_one_matrix(n) #tt_one_matrix(2*n)
+    ineq_mask = [E(0, 0)] + tt_sub(tt_one_matrix(n), tt_identity(n)) + tt_sub(tt_one_matrix(n), tt_identity(n)) #tt_one_matrix(2*n)
 
     # ---
 
@@ -222,16 +214,16 @@ def create_problem(n, max_rank):
                     [E(0, 0)] + [E(0, 0) for _ in range(n)] + tt_identity(n),
                     # 6.1
                     [E(0, 0)] + tt_identity(n) + tt_sub(tt_one_matrix(n), tt_identity(n)),  # 6.2
-                    [E(0, 0)] + tt_sub(
-                        tt_one_matrix(n) + [E(1, 1) for _ in range(n)],
-                        [E(0, 0) for _ in range(n)] + [E(1, 1) for _ in range(n)]),  # 5
-                    [E(0, 0)] + [E(1, 0) for _ in range(n)] + [E(0, 0) for _ in range(n)]  # 4
+                    [E(0, 0)] + tt_sub(tt_one_matrix(n), tt_identity(n))  + [E(1, 0) for _ in range(n)],  # 5.1
+                    [E(0, 0)] + tt_sub(tt_identity(n), [E(0, 0) for _ in range(n)]) + [E(1, 1) for _ in range(n)],  # 5.2
+                    [E(0, 0)] + tt_sub(tt_one_matrix(n), tt_identity(n)) + tt_identity(n)  # 4
 
                 )
             )
         ))),
         "t": tt_rank_reduce(tt_diag(tt_split_bonds(tt_sub(tt_one_matrix(2 * n + 1), ineq_mask))))
     }
+
     return C_tt, L_op_tt, eq_bias_tt, ineq_mask, lag_maps
 
 if __name__ == "__main__":
@@ -302,6 +294,3 @@ if __name__ == "__main__":
         print(f"Peak memory avg {np.mean(memory):.3f} MB", flush=True)
     print(f"Complementary Slackness avg: {np.mean(complementary_slackness)}", flush=True)
     print(f"Total feasibility error avg: {np.mean(feasibility_errors)}", flush=True)
-    print(tt_matrix_to_matrix(X_tt))
-    print(tt_matrix_to_matrix(tt_reshape(Y_tt, (2, 2))))
-    print(tt_norm(X_tt), tt_norm(Y_tt), tt_norm(T_tt), tt_norm(Z_tt))

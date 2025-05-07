@@ -101,6 +101,3 @@ if __name__ == "__main__":
         print(f"Peak memory avg {np.mean(memory):.3f} MB", flush=True)
     print(f"Complementary Slackness avg: {np.mean(complementary_slackness)}", flush=True)
     print(f"Total feasibility error avg: {np.mean(feasibility_errors)}", flush=True)
-    print(tt_trace(X_tt), tt_trace(Z_tt))
-    print(tt_matrix_to_matrix(X_tt))
-    print(tt_inner_prod(tt_reshape(G_tt, (2, 2)), X_tt))
