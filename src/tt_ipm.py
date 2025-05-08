@@ -8,7 +8,7 @@ sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
 from src.tt_amen import tt_block_mals, _block_local_product, cached_einsum, tt_amen
-from src.tt_ineq_check import tt_pd_optimal_step_size, tt_ineq_optimal_step_size
+from src.tt_eigen import tt_max_generalised_eigen, tt_min_eig
 from dataclasses import dataclass
 
 def forward_backward_sub(L, b, overwrite_b=False):
@@ -84,7 +84,6 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
     block_res_new = np.linalg.norm(_block_local_product(XAX_k, block_A_k, XAX_k1, solution_now).__isub__(rhs)) / norm_rhs
 
     if block_res_old < block_res_new:
-        print("Triggered!!!!")
         solution_now = previous_solution
 
     return solution_now, block_res_old, min(block_res_new, block_res_old), rhs, norm_rhs
@@ -228,9 +227,12 @@ def tt_infeasible_newton_system(
     status.is_primal_feasible = status.primal_error < status.feasibility_tol
 
     # Check dual feasibility and compute residual
-    dual_feas = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(lin_op_tt_adj, Y_tt, status.eps), tt_rank_reduce(tt_add(tt_reshape(Z_tt, (4, )), obj_tt), status.eps)), status.eps if status.with_ineq else status.op_tol, rank_weighted_error=not status.with_ineq)
+    dual_feas = tt_reshape(_tt_symmetrise(tt_reshape(tt_fast_matrix_vec_mul(lin_op_tt_adj, Y_tt, status.eps),  (2, 2)), status.eps), (4, ))
+    dual_feas = tt_rank_reduce(tt_sub(dual_feas, tt_rank_reduce(tt_add(tt_reshape(Z_tt, (4, )), obj_tt), status.eps)), status.eps if status.with_ineq else status.op_tol, rank_weighted_error=not status.with_ineq)
     if status.with_ineq:
         dual_feas = tt_rank_reduce(tt_sub(dual_feas, tt_reshape(T_tt, (4, ))), status.op_tol, rank_weighted_error=True)
+    # We symmetrise the the dual_feas because we cannot map the swek-symmetirc parts to zero without blowing up the ranks of Y_tt
+    dual_feas = tt_reshape(_tt_symmetrise(tt_reshape(dual_feas, (2, 2)), status.eps), (4, )) # TODO: Make this line more efficient
     status.dual_error = tt_norm(dual_feas) / status.dual_error_normalisation
     status.is_dual_feasible = status.dual_error < 2*status.feasibility_tol
 
@@ -241,6 +243,7 @@ def tt_infeasible_newton_system(
 
     if not status.is_dual_feasible or status.is_last_iter:
         rhs[1] = dual_feas
+        #print(tt_matrix_to_matrix(tt_reshape(Y_tt, (2, 2))))
 
     if not status.is_central or status.is_last_iter:
         if status.aho_direction:
@@ -249,7 +252,6 @@ def tt_infeasible_newton_system(
             rhs[2] = tt_reshape(tt_scale(-1, tt_rank_reduce(tt_fast_mat_mat_mul(Z_tt, X_tt, status.eps), eps=status.op_tol, rank_weighted_error=True)), (4,))
 
     if status.with_ineq:
-        # TODO: There might be room to optimise the tt_diag(tt_split_bonds(.))-expression
         lhs[(3, 1)] =  tt_diag_op(T_tt, status.op_tol, rank_weighted_error=True)
         masked_X_tt = tt_rank_reduce(tt_add(tt_scale(status.boundary_val, ineq_mask), tt_fast_hadammard(ineq_mask, X_tt, status.eps)), eps=status.eps)
         lhs[(3, 3)] = tt_rank_reduce(tt_add(status.lag_map_t, tt_diag_op(masked_X_tt, status.eps)), eps=status.op_tol, rank_weighted_error=True)
@@ -397,8 +399,8 @@ def _tt_line_search(
         permitted_err_x = 1
         permitted_err_z = 1
     else:
-        x_step_size, permitted_err_x = tt_pd_optimal_step_size(X_tt, Delta_X_tt, status.op_tol, tol=status.eps)
-        z_step_size, permitted_err_z = tt_pd_optimal_step_size(Z_tt, Delta_Z_tt, status.op_tol, tol=status.eps)
+        x_step_size, permitted_err_x = tt_max_generalised_eigen(X_tt, Delta_X_tt, status.op_tol, tol=status.eps)
+        z_step_size, permitted_err_z = tt_max_generalised_eigen(Z_tt, Delta_Z_tt, status.op_tol, tol=status.eps)
     if status.with_ineq and not status.is_last_iter:
         x_step_size, z_step_size, permitted_err_ineq = _tt_line_search_ineq(x_step_size, z_step_size, X_tt, T_tt, Delta_X_tt, Delta_T_tt, ineq_mask, status)
         permitted_err_x = min(permitted_err_x, permitted_err_ineq[0])
@@ -408,43 +410,54 @@ def _tt_line_search(
     return tau_x*x_step_size, tau_z*z_step_size, (permitted_err_x, permitted_err_z)
 
 
+def _ineq_step_size(A_tt, Delta_tt, status):
+    sum_tt = tt_add(A_tt, Delta_tt)
+    if status.compl_ineq_mask:
+        sum_tt = tt_add(sum_tt, tt_scale(tt_entrywise_sum(sum_tt)/status.num_ineq_constraints, status.compl_ineq_mask))
+    sum_tt = tt_rank_reduce(sum_tt, status.eps, rank_weighted_error=True)
+    e_tt, min_eval = tt_min_eig(tt_diag_op(sum_tt, status.eps), verbose=True)
+    e_tt = tt_reshape(tt_normalise(tt_fast_hadammard(e_tt, e_tt, status.eps)), (2, 2))
+    min_A_val = tt_inner_prod(A_tt, e_tt)
+    min_Delta_val = tt_inner_prod(Delta_tt, e_tt)
+    if min_Delta_val > 0:
+        step_size = 1
+    else:
+        step_size = np.clip(-(1-status.op_tol)*min_A_val/min_Delta_val, a_min=0, a_max=1)
+    A = tt_matrix_to_matrix(A_tt) + tt_matrix_to_matrix(status.compl_ineq_mask)
+    B = tt_matrix_to_matrix(Delta_tt) + tt_matrix_to_matrix(status.compl_ineq_mask)
+    true_step_size = -abs(A) / B
+    if np.min(A) > 0 and np.min(B) > 0:
+        true_step_size = 1
+    else:
+        true_step_size = min(max(np.min(true_step_size[true_step_size >= 0]), 0), 1)
+    if step_size < true_step_size-0.05:
+        print(tt_matrix_to_matrix(sum_tt))
+    print()
+    print("Step_size!!!: ", step_size, true_step_size, np.min(A))
+    print()
+    permitted_error = min_A_val + step_size*min_Delta_val
+    return step_size, permitted_error
+
+
 def _tt_line_search_ineq(x_step_size, z_step_size, X_tt, T_tt, Delta_X_tt, Delta_T_tt, ineq_mask, status):
     if x_step_size > 0:
-        degeneracy_helper = tt_scale(status.boundary_val, tt_one_matrix(len(X_tt)))
-        masked_X_tt = tt_rank_reduce(tt_add(tt_fast_hadammard(ineq_mask, X_tt, status.eps), tt_scale(0.9, degeneracy_helper)), status.op_tol, rank_weighted_error=True)
-        masked_Delta_X_tt = tt_rank_reduce(
-            tt_add(
-                tt_scale(x_step_size, tt_fast_hadammard(ineq_mask, Delta_X_tt, status.eps)),
-                tt_scale(0.1, degeneracy_helper)
-            ),
-            status.op_tol,
-            rank_weighted_error=True
-        )
-        x_ineq_step_size, permitted_error_x = tt_ineq_optimal_step_size(
-            tt_diag_op(masked_X_tt, status.eps),
-            tt_diag_op(masked_Delta_X_tt, status.eps),
-            status.op_tol, verbose=status.verbose
+        masked_X_tt = tt_fast_hadammard(ineq_mask, X_tt, status.eps)
+        masked_Delta_X_tt = tt_fast_hadammard(ineq_mask, Delta_X_tt, status.eps)
+        x_ineq_step_size, permitted_error_x = _ineq_step_size(
+            tt_add(masked_X_tt, tt_scale(status.boundary_val, ineq_mask)),
+            tt_scale(x_step_size, masked_Delta_X_tt),
+            status
         )
         x_step_size *= x_ineq_step_size
 
     if z_step_size > 0:
-        # FIXME
-        # TODO: T_tt becomes negative
-        # FIXME
-        print()
-        print("Panic!!!!!!!!!", np.min(tt_matrix_to_matrix(T_tt)))
-        masked_T_tt = tt_rank_reduce(tt_add(T_tt, status.compl_ineq_mask), status.op_tol, rank_weighted_error=True)
-        masked_Delta_T_tt = tt_rank_reduce(
-            tt_add(tt_scale(z_step_size, Delta_T_tt), status.compl_ineq_mask),
-            status.op_tol,
-            rank_weighted_error=True
-        )
-        t_step_size, permitted_error_t = tt_ineq_optimal_step_size(
-            tt_diag_op(masked_T_tt, status.op_tol),
-            tt_diag_op(masked_Delta_T_tt, status.op_tol),
-            status.op_tol, verbose=status.verbose
+        t_step_size, permitted_error_t = _ineq_step_size(
+            T_tt,
+            tt_scale(z_step_size, Delta_T_tt),
+            status
         )
         z_step_size *= t_step_size
+        print("Permitted_error_t: ", permitted_error_t)
 
     return x_step_size, z_step_size, (permitted_error_x, permitted_error_t)
 
@@ -463,29 +476,26 @@ def _update(x_step_size, z_step_size, X_tt, Z_tt, Delta_X_tt, Delta_Z_tt, op_tol
 def _initialise(obj_tt, lin_op_tt, bias_tt, ineq_mask, status, dim):
     lin_op_tt_T = tt_transpose(lin_op_tt)
     A = tt_rank_reduce(tt_add(tt_fast_mat_mat_mul(lin_op_tt, lin_op_tt_T, status.eps), tt_fast_mat_mat_mul(tt_transpose(status.lag_map_y), status.lag_map_y, status.eps)), eps=status.op_tol, rank_weighted_error=True)
-    Y_tt, _ = tt_amen(A, obj_tt)
+    Y_tt, _ = tt_amen(A, obj_tt, nswp=5)
     Y_tt = tt_rank_reduce(tt_sub(Y_tt, tt_fast_matrix_vec_mul(status.lag_map_y, Y_tt, status.eps)), eps=status.op_tol, rank_weighted_error=True)
     res_tt = tt_reshape(tt_rank_reduce(tt_sub(obj_tt, tt_fast_matrix_vec_mul(lin_op_tt, Y_tt, status.eps)), eps=status.op_tol, rank_weighted_error=True), (2, 2))
     T_tt = None
     if status.with_ineq:
         res_tt = tt_rank_reduce(tt_sub(res_tt, ineq_mask), eps=status.op_tol, rank_weighted_error=True)
         masked_res_tt = tt_fast_hadammard(ineq_mask, res_tt, status.eps)
-        masked_res_tt_prime = tt_rank_reduce(tt_add(masked_res_tt, status.compl_ineq_mask), eps=status.op_tol,
-                                             rank_weighted_error=True)
-        t_step_size, permitted_err_t = tt_ineq_optimal_step_size(
-            [np.eye(4).reshape(1, 4, 4, 1) for _ in range(dim)],
-            tt_diag_op(masked_res_tt_prime, status.op_tol),
-            status.op_tol, verbose=status.verbose
+        t_step_size, permitted_err_t = _ineq_step_size(
+            ineq_mask,
+            masked_res_tt,
+            status
         )
-        tau_t = 0.95
-        T_tt = tt_rank_reduce(tt_add(ineq_mask, tt_scale(tau_t * t_step_size, masked_res_tt)), eps=0.1 * status.op_tol,
+        T_tt = tt_rank_reduce(tt_add(ineq_mask, tt_scale(0.9 * t_step_size, masked_res_tt)), eps=0.1 * status.op_tol,
                               rank_weighted_error=True)
         res_tt = tt_rank_reduce(tt_sub(res_tt, T_tt), eps=status.op_tol, rank_weighted_error=True)
         #print(tt_matrix_to_matrix(T_tt))
 
     Z_tt = tt_identity(dim)
     res_tt = tt_rank_reduce(tt_sub(res_tt, Z_tt), eps=status.op_tol, rank_weighted_error=True)
-    z_step_size, permitted_err_z = tt_pd_optimal_step_size(Z_tt, res_tt, status.op_tol, tol=status.eps)
+    z_step_size, permitted_err_z = tt_max_generalised_eigen(Z_tt, res_tt, status.op_tol, tol=status.eps)
     tau_z = 0.95 + 0.05 * (permitted_err_z >= status.op_tol or z_step_size == 1)
     Z_tt = tt_rank_reduce(tt_add(Z_tt, tt_scale(tau_z*z_step_size, res_tt)), eps=status.op_tol, rank_weighted_error=True)
     x_initial_step = tt_norm(bias_tt) / tt_norm(tt_diagonal(lin_op_tt))
@@ -670,6 +680,9 @@ def tt_ipm(
         if status.with_ineq:
             T_tt = tt_rank_reduce(tt_add(T_tt, tt_scale(z_step_size, Delta_T_tt)), eps=0.1*op_tol, rank_weighted_error=True)
             #T_tt = tt_rank_reduce(tt_add(T_tt, tt_scale(op_tol, ineq_mask)), eps=0.1*op_tol, rank_weighted_error=True)
+            print()
+            print("min val: ", np.min(tt_matrix_to_matrix(T_tt)))
+            print()
         if status.is_last_iter:
             finishing_steps -= 1
 

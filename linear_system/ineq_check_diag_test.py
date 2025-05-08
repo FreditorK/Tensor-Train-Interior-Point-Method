@@ -2,7 +2,7 @@ import sys
 import os
 
 sys.path.append(os.getcwd() + '/../')
-from src.tt_ineq_check import *
+from src.tt_eigen import *
 
 np.random.seed(4)
 np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=6, suppress=True)

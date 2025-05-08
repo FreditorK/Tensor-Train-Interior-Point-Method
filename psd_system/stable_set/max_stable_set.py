@@ -2,6 +2,7 @@ import copy
 import sys
 import os
 
+import numpy as np
 import yaml
 import argparse
 import tracemalloc
@@ -62,12 +63,11 @@ if __name__ == "__main__":
             tr_bias_tt = [E(0, 0) for _ in range(config["dim"])]
             J_tt = tt_obj_matrix(config["dim"])
             lag_maps = {
-                "y": tt_rank_reduce(tt_diag(tt_split_bonds(tt_sub(tt_one_matrix(config["dim"]), tt_add(G, tr_bias_tt)))))
+                "y": tt_rank_reduce(tt_diag_op(tt_sub(tt_one_matrix(config["dim"]), tt_add(G, tr_bias_tt))))
             }
             L_tt = tt_rank_reduce(tt_add(G_entry_tt_op, tr_tt_op))
             bias_tt = tr_bias_tt
 
-            lag_maps = {key: tt_reshape(value, (4, 4)) for key, value in lag_maps.items()}
             J_tt = tt_reshape(J_tt, (4,))
             L_tt = tt_reshape(L_tt, (4, 4))
             bias_tt = tt_reshape(bias_tt, (4,))
@@ -114,3 +114,4 @@ if __name__ == "__main__":
             print(f"Peak memory avg {np.mean(memory):.3f} MB", flush=True)
         print(f"Complementary Slackness avg: {np.mean(complementary_slackness)}", flush=True)
         print(f"Total feasibility error  avg: {np.mean(feasibility_errors)}", flush=True)
+        print(tt_matrix_to_matrix(X_tt))

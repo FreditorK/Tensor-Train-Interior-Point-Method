@@ -9,7 +9,7 @@ import scipy
 sys.path.append(os.getcwd() + '/../')
 from src.tt_ops import *
 from src.tt_ops import tt_rank_reduce, _tt_generalised_nystroem, tt_random_gaussian
-from src.tt_ineq_check import tt_pd_optimal_step_size
+from src.tt_eigen import tt_max_generalised_eigen
 from src.tt_eig import tt_min_eig, tt_max_eig
 
 np.random.seed(4) # 9

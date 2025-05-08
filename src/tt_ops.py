@@ -484,7 +484,7 @@ def tt_random_graph(dim, max_rank, eps=1e-9):
         new_graph = tt_random_rank_one(dim)
         masked_new_graph = tt_fast_hadammard(tt_sub(mask_matrix, graph), new_graph, eps)
         graph = tt_rank_reduce(tt_add(graph, masked_new_graph), eps)
-        rank = np.max(tt_ranks(graph)) - (tt_inner_prod(graph,  graph) == 0)
+        rank = np.max(tt_ranks(graph)) - (tt_inner_prod(graph,  graph) < eps)
     return graph
 
 
