@@ -230,7 +230,7 @@ def create_problem(n, max_rank):
     return C_tt, L_op_tt, eq_bias_tt, ineq_mask, lag_maps
 
 if __name__ == "__main__":
-    np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=2, suppress=True)
+    np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=4, suppress=True)
     parser = argparse.ArgumentParser(description="Script with optional memory tracking.")
     parser.add_argument("--track_mem", action="store_true", help="Enable memory tracking from a certain point.")
     parser.add_argument("--config", type=str, required=True, help="Path to the YAML configuration file")
@@ -296,4 +296,3 @@ if __name__ == "__main__":
         print(f"Peak memory avg {np.mean(memory):.3f} MB", flush=True)
     print(f"Complementary Slackness avg: {np.mean(complementary_slackness)}", flush=True)
     print(f"Total feasibility error avg: {np.mean(feasibility_errors)}", flush=True)
-    print(tt_matrix_to_matrix(X_tt))

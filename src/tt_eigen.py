@@ -182,8 +182,6 @@ def tt_max_generalised_eigen(A, Delta, op_tol, x0=None, kick_rank=None, nswp=10,
 
 
 def tt_min_eig(A, x0=None, kick_rank=None, nswp=10, tol=1e-12, verbose=False):
-    print("Min Eig")
-    print(np.min(tt_vec_to_vec(tt_diagonal(A)).flatten()))
     if verbose:
         print(f"Starting Eigen solve with:\n \t {tol} \n \t sweeps: {nswp}")
         t0 = time.time()
@@ -288,7 +286,6 @@ def tt_min_eig(A, x0=None, kick_rank=None, nswp=10, tol=1e-12, verbose=False):
         print('\t Time per sweep: ', (time.time() - t0) / (swp + 1))
 
     min_eig_value = tt_inner_prod(x_cores, tt_fast_matrix_vec_mul(A, x_cores, tol))
-    print(np.max(tt_vec_to_vec(x_cores).flatten()), np.min(tt_vec_to_vec(x_cores).flatten()))
     return x_cores, min_eig_value
 
 

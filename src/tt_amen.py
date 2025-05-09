@@ -482,7 +482,7 @@ def tt_block_mals(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, local_solv
     else:
         if len(x0[0].shape) > len(x0[-1].shape):
             direction *= -1
-        x_cores = x0
+        x_cores = tt_rank_retraction(x0, [2]*(len(x0)-1))
 
     if verbose:
         t0 = time.time()
@@ -503,8 +503,8 @@ def tt_block_mals(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, local_solv
     normx = np.ones((d - 1))
     real_tol = (tol / np.sqrt(d))
     r_max_final = block_size*int(np.sqrt(d)*d) + block_size
-    size_limit = 0.1*r_max_final*N[0]*r_max_final
-    r_max_part = max(int(r_max_final // (nswp-1)), np.max(tt_ranks(x_cores)))
+    size_limit = (r_max_final/d)**2*N[0]
+    r_max_part = max(int(r_max_final // (nswp-1)), 2)
 
     for swp in range(nswp):
         r_max = min((swp+1)*r_max_part, r_max_final)
