@@ -34,15 +34,23 @@ def tt_partial_J_trace_op(block_size, dim):
         core[:, 1] = c
         block_op_0.append(core)
     op_tt_0 = tt_diag(tt_split_bonds(matrix_tt)) + block_op_0
-    # 4.10
-    matrix_tt = tt_sub(tt_one_matrix(dim-block_size), tt_identity(dim-block_size))
+    # 4.10.1
+    matrix_tt = tt_sub(tt_triu_one_matrix(dim-block_size), tt_identity(dim-block_size))
     block_op_1 = []
     for i, c in enumerate(tt_split_bonds(tt_sub(tt_one_matrix(block_size), tt_identity(block_size)))):
         core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
         core[:, (i+1) % 2] = c
         block_op_1.append(core)
     op_tt_1 = tt_diag(tt_split_bonds(matrix_tt)) + block_op_1
-    return tt_reshape(tt_rank_reduce(Q_PREFIX + tt_sum(op_tt_0, op_tt_1)), (4, 4))
+    # 4.10.2
+    matrix_tt = tt_sub(tt_tril_one_matrix(dim - block_size), tt_identity(dim - block_size))
+    block_op_2 = []
+    for i, c in enumerate(tt_split_bonds(tt_sub(tt_one_matrix(block_size), tt_identity(block_size)))):
+        core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
+        core[:, i % 2] = c
+        block_op_2.append(core)
+    op_tt_2 = tt_diag(tt_split_bonds(matrix_tt)) + block_op_2
+    return tt_reshape(tt_rank_reduce(Q_PREFIX + tt_sum(op_tt_0, op_tt_1, op_tt_2)), (4, 4))
 
 # ------------------------------------------------------------------------------
 # Constraint 6 -----------------------------------------------------------------
@@ -136,10 +144,10 @@ def tt_obj_matrix(rank, dim):
         [ 6  6  | 4  0  | 7 | 0 0 0]
         [ 6  6  | 5  4  | 7 | 0 0 0]
         [--------------------------]
-        [ 4  0  | 0  6  | 7 | 0 0 0]
-        [ 5  4  | 6  5  | 7 | 0 0 0]
+        [ 4  5  | 0  6  | 7 | 0 0 0]
+        [ 0  4  | 6  5  | 7 | 0 0 0]
     Y = [--------------------------]
-        [ 0  0  | 0  0  | P | 0 0 0]
+        [ 7  7  | 7  7  | P | 0 0 0]
         [--------------------------]
         [ 0  0  | 0  0  | 0 | P 0 0]
         [ 0  0  | 0  0  | 0 | 0 P 0]
@@ -163,9 +171,9 @@ def create_problem(n, max_rank):
     # ---
     # V
     partial_tr_J_op = tt_partial_J_trace_op(n, 2 * n)
-    partial_tr_J_op_bias = [E(0, 0)] + tt_sub(tt_one_matrix(n), tt_identity(n)) + [E(1, 0) for _ in range(n)]
+    partial_tr_J_op_bias = [E(0, 0)] + tt_sub(tt_tril_one_matrix(n), tt_identity(n)) + [E(0, 1) for _ in range(n)]
+    partial_tr_J_op_bias = tt_add(partial_tr_J_op_bias, [E(0, 0)] + tt_sub(tt_triu_one_matrix(n), tt_identity(n)) + [E(1, 0) for _ in range(n)])
     partial_tr_J_op_bias = tt_rank_reduce(tt_add(partial_tr_J_op_bias, [E(0, 0)] + tt_sub(tt_identity(n), [E(0, 0) for _ in range(n)]) + [E(1, 1) for _ in range(n)]))
-
 
     L_op_tt = tt_rank_reduce(tt_add(L_op_tt, partial_tr_J_op))
     eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, partial_tr_J_op_bias))
@@ -217,8 +225,7 @@ def create_problem(n, max_rank):
                     [E(0, 0)] + [E(0, 0) for _ in range(n)] + tt_identity(n),
                     # 6.1
                     [E(0, 0)] + tt_identity(n) + tt_sub(tt_one_matrix(n), tt_identity(n)),  # 6.2
-                    [E(0, 0)] + tt_sub(tt_one_matrix(n), tt_identity(n))  + [E(1, 0) for _ in range(n)],  # 5.1
-                    [E(0, 0)] + tt_sub(tt_identity(n), [E(0, 0) for _ in range(n)]) + [E(1, 1) for _ in range(n)],  # 5.2
+                    partial_tr_J_op_bias,  # 5
                     [E(0, 0)] + tt_sub(tt_one_matrix(n), tt_identity(n)) + tt_identity(n)  # 4
 
                 )
@@ -296,3 +303,4 @@ if __name__ == "__main__":
         print(f"Peak memory avg {np.mean(memory):.3f} MB", flush=True)
     print(f"Complementary Slackness avg: {np.mean(complementary_slackness)}", flush=True)
     print(f"Total feasibility error avg: {np.mean(feasibility_errors)}", flush=True)
+    print(tt_matrix_to_matrix(X_tt))

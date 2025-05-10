@@ -2,7 +2,6 @@ import scipy as scp
 
 from src.ops import *
 from cy_src.tt_ops_cy import *
-from opt_einsum import contract as einsum
 from functools import reduce
 from functools import lru_cache
 from opt_einsum import contract_expression
@@ -140,8 +139,8 @@ def tt_rank_reduce(train_tt: List[np.array], eps=1e-18, rank_weighted_error=Fals
         idx_shape = tt_core.shape
         next_idx_shape = train_tt[idx + 1].shape
         u, s, v_t = scp.linalg.svd(
-            train_tt[idx].reshape(rank * np.prod(idx_shape[1:len(idx_shape) - 1], dtype=int), -1)
-            , full_matrices=False,
+            train_tt[idx].reshape(rank * np.prod(idx_shape[1:len(idx_shape) - 1], dtype=int), -1),
+            full_matrices=False,
             check_finite=False,
             overwrite_a=True
         )
@@ -207,7 +206,8 @@ def tt_entry(train_tt: List[np.array], indices: List[int]) -> np.array:
     """
     return np.sum(
         np.linalg.multi_dot(
-            [core[tuple([slice(None)] + [i] * (len(core.shape) - 2))] for i, core in zip(indices, train_tt)]))
+            [core[tuple([slice(None)] + [i] * (len(core.shape) - 2))] for i, core in zip(indices, train_tt)])
+    )
 
 
 def _block_diag_tensor(tensor_1: np.array, tensor_2: np.array) -> np.array:
@@ -398,7 +398,7 @@ def tt_split_bonds(matrix_tt):
 
 
 def tt_merge_bonds(vec_tt):
-    return [einsum("abc, cde -> abde", c_1, c_2, optimize=True) for c_1, c_2 in zip(vec_tt[:-1:2], vec_tt[1::2])]
+    return [cached_einsum("abc, cde -> abde", c_1, c_2) for c_1, c_2 in zip(vec_tt[:-1:2], vec_tt[1::2])]
 
 
 def _tt_generalised_nystroem(tt_train, tt_gaussian_1, tt_gaussian_2):
@@ -439,7 +439,7 @@ def tt_norm(train_tt):
 
 def tt_diag(vec_tt, eps=1e-18):
     identity = np.eye(vec_tt[0].shape[1])
-    basis = [einsum("ij, rjR -> rijR", identity, c, optimize="greedy") for c in vec_tt]
+    basis = [cached_einsum("ij, rjR -> rijR", identity, c) for c in vec_tt]
     return tt_rank_reduce(basis, eps)
 
 def tt_diagonal(matrix_tt):
@@ -517,5 +517,25 @@ def tt_MkronI(matrix_tt):
 
 def tt_diag_op(matrix_tt, eps=1e-18, rank_weighted_error=False):
     identity = np.eye(matrix_tt[0].shape[1]*matrix_tt[0].shape[2])
-    basis = [einsum("ij, rjR -> rijR", identity, c.reshape(c.shape[0], c.shape[1]*c.shape[2], c.shape[3]), optimize="greedy") for c in matrix_tt]
+    basis = [cached_einsum("ij, rjR -> rijR", identity, c.reshape(c.shape[0], c.shape[1]*c.shape[2], c.shape[3])) for c in matrix_tt]
     return tt_rank_reduce(basis, eps, rank_weighted_error)
+
+def tt_tril_one_matrix(dim):
+    if dim == 1:
+        return np.array([[1, 0], [1, 1]]).reshape(1, 2, 2, 1)
+    all_one = np.ones((1, 2, 2, 1))
+    all_zeros = np.zeros((1, 2, 2, 1))
+    return ([np.concatenate((E(1, 0), E(0, 0) + E(1, 1)), axis=-1)]
+            + [np.concatenate((np.concatenate((all_one, E(1, 0)), axis=0), np.concatenate((all_zeros, E(0, 0) + E(1, 1)), axis=0)), axis=-1) for _ in range(dim-2)]
+            + [np.concatenate((all_one, E(1, 0) + E(0, 0) + E(1, 1)), axis=0)]
+    )
+
+def tt_triu_one_matrix(dim):
+    if dim == 1:
+        return np.array([[1, 1], [0, 1]]).reshape(1, 2, 2, 1)
+    all_one = np.ones((1, 2, 2, 1))
+    all_zeros = np.zeros((1, 2, 2, 1))
+    return ([np.concatenate((E(0, 1), E(0, 0) + E(1, 1)), axis=-1)]
+            + [np.concatenate((np.concatenate((all_one, E(0, 1)), axis=0), np.concatenate((all_zeros, E(0, 0) + E(1, 1)), axis=0)), axis=-1) for _ in range(dim-2)]
+            + [np.concatenate((all_one, E(0, 1) + E(0, 0) + E(1, 1)), axis=0)]
+    )

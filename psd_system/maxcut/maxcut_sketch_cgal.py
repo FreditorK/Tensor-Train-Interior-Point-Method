@@ -9,6 +9,7 @@ sys.path.append(os.getcwd() + '/../../')
 import time
 from src.tt_ops import *
 from src.baselines import *
+from .maxcut import tt_obj_matrix
 
 
 if __name__ == "__main__":
@@ -30,7 +31,7 @@ if __name__ == "__main__":
         np.random.seed(seed)
         t0 = time.time()
         G = tt_rank_reduce(tt_random_graph(config["dim"], config["max_rank"]))
-        C = np.round(tt_matrix_to_matrix(G), decimals=1)
+        C = tt_matrix_to_matrix(tt_obj_matrix(config["max_rank"], config["dim"]))
         t1 = time.time()
         constraint_matrices = [np.outer(column, column) for column in np.eye(C.shape[0])]
         bias = np.ones((C.shape[0], 1))

@@ -3,8 +3,6 @@ import sys
 import os
 import time
 
-import scipy.sparse.linalg
-
 sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
@@ -108,7 +106,7 @@ def tt_max_generalised_eigen(A, Delta, op_tol, x0=None, kick_rank=None, nswp=10,
                     u = u[:, :r]
                     v = v[:r]
                 x_cores[k] = np.reshape(u.T, (r, N[k], rx[k + 1]))
-                x_cores[k - 1] = einsum('rdc,cR->rdR', x_cores[k - 1], v.T, optimize="greedy")
+                x_cores[k - 1] = cached_einsum('rdc,cR->rdR', x_cores[k - 1], v.T)
                 rx[k] = r
 
                 XAX[k] = _compute_phi_bck_A(XAX[k + 1], x_cores[k], A[k], x_cores[k])
@@ -127,7 +125,7 @@ def tt_max_generalised_eigen(A, Delta, op_tol, x0=None, kick_rank=None, nswp=10,
         if max_res < tol or swp == nswp - 1:
             last = True
         if verbose:
-            print('Starting Sweep:\n\tMax num of sweeps: %d' % swp)
+            print('\tStarting Sweep:\n\tMax num of sweeps: %d' % swp)
             print(f"\tDirection: {-1}")
             print(f'\tResidual {max_res}')
             print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
@@ -147,7 +145,7 @@ def tt_max_generalised_eigen(A, Delta, op_tol, x0=None, kick_rank=None, nswp=10,
                     u = u[:, :r]
                     v = v[:r, :]
                 x_cores[k] = u.reshape(rx[k], N[k], r)
-                x_cores[k + 1] = einsum('ij,jkl->ikl', v, x_cores[k + 1], optimize="greedy").reshape(r, N[k + 1], rx[k + 2])
+                x_cores[k + 1] = cached_einsum('ij,jkl->ikl', v, x_cores[k + 1]).reshape(r, N[k + 1], rx[k + 2])
                 rx[k + 1] = r
                 XAX[k + 1] = compute_phi_fwd_A(XAX[k], x_cores[k], A[k], x_cores[k])
                 XDX[k + 1] = compute_phi_fwd_A(XDX[k], x_cores[k], Delta[k], x_cores[k])
@@ -164,7 +162,7 @@ def tt_max_generalised_eigen(A, Delta, op_tol, x0=None, kick_rank=None, nswp=10,
         if max_res < tol:
             last = True
         if verbose:
-            print('Starting Sweep:\n\tMax num of sweeps: %d' % swp)
+            print('\tStarting Sweep:\n\tMax num of sweeps: %d' % swp)
             print(f"\tDirection: {1}")
             print(f'\tResidual {max_res}')
             print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
@@ -221,7 +219,7 @@ def tt_min_eig(A, x0=None, kick_rank=None, nswp=10, tol=1e-12, verbose=False):
                     u = u[:, :r]
                     v = v[:r]
                 x_cores[k] = np.reshape(u.T, (r, N[k], rx[k + 1]))
-                x_cores[k - 1] = einsum('rdc,cR->rdR', x_cores[k - 1], v.T, optimize="greedy")
+                x_cores[k - 1] = cached_einsum('rdc,cR->rdR', x_cores[k - 1], v.T)
                 rx[k] = r
 
                 XAX[k] = _compute_phi_bck_A(XAX[k + 1], x_cores[k], A[k], x_cores[k])
@@ -237,7 +235,7 @@ def tt_min_eig(A, x0=None, kick_rank=None, nswp=10, tol=1e-12, verbose=False):
         if max_res < tol or swp == nswp - 1:
             last = True
         if verbose:
-            print('Starting Sweep:\n\tMax num of sweeps: %d' % swp)
+            print('\tStarting Sweep:\n\tMax num of sweeps: %d' % swp)
             print(f"\tDirection: {-1}")
             print(f'\tResidual {max_res}')
             print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
@@ -257,7 +255,7 @@ def tt_min_eig(A, x0=None, kick_rank=None, nswp=10, tol=1e-12, verbose=False):
                     u = u[:, :r]
                     v = v[:r, :]
                 x_cores[k] = u.reshape(rx[k], N[k], r)
-                x_cores[k + 1] = einsum('ij,jkl->ikl', v, x_cores[k + 1], optimize="greedy").reshape(r, N[k + 1], rx[k + 2])
+                x_cores[k + 1] = cached_einsum('ij,jkl->ikl', v, x_cores[k + 1]).reshape(r, N[k + 1], rx[k + 2])
                 rx[k + 1] = r
                 XAX[k + 1] = compute_phi_fwd_A(XAX[k], x_cores[k], A[k], x_cores[k])
                 norm = np.linalg.norm(XAX[k + 1])
@@ -272,7 +270,7 @@ def tt_min_eig(A, x0=None, kick_rank=None, nswp=10, tol=1e-12, verbose=False):
         if max_res < tol:
             last = True
         if verbose:
-            print('Starting Sweep:\n\tMax num of sweeps: %d' % swp)
+            print('\tStarting Sweep:\n\tMax num of sweeps: %d' % swp)
             print(f"\tDirection: {1}")
             print(f'\tResidual {max_res}')
             print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
@@ -348,8 +346,8 @@ def tt_elementwise_max(vec_tt, val, nswp=4, eps=1e-10, verbose=False):
         for k in range(d):
 
             # solve the local system
-            Bp = einsum("smnS,LSR->smnRL", A[k], XAX[k + 1], optimize=True)
-            B = einsum("lsr,smnRL->lmLrnR", XAX[k], Bp, optimize=True)
+            Bp = cached_einsum("smnS,LSR->smnRL", A[k], XAX[k + 1])
+            B = cached_einsum("lsr,smnRL->lmLrnR", XAX[k], Bp)
             B = np.reshape(B, [rx[k] * N[k] * rx[k + 1], rx[k] * N[k] * rx[k + 1]])
 
             #TODO: Need to normalise x_cores ?
@@ -387,7 +385,7 @@ def tt_elementwise_max(vec_tt, val, nswp=4, eps=1e-10, verbose=False):
 
 
             if k < d - 1:
-                v = einsum('ij,jkl->ikl', v, np.tile(x_cores[k + 1], (b, 1, 1)), optimize=True)
+                v = cached_einsum('ij,jkl->ikl', v, np.tile(x_cores[k + 1], (b, 1, 1)))
 
                 x_cores[k] = np.reshape(u, [rx[k], N[k], r])
                 x_cores[k + 1] = np.reshape(v, [r, N[k + 1], rx[k + 2]])

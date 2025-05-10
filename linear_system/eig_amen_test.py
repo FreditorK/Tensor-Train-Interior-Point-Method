@@ -39,7 +39,5 @@ print(np.min(tt_matrix_to_matrix(s_matrix_tt) + step_size*tt_matrix_to_matrix(s_
 A = tt_matrix_svd(np.tril(np.ones((16, 16)), k=0), err_bound=1e-10)
 print(tt_ranks(A))
 print(tt_matrix_to_matrix(A))
-all_one = np.ones((1, 2, 2, 1))
-conc = lambda a, b, c, d: np.concatenate((np.concatenate((a, b), axis=0), np.concatenate((c, d), axis=0)), axis=-1)
-B = [np.concatenate((E(1, 0), E(0,  0) +  E(1, 1)), axis=-1)] + [conc(all_one, E(1, 0), np.zeros((1, 2, 2, 1)), E(0,  0) +  E(1, 1)) for _ in range(2)] + [np.concatenate((all_one, E(1,  0) + E(0,  0) +  E(1, 1)), axis=0)]
+B = triu_one_matrix(4)
 print(tt_matrix_to_matrix(B))
