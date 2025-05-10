@@ -1,14 +1,10 @@
 import sys
 import os
-import time
-import yaml
-import argparse
-import tracemalloc
 
 sys.path.append(os.getcwd() + '/../../')
 
-from src.tt_ops import *
 from src.baselines import sketchy_cgal
+from max_stable_set import *
 
 
 if __name__ == "__main__":
@@ -41,15 +37,27 @@ if __name__ == "__main__":
         bias = np.zeros((len(adj_matrix) ** 2, 1))
         J = np.ones_like(adj_matrix)
         if args.track_mem:
-            tracemalloc.start()  # Start memory tracking
+            start_mem = memory_usage(max_usage=True)
         t2 = time.time()
-        X, duality_gaps, info = sketchy_cgal(-J, constraint_matrices, bias, (1, 1), feasability_tol=config["feasibility_tol"], duality_tol=config["duality_tol"],
-                                       num_iter=1000 * 2 ** config["dim"], R=config["sketch_cgal_rank"], verbose=config["verbose"])
-        t3 = time.time()
         if args.track_mem:
-            current, peak = tracemalloc.get_traced_memory()
-            tracemalloc.stop()  # Stop tracking after measuring
-            memory.append(peak / 10 ** 6)
+            def wrapper():
+                X, duality_gaps, info = sketchy_cgal(-J, constraint_matrices, bias, (1, 1),
+                                                     feasability_tol=config["feasibility_tol"],
+                                                     duality_tol=config["duality_tol"],
+                                                     num_iter=1000 * 2 ** config["dim"], R=config["sketch_cgal_rank"],
+                                                     verbose=config["verbose"])
+                return X, duality_gaps, info
+
+            res = memory_usage(proc=wrapper, max_usage=True, retval=True)
+            X, duality_gaps, info = res[1]
+            memory.append(res[0] - start_mem)
+        else:
+            X, duality_gaps, info = sketchy_cgal(-C, constraint_matrices, bias, (trace_param, trace_param),
+                                                 feasability_tol=config["feasibility_tol"],
+                                                 duality_tol=config["duality_tol"],
+                                                 num_iter=1000 * 2 ** config["dim"], R=config["sketch_cgal_rank"],
+                                                 verbose=config["verbose"])
+        t3 = time.time()
         problem_creation_times.append(t2 - t1)
         runtimes.append(t3 - t2)
         aux_duality_gap.append(duality_gaps[-1])

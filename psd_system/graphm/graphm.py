@@ -1,7 +1,6 @@
 import sys
 import os
 import yaml
-import tracemalloc
 import argparse
 
 sys.path.append(os.getcwd() + '/../../')
@@ -9,6 +8,7 @@ sys.path.append(os.getcwd() + '/../../')
 from src.tt_ops import *
 from src.tt_ipm import tt_ipm
 import time
+from memory_profiler import memory_usage
 
 
 Q_PREFIX = [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1), np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)]
@@ -262,26 +262,42 @@ if __name__ == "__main__":
         lag_maps = {key: tt_reshape(value, (4, 4)) for key, value in lag_maps.items()}
         C_tt = tt_reshape(C_tt, (4,))
         eq_bias_tt = tt_reshape(eq_bias_tt, (4,))
-        if args.track_mem:
-            tracemalloc.start()
         t2 = time.time()
-        X_tt, Y_tt, T_tt, Z_tt, info = tt_ipm(
-            lag_maps,
-            C_tt,
-            L_op_tt,
-            eq_bias_tt,
-            ineq_mask,
-            max_iter=config["max_iter"],
-            verbose=config["verbose"],
-            feasibility_tol=config["feasibility_tol"],
-            centrality_tol=config["centrality_tol"],
-            op_tol=config["op_tol"]
-        )
-        t3 = time.time()
         if args.track_mem:
-            current, peak = tracemalloc.get_traced_memory()
-            tracemalloc.stop()  # Stop tracking after measuring
-            memory.append(peak / 10 ** 6)
+            start_mem = memory_usage(max_usage=True)
+            def wrapper():
+                X_tt, Y_tt, T_tt, Z_tt, info = tt_ipm(
+                    lag_maps,
+                    C_tt,
+                    L_op_tt,
+                    eq_bias_tt,
+                    ineq_mask,
+                    max_iter=config["max_iter"],
+                    verbose=config["verbose"],
+                    feasibility_tol=config["feasibility_tol"],
+                    centrality_tol=config["centrality_tol"],
+                    op_tol=config["op_tol"]
+                )
+                return X_tt, Y_tt, T_tt, Z_tt, info
+
+            res = memory_usage(proc=wrapper, max_usage=True, retval=True)
+            X_tt, Y_tt, T_tt, Z_tt, info = res[1]
+            memory.append(res[0] - start_mem)
+        else:
+            X_tt, Y_tt, T_tt, Z_tt, info = tt_ipm(
+                lag_maps,
+                C_tt,
+                L_op_tt,
+                eq_bias_tt,
+                ineq_mask,
+                max_iter=config["max_iter"],
+                verbose=config["verbose"],
+                feasibility_tol=config["feasibility_tol"],
+                centrality_tol=config["centrality_tol"],
+                op_tol=config["op_tol"]
+            )
+
+        t3 = time.time()
         problem_creation_times.append(t2 - t1)
         runtimes.append(t3 - t2)
         complementary_slackness.append(abs(tt_inner_prod(X_tt, Z_tt)))
@@ -303,4 +319,3 @@ if __name__ == "__main__":
         print(f"Peak memory avg {np.mean(memory):.3f} MB", flush=True)
     print(f"Complementary Slackness avg: {np.mean(complementary_slackness)}", flush=True)
     print(f"Total feasibility error avg: {np.mean(feasibility_errors)}", flush=True)
-    print(tt_matrix_to_matrix(X_tt))

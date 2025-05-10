@@ -12,6 +12,7 @@ import time
 from src.tt_ops import *
 from src.baselines import *
 import cvxpy as cp
+from memory_profiler import memory_usage
 
 if __name__ == "__main__":
     np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=4, suppress=True)
@@ -31,14 +32,16 @@ if __name__ == "__main__":
         np.random.seed(seed)
         t0 = time.time()
         n = 2**config["dim"]
-        G_A = np.round(tt_matrix_to_matrix(tt_random_graph(config["dim"], config["max_rank"])), decimals=1)
-        G_B = np.round(tt_matrix_to_matrix(tt_random_graph(config["dim"], config["max_rank"])), decimals=1)
+        G_A = tt_matrix_to_matrix(tt_random_graph(config["dim"], config["max_rank"]))
+        G_B = tt_matrix_to_matrix(tt_random_graph(config["dim"], config["max_rank"]))
         t1 = time.time()
         if args.track_mem:
             tracemalloc.start()  # Start memory tracking
         t2 = time.time()
         J_n = np.ones((n, n))
 
+        if args.track_mem:
+            start_mem = memory_usage(max_usage=True)
         # Variables
         Q = cp.Variable((n ** 2, n ** 2), PSD=True)
         P = cp.Variable((n, n))
@@ -89,17 +92,27 @@ if __name__ == "__main__":
         t2 = time.time()
         # Solve the problem
         prob = cp.Problem(objective, constraints)
-        _ = prob.solve(solver=cp.SDPA, epsilonStar=0.1*config["centrality_tol"], epsilonDash=config["feasibility_tol"], verbose=True, numThreads=1)
-        X = QP_mat.value
-        for m in prob.solution.dual_vars.values():
-            if type(m) == np.ndarray:
-                if m.shape == (n**2+1, n**2+1):
-                    Z = m
-        t3 = time.time()
+        _ = prob.solve(solver=cp.SDPA, epsilonStar=1e-5, verbose=True, numThreads=1)
         if args.track_mem:
-            current, peak = tracemalloc.get_traced_memory()
-            tracemalloc.stop()  # Stop tracking after measuring
-            memory.append(peak / 10 ** 6)
+            def wrapper():
+                _ = prob.solve(solver=cp.SDPA, epsilonStar=1e-5, verbose=True, numThreads=1)
+
+            res = memory_usage(proc=wrapper, max_usage=True, retval=True)
+            X = QP_mat.value
+            for m in prob.solution.dual_vars.values():
+                if type(m) == np.ndarray:
+                    if m.shape == (n ** 2 + 1, n ** 2 + 1):
+                        Z = m
+            memory.append(res[0] - start_mem)
+        else:
+            _ = prob.solve(solver=cp.SDPA, epsilonStar=1e-5, verbose=True, numThreads=1)
+            X = QP_mat.value
+            for m in prob.solution.dual_vars.values():
+                if type(m) == np.ndarray:
+                    if m.shape == (n ** 2 + 1, n ** 2 + 1):
+                        Z = m
+
+        t3 = time.time()
         problem_creation_times.append(t2 - t1)
         runtimes.append(t3 - t2)
         complementary_slackness.append(np.trace(X @ Z))
@@ -110,6 +123,3 @@ if __name__ == "__main__":
         print(f"Peak memory avg {np.mean(memory):.3f} MB")
     print(f"Complementary Slackness avg: {np.mean(complementary_slackness)}")
     print(f"Total feasibility error avg: {np.mean(feasibility_errors)}")
-    print(X)
-    print(Z)
-    print(np.linalg.norm(X), np.linalg.norm(Z))
