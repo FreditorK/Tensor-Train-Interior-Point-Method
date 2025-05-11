@@ -34,7 +34,7 @@ END_DIM=4
 for dim in $(seq $START_DIM $END_DIM); do
     CONFIG="configs/graphm_${dim}.yaml"
     echo -e "\n▶ Running dim=$dim with config=$CONFIG at $(date)"
-    CURRENT_TIMEOUT=$((BASE_TIMEOUT * dim))
+    CURRENT_TIMEOUT=$((2 * BASE_TIMEOUT * dim))
 
     timeout "$CURRENT_TIMEOUT" python graphm.py --config "$CONFIG" --track_mem
     status=$?
