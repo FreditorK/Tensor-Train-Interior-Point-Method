@@ -309,9 +309,10 @@ if __name__ == "__main__":
         print(f"Problem created in {problem_creation_times[-1]:.3f}s", flush=True)
         print(f"Problem solved in {runtimes[-1]:.3f}s", flush=True)
         if args.track_mem:
-            print(f"Peak memory avg {memory[-1]:.3f} MB", flush=True)
+            print(f"Peak memory {memory[-1]:.3f} MB", flush=True)
         print(f"Complementary Slackness: {complementary_slackness[-1]}", flush=True)
         print(f"Total feasibility error: {feasibility_errors[-1]}", flush=True)
+    print("--- Run Summary ---", flush=True)
     print(f"Converged after avg {np.mean(num_iters):.1f} iterations", flush=True)
     print(f"Problem created in avg {np.mean(problem_creation_times):.3f}s", flush=True)
     print(f"Problem solved in avg {np.mean(runtimes):.3f}s", flush=True)

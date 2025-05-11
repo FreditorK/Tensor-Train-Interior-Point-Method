@@ -2,6 +2,9 @@ import copy
 import sys
 import os
 import time
+from http.cookiejar import escape_path
+
+import numpy as np
 
 sys.path.append(os.getcwd() + '/../')
 
@@ -33,9 +36,11 @@ def _step_size_local_solve(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k, A_k
 
     x_shape = previous_solution.shape
     previous_solution = previous_solution.reshape(-1, 1)
-    mat_vec_A = lambda x_vec: cached_einsum('lsr,smnS,LSR,rnR->lmL',XAX_k, A_k, XAX_k1, x_vec.reshape(*x_shape)).reshape(-1, 1)
+    _mat_vec_A = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k.shape, A_k.shape, XAX_k1.shape, x_shape, optimize="greedy")
+    mat_vec_A = lambda x_vec: _mat_vec_A(XAX_k, A_k, XAX_k1, x_vec.reshape(*x_shape)).reshape(-1, 1)
     A_op = scip.sparse.linalg.LinearOperator((m, m), matvec=mat_vec_A)
-    mat_vec_D = lambda x_vec: -cached_einsum('lsr,smnS,LSR,rnR->lmL', XDX_k, Delta_k, XDX_k1, x_vec.reshape(*x_shape)).reshape(-1, 1)
+    _mat_vec_D = contract_expression('lsr,smnS,LSR,rnR->lmL', XDX_k.shape, Delta_k.shape, XDX_k1.shape, x_shape, optimize="greedy")
+    mat_vec_D = lambda x_vec: -_mat_vec_D(XDX_k, Delta_k, XDX_k1, x_vec.reshape(*x_shape)).reshape(-1, 1)
     D_op = scip.sparse.linalg.LinearOperator((m, m), matvec=mat_vec_D)
     AD_op = scip.sparse.linalg.LinearOperator((m, m), matvec=lambda x_vec: mat_vec_A(x_vec) / step_size - mat_vec_D(x_vec))
 
@@ -74,6 +79,7 @@ def tt_max_generalised_eigen(A, Delta, op_tol, x0=None, kick_rank=None, nswp=10,
         x_cores = x0
     if kick_rank is None:
         kick_rank = max(int(2 ** (len(A) / 2) / (2 * nswp)), 1)
+
     d = len(x_cores)
     rx = np.array([1] + tt_ranks(x_cores) + [1])
     N = np.array([c.shape[1] for c in x_cores])
@@ -100,7 +106,7 @@ def tt_max_generalised_eigen(A, Delta, op_tol, x0=None, kick_rank=None, nswp=10,
                 u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True)
                 v = s.reshape(-1, 1) * v
                 r = prune_singular_vals(s, 0.5*tol)
-                if not last:
+                if not last and r == len(s):
                     u, v, r = _add_kick_rank(u[:, :r], v[:r], kick_rank)
                 else:
                     u = u[:, :r]
@@ -113,8 +119,8 @@ def tt_max_generalised_eigen(A, Delta, op_tol, x0=None, kick_rank=None, nswp=10,
                 XDX[k] = _compute_phi_bck_A(XDX[k + 1], x_cores[k], Delta[k], x_cores[k])
                 norm = np.sqrt(np.linalg.norm(XAX[k]) ** 2 + np.linalg.norm(XDX[k]) ** 2)
                 norm = norm if norm > 0 else 1.0
-                XAX[k] = np.divide(XAX[k], norm)
-                XDX[k] = np.divide(XDX[k], norm)
+                XAX[k] /= norm
+                XDX[k] /= norm
 
             else:
                 x_cores[k] = np.reshape(solution_now, (rx[k], N[k], rx[k + 1]))
@@ -139,7 +145,7 @@ def tt_max_generalised_eigen(A, Delta, op_tol, x0=None, kick_rank=None, nswp=10,
                 u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True)
                 v = s.reshape(-1, 1) * v
                 r = prune_singular_vals(s, 0.5*tol)
-                if not last:
+                if not last and r == len(s):
                     u, v, r = _add_kick_rank(u[:, :r], v[:r, :], kick_rank)
                 else:
                     u = u[:, :r]
@@ -151,8 +157,8 @@ def tt_max_generalised_eigen(A, Delta, op_tol, x0=None, kick_rank=None, nswp=10,
                 XDX[k + 1] = compute_phi_fwd_A(XDX[k], x_cores[k], Delta[k], x_cores[k])
                 norm = np.sqrt(np.linalg.norm(XAX[k + 1]) ** 2 + np.linalg.norm(XDX[k + 1]) ** 2)
                 norm = norm if np.greater(norm, 0) else 1.0
-                XAX[k + 1] = np.divide(XAX[k + 1], norm)
-                XDX[k + 1] = np.divide(XDX[k + 1], norm)
+                XAX[k + 1] /= norm
+                XDX[k + 1] /= norm
             else:
                 x_cores[k] = np.reshape(solution_now, (rx[k], N[k], rx[k + 1]))
 
@@ -175,8 +181,10 @@ def tt_max_generalised_eigen(A, Delta, op_tol, x0=None, kick_rank=None, nswp=10,
         print('\t Time: ', time.time() - t0)
         print('\t Time per sweep: ', (time.time() - t0) / (swp + 1))
 
+    if max_res > tol:
+        return 0, 0
     min_eig_value = tt_inner_prod(x_cores, tt_fast_matrix_vec_mul(A, x_cores, tol)) + step_size * tt_inner_prod(x_cores, tt_fast_matrix_vec_mul(Delta, x_cores, tol))
-    return step_size, max(min_eig_value, 0)
+    return step_size, min_eig_value
 
 
 def tt_min_eig(A, x0=None, kick_rank=None, nswp=10, tol=1e-12, verbose=False):
@@ -213,7 +221,7 @@ def tt_min_eig(A, x0=None, kick_rank=None, nswp=10, tol=1e-12, verbose=False):
                 u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True)
                 v = s.reshape(-1, 1) * v
                 r = prune_singular_vals(s, 0.5*tol)
-                if not last:
+                if not last and r == len(s):
                     u, v, r = _add_kick_rank(u[:, :r], v[:r], kick_rank)
                 else:
                     u = u[:, :r]
@@ -225,7 +233,7 @@ def tt_min_eig(A, x0=None, kick_rank=None, nswp=10, tol=1e-12, verbose=False):
                 XAX[k] = _compute_phi_bck_A(XAX[k + 1], x_cores[k], A[k], x_cores[k])
                 norm = np.linalg.norm(XAX[k])
                 norm = norm if norm > 0 else 1.0
-                XAX[k] = np.divide(XAX[k], norm)
+                XAX[k] /= norm
             else:
                 x_cores[k] = np.reshape(solution_now, (rx[k], N[k], rx[k + 1]))
 
@@ -249,7 +257,7 @@ def tt_min_eig(A, x0=None, kick_rank=None, nswp=10, tol=1e-12, verbose=False):
                 u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True)
                 v = s.reshape(-1, 1) * v
                 r = prune_singular_vals(s, 0.5*tol)
-                if not last:
+                if not last and r == len(s):
                     u, v, r = _add_kick_rank(u[:, :r], v[:r, :], kick_rank)
                 else:
                     u = u[:, :r]
@@ -260,7 +268,7 @@ def tt_min_eig(A, x0=None, kick_rank=None, nswp=10, tol=1e-12, verbose=False):
                 XAX[k + 1] = compute_phi_fwd_A(XAX[k], x_cores[k], A[k], x_cores[k])
                 norm = np.linalg.norm(XAX[k + 1])
                 norm = norm if np.greater(norm, 0) else 1.0
-                XAX[k + 1] = np.divide(XAX[k + 1], norm)
+                XAX[k + 1] /= norm
             else:
                 x_cores[k] = np.reshape(solution_now, (rx[k], N[k], rx[k + 1]))
 
@@ -300,9 +308,9 @@ def _eigen_local_solve(previous_solution, XAX_k, A_k, XAX_k1, m, size_limit, eps
 
     x_shape = previous_solution.shape
     previous_solution = previous_solution.reshape(-1, 1)
-    mat_vec_A = lambda x_vec: cached_einsum('lsr,smnS,LSR,rnR->lmL',XAX_k, A_k, XAX_k1, x_vec.reshape(*x_shape)).reshape(-1, 1)
+    _mat_vec_A = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k.shape, A_k.shape, XAX_k1.shape, x_shape, optimize="greedy")
+    mat_vec_A = lambda x_vec: -_mat_vec_A(XAX_k, A_k, XAX_k1, x_vec.reshape(*x_shape)).reshape(-1, 1)
     A_op = scip.sparse.linalg.LinearOperator((m, m), matvec=mat_vec_A)
-
     try:
         eig_val, solution_now = scip.sparse.linalg.eigsh(A_op, tol=eps, k=1, which="SA", v0=previous_solution)
     except:
@@ -397,7 +405,7 @@ def tt_elementwise_max(vec_tt, val, nswp=4, eps=1e-10, verbose=False):
                 # ... and norms
                 norm = np.linalg.norm(XAX[k + 1])
                 norm = norm if np.greater(norm, 0) else 1.0
-                XAX[k + 1] = np.divide(XAX[k + 1], norm)
+                XAX[k + 1] /= norm
 
             else:
                 x_cores[k] = np.reshape(np.tile(u,  (1, b)) @ v.reshape(r*b, rx[k + 1]), (rx[k], N[k], rx[k + 1]))
@@ -424,3 +432,148 @@ def tt_elementwise_max(vec_tt, val, nswp=4, eps=1e-10, verbose=False):
 
 def tt_elementwise_min(vec_tt, val, nswp=4, eps=1e-10, verbose=False):
     return tt_scale(-1, tt_elementwise_max(tt_scale(-1, vec_tt), -val, nswp, eps, verbose))
+
+
+def symmetric_powers_of_two(length):
+    half = length // 2
+    first_half = [2**i for i in range(1, half + 1)]
+    if length % 2 == 0:
+        return np.array(first_half + first_half[::-1])
+    else:
+        return np.array(first_half + [2**(half + 1)] + first_half[::-1])
+
+
+def tt_approx_mat_mat_mul(A, D, x0=None, kick_rank=None, nswp=20, tol=1e-6, verbose=False):
+    if verbose:
+        print(f"Starting Eigen solve with:\n \t {tol} \n \t sweeps: {nswp}")
+        t0 = time.time()
+    if x0 is None:
+        x_cores = tt_random_gaussian([2]*(len(A)-1), A[0].shape[1:-1])
+    else:
+        x_cores = x0
+
+    if kick_rank is None:
+        kick_rank = np.maximum(symmetric_powers_of_two(len(A)), 1).astype(int)
+
+    d = len(x_cores)
+    rx = np.array([1] + tt_ranks(x_cores) + [1])
+    N = np.array([c.shape[1] for c in x_cores])
+    M = np.array([c.shape[2] for c in x_cores])
+
+    XADX = [np.ones((1, 1, 1))] + [None] * (d - 1) + [np.ones((1, 1, 1))]  # size is rk x Rk x rk
+
+    normAD = np.ones(d - 1)  # norm of each row in the block matrix
+    nrmsc = 1.0
+    normx = np.ones((d - 1))
+
+    max_res = 0
+    last = False
+    for swp in range(nswp):
+        max_res = np.inf if swp == 0 else 0
+        for k in range(d - 1, -1, -1):
+            if swp > 0:
+                previous_solution = x_cores[k]
+                solution_now = cached_einsum('rab,amkA,bknB,RAB->rmnR',XADX[k], A[k], D[k], XADX[k+1])
+                solution_now *= nrmsc
+                local_res = np.linalg.norm(solution_now - previous_solution) / np.linalg.norm(solution_now)
+                max_res = max(max_res, local_res)
+                solution_now = np.reshape(solution_now, (rx[k], N[k] * M[k] * rx[k + 1])).T
+            else:
+                solution_now = np.reshape(x_cores[k], (rx[k], N[k] * M[k] * rx[k + 1])).T
+
+            if k > 0:
+                u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True)
+                v = s.reshape(-1, 1) * v
+                r = prune_singular_vals(s, 0.5*tol)
+                if not last and r == len(s):
+                    u, v, r = _add_kick_rank(u[:, :r], v[:r], kick_rank[k])
+                else:
+                    u = u[:, :r]
+                    v = v[:r]
+                nrmsc *= normx[k - 1] / normAD[k - 1]
+                x_cores[k] = np.reshape(u.T, (r, N[k], M[k], rx[k + 1]))
+                x_cores[k - 1] = cached_einsum('rdkc,cR->rdkR', x_cores[k - 1], v.T)
+                norm_now = np.linalg.norm(x_cores[k - 1])
+                normx[k - 1] *= norm_now
+                x_cores[k - 1] /= norm_now
+                rx[k] = r
+
+                XADX[k] = cached_einsum('RAB,amkA,bknB,rmnR->rab', XADX[k+1], A[k], D[k], x_cores[k])
+                norm = np.linalg.norm(XADX[k])
+                norm = norm if norm > 0 else 1.0
+                XADX[k] /= norm
+                normAD[k-1] = norm
+                nrmsc *= normAD[k - 1] / normx[k - 1]
+            else:
+                x_cores[k] = np.reshape(solution_now, (rx[k], N[k], M[k], rx[k + 1]))
+
+        if last:
+            break
+        if max_res < tol or swp == nswp - 1:
+            last = True
+        if verbose:
+            print('\tStarting Sweep:\n\tMax num of sweeps: %d' % swp)
+            print(f"\tDirection: {-1}")
+            print(f'\tResidual {max_res}')
+            print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
+        max_res = 0
+        for k in range(d):
+            previous_solution = x_cores[k]
+            solution_now = cached_einsum('rab,amkA,bknB,RAB->rmnR', XADX[k], A[k], D[k], XADX[k + 1])
+            solution_now *= nrmsc
+            local_res = np.linalg.norm(solution_now - previous_solution) / np.linalg.norm(solution_now)
+            max_res = max(max_res, local_res)
+            solution_now = np.reshape(solution_now, (rx[k] * N[k] * M[k], rx[k + 1]))
+            if k < d - 1:
+                nrmsc *= normx[k] / normAD[k]
+                u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True)
+                v = s.reshape(-1, 1) * v
+                r = prune_singular_vals(s, 0.5*tol)
+                if not last and r == len(s):
+                    u, v, r = _add_kick_rank(u[:, :r], v[:r, :], kick_rank[k])
+                else:
+                    u = u[:, :r]
+                    v = v[:r, :]
+                x_cores[k] = u.reshape(rx[k], N[k], M[k], r)
+                x_cores[k + 1] = cached_einsum('ij,jdkl->idkl', v, x_cores[k + 1]).reshape(r, N[k + 1], M[k+1], rx[k + 2])
+                norm_now = np.linalg.norm(x_cores[k + 1])
+                normx[k] *= norm_now
+                x_cores[k + 1] /= norm_now
+                rx[k + 1] = r
+
+                XADX[k + 1] = cached_einsum('rab,amkA,bknB,rmnR->RAB', XADX[k], A[k], D[k], x_cores[k])
+                norm = np.linalg.norm(XADX[k + 1])
+                norm = norm if np.greater(norm, 0) else 1.0
+                XADX[k + 1] /= norm
+                normAD[k] = norm
+                nrmsc *= normAD[k] / normx[k]
+            else:
+                x_cores[k] = np.reshape(solution_now, (rx[k], N[k], M[k], rx[k + 1]))
+
+        if last:
+            break
+        if max_res < tol:
+            last = True
+        if verbose:
+            print('\tStarting Sweep:\n\tMax num of sweeps: %d' % swp)
+            print(f"\tDirection: {1}")
+            print(f'\tResidual {max_res}')
+            print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
+
+    if verbose:
+        print("\t -----")
+        print(f"\t Solution rank is {rx[1:-1]}")
+        print(f"\t Residual {max_res}")
+        print('\t Number of sweeps', swp + 1)
+        print('\t Time: ', time.time() - t0)
+        print('\t Time per sweep: ', (time.time() - t0) / (swp + 1))
+
+    normx = np.exp(np.sum(np.log(normx)) / d)
+
+    return [normx * core for core in x_cores]
+
+
+def tt_mat_mat_mul(mat1, mat2, op_tol, eps):
+    if np.max(np.array(tt_ranks(mat1))*np.array(tt_ranks(mat2))) <= 2**(len(mat1)-1):
+        return tt_rank_reduce(tt_fast_mat_mat_mul(mat1, mat2, eps), eps=op_tol)
+    return tt_approx_mat_mat_mul(mat1, mat2, tol=op_tol)

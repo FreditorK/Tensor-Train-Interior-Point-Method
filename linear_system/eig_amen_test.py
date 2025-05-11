@@ -12,7 +12,6 @@ from src.tt_eigen import *
 
 np.random.seed(3)
 np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=2, suppress=True)
-"""
 s_matrix_tt = tt_scale(5, tt_random_gaussian([4, 4, 4], shape=(2, 2)))
 s_matrix_tt = tt_rank_reduce(tt_add(s_matrix_tt, tt_transpose(s_matrix_tt)), eps=1e-8)
 s_matrix_tt = tt_add(tt_fast_hadammard(s_matrix_tt, s_matrix_tt), tt_scale(0.1, tt_one_matrix(4)))
@@ -35,9 +34,3 @@ true_step_size = min(max(np.min((-A/B)[true_step_size > 0]), 0), 1)
 print("Ineq step_size: ", step_size, error, true_step_size)
 print(np.min(tt_matrix_to_matrix(s_matrix_tt) + true_step_size*tt_matrix_to_matrix(s_matrix_tt_2)))
 print(np.min(tt_matrix_to_matrix(s_matrix_tt) + step_size*tt_matrix_to_matrix(s_matrix_tt_2) + tt_matrix_to_matrix(tt_sub(tt_one_matrix(len(mask)), mask))))
-"""
-A = tt_matrix_svd(np.tril(np.ones((16, 16)), k=0), err_bound=1e-10)
-print(tt_ranks(A))
-print(tt_matrix_to_matrix(A))
-B = triu_one_matrix(4)
-print(tt_matrix_to_matrix(B))
