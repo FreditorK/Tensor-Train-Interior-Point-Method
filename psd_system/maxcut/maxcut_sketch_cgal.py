@@ -25,11 +25,11 @@ if __name__ == "__main__":
     for seed in config["seeds"]:
         np.random.seed(seed)
         t0 = time.time()
-        C = tt_matrix_to_matrix(tt_obj_matrix(config["max_rank"], config["dim"]))
+        trace_param = 2**config["dim"]
+        C = trace_param*tt_matrix_to_matrix(tt_obj_matrix(config["max_rank"], config["dim"]))
         t1 = time.time()
         constraint_matrices = [np.outer(column, column) for column in np.eye(C.shape[0])]
         bias = np.ones((C.shape[0], 1))
-        trace_param = np.sum(bias)
         if args.track_mem:
             start_mem = memory_usage(max_usage=True)
         t2 = time.time()
