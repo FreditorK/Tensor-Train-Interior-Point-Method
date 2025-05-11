@@ -9,5 +9,5 @@ verbose: False
 op_tol: !!float 1e-4
 max_iter: !!int 15
 # Sketchy CGAL
-sketch_cgal_rank: !!int 100
-duality_tol: 0.5
+sketch_cgal_rank: !!int 64
+duality_tol: 0.1
