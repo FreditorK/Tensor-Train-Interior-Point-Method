@@ -271,6 +271,19 @@ def prune_singular_vals(s, eps):
 
     return R
 
+
+def prune_eig_vals(s, eps):
+    if np.linalg.norm(s) == 0.0:
+        return 1
+    s = s[::-1]
+    s = s[s > 0]
+    sc = np.cumsum(np.abs(s[::-1]) ** 2)[::-1]
+    R = np.argmax(sc < eps ** 2)
+    R = max(R, 1)
+    R = s.size if sc[-1] > eps ** 2 else R
+
+    return R
+
 def swap_cores(core_a, core_b, eps):
     if len(core_a.shape) == 3 and len(core_b.shape) == 3:
         u, s, v = scip.linalg.svd(cached_einsum("rms,snR->rnmR", core_a, core_b).reshape(core_a.shape[0] * core_b.shape[1], -1), full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")

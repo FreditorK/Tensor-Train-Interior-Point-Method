@@ -2,9 +2,6 @@ import copy
 import sys
 import os
 import time
-from http.cookiejar import escape_path
-
-import numpy as np
 
 sys.path.append(os.getcwd() + '/../')
 
@@ -31,6 +28,8 @@ def _step_size_local_solve(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k, A_k
                 step_size = max(0, min(step_size, (1 - op_tol) / eig_val[0]))
             except:
                 solution_now = previous_solution
+        if step_size < 1e-4:
+            raise Exception("Matrix A is not positive semi-definite!")
         old_res = np.linalg.norm(previous_solution.reshape(-1, 1).T @ ((1/step_size)*A + D) @ previous_solution * previous_solution.reshape(-1, 1) - ((1/step_size)*A + D) @ previous_solution)
         return solution_now, step_size, old_res
 
@@ -56,6 +55,8 @@ def _step_size_local_solve(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k, A_k
         except:
             solution_now = previous_solution
 
+    if step_size < 1e-4:
+        raise Exception("Matrix A is not positive semi-definite!")
     old_res = np.linalg.norm(previous_solution.reshape(-1, 1).T @ AD_op(previous_solution.reshape(-1, 1)) * previous_solution.reshape(-1, 1) - AD_op(previous_solution.reshape(-1, 1)))
 
     return solution_now.reshape(-1, 1), step_size, old_res
@@ -78,7 +79,7 @@ def tt_max_generalised_eigen(A, Delta, op_tol, x0=None, kick_rank=None, nswp=10,
     else:
         x_cores = x0
     if kick_rank is None:
-        kick_rank = max(int(2 ** (len(A) / 2) / (2 * nswp)), 1)
+        kick_rank = np.maximum(symmetric_powers_of_two(len(A)), 1).astype(int)
 
     d = len(x_cores)
     rx = np.array([1] + tt_ranks(x_cores) + [1])
@@ -106,8 +107,9 @@ def tt_max_generalised_eigen(A, Delta, op_tol, x0=None, kick_rank=None, nswp=10,
                 u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True)
                 v = s.reshape(-1, 1) * v
                 r = prune_singular_vals(s, 0.5*tol)
-                if not last and r == len(s):
-                    u, v, r = _add_kick_rank(u[:, :r], v[:r], kick_rank)
+                if not last:
+                    kick = max(int(np.round(r / len(s)) * kick_rank[k]), 1)
+                    u, v, r = _add_kick_rank(u[:, :r], v[:r], kick)
                 else:
                     u = u[:, :r]
                     v = v[:r]
@@ -132,6 +134,7 @@ def tt_max_generalised_eigen(A, Delta, op_tol, x0=None, kick_rank=None, nswp=10,
             last = True
         if verbose:
             print('\tStarting Sweep:\n\tMax num of sweeps: %d' % swp)
+            print('\tStep size: %f' % step_size)
             print(f"\tDirection: {-1}")
             print(f'\tResidual {max_res}')
             print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
@@ -145,8 +148,9 @@ def tt_max_generalised_eigen(A, Delta, op_tol, x0=None, kick_rank=None, nswp=10,
                 u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True)
                 v = s.reshape(-1, 1) * v
                 r = prune_singular_vals(s, 0.5*tol)
-                if not last and r == len(s):
-                    u, v, r = _add_kick_rank(u[:, :r], v[:r, :], kick_rank)
+                if not last:
+                    kick = max(int(np.round(r / len(s)) * kick_rank[k]), 1)
+                    u, v, r = _add_kick_rank(u[:, :r], v[:r, :], kick)
                 else:
                     u = u[:, :r]
                     v = v[:r, :]
@@ -169,6 +173,7 @@ def tt_max_generalised_eigen(A, Delta, op_tol, x0=None, kick_rank=None, nswp=10,
             last = True
         if verbose:
             print('\tStarting Sweep:\n\tMax num of sweeps: %d' % swp)
+            print('\tStep size: %f' % step_size)
             print(f"\tDirection: {1}")
             print(f'\tResidual {max_res}')
             print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
@@ -176,13 +181,14 @@ def tt_max_generalised_eigen(A, Delta, op_tol, x0=None, kick_rank=None, nswp=10,
     if verbose:
         print("\t -----")
         print(f"\t Solution rank is {rx[1:-1]}")
+        print('\tStep size: %f' % step_size)
         print(f"\t Residual {max_res}")
         print('\t Number of sweeps', swp + 1)
         print('\t Time: ', time.time() - t0)
         print('\t Time per sweep: ', (time.time() - t0) / (swp + 1))
 
     if max_res > tol:
-        return 0, 0
+        raise Exception("Matrix A is not positive semi-definite!")
     min_eig_value = tt_inner_prod(x_cores, tt_fast_matrix_vec_mul(A, x_cores, tol)) + step_size * tt_inner_prod(x_cores, tt_fast_matrix_vec_mul(Delta, x_cores, tol))
     return step_size, min_eig_value
 
@@ -196,7 +202,7 @@ def tt_min_eig(A, x0=None, kick_rank=None, nswp=10, tol=1e-12, verbose=False):
     else:
         x_cores = x0
     if kick_rank is None:
-        kick_rank = max(int(2 ** (len(A) / 2) / (2 * nswp)), 1)
+        kick_rank = np.maximum(symmetric_powers_of_two(len(A)), 1).astype(int)
     d = len(x_cores)
     rx = np.array([1] + tt_ranks(x_cores) + [1])
     N = np.array([c.shape[1] for c in x_cores])
@@ -221,8 +227,9 @@ def tt_min_eig(A, x0=None, kick_rank=None, nswp=10, tol=1e-12, verbose=False):
                 u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True)
                 v = s.reshape(-1, 1) * v
                 r = prune_singular_vals(s, 0.5*tol)
-                if not last and r == len(s):
-                    u, v, r = _add_kick_rank(u[:, :r], v[:r], kick_rank)
+                if not last:
+                    kick = max(int(np.round(r / len(s)) * kick_rank[k]), 1)
+                    u, v, r = _add_kick_rank(u[:, :r], v[:r], kick)
                 else:
                     u = u[:, :r]
                     v = v[:r]
@@ -257,8 +264,9 @@ def tt_min_eig(A, x0=None, kick_rank=None, nswp=10, tol=1e-12, verbose=False):
                 u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True)
                 v = s.reshape(-1, 1) * v
                 r = prune_singular_vals(s, 0.5*tol)
-                if not last and r == len(s):
-                    u, v, r = _add_kick_rank(u[:, :r], v[:r, :], kick_rank)
+                if not last:
+                    kick = max(int(np.round(r / len(s)) * kick_rank[k]), 1)
+                    u, v, r = _add_kick_rank(u[:, :r], v[:r, :], kick)
                 else:
                     u = u[:, :r]
                     v = v[:r, :]
@@ -485,8 +493,9 @@ def tt_approx_mat_mat_mul(A, D, x0=None, kick_rank=None, nswp=20, tol=1e-6, verb
                 u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True)
                 v = s.reshape(-1, 1) * v
                 r = prune_singular_vals(s, 0.5*tol)
-                if not last and r == len(s):
-                    u, v, r = _add_kick_rank(u[:, :r], v[:r], kick_rank[k])
+                if not last:
+                    kick = max(int(np.round(r / len(s)) * kick_rank[k]), 1)
+                    u, v, r = _add_kick_rank(u[:, :r], v[:r], kick)
                 else:
                     u = u[:, :r]
                     v = v[:r]
@@ -529,8 +538,9 @@ def tt_approx_mat_mat_mul(A, D, x0=None, kick_rank=None, nswp=20, tol=1e-6, verb
                 u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True)
                 v = s.reshape(-1, 1) * v
                 r = prune_singular_vals(s, 0.5*tol)
-                if not last and r == len(s):
-                    u, v, r = _add_kick_rank(u[:, :r], v[:r, :], kick_rank[k])
+                if not last:
+                    kick = max(int(np.round(r / len(s)) * kick_rank[k]), 1)
+                    u, v, r = _add_kick_rank(u[:, :r], v[:r, :], kick)
                 else:
                     u = u[:, :r]
                     v = v[:r, :]
