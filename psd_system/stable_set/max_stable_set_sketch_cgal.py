@@ -52,7 +52,7 @@ if __name__ == "__main__":
             X, duality_gaps, info = res[1]
             memory.append(res[0] - start_mem)
         else:
-            X, duality_gaps, info = sketchy_cgal(-C, constraint_matrices, bias, (trace_param, trace_param),
+            X, duality_gaps, info = sketchy_cgal(-J, constraint_matrices, bias, (1, 1),
                                                  feasability_tol=config["feasibility_tol"],
                                                  duality_tol=config["duality_tol"],
                                                  num_iter=1000 * 2 ** config["dim"], R=config["sketch_cgal_rank"],
