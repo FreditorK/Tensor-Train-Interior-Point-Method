@@ -422,7 +422,9 @@ def _tt_line_search(
         permitted_err_x = 1
         permitted_err_z = 1
     else:
-
+        print()
+        print(np.min(np.linalg.eigvalsh(tt_matrix_to_matrix(X_tt))), np.min(np.linalg.eigvalsh(tt_matrix_to_matrix(Z_tt))))
+        print()
         x_step_size, permitted_err_x = tt_max_generalised_eigen(X_tt, Delta_X_tt, status.op_tol, tol=status.eps, verbose=status.verbose)
         z_step_size, permitted_err_z = tt_max_generalised_eigen(Z_tt, Delta_Z_tt, status.op_tol, tol=status.eps, verbose=status.verbose)
     permitted_err_t = 1
@@ -455,10 +457,13 @@ def _ineq_step_size(A_tt, Delta_tt, status):
 
 
 def _tt_line_search_ineq(x_step_size, z_step_size, X_tt, T_tt, Delta_X_tt, Delta_T_tt, ineq_mask, status):
+
+    permitted_err_x = 1
+    permitted_err_t = status.op_tol + status.eps
     if x_step_size > 0:
         masked_X_tt = tt_fast_hadammard(ineq_mask, X_tt, status.eps)
         masked_Delta_X_tt = tt_fast_hadammard(ineq_mask, Delta_X_tt, status.eps)
-        x_ineq_step_size, permitted_error_x = _ineq_step_size(
+        x_ineq_step_size, permitted_err_x = _ineq_step_size(
             tt_add(masked_X_tt, tt_scale(status.boundary_val, ineq_mask)),
             tt_scale(x_step_size, masked_Delta_X_tt),
             status
@@ -466,14 +471,14 @@ def _tt_line_search_ineq(x_step_size, z_step_size, X_tt, T_tt, Delta_X_tt, Delta
         x_step_size *= x_ineq_step_size
 
     if z_step_size > 0:
-        t_step_size, permitted_error_t = _ineq_step_size(
+        t_step_size, permitted_err_t = _ineq_step_size(
             T_tt,
             tt_scale(z_step_size, Delta_T_tt),
             status
         )
         z_step_size *= t_step_size
 
-    return x_step_size, z_step_size, (permitted_error_x, permitted_error_t)
+    return x_step_size, z_step_size, (permitted_err_x, permitted_err_t)
 
 
 def _update(x_step_size, z_step_size, X_tt, Z_tt, Delta_X_tt, Delta_Z_tt, status, permitted_error):
