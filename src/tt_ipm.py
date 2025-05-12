@@ -422,9 +422,6 @@ def _tt_line_search(
         permitted_err_x = 1
         permitted_err_z = 1
     else:
-        print()
-        print(np.min(np.linalg.eigvalsh(tt_matrix_to_matrix(X_tt))), np.min(np.linalg.eigvalsh(tt_matrix_to_matrix(Z_tt))))
-        print()
         x_step_size, permitted_err_x = tt_max_generalised_eigen(X_tt, Delta_X_tt, status.op_tol, tol=status.eps, verbose=status.verbose)
         z_step_size, permitted_err_z = tt_max_generalised_eigen(Z_tt, Delta_Z_tt, status.op_tol, tol=status.eps, verbose=status.verbose)
     permitted_err_t = 1
