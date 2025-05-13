@@ -28,13 +28,14 @@ def _step_size_local_solve(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k, A_k
                 step_size = max(0, min(step_size, (1 - op_tol) / eig_val[0]))
             except:
                 solution_now = previous_solution
-        if step_size < 1e-4:
+        if step_size < op_tol:
             raise Exception("Matrix A is not positive semi-definite!")
         old_res = np.linalg.norm(previous_solution.reshape(-1, 1).T @ ((1/step_size)*A + D) @ previous_solution * previous_solution.reshape(-1, 1) - ((1/step_size)*A + D) @ previous_solution)
         return solution_now, step_size, old_res
 
     x_shape = previous_solution.shape
     previous_solution = previous_solution.reshape(-1, 1)
+    # 'lsr,smnk,LSR,rnR-> lmkLS' 'ks'
     _mat_vec_A = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k.shape, A_k.shape, XAX_k1.shape, x_shape, optimize="greedy")
     mat_vec_A = lambda x_vec: _mat_vec_A(XAX_k, A_k, XAX_k1, x_vec.reshape(*x_shape)).reshape(-1, 1)
     A_op = scip.sparse.linalg.LinearOperator((m, m), matvec=mat_vec_A)
@@ -55,7 +56,7 @@ def _step_size_local_solve(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k, A_k
         except:
             solution_now = previous_solution
 
-    if step_size < 1e-4:
+    if step_size < op_tol:
         raise Exception("Matrix A is not positive semi-definite!")
     old_res = np.linalg.norm(previous_solution.reshape(-1, 1).T @ AD_op(previous_solution.reshape(-1, 1)) * previous_solution.reshape(-1, 1) - AD_op(previous_solution.reshape(-1, 1)))
 
@@ -79,7 +80,7 @@ def tt_max_generalised_eigen(A, Delta, op_tol, x0=None, kick_rank=None, nswp=10,
     else:
         x_cores = x0
     if kick_rank is None:
-        kick_rank = np.maximum(symmetric_powers_of_two(len(A)), 1).astype(int)
+        kick_rank = np.maximum((symmetric_powers_of_two(len(A))/(nswp -1)), 1).astype(int)
 
     d = len(x_cores)
     rx = np.array([1] + tt_ranks(x_cores) + [1])
@@ -108,7 +109,7 @@ def tt_max_generalised_eigen(A, Delta, op_tol, x0=None, kick_rank=None, nswp=10,
                 v = s.reshape(-1, 1) * v
                 r = prune_singular_vals(s, 0.5*tol)
                 if not last:
-                    kick = max(int(np.round(r / len(s)) * kick_rank[k]), 1)
+                    kick = kick_rank[k]
                     u, v, r = _add_kick_rank(u[:, :r], v[:r], kick)
                 else:
                     u = u[:, :r]
@@ -149,7 +150,7 @@ def tt_max_generalised_eigen(A, Delta, op_tol, x0=None, kick_rank=None, nswp=10,
                 v = s.reshape(-1, 1) * v
                 r = prune_singular_vals(s, 0.5*tol)
                 if not last:
-                    kick = max(int(np.round(r / len(s)) * kick_rank[k]), 1)
+                    kick = kick_rank[k]
                     u, v, r = _add_kick_rank(u[:, :r], v[:r, :], kick)
                 else:
                     u = u[:, :r]
@@ -189,7 +190,7 @@ def tt_max_generalised_eigen(A, Delta, op_tol, x0=None, kick_rank=None, nswp=10,
 
     if max_res > tol:
         raise Exception("Matrix A is not positive semi-definite!")
-    min_eig_value = tt_inner_prod(x_cores, tt_fast_matrix_vec_mul(A, x_cores, tol)) + step_size * tt_inner_prod(x_cores, tt_fast_matrix_vec_mul(Delta, x_cores, tol))
+    min_eig_value = tt_inner_prod(x_cores, tt_fast_matrix_vec_mul(A, x_cores, tol)) + step_size * tt_inner_prod(x_cores, tt_fast_matrix_vec_mul(Delta, x_cores, tol)).squeeze()
     return step_size, min_eig_value
 
 
@@ -202,7 +203,7 @@ def tt_min_eig(A, x0=None, kick_rank=None, nswp=10, tol=1e-12, verbose=False):
     else:
         x_cores = x0
     if kick_rank is None:
-        kick_rank = np.maximum(symmetric_powers_of_two(len(A)), 1).astype(int)
+        kick_rank = np.maximum((symmetric_powers_of_two(len(A))/(nswp -1)), 1).astype(int)
     d = len(x_cores)
     rx = np.array([1] + tt_ranks(x_cores) + [1])
     N = np.array([c.shape[1] for c in x_cores])
@@ -228,7 +229,7 @@ def tt_min_eig(A, x0=None, kick_rank=None, nswp=10, tol=1e-12, verbose=False):
                 v = s.reshape(-1, 1) * v
                 r = prune_singular_vals(s, 0.5*tol)
                 if not last:
-                    kick = max(int(np.round(r / len(s)) * kick_rank[k]), 1)
+                    kick = kick_rank[k]
                     u, v, r = _add_kick_rank(u[:, :r], v[:r], kick)
                 else:
                     u = u[:, :r]
@@ -265,7 +266,7 @@ def tt_min_eig(A, x0=None, kick_rank=None, nswp=10, tol=1e-12, verbose=False):
                 v = s.reshape(-1, 1) * v
                 r = prune_singular_vals(s, 0.5*tol)
                 if not last:
-                    kick = max(int(np.round(r / len(s)) * kick_rank[k]), 1)
+                    kick = kick_rank[k]
                     u, v, r = _add_kick_rank(u[:, :r], v[:r, :], kick)
                 else:
                     u = u[:, :r]
@@ -299,7 +300,7 @@ def tt_min_eig(A, x0=None, kick_rank=None, nswp=10, tol=1e-12, verbose=False):
         print('\t Time: ', time.time() - t0)
         print('\t Time per sweep: ', (time.time() - t0) / (swp + 1))
 
-    min_eig_value = tt_inner_prod(x_cores, tt_fast_matrix_vec_mul(A, x_cores, tol))
+    min_eig_value = tt_inner_prod(x_cores, tt_fast_matrix_vec_mul(A, x_cores, tol)).squeeze()
     return x_cores, min_eig_value
 
 
@@ -461,7 +462,7 @@ def tt_approx_mat_mat_mul(A, D, x0=None, kick_rank=None, nswp=20, tol=1e-6, verb
         x_cores = x0
 
     if kick_rank is None:
-        kick_rank = np.maximum(symmetric_powers_of_two(len(A)), 1).astype(int)
+        kick_rank = np.maximum((symmetric_powers_of_two(len(A))/(nswp -1)), 1).astype(int)
 
     d = len(x_cores)
     rx = np.array([1] + tt_ranks(x_cores) + [1])
@@ -494,7 +495,7 @@ def tt_approx_mat_mat_mul(A, D, x0=None, kick_rank=None, nswp=20, tol=1e-6, verb
                 v = s.reshape(-1, 1) * v
                 r = prune_singular_vals(s, 0.5*tol)
                 if not last:
-                    kick = max(int(np.round(r / len(s)) * kick_rank[k]), 1)
+                    kick = kick_rank[k]
                     u, v, r = _add_kick_rank(u[:, :r], v[:r], kick)
                 else:
                     u = u[:, :r]
@@ -539,7 +540,7 @@ def tt_approx_mat_mat_mul(A, D, x0=None, kick_rank=None, nswp=20, tol=1e-6, verb
                 v = s.reshape(-1, 1) * v
                 r = prune_singular_vals(s, 0.5*tol)
                 if not last:
-                    kick = max(int(np.round(r / len(s)) * kick_rank[k]), 1)
+                    kick = kick_rank[k]
                     u, v, r = _add_kick_rank(u[:, :r], v[:r, :], kick)
                 else:
                     u = u[:, :r]

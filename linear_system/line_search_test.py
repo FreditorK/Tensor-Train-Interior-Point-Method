@@ -10,10 +10,11 @@ from src.tt_ops import *
 from src.tt_ops import tt_rank_reduce
 from src.tt_eigen import tt_max_generalised_eigen
 
-np.random.seed(4) # 9
+np.random.seed(6) # 9
 
 X_tt = tt_random_gaussian([2, 9, 3, 7, 6], shape=(2, 2))
 X_tt = tt_fast_mat_mat_mul(tt_transpose(X_tt), X_tt)
+X_tt = tt_add(X_tt, tt_scale(0.1, tt_identity(len(X_tt))))
 
 s_matrix_tt = tt_random_gaussian([4, 2, 2, 3, 5], shape=(2, 2))
 s_matrix_tt = tt_add(tt_rank_reduce(tt_add(s_matrix_tt, tt_transpose(s_matrix_tt)), eps=0), X_tt)
@@ -34,4 +35,4 @@ print(np.linalg.eigvals(A + step_size*B))
 #print(tt_min_eig(tt_add(X_tt, s_matrix_tt))[0], np.linalg.eigvals(A + B))
 alpha, a = tt_max_generalised_eigen(X_tt, s_matrix_tt, op_tol=1e-12, verbose=True)
 print(alpha, a)
-print(np.linalg.eigvals(A + alpha*B))
+#print(np.linalg.eigvals(A + alpha*B))

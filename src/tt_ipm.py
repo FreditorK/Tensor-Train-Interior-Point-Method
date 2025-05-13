@@ -378,7 +378,7 @@ def _tt_ipm_newton_step(
             status.op_tol,
             rank_weighted_error=True
         ) if status.sigma > 0 else tt_add(rhs_vec_tt[2], tt_reshape(Delta_XZ_term, (4, )))
-        Delta_tt_cc, res = solver(lhs_matrix_tt, rhs_vec_tt, Delta_tt, 6 + status.with_ineq)
+        Delta_tt_cc, res = solver(lhs_matrix_tt, rhs_vec_tt, Delta_tt, 8 + status.with_ineq)
         Delta_X_tt_cc = _tt_symmetrise(tt_reshape(_tt_get_block(1, Delta_tt_cc), (2, 2)), status.op_tol)
         Delta_Z_tt_cc = _tt_symmetrise(tt_reshape(_tt_get_block(2, Delta_tt_cc), (2, 2)), status.op_tol)
         Delta_X_tt = tt_rank_reduce(tt_add(Delta_X_tt_cc, Delta_X_tt), eps=status.op_tol)
@@ -438,12 +438,10 @@ def _tt_line_search(
     permitted_err_t = 1
     if status.with_ineq and not status.is_last_iter:
         x_step_size, z_step_size, permitted_err_ineq = _tt_line_search_ineq(x_step_size, z_step_size, X_tt, T_tt, Delta_X_tt, Delta_T_tt, ineq_mask, status)
-        permitted_err_x_prime = permitted_err_ineq[0]
+        permitted_err_x = min(permitted_err_x, permitted_err_ineq[0])
         permitted_err_t = permitted_err_ineq[1]
-        tau_x = 0.95 + 0.05 * ((permitted_err_x >= status.op_tol and permitted_err_x_prime >= status.op_tol) or x_step_size == 1)
-    else:
-        tau_x = 0.95 + 0.05*(permitted_err_x >= status.op_tol or x_step_size == 1)
-    tau_z = 0.95 + 0.05*(permitted_err_z >= status.op_tol or z_step_size == 1)
+    tau_x = 0.9 if x_step_size < 1 else 1.0
+    tau_z = 0.9 if z_step_size < 1 else 1.0
     return X_tt, Z_tt, tau_x*x_step_size, tau_z*z_step_size, (permitted_err_x, permitted_err_z, permitted_err_t)
 
 
@@ -492,7 +490,7 @@ def _tt_line_search_ineq(x_step_size, z_step_size, X_tt, T_tt, Delta_X_tt, Delta
 def _update(x_step_size, z_step_size, X_tt, Z_tt, Delta_X_tt, Delta_Z_tt, status, permitted_error):
     #print()
     #print("Before: ", np.min(np.linalg.eigvalsh(tt_matrix_to_matrix(X_tt))),
-     #     np.min(np.linalg.eigvalsh(tt_matrix_to_matrix(Z_tt))))
+    #     np.min(np.linalg.eigvalsh(tt_matrix_to_matrix(Z_tt))))
     #print()
     #print("Mid: ", np.min(np.linalg.eigvalsh(tt_matrix_to_matrix(tt_add(X_tt, tt_scale(x_step_size, Delta_X_tt))))), np.min(np.linalg.eigvalsh(tt_matrix_to_matrix(tt_add(Z_tt, tt_scale(z_step_size, Delta_Z_tt))))))
     if x_step_size > 0:
@@ -502,7 +500,7 @@ def _update(x_step_size, z_step_size, X_tt, Z_tt, Delta_X_tt, Delta_Z_tt, status
 
     #print()
     #print("After: ", np.min(np.linalg.eigvalsh(tt_matrix_to_matrix(X_tt))),
-    #      np.min(np.linalg.eigvalsh(tt_matrix_to_matrix(Z_tt))))
+     #     np.min(np.linalg.eigvalsh(tt_matrix_to_matrix(Z_tt))))
     #print()
     return X_tt, Z_tt
 
