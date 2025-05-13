@@ -433,8 +433,7 @@ def _fwd_sweep(
                 res = _block_local_product(XAX[k], block_A[k], XAX[k + 1], np.transpose(solution_now, (0, 2, 1, 3))) - rhs
                 r = r_start
                 for r in range(r_start - 1, 0, -1):
-                    res -= _block_local_product(XAX[k], block_A[k], XAX[k + 1], np.transpose(
-                        cached_einsum("rbR, Rdk -> rbdk", u[:, :, None, r], v[None, r]), (0, 2, 1, 3)))
+                    res -= _block_local_product(XAX[k], block_A[k], XAX[k + 1], cached_einsum("rbR, Rdk -> rdbk", u[:, :, None, r], v[None, r]))
                     if np.linalg.norm(res) / norm_rhs > max(2 * real_tol, block_res_new):
                         break
                 r += 1

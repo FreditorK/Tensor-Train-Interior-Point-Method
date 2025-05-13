@@ -85,8 +85,8 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
             linear_op,
             local_rhs.reshape(-1, 1),
             rtol=1e-3*block_res_old,
-            maxiter=24,
-            restart=8
+            maxiter=30,
+            restart=10
         )
         solution_now = np.transpose(solution_now.reshape(2, x_shape[0], x_shape[2], x_shape[3]), (1, 0, 2, 3)) + previous_solution[:, :2]
         z = inv_I * (rhs[:, 1] - cached_einsum('lsr,smnS,LSR,lmL->rnR', XAX_k[(0, 1)], block_A_k[(0, 1)], XAX_k1[(0, 1)], solution_now[:, 0]))
@@ -207,8 +207,8 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
             linear_op,
             local_rhs.reshape(-1, 1),
             rtol=1e-3 * block_res_old_scalar,
-            maxiter=24,
-            restart=8
+            maxiter=27,
+            restart=9
         )
         solution_now = np.transpose(solution_now.reshape(3, x_shape[0], x_shape[2], x_shape[3]),
                                     (1, 0, 2, 3)) + previous_solution[:, [0, 1, 3]]
@@ -307,14 +307,24 @@ def _tt_ipm_newton_step(
     if status.verbose:
         print("--- Predictor  step ---")
     Delta_tt, res = solver(lhs_matrix_tt, rhs_vec_tt, None, 8 + status.is_last_iter*2 + status.with_ineq)
-    Delta_X_tt = _tt_symmetrise(tt_reshape(_tt_get_block(1, Delta_tt), (2, 2)), status.op_tol)
-    Delta_Z_tt = _tt_symmetrise(tt_reshape(_tt_get_block(2, Delta_tt), (2, 2)), status.op_tol)
-    Delta_Y_tt = tt_rank_reduce(_tt_get_block(0, Delta_tt), eps=status.eps)
-    Delta_Y_tt = tt_rank_reduce(tt_sub(Delta_Y_tt, tt_fast_matrix_vec_mul(status.lag_map_y, Delta_Y_tt, status.eps)), eps=status.op_tol, rank_weighted_error=True)
-    Delta_T_tt = None
-    if status.with_ineq:
-        Delta_T_tt = tt_rank_reduce(_tt_get_block(3, Delta_tt), eps=status.eps)
-        Delta_T_tt = tt_fast_hadammard(ineq_mask, tt_reshape(Delta_T_tt, (2, 2)), status.eps)
+    if res < status.local_res_bound:
+        Delta_X_tt = _tt_symmetrise(tt_reshape(_tt_get_block(1, Delta_tt), (2, 2)), status.op_tol)
+        Delta_Z_tt = _tt_symmetrise(tt_reshape(_tt_get_block(2, Delta_tt), (2, 2)), status.op_tol)
+        Delta_Y_tt = tt_rank_reduce(_tt_get_block(0, Delta_tt), eps=status.eps)
+        Delta_Y_tt = tt_rank_reduce(tt_sub(Delta_Y_tt, tt_fast_matrix_vec_mul(status.lag_map_y, Delta_Y_tt, status.eps)), eps=status.op_tol, rank_weighted_error=True)
+        Delta_T_tt = None
+        if status.with_ineq:
+            Delta_T_tt = tt_rank_reduce(_tt_get_block(3, Delta_tt), eps=status.eps)
+            Delta_T_tt = tt_fast_hadammard(ineq_mask, tt_reshape(Delta_T_tt, (2, 2)), status.eps)
+    else:
+        # regularise
+        dim = len(X_tt)
+        Delta_X_tt = tt_scale(2*status.op_tol, tt_identity(dim))
+        Delta_Z_tt = tt_scale(2*status.op_tol, tt_identity(dim))
+        Delta_Y_tt = [np.zeros((1, 4, 1)) for _ in range(dim)]
+        Delta_T_tt = None
+        if status.with_ineq:
+            Delta_T_tt = tt_scale(2*status.eps, ineq_mask)
 
     X_tt, Z_tt, x_step_size, z_step_size, permitted_error = _tt_line_search(
         X_tt,
@@ -513,7 +523,7 @@ def _initialise(ineq_mask, status, dim):
     T_tt = None
 
     if status.with_ineq:
-        T_tt = tt_scale(status.op_tol, ineq_mask)
+        T_tt = tt_scale(status.boundary_val, ineq_mask)
 
 
     #print(tt_matrix_to_matrix(X_tt))
@@ -548,6 +558,7 @@ class IPMStatus:
     boundary_val: float = 0.01
     sigma: float = 0.5
     num_ineq_constraints: float = 0
+    local_res_bound: float = 1.0
     lag_map_t: list = None
     lag_map_y: list = None
     compl_ineq_mask = None
@@ -704,8 +715,6 @@ def tt_ipm(
 
         if status.with_ineq:
             T_tt = _tt_symmetrise(tt_add(T_tt, tt_scale(z_step_size, Delta_T_tt)), 0.1*op_tol)
-            if permitted_error[2] <= status.eps:
-                T_tt = tt_rank_reduce(tt_add(T_tt, tt_scale(2*(status.eps - permitted_error[2]), ineq_mask)), eps=0.1*op_tol, rank_weighted_error=True)
 
         if status.is_last_iter:
             finishing_steps -= 1
