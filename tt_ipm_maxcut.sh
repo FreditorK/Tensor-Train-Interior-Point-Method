@@ -1,25 +1,12 @@
 #!/bin/bash
-#PBS -l select=1:ncpus=22:mem=32gb
-#PBS -l walltime=10:00:00
-#PBS -N tt_maxcut
-#PBS -o tt_ipm_maxcut.out
-#PBS -e tt_ipm_maxcut.err
 
-cd "$PBS_O_WORKDIR"
+# Activate conda if not activated
 
-# Activate conda
-source .conda/bin/activate
-conda activate ttipm
-
-cd TT-IPM/psd_system/maxcut
-
-# ---------------------------
-# Logging setup
-# ---------------------------
-LOGFILE="maxcut_batch_log_$(date +%Y%m%d_%H%M%S).txt"
-exec > >(tee -a "$LOGFILE") 2>&1
-
-echo "==== Maxcut TT-IPM Batch Run Started at $(date) ===="
+#Fix threads
+export OMP_NUM_THREADS=8
+export MKL_NUM_THREADS=8
+export OPENBLAS_NUM_THREADS=8
+export NUMEXPR_NUM_THREADS=8
 
 # ---------------------------
 # Parameters
@@ -27,6 +14,16 @@ echo "==== Maxcut TT-IPM Batch Run Started at $(date) ===="
 BASE_TIMEOUT=1800  # 30 minutes
 START_DIM=6
 END_DIM=10
+
+# ---------------------------
+# Logging setup
+# ---------------------------
+LOGFILE="tt_ipm_maxcut_($START_DIM)_($END_DIM).txt"
+exec > >(tee -a "$LOGFILE") 2>&1
+
+echo "==== Maxcut TT-IPM Batch Run Started at $(date) ===="
+
+cd psd_system/maxcut
 
 # ---------------------------
 # Loop through configs

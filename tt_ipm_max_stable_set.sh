@@ -1,25 +1,12 @@
 #!/bin/bash
-#PBS -l select=1:ncpus=22:mem=32gb
-#PBS -l walltime=10:00:00
-#PBS -N tt_max_stable_set
-#PBS -o tt_ipm_max_stable_set.out
-#PBS -e tt_ipm_max_stable_set.err
 
-cd "$PBS_O_WORKDIR"
+# Activate conda if not activated
 
-# Activate conda
-source .conda/bin/activate
-conda activate ttipm
-
-cd TT-IPM/psd_system/stable_set
-
-# ---------------------------
-# Logging setup
-# ---------------------------
-LOGFILE="max_stable_set_batch_log_$(date +%Y%m%d_%H%M%S).txt"
-exec > >(tee -a "$LOGFILE") 2>&1
-
-echo "==== Max Stable Set TT-IPM Batch Run Started at $(date) ===="
+#Fix threads
+export OMP_NUM_THREADS=8
+export MKL_NUM_THREADS=8
+export OPENBLAS_NUM_THREADS=8
+export NUMEXPR_NUM_THREADS=8
 
 # ---------------------------
 # Parameters
@@ -29,6 +16,16 @@ START_DIM=6
 END_DIM=10
 
 # ---------------------------
+# Logging setup
+# ---------------------------
+LOGFILE="tt_ipm_max_stable_set_($START_DIM)_($END_DIM).txt"
+exec > >(tee -a "$LOGFILE") 2>&1
+
+echo "==== Max Stable Set TT-IPM Batch Run Started at $(date) ===="
+
+cd psd_system/maxcut
+
+# ---------------------------
 # Loop through configs
 # ---------------------------
 for dim in $(seq $START_DIM $END_DIM); do
@@ -36,7 +33,7 @@ for dim in $(seq $START_DIM $END_DIM); do
     echo -e "\n▶ Running dim=$dim with config=$CONFIG at $(date)"
     CURRENT_TIMEOUT=$((BASE_TIMEOUT * dim))
 
-    timeout "$CURRENT_TIMEOUT" python max_stable_set.py --config "$CONFIG" --track_mem
+    timeout "$CURRENT_TIMEOUT" python maxcut.py --config "$CONFIG" --track_mem
     status=$?
 
     if [ $status -eq 124 ]; then
