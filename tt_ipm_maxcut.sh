@@ -12,8 +12,8 @@ export NUMEXPR_NUM_THREADS=8
 # Parameters
 # ---------------------------
 BASE_TIMEOUT=1800  # 30 minutes
-START_DIM=6
-END_DIM=10
+START_DIM=8
+END_DIM=8
 
 # ---------------------------
 # Logging setup

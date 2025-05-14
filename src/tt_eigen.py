@@ -28,8 +28,6 @@ def _step_size_local_solve(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k, A_k
                 step_size = max(0, min(step_size, (1 - op_tol) / eig_val[0]))
             except:
                 solution_now = previous_solution
-        if step_size < op_tol:
-            raise Exception("Matrix A is not positive semi-definite!")
         old_res = np.linalg.norm(previous_solution.reshape(-1, 1).T @ ((1/step_size)*A + D) @ previous_solution * previous_solution.reshape(-1, 1) - ((1/step_size)*A + D) @ previous_solution)
         return solution_now, step_size, old_res
 
@@ -56,8 +54,6 @@ def _step_size_local_solve(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k, A_k
         except:
             solution_now = previous_solution
 
-    if step_size < op_tol:
-        raise Exception("Matrix A is not positive semi-definite!")
     old_res = np.linalg.norm(previous_solution.reshape(-1, 1).T @ AD_op(previous_solution.reshape(-1, 1)) * previous_solution.reshape(-1, 1) - AD_op(previous_solution.reshape(-1, 1)))
 
     return solution_now.reshape(-1, 1), step_size, old_res
@@ -129,7 +125,7 @@ def tt_max_generalised_eigen(A, Delta, op_tol, x0=None, kick_rank=None, nswp=10,
                 x_cores[k] = np.reshape(solution_now, (rx[k], N[k], rx[k + 1]))
 
         x_cores = tt_normalise(x_cores)
-        if step_size == 0 or last:
+        if step_size < 1e-3 or last:
             break
         if max_res < tol or swp == nswp - 1:
             last = True
@@ -168,7 +164,7 @@ def tt_max_generalised_eigen(A, Delta, op_tol, x0=None, kick_rank=None, nswp=10,
                 x_cores[k] = np.reshape(solution_now, (rx[k], N[k], rx[k + 1]))
 
         x_cores = tt_normalise(x_cores)
-        if step_size == 0 or last:
+        if step_size < 1e-3 or last:
             break
         if max_res < tol:
             last = True
@@ -189,8 +185,10 @@ def tt_max_generalised_eigen(A, Delta, op_tol, x0=None, kick_rank=None, nswp=10,
         print('\t Time per sweep: ', (time.time() - t0) / (swp + 1))
 
     if max_res > tol:
-        raise Exception("Matrix A is not positive semi-definite!")
-    min_eig_value = tt_inner_prod(x_cores, tt_fast_matrix_vec_mul(A, x_cores, tol)) + step_size * tt_inner_prod(x_cores, tt_fast_matrix_vec_mul(Delta, x_cores, tol)).squeeze()
+        step_size = 0
+        min_eig_value = 0
+    else:
+        min_eig_value = tt_inner_prod(x_cores, tt_fast_matrix_vec_mul(A, x_cores, tol)) + step_size * tt_inner_prod(x_cores, tt_fast_matrix_vec_mul(Delta, x_cores, tol)).squeeze()
     return step_size, min_eig_value
 
 
@@ -323,7 +321,6 @@ def _eigen_local_solve(previous_solution, XAX_k, A_k, XAX_k1, m, size_limit, eps
     try:
         eig_val, solution_now = scip.sparse.linalg.eigsh(A_op, tol=eps, k=1, which="SA", v0=previous_solution)
     except:
-        print("Error in sparse eigsh")
         solution_now = previous_solution
 
     old_res = np.linalg.norm(previous_solution.reshape(-1, 1).T @ A_op(previous_solution.reshape(-1, 1)) * previous_solution.reshape(-1, 1) - A_op(previous_solution.reshape(-1, 1)))
