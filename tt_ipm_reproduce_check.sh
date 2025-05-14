@@ -11,6 +11,12 @@ cd "$PBS_O_WORKDIR"
 source .conda/bin/activate
 conda activate ttipm
 
+export OMP_NUM_THREADS=22
+export MKL_NUM_THREADS=22
+export OPENBLAS_NUM_THREADS=22
+export NUMEXPR_NUM_THREADS=22
+
+
 cd TT-IPM/psd_system/maxcut
 
 # ---------------------------

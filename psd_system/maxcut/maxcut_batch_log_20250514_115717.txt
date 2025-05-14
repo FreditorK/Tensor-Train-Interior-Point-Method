@@ -1,0 +1,25 @@
+==== Maxcut TT-IPM Batch Run Started at Wed May 14 11:57:17 AM BST 2025 ====
+
+▶ Running dim=7 with config=configs/maxcut_7.yaml at Wed May 14 11:57:17 AM BST 2025
+Seed:  9
+---Terminated---
+Converged in 6 iterations.
+Ranks X_tt: [2, 6, 13, 18, 6, 2], Z_tt: [2, 6, 14, 12, 7, 2], 
+      Y_tt: [1, 2, 3, 4, 2, 1], T_tt: None 
+
+Converged after 6.0 iterations
+Problem created in 0.003s
+Problem solved in 5.094s
+Peak memory 34.562 MB
+Complementary Slackness: 3.7421460406694695e-05
+Total feasibility error: 1.708917364621989e-05
+--- Run Summary ---
+Converged after avg 6.0 iterations
+Problem created in avg 0.003s
+Problem solved in avg 5.094s
+Peak memory avg 34.562 MB
+Complementary Slackness avg: 3.7421460406694695e-05
+Total feasibility error avg: 1.708917364621989e-05
+✅ Completed dim=7 successfully
+
+==== All runs completed at Wed May 14 11:57:22 AM BST 2025 ====
