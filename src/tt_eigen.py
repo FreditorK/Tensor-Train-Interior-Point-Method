@@ -29,34 +29,52 @@ def _step_size_local_solve(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k, A_k
             except:
                 solution_now = previous_solution
         old_res = np.linalg.norm(previous_solution.reshape(-1, 1).T @ ((1/step_size)*A + D) @ previous_solution * previous_solution.reshape(-1, 1) - ((1/step_size)*A + D) @ previous_solution)
-        return solution_now, step_size, old_res
+    else:
+        x_shape = previous_solution.shape
+        previous_solution = previous_solution.reshape(-1, 1)
+        # 'lsr,smnk,LSR,rnR-> lmkLS' 'ks'
+        _mat_vec_A = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k.shape, A_k.shape, XAX_k1.shape, x_shape, optimize="greedy")
+        mat_vec_A = lambda x_vec: _mat_vec_A(XAX_k, A_k, XAX_k1, x_vec.reshape(*x_shape)).reshape(-1, 1)
+        A_op = scip.sparse.linalg.LinearOperator((m, m), matvec=mat_vec_A)
+        _mat_vec_D = contract_expression('lsr,smnS,LSR,rnR->lmL', XDX_k.shape, Delta_k.shape, XDX_k1.shape, x_shape, optimize="greedy")
+        mat_vec_D = lambda x_vec: -_mat_vec_D(XDX_k, Delta_k, XDX_k1, x_vec.reshape(*x_shape)).reshape(-1, 1)
+        D_op = scip.sparse.linalg.LinearOperator((m, m), matvec=mat_vec_D)
+        AD_op = scip.sparse.linalg.LinearOperator((m, m), matvec=lambda x_vec: mat_vec_A(x_vec) / step_size - mat_vec_D(x_vec))
 
-    x_shape = previous_solution.shape
-    previous_solution = previous_solution.reshape(-1, 1)
-    # 'lsr,smnk,LSR,rnR-> lmkLS' 'ks'
-    _mat_vec_A = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k.shape, A_k.shape, XAX_k1.shape, x_shape, optimize="greedy")
-    mat_vec_A = lambda x_vec: _mat_vec_A(XAX_k, A_k, XAX_k1, x_vec.reshape(*x_shape)).reshape(-1, 1)
-    A_op = scip.sparse.linalg.LinearOperator((m, m), matvec=mat_vec_A)
-    _mat_vec_D = contract_expression('lsr,smnS,LSR,rnR->lmL', XDX_k.shape, Delta_k.shape, XDX_k1.shape, x_shape, optimize="greedy")
-    mat_vec_D = lambda x_vec: -_mat_vec_D(XDX_k, Delta_k, XDX_k1, x_vec.reshape(*x_shape)).reshape(-1, 1)
-    D_op = scip.sparse.linalg.LinearOperator((m, m), matvec=mat_vec_D)
-    AD_op = scip.sparse.linalg.LinearOperator((m, m), matvec=lambda x_vec: mat_vec_A(x_vec) / step_size - mat_vec_D(x_vec))
-
-    try:
-        eig_val, solution_now = scip.sparse.linalg.eigsh(AD_op, tol=eps, k=1, which="SA", v0=previous_solution)
-    except:
-        eig_val = previous_solution.T @ AD_op(previous_solution)
-        solution_now = previous_solution
-    if eig_val < 0:
         try:
-            eig_val, solution_now = scip.sparse.linalg.eigsh(D_op, M=A_op, tol=eps, k=1, which="LA", v0=previous_solution)
-            step_size = max(0, min(step_size, (1 - op_tol) / eig_val[0]))
+            eig_val, solution_now = scip.sparse.linalg.eigsh(AD_op, tol=eps, k=1, which="SA", v0=previous_solution)
         except:
+            eig_val = previous_solution.T @ AD_op(previous_solution)
             solution_now = previous_solution
+        if eig_val < 0:
+            try:
+                eig_val, solution_now = scip.sparse.linalg.eigsh(D_op, M=A_op, tol=eps, k=1, which="LA", v0=previous_solution)
+                step_size = max(0, min(step_size, (1 - op_tol) / eig_val[0]))
+            except:
+                solution_now = previous_solution
 
-    old_res = np.linalg.norm(previous_solution.reshape(-1, 1).T @ AD_op(previous_solution.reshape(-1, 1)) * previous_solution.reshape(-1, 1) - AD_op(previous_solution.reshape(-1, 1)))
+        old_res = np.linalg.norm(previous_solution.reshape(-1, 1).T @ AD_op(previous_solution.reshape(-1, 1)) * previous_solution.reshape(-1, 1) - AD_op(previous_solution.reshape(-1, 1)))
 
     return solution_now.reshape(-1, 1), step_size, old_res
+
+
+def _local_psd_check(previous_solution, XAX_k, A_k, XAX_k1, m, size_limit, eps):
+    if m <= size_limit:
+        try:
+            eig_val, _ = scip.sparse.linalg.eigsh(cached_einsum("lsr,smnS,LSR->lmLrnR", XAX_k, A_k, XAX_k1).reshape(m, m), tol=eps, k=1, which="SA")
+        except:
+            eig_val = -1
+    else:
+        x_shape = previous_solution.shape
+        _mat_vec_A = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k.shape, A_k.shape, XAX_k1.shape, x_shape, optimize="greedy")
+        mat_vec_A = lambda x_vec: _mat_vec_A(XAX_k, A_k, XAX_k1, x_vec.reshape(*x_shape)).reshape(-1, 1)
+        A_op = scip.sparse.linalg.LinearOperator((m, m), matvec=mat_vec_A)
+        try:
+            eig_val, _ = scip.sparse.linalg.eigsh(A_op, tol=eps, k=1, which="SA")
+        except:
+            eig_val = -1
+
+    return eig_val >= 0
 
 
 def _add_kick_rank(u, v, r_add=2):
@@ -95,6 +113,9 @@ def tt_max_generalised_eigen(A, Delta, op_tol, x0=None, kick_rank=None, nswp=10,
             if swp > 0:
                 previous_solution = x_cores[k]
                 solution_now, step_size, local_res = _step_size_local_solve(previous_solution, XDX[k], Delta[k], XDX[k+1], XAX[k], A[k], XAX[k+1], rx[k] * N[k] * rx[k + 1], step_size, op_tol, size_limit, tol)
+                if step_size < 1e-3:
+                    if not _local_psd_check(previous_solution, XAX[k], A[k], XAX[k+1], rx[k] * N[k] * rx[k + 1], size_limit, tol):
+                        break
                 max_res = max(max_res, local_res)
                 solution_now = np.reshape(solution_now, (rx[k], N[k] * rx[k + 1])).T
             else:
@@ -125,7 +146,7 @@ def tt_max_generalised_eigen(A, Delta, op_tol, x0=None, kick_rank=None, nswp=10,
                 x_cores[k] = np.reshape(solution_now, (rx[k], N[k], rx[k + 1]))
 
         x_cores = tt_normalise(x_cores)
-        if step_size < 1e-3 or last:
+        if step_size < tol or last:
             break
         if max_res < tol or swp == nswp - 1:
             last = True
@@ -139,6 +160,9 @@ def tt_max_generalised_eigen(A, Delta, op_tol, x0=None, kick_rank=None, nswp=10,
         for k in range(d):
             previous_solution = x_cores[k]
             solution_now, step_size, local_res = _step_size_local_solve(previous_solution, XDX[k], Delta[k], XDX[k+1], XAX[k], A[k], XAX[k+1], rx[k] * N[k] * rx[k + 1], step_size, op_tol, size_limit, tol)
+            if step_size < 1e-3:
+                if not _local_psd_check(previous_solution, XAX[k], A[k], XAX[k + 1], rx[k] * N[k] * rx[k + 1], size_limit, tol):
+                    break
             max_res = max(max_res, local_res)
             solution_now = np.reshape(solution_now, (rx[k] * N[k], rx[k + 1]))
             if k < d - 1:
@@ -164,7 +188,7 @@ def tt_max_generalised_eigen(A, Delta, op_tol, x0=None, kick_rank=None, nswp=10,
                 x_cores[k] = np.reshape(solution_now, (rx[k], N[k], rx[k + 1]))
 
         x_cores = tt_normalise(x_cores)
-        if step_size < 1e-3 or last:
+        if step_size < tol or last:
             break
         if max_res < tol:
             last = True

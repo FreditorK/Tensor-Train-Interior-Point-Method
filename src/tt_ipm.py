@@ -333,8 +333,8 @@ def _tt_ipm_newton_step(
     if res > status.local_res_bound or x_step_size < 1e-3 or z_step_size < 1e-3:
         # regularise
         dim = len(X_tt)
-        Delta_X_tt = tt_identity(dim)
-        Delta_Z_tt = tt_identity(dim)
+        Delta_X_tt = tt_scale(0.1, tt_identity(dim))
+        Delta_Z_tt = tt_scale(0.1, tt_identity(dim))
         Delta_Y_tt = [np.zeros((1, 4, 1)) for _ in range(dim)]
         Delta_T_tt = None
         if status.with_ineq:
@@ -439,13 +439,9 @@ def _tt_line_search(
     else:
 
         X_tt = tt_add(X_tt, tt_scale(status.op_tol, tt_identity(len(X_tt))))
-        print()
-        print("Before: ", np.min(np.linalg.eigvalsh(tt_matrix_to_matrix(X_tt))))
         x_step_size, permitted_err_x = tt_max_generalised_eigen(X_tt, Delta_X_tt, status.op_tol, tol=status.eps, verbose=status.verbose)
 
         Z_tt = tt_add(Z_tt, tt_scale(status.op_tol, tt_identity(len(Z_tt))))
-        print("Before: ", np.min(np.linalg.eigvalsh(tt_matrix_to_matrix(Z_tt))))
-        print()
         z_step_size, permitted_err_z = tt_max_generalised_eigen(Z_tt, Delta_Z_tt, status.op_tol, tol=status.eps, verbose=status.verbose)
 
     permitted_err_t = 1
