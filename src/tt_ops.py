@@ -5,6 +5,7 @@ from cy_src.tt_ops_cy import *
 from functools import reduce
 from functools import lru_cache
 from opt_einsum import contract_expression
+from opt_einsum import contract as einsum
 
 def E(i, j):
     E = np.zeros((1, 2, 2, 1))
@@ -142,7 +143,8 @@ def tt_rank_reduce(train_tt: List[np.array], eps=1e-18, rank_weighted_error=Fals
             train_tt[idx].reshape(rank * np.prod(idx_shape[1:len(idx_shape) - 1], dtype=int), -1),
             full_matrices=False,
             check_finite=False,
-            overwrite_a=True
+            overwrite_a=True,
+            lapack_driver="gesvd"
         )
         next_rank = prune_singular_vals(s, eps[idx])
         train_tt[idx] = u[:, :next_rank].reshape(rank, *idx_shape[1:-1], next_rank)
@@ -152,6 +154,86 @@ def tt_rank_reduce(train_tt: List[np.array], eps=1e-18, rank_weighted_error=Fals
         rank = next_rank
     return train_tt
 
+def tt_psd_rank_reduce(train_tt: List[np.array], eps=1e-18, rank_weighted_error=False):
+    """ Might reduce TT-rank """
+    dim = len(train_tt)
+    eps /= 2
+    ranks = np.array([1] + tt_ranks(train_tt) + [1])
+    if dim == 1 or np.all(ranks==1):
+        return train_tt
+    if rank_weighted_error:
+        weights = ranks[1:-1] * ranks[:-2] + ranks[1:-1] * ranks[2:]
+        eps = np.sqrt(weights/np.sum(weights))*eps
+    else:
+        eps = np.ones(dim - 1) * (eps / np.sqrt(dim - 1))
+    train_tt = tt_rl_orthogonalise(train_tt)
+    rank = 1
+    sum_eps_sq = 0.0
+    for idx, tt_core in enumerate(train_tt[:-1]):
+        idx_shape = tt_core.shape
+        next_idx_shape = train_tt[idx + 1].shape
+        u, s, v_t = scp.linalg.svd(
+            train_tt[idx].reshape(rank * np.prod(idx_shape[1:len(idx_shape) - 1], dtype=int), -1),
+            full_matrices=False,
+            check_finite=False,
+            overwrite_a=True,
+            lapack_driver="gesvd"
+        )
+        sc = np.cumsum(np.abs(s[::-1]) ** 2)[::-1]
+        next_rank = np.argmax(sc < eps[idx] ** 2)
+        next_rank = max(next_rank, 1)
+        next_rank = s.size if sc[-1] > eps[idx] ** 2 else next_rank
+        if next_rank < len(s):
+            sum_eps_sq += sc[next_rank]
+        train_tt[idx] = u[:, :next_rank].reshape(rank, *idx_shape[1:-1], next_rank)
+        train_tt[idx + 1] = (
+            s[:next_rank].reshape(-1, 1) * v_t[:next_rank, :] @ train_tt[idx + 1].reshape(v_t.shape[-1], -1)
+        ).reshape(next_rank, *next_idx_shape[1:-1], -1)
+        rank = next_rank
+    factor = np.pow(sum_eps_sq, 1 / (2 * dim))
+    I = factor * np.eye(train_tt[0].shape[1]).reshape(1, *train_tt[0].shape[1:-1], 1)
+    return tt_add(train_tt, [I] * dim)
+
+
+def tt_mask_rank_reduce(train_tt: List[np.array], mask_tt, eps=1e-18, rank_weighted_error=False):
+    """ Might reduce TT-rank """
+    dim = len(train_tt)
+    eps /= 2
+    ranks = np.array([1] + tt_ranks(train_tt) + [1])
+    if dim == 1 or np.all(ranks==1):
+        return train_tt
+    if rank_weighted_error:
+        weights = ranks[1:-1] * ranks[:-2] + ranks[1:-1] * ranks[2:]
+        eps = np.sqrt(weights/np.sum(weights))*eps
+    else:
+        eps = np.ones(dim - 1) * (eps / np.sqrt(dim - 1))
+    train_tt = tt_rl_orthogonalise(train_tt)
+    rank = 1
+    sum_eps_sq = 0.0
+    for idx, tt_core in enumerate(train_tt[:-1]):
+        idx_shape = tt_core.shape
+        next_idx_shape = train_tt[idx + 1].shape
+        u, s, v_t = scp.linalg.svd(
+            train_tt[idx].reshape(rank * np.prod(idx_shape[1:len(idx_shape) - 1], dtype=int), -1),
+            full_matrices=False,
+            check_finite=False,
+            overwrite_a=True,
+            lapack_driver="gesvd"
+        )
+        sc = np.cumsum(np.abs(s[::-1]) ** 2)[::-1]
+        next_rank = np.argmax(sc < eps[idx] ** 2)
+        next_rank = max(next_rank, 1)
+        next_rank = s.size if sc[-1] > eps[idx] ** 2 else next_rank
+        if next_rank < len(s):
+            sum_eps_sq += sc[next_rank]
+        train_tt[idx] = u[:, :next_rank].reshape(rank, *idx_shape[1:-1], next_rank)
+        train_tt[idx + 1] = (
+            s[:next_rank].reshape(-1, 1) * v_t[:next_rank, :] @ train_tt[idx + 1].reshape(v_t.shape[-1], -1)
+        ).reshape(next_rank, *next_idx_shape[1:-1], -1)
+        rank = next_rank
+    factor = np.pow(sum_eps_sq, 1 / (2 * dim))
+    return tt_add(train_tt, [factor*c for c in mask_tt])
+
 
 def tt_rank_retraction(train_tt: List[np.array], upper_ranks: List[int]):
     """ Might reduce TT-rank """
@@ -160,7 +242,7 @@ def tt_rank_retraction(train_tt: List[np.array], upper_ranks: List[int]):
     for idx, upper_rank in enumerate(upper_ranks):
         idx_shape = train_tt[idx].shape
         next_idx_shape = train_tt[idx + 1].shape
-        U, S, V_T = scip.linalg.svd(train_tt[idx].reshape(rank * np.prod(idx_shape[1:-1], dtype=int), -1), full_matrices=False)
+        U, S, V_T = scip.linalg.svd(train_tt[idx].reshape(rank * np.prod(idx_shape[1:-1], dtype=int), -1), full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
         abs_S = np.abs(S)
         next_rank = min(upper_rank, len(abs_S > 0))
         non_sing_eig_idxs = np.argpartition(abs_S, -next_rank)[-next_rank:]
@@ -184,7 +266,7 @@ def tt_svd(tensor: np.array, err_bound=1e-18) -> List[np.array]:
     cores = []
     for i in range(len(shape) - 1):
         A = tensor.reshape(rank * shape[i], -1)
-        U, S, V_T = scip.linalg.svd(A, full_matrices=False, check_finite=False)
+        U, S, V_T = scip.linalg.svd(A, full_matrices=False, check_finite=False, lapack_driver="gesvd")
         S = S.flatten()
         _, non_sing_eig_idxs = np.asarray(S >= min(np.max(S), err_bound)).nonzero()
         S = S[non_sing_eig_idxs]
@@ -286,12 +368,12 @@ def prune_eig_vals(s, eps):
 
 def swap_cores(core_a, core_b, eps):
     if len(core_a.shape) == 3 and len(core_b.shape) == 3:
-        u, s, v = scip.linalg.svd(cached_einsum("rms,snR->rnmR", core_a, core_b).reshape(core_a.shape[0] * core_b.shape[1], -1), full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
+        u, s, v = scip.linalg.svd(einsum("rms,snR->rnmR", core_a, core_b, optimize=[(0, 1)]).reshape(core_a.shape[0] * core_b.shape[1], -1), full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
         r = prune_singular_vals(s, eps)
         return np.reshape(u[:, :r] * s[:r].reshape(1, -1), (core_a.shape[0], core_b.shape[1], -1)), np.reshape(v[:r, :],(-1, core_a.shape[1], core_b.shape[2]))
     elif len(core_a.shape) == 4 and len(core_b.shape) == 4:
         # TODO: Can we split them up before
-        u, s, v = scip.linalg.svd(cached_einsum("rmas,snbR->rnbmaR", core_a, core_b).reshape(core_a.shape[0] * core_b.shape[1] * core_b.shape[2], -1), full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
+        u, s, v = scip.linalg.svd(einsum("rmas,snbR->rnbmaR", core_a, core_b, optimize=[(0, 1)]).reshape(core_a.shape[0] * core_b.shape[1] * core_b.shape[2], -1), full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
         r = prune_singular_vals(s, eps)
         return np.reshape(u[:, :r] * s[:r].reshape(1, -1), (core_a.shape[0], core_b.shape[1], core_b.shape[2], -1)), np.reshape(v[:r, :], (-1, core_a.shape[1], core_a.shape[2], core_b.shape[3]))
     else:
@@ -305,7 +387,7 @@ def tt_fast_matrix_vec_mul(matrix_tt: List[np.array], vec_tt: List[np.array], ep
 
     cores = [np.transpose(c, (2, 1, 0)) for c in reversed(vec_tt)]
     for i in range(dim):
-        cores[0] = cached_einsum("mabk,kbn->man", matrix_tt[dim - i - 1], cores[0])
+        cores[0] = einsum("mabk,kbn->man", matrix_tt[dim - i - 1], cores[0], optimize=[(0, 1)])
 
         if i != dim - 1:
             for j in range(i, -1, -1):
@@ -319,7 +401,7 @@ def tt_fast_mat_mat_mul(matrix_tt_1, matrix_tt_2, eps=1e-18):
 
     cores = [np.transpose(c, (3, 1, 2, 0)) for c in reversed(matrix_tt_2)]
     for i in range(dim):
-        cores[0] = cached_einsum("mabk,kbcn->macn", matrix_tt_1[dim - i - 1], cores[0])
+        cores[0] = einsum("mabk,kbcn->macn", matrix_tt_1[dim - i - 1], cores[0], optimize=[(0, 1)])
 
         if i != dim - 1:
             for j in range(i, -1, -1):
@@ -361,7 +443,8 @@ def tt_fast_hadammard(train_tt_1, train_tt_2, eps=1e-18):
 
 def tt_kron(matrix_tt_1, matrix_tt_2):
     # FIXME:  DO SVD right away to not be overbearing to memory
-    result_tt = [cached_einsum("rmnR, lijL -> rlminjRL", c_1, c_2).reshape(c_1.shape[0]*c_2.shape[0], c_1.shape[1]*c_2.shape[1], c_1.shape[2]*c_2.shape[2], c_1.shape[-1]*c_2.shape[-1]) for c_1, c_2 in zip(matrix_tt_1, matrix_tt_2)]
+    path = [(0, 1)]
+    result_tt = [einsum("rmnR, lijL -> rlminjRL", c_1, c_2, optimize=path).reshape(c_1.shape[0]*c_2.shape[0], c_1.shape[1]*c_2.shape[1], c_1.shape[2]*c_2.shape[2], c_1.shape[-1]*c_2.shape[-1]) for c_1, c_2 in zip(matrix_tt_1, matrix_tt_2)]
     return result_tt
 
 
@@ -411,7 +494,8 @@ def tt_split_bonds(matrix_tt):
 
 
 def tt_merge_bonds(vec_tt):
-    return [cached_einsum("abc, cde -> abde", c_1, c_2) for c_1, c_2 in zip(vec_tt[:-1:2], vec_tt[1::2])]
+    path = [(0, 1)]
+    return [einsum("abc, cde -> abde", c_1, c_2, optimize=path) for c_1, c_2 in zip(vec_tt[:-1:2], vec_tt[1::2])]
 
 
 def _tt_generalised_nystroem(tt_train, tt_gaussian_1, tt_gaussian_2):
@@ -452,7 +536,8 @@ def tt_norm(train_tt):
 
 def tt_diag(vec_tt, eps=1e-18):
     identity = np.eye(vec_tt[0].shape[1])
-    basis = [cached_einsum("ij, rjR -> rijR", identity, c) for c in vec_tt]
+    path = [(0, 1)]
+    basis = [einsum("ij, rjR -> rijR", identity, c, optimize=path) for c in vec_tt]
     return tt_rank_reduce(basis, eps)
 
 def tt_diagonal(matrix_tt):
@@ -473,9 +558,10 @@ def tt_reshape(train_tt, shape):
     return [c.reshape(c.shape[0], *shape, c.shape[-1]) for c in train_tt]
 
 def tt_merge_cores(train_tt):
+    path = [(0, 1)]
     if len(train_tt[0].shape[1:-1]) == 1:
-        return [cached_einsum("kir, rsK -> kisK", c_1, c_2) for c_1, c_2 in zip(train_tt[:-1:2], train_tt[1::2])]
-    return [cached_einsum("kijr, rsdK -> kisjdK", c_1, c_2) for c_1, c_2 in zip(train_tt[:-1:2], train_tt[1::2])]
+        return [einsum("kir, rsK -> kisK", c_1, c_2, optimize=path) for c_1, c_2 in zip(train_tt[:-1:2], train_tt[1::2])]
+    return [einsum("kijr, rsdK -> kisjdK", c_1, c_2, optimize=path) for c_1, c_2 in zip(train_tt[:-1:2], train_tt[1::2])]
 
 
 def tt_random_rank_one(dim):
@@ -521,16 +607,19 @@ def tt_skew_zero_op(op_tt, eps):
 
 def tt_IkronM(matrix_tt):
     I = np.eye(2).reshape(1, 2, 2, 1)
-    return [cached_einsum("rmnR, lijL -> rlminjRL", I, c).reshape(c.shape[0], 4, 4, c.shape[-1]) for c in matrix_tt]
+    path = [(0, 1)]
+    return [einsum("rmnR, lijL -> rlminjRL", I, c, optimize=path).reshape(c.shape[0], 4, 4, c.shape[-1]) for c in matrix_tt]
 
 def tt_MkronI(matrix_tt):
     I = np.eye(2).reshape(1, 2, 2, 1)
-    return [cached_einsum("rmnR, lijL -> rlminjRL", c, I).reshape(c.shape[0], 4, 4, c.shape[-1]) for c in matrix_tt]
+    path = [(0, 1)]
+    return [einsum("rmnR, lijL -> rlminjRL", c, I, optimize=path).reshape(c.shape[0], 4, 4, c.shape[-1]) for c in matrix_tt]
 
 
 def tt_diag_op(matrix_tt, eps=1e-18, rank_weighted_error=False):
     identity = np.eye(matrix_tt[0].shape[1]*matrix_tt[0].shape[2])
-    basis = [cached_einsum("ij, rjR -> rijR", identity, c.reshape(c.shape[0], c.shape[1]*c.shape[2], c.shape[3])) for c in matrix_tt]
+    path = [(0, 1)]
+    basis = [einsum("ij, rjR -> rijR", identity, c.reshape(c.shape[0], c.shape[1]*c.shape[2], c.shape[3]), optimize=path) for c in matrix_tt]
     return tt_rank_reduce(basis, eps, rank_weighted_error)
 
 def tt_tril_one_matrix(dim):

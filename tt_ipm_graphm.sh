@@ -8,12 +8,22 @@ export MKL_NUM_THREADS=8
 export OPENBLAS_NUM_THREADS=8
 export NUMEXPR_NUM_THREADS=8
 
+# Cleanup on exit or interrupt
+cleanup() {
+    echo -e "\n⚠️ Caught interrupt. Cleaning up at $(date)..." >&2
+    pkill -P $$ 2>/dev/null
+    echo "🧹 Cleaned up. Exiting." >&2
+    exit 1
+}
+trap cleanup SIGINT SIGTERM
+trap 'echo -e "\n⚠️ Script resumed (was suspended). Memory may not have been cleaned up."' SIGCONT
+
 # ---------------------------
 # Parameters
 # ---------------------------
 BASE_TIMEOUT=1800  # 30 minutes
-START_DIM=3
-END_DIM=4
+START_DIM=2
+END_DIM=2
 
 # ---------------------------
 # Logging setup
@@ -23,7 +33,7 @@ exec > >(tee -a "$LOGFILE") 2>&1
 
 echo "==== Graph Matching TT-IPM Batch Run Started at $(date) ===="
 
-cd psd_system/maxcut
+cd psd_system/graphm
 
 # ---------------------------
 # Loop through configs

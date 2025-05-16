@@ -12,8 +12,18 @@ export NUMEXPR_NUM_THREADS=8
 # Parameters
 # ---------------------------
 BASE_TIMEOUT=1800  # 30 minutes
-START_DIM=8
-END_DIM=8
+START_DIM=7
+END_DIM=7
+
+# Cleanup on exit or interrupt
+cleanup() {
+    echo -e "\n⚠️ Caught interrupt. Cleaning up at $(date)..." >&2
+    pkill -P $$ 2>/dev/null
+    echo "🧹 Cleaned up. Exiting." >&2
+    exit 1
+}
+trap cleanup SIGINT SIGTERM
+trap 'echo -e "\n⚠️ Script resumed (was suspended). Memory may not have been cleaned up."' SIGCONT
 
 # ---------------------------
 # Logging setup
@@ -33,7 +43,7 @@ for dim in $(seq $START_DIM $END_DIM); do
     echo -e "\n▶ Running dim=$dim with config=$CONFIG at $(date)"
     CURRENT_TIMEOUT=$((BASE_TIMEOUT * dim))
 
-    timeout "$CURRENT_TIMEOUT" python maxcut.py --config "$CONFIG" --track_mem
+    timeout "$CURRENT_TIMEOUT" python maxcut.py --config "$CONFIG"
     status=$?
 
     if [ $status -eq 124 ]; then

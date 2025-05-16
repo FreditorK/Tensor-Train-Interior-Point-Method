@@ -15,6 +15,16 @@ BASE_TIMEOUT=1800  # 30 minutes
 START_DIM=6
 END_DIM=10
 
+# Cleanup on exit or interrupt
+cleanup() {
+    echo -e "\n⚠️ Caught interrupt. Cleaning up at $(date)..." >&2
+    pkill -P $$ 2>/dev/null
+    echo "🧹 Cleaned up. Exiting." >&2
+    exit 1
+}
+trap cleanup SIGINT SIGTERM
+trap 'echo -e "\n⚠️ Script resumed (was suspended). Memory may not have been cleaned up."' SIGCONT
+
 # ---------------------------
 # Logging setup
 # ---------------------------
@@ -23,7 +33,7 @@ exec > >(tee -a "$LOGFILE") 2>&1
 
 echo "==== Max Stable Set TT-IPM Batch Run Started at $(date) ===="
 
-cd psd_system/maxcut
+cd psd_system/stable_set
 
 # ---------------------------
 # Loop through configs

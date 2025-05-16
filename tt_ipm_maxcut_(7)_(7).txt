@@ -1,0 +1,6518 @@
+==== Maxcut TT-IPM Batch Run Started at Thu May 15 05:58:53 PM BST 2025 ====
+
+▶ Running dim=7 with config=configs/maxcut_7.yaml at Thu May 15 05:58:53 PM BST 2025
+Seed:  5
+
+Results of iteration 0:
+Finishing up: False
+Is central: False, Is primal feasible:  True, Is dual feasible: False
+Using AHO-Direction: False
+Centrality Error: 0.09077084725284756
+Primal-Dual Error: (np.float64(1.851629348289397e-15), np.float64(6.103963929382101))
+Sigma: 0.5
+Ranks X_tt: [1, 1, 1, 1, 1, 1], Z_tt: [1, 1, 1, 1, 1, 1], 
+      Y_tt: [1, 1, 1, 1, 1, 1], T_tt: None 
+
+--- Step 1 ---
+--- Predictor  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction 1
+	Residual inf
+	TT-sol rank: [3, 3, 3, 3, 3, 3]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction -1
+	Residual 32.58774291892878
+	TT-sol rank: [2, 4, 4, 4, 4, 4]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction 1
+	Residual 0.002027221896995031
+	TT-sol rank: [4, 6, 6, 5, 4, 2]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction -1
+	Residual 0.00040847818790344084
+	TT-sol rank: [2, 5, 5, 5, 5, 4]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction 1
+	Residual 7.754525791264296e-15
+	TT-sol rank: [4, 7, 7, 5, 4, 2]
+
+	---Results---
+	Solution rank is [4 7 7 5 4 2]
+	Residual  7.754525791264296e-15
+	Number of sweeps 5
+	Time:  0.13148784637451172
+	Time per sweep:  0.02629828453063965
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	Starting Sweep: 1
+	Step size: 1.000000
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.05517935752868652
+	 Time per sweep:  0.027591943740844727
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.967072
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 3, 3, 3]
+	Starting Sweep: 1
+	Step size: 0.967072
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 3, 3, 2]
+	 -----
+	 Solution rank is [1 2 2 1 1 1]
+	Step size: 0.967072
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.03988385200500488
+	 Time per sweep:  0.019943833351135254
+
+--- Centering-Corrector  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 6, 6, 6, 6, 6]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 22.701603766477476
+	TT-sol rank: [5, 7, 8, 6, 5, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 0.00023309915251545264
+	TT-sol rank: [2, 5, 6, 6, 6, 5]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction 1
+	Residual 4.34421740188211e-05
+	TT-sol rank: [5, 8, 8, 6, 5, 2]
+
+	---Results---
+	Solution rank is [5 8 8 6 5 2]
+	Residual  4.34421740188211e-05
+	Number of sweeps 4
+	Time:  0.12713861465454102
+	Time per sweep:  0.03178596496582031
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	Starting Sweep: 1
+	Step size: 1.000000
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.030922889709472656
+	 Time per sweep:  0.015463471412658691
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.483223
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.483223
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	Step size: 0.483223
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.03928709030151367
+	 Time per sweep:  0.019645333290100098
+Step sizes: 1.0000, 0.4349
+Permitted errors: (np.float64(0.7294567736397333), np.float64(5.4808041105580685e-08), 1)
+
+Results of iteration 1:
+Finishing up: False
+Is central: False, Is primal feasible:  True, Is dual feasible: False
+Using AHO-Direction: False
+Centrality Error: 0.011849897825793269
+Primal-Dual Error: (np.float64(3.9110298239006275e-05), np.float64(0.7951907468158685))
+Sigma: 0.002174046961336573
+Ranks X_tt: [3, 6, 6, 5, 5, 3], Z_tt: [3, 6, 6, 6, 5, 3], 
+      Y_tt: [1, 2, 2, 3, 2, 1], T_tt: None 
+
+--- Step 2 ---
+--- Predictor  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction 1
+	Residual inf
+	TT-sol rank: [3, 3, 3, 3, 3, 3]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction -1
+	Residual 48.76024600696416
+	TT-sol rank: [2, 6, 6, 7, 7, 7]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction 1
+	Residual 0.004754677308292585
+	TT-sol rank: [5, 11, 12, 9, 6, 2]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction -1
+	Residual 0.00024404762240991048
+	TT-sol rank: [2, 6, 9, 11, 9, 5]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction 1
+	Residual 5.490225382622519e-05
+	TT-sol rank: [5, 12, 13, 10, 6, 2]
+
+	---Results---
+	Solution rank is [ 5 12 13 10  6  2]
+	Residual  5.490225382622519e-05
+	Number of sweeps 5
+	Time:  0.26294875144958496
+	Time per sweep:  0.05259075164794922
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [3, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	Starting Sweep: 1
+	Step size: 1.000000
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 4, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 2 2 1]
+	Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.04295039176940918
+	 Time per sweep:  0.021477699279785156
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [3, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.740842
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.740842
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	Step size: 0.740842
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.04642748832702637
+	 Time per sweep:  0.0232161283493042
+
+--- Centering-Corrector  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 6, 6, 6, 6, 6]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 30.460945815289943
+	TT-sol rank: [5, 13, 13, 11, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 0.0026585214727506065
+	TT-sol rank: [2, 6, 9, 13, 10, 5]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction 1
+	Residual 9.492044726644486e-05
+	TT-sol rank: [5, 12, 15, 14, 7, 2]
+
+	---Results---
+	Solution rank is [ 5 12 15 14  7  2]
+	Residual  9.492044726644486e-05
+	Number of sweeps 4
+	Time:  0.3926370143890381
+	Time per sweep:  0.09816032648086548
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.887385
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.887385
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	Step size: 0.887385
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.035308122634887695
+	 Time per sweep:  0.01765573024749756
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.377887
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.377887
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	Step size: 0.377887
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.037370920181274414
+	 Time per sweep:  0.018687725067138672
+Step sizes: 0.7986, 0.3401
+Permitted errors: (np.float64(-1.250131235086549e-05), np.float64(2.2945284932490706e-06), 1)
+
+Results of iteration 2:
+Finishing up: False
+Is central: False, Is primal feasible:  True, Is dual feasible: False
+Using AHO-Direction: False
+Centrality Error: 0.003814367923171172
+Primal-Dual Error: (np.float64(0.00011379031867760281), np.float64(0.2547361739794702))
+Sigma: 0.03645901065070316
+Ranks X_tt: [3, 7, 10, 13, 7, 3], Z_tt: [3, 6, 6, 7, 5, 3], 
+      Y_tt: [1, 2, 2, 3, 2, 1], T_tt: None 
+
+--- Step 3 ---
+--- Predictor  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction 1
+	Residual inf
+	TT-sol rank: [3, 3, 3, 3, 3, 3]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction -1
+	Residual 1715.861200384902
+	TT-sol rank: [2, 6, 6, 7, 7, 8]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction 1
+	Residual 0.09319424519730754
+	TT-sol rank: [5, 11, 12, 10, 7, 2]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction -1
+	Residual 0.025727833316731386
+	TT-sol rank: [2, 6, 10, 13, 10, 5]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction 1
+	Residual 0.0029938143112155447
+	TT-sol rank: [5, 11, 14, 15, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 5
+	Direction -1
+	Residual 0.0013522899583604418
+	TT-sol rank: [2, 6, 10, 16, 11, 5]
+	Starting Sweep:
+	Max num of sweeps: 6
+	Direction 1
+	Residual 0.00044715214281318373
+	TT-sol rank: [5, 11, 14, 16, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 7
+	Direction -1
+	Residual 0.0006435864106367303
+	TT-sol rank: [2, 6, 10, 17, 11, 5]
+
+	---Results---
+	Solution rank is [ 2  6 10 17 11  5]
+	Residual  0.0006435864106367303
+	Number of sweeps 8
+	Time:  0.6085474491119385
+	Time per sweep:  0.07606905698776245
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	Starting Sweep: 1
+	Step size: 1.000000
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.03377890586853027
+	 Time per sweep:  0.01689136028289795
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.257318
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.250718
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	Starting Sweep: 1
+	Step size: 0.250713
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	Step size: 0.250713
+	 Residual 0
+	 Number of sweeps 3
+	 Time:  0.05913686752319336
+	 Time per sweep:  0.019713958104451496
+
+--- Centering-Corrector  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction 1
+	Residual inf
+	TT-sol rank: [5, 6, 6, 4, 4, 2]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction -1
+	Residual 2.406852781144635
+	TT-sol rank: [2, 6, 8, 7, 7, 5]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction 1
+	Residual 0.06984702247427921
+	TT-sol rank: [5, 9, 11, 10, 7, 2]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction -1
+	Residual 0.054523964354254585
+	TT-sol rank: [2, 6, 10, 13, 9, 5]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction 1
+	Residual 0.007490037181538298
+	TT-sol rank: [5, 9, 12, 13, 7, 2]
+	Starting Sweep:
+	Max num of sweeps: 5
+	Direction -1
+	Residual 0.0027837361851448497
+	TT-sol rank: [2, 6, 10, 14, 9, 5]
+	Starting Sweep:
+	Max num of sweeps: 6
+	Direction 1
+	Residual 0.001751553755285504
+	TT-sol rank: [5, 9, 12, 14, 7, 2]
+	Starting Sweep:
+	Max num of sweeps: 7
+	Direction -1
+	Residual 0.0028049585682979575
+	TT-sol rank: [2, 6, 10, 15, 9, 5]
+
+	---Results---
+	Solution rank is [ 2  6 10 15  9  5]
+	Residual  0.0028049585682979575
+	Number of sweeps 8
+	Time:  0.5170209407806396
+	Time per sweep:  0.0646284818649292
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	Starting Sweep: 1
+	Step size: 1.000000
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 4, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 2 2 1]
+	Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.028856515884399414
+	 Time per sweep:  0.014430522918701172
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.187262
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.187262
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	Step size: 0.187262
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.04119706153869629
+	 Time per sweep:  0.020600557327270508
+Step sizes: 1.0000, 0.1685
+Permitted errors: (np.float64(0.022186591205799244), np.float64(2.218142808934828e-06), 1)
+
+Results of iteration 3:
+Finishing up: False
+Is central: False, Is primal feasible:  True, Is dual feasible: False
+Using AHO-Direction: False
+Centrality Error: 0.0012408025656667765
+Primal-Dual Error: (np.float64(0.00016399328414169), np.float64(0.16937947684719273))
+Sigma: 0.3546598185405202
+Ranks X_tt: [3, 7, 11, 16, 9, 3], Z_tt: [3, 7, 9, 8, 5, 3], 
+      Y_tt: [1, 2, 2, 3, 2, 1], T_tt: None 
+
+--- Step 4 ---
+--- Predictor  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction 1
+	Residual inf
+	TT-sol rank: [3, 3, 3, 3, 3, 3]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction -1
+	Residual 1023.036945406498
+	TT-sol rank: [2, 6, 6, 7, 7, 7]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction 1
+	Residual 1.8338017276355636
+	TT-sol rank: [5, 10, 10, 10, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction -1
+	Residual 0.24204193841441607
+	TT-sol rank: [2, 6, 10, 13, 11, 5]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction 1
+	Residual 0.04930559473242893
+	TT-sol rank: [5, 9, 13, 15, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 5
+	Direction -1
+	Residual 0.020849048464748277
+	TT-sol rank: [2, 6, 10, 16, 11, 5]
+	Starting Sweep:
+	Max num of sweeps: 6
+	Direction 1
+	Residual 0.0163606873535137
+	TT-sol rank: [5, 9, 13, 17, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 7
+	Direction -1
+	Residual 0.02238055207254306
+	TT-sol rank: [2, 6, 10, 18, 11, 5]
+
+	---Results---
+	Solution rank is [ 2  6 10 18 11  5]
+	Residual  0.02238055207254306
+	Number of sweeps 8
+	Time:  0.6577086448669434
+	Time per sweep:  0.08221414685249329
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 3, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.812056
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 3, 3, 4, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.811286
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 3, 3, 4, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	Step size: 0.424520
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.043436288833618164
+	 Time per sweep:  0.021720051765441895
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.977936
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 4, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.977935
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 4, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 2 2 1]
+	Step size: 0.977935
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.036037445068359375
+	 Time per sweep:  0.0180206298828125
+
+--- Centering-Corrector  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction 1
+	Residual inf
+	TT-sol rank: [4, 5, 5, 5, 5, 2]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction -1
+	Residual 5.012526501677701
+	TT-sol rank: [2, 6, 7, 9, 9, 5]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction 1
+	Residual 0.4943485617854292
+	TT-sol rank: [5, 9, 10, 12, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction -1
+	Residual 0.050651040207207274
+	TT-sol rank: [2, 6, 10, 14, 11, 5]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction 1
+	Residual 0.01716247896488709
+	TT-sol rank: [5, 9, 13, 16, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 5
+	Direction -1
+	Residual 0.018160815219215493
+	TT-sol rank: [2, 6, 10, 17, 11, 5]
+	Starting Sweep:
+	Max num of sweeps: 6
+	Direction 1
+	Residual 0.01757199703632073
+	TT-sol rank: [5, 9, 13, 18, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 7
+	Direction -1
+	Residual 0.01911773781647371
+	TT-sol rank: [2, 6, 10, 18, 11, 5]
+
+	---Results---
+	Solution rank is [ 2  6 10 18 11  5]
+	Residual  0.01911773781647371
+	Number of sweeps 8
+	Time:  0.9356071949005127
+	Time per sweep:  0.11695125699043274
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.321640
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.321640
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 6, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	Step size: 0.321640
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.038559913635253906
+	 Time per sweep:  0.019282102584838867
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.319497
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.319496
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	Step size: 0.319496
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.039179086685180664
+	 Time per sweep:  0.019591569900512695
+Step sizes: 0.2895, 0.2875
+Permitted errors: (np.float64(-8.349367420723564e-06), np.float64(5.9070330762443085e-06), 1)
+
+Results of iteration 4:
+Finishing up: False
+Is central: False, Is primal feasible:  True, Is dual feasible: False
+Using AHO-Direction: False
+Centrality Error: 0.000522509209732792
+Primal-Dual Error: (np.float64(0.00019141636134551945), np.float64(0.07236492867817801))
+Sigma: 0.07517893593869082
+Ranks X_tt: [3, 7, 11, 18, 9, 3], Z_tt: [3, 7, 10, 10, 5, 3], 
+      Y_tt: [1, 2, 2, 3, 2, 1], T_tt: None 
+
+--- Step 5 ---
+--- Predictor  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction 1
+	Residual inf
+	TT-sol rank: [3, 3, 3, 3, 3, 3]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction -1
+	Residual 1260.593193390777
+	TT-sol rank: [2, 6, 5, 7, 7, 8]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction 1
+	Residual 1.3474743778089033
+	TT-sol rank: [5, 9, 9, 11, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction -1
+	Residual 0.32575522860455747
+	TT-sol rank: [2, 6, 10, 14, 12, 5]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction 1
+	Residual 0.024271619042712744
+	TT-sol rank: [5, 10, 14, 16, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 5
+	Direction -1
+	Residual 0.02111504386648468
+	TT-sol rank: [2, 6, 10, 16, 12, 5]
+	Starting Sweep:
+	Max num of sweeps: 6
+	Direction 1
+	Residual 0.012171227354562214
+	TT-sol rank: [5, 10, 14, 17, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 7
+	Direction -1
+	Residual 0.020984805289216573
+	TT-sol rank: [2, 6, 10, 17, 12, 5]
+
+	---Results---
+	Solution rank is [ 2  6 10 17 12  5]
+	Residual  0.020984805289216573
+	Number of sweeps 8
+	Time:  0.7429797649383545
+	Time per sweep:  0.09287318587303162
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.301908
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.301908
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 6, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	Step size: 0.301908
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.04845285415649414
+	 Time per sweep:  0.024228692054748535
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 4, 4, 3]
+	Starting Sweep: 1
+	Step size: 1.000000
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 4, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 2 2 1]
+	Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.03022027015686035
+	 Time per sweep:  0.015112161636352539
+
+--- Centering-Corrector  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction 1
+	Residual inf
+	TT-sol rank: [3, 4, 4, 4, 4, 2]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction -1
+	Residual 7.880124126932711
+	TT-sol rank: [2, 6, 6, 9, 8, 5]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction 1
+	Residual 0.49095872571157007
+	TT-sol rank: [5, 10, 10, 12, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction -1
+	Residual 0.11459936548540967
+	TT-sol rank: [2, 6, 10, 15, 12, 5]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction 1
+	Residual 0.02908949323595697
+	TT-sol rank: [5, 10, 13, 17, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 5
+	Direction -1
+	Residual 0.04655296789151382
+	TT-sol rank: [2, 6, 10, 17, 12, 5]
+	Starting Sweep:
+	Max num of sweeps: 6
+	Direction 1
+	Residual 0.028943586472810773
+	TT-sol rank: [5, 10, 13, 18, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 7
+	Direction -1
+	Residual 0.045875943947469376
+	TT-sol rank: [2, 6, 10, 18, 12, 5]
+
+	---Results---
+	Solution rank is [ 2  6 10 18 12  5]
+	Residual  0.045875943947469376
+	Number of sweeps 8
+	Time:  1.111570119857788
+	Time per sweep:  0.13894671201705933
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.545199
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 3, 3, 4, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.545199
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 3, 3, 4, 4, 2]
+	 -----
+	 Solution rank is [1 1 1 2 2 1]
+	Step size: 0.545199
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.030524015426635742
+	 Time per sweep:  0.015264272689819336
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.289941
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.289940
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 6, 4, 2]
+	Starting Sweep: 1
+	Step size: 0.289940
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	Step size: 0.289940
+	 Residual 0
+	 Number of sweeps 3
+	 Time:  0.044800758361816406
+	 Time per sweep:  0.014934857686360678
+Step sizes: 0.4907, 0.2609
+Permitted errors: (np.float64(-1.9176266857767743e-07), np.float64(4.574661297777254e-06), 1)
+
+Results of iteration 5:
+Finishing up: False
+Is central: True, Is primal feasible:  True, Is dual feasible: False
+Using AHO-Direction: False
+Centrality Error: 9.869403040548912e-05
+Primal-Dual Error: (np.float64(0.00027940561815816906), np.float64(0.035182845333158665))
+Sigma: 0.16902840354468196
+Ranks X_tt: [3, 7, 11, 17, 9, 3], Z_tt: [3, 7, 10, 9, 5, 3], 
+      Y_tt: [1, 2, 2, 3, 2, 1], T_tt: None 
+
+--- Step 6 ---
+--- Predictor  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction 1
+	Residual inf
+	TT-sol rank: [3, 3, 3, 3, 3, 3]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction -1
+	Residual 1685.1424924663647
+	TT-sol rank: [2, 5, 7, 7, 7, 8]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction 1
+	Residual 0.06282855982570468
+	TT-sol rank: [5, 12, 16, 16, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction -1
+	Residual 0.061380569205435276
+	TT-sol rank: [2, 6, 11, 24, 14, 5]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction 1
+	Residual 0.003420829133628649
+	TT-sol rank: [5, 14, 21, 27, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 5
+	Direction -1
+	Residual 0.00038604534429212796
+	TT-sol rank: [2, 6, 11, 30, 14, 5]
+	Starting Sweep:
+	Max num of sweeps: 6
+	Direction 1
+	Residual 0.0002831633309739969
+	TT-sol rank: [5, 14, 21, 28, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 7
+	Direction -1
+	Residual 0.00012452235237481348
+	TT-sol rank: [2, 6, 11, 30, 14, 5]
+
+	---Results---
+	Solution rank is [ 2  6 11 30 14  5]
+	Residual  0.00012452235237481348
+	Number of sweeps 8
+	Time:  2.077366828918457
+	Time per sweep:  0.25967124104499817
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 3, 3, 4, 4, 3]
+	 -----
+	 Solution rank is [1 1 1 2 2 1]
+	Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.030659914016723633
+	 Time per sweep:  0.015331625938415527
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 4, 4, 3]
+	Starting Sweep: 1
+	Step size: 1.000000
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 4, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.02728104591369629
+	 Time per sweep:  0.013641834259033203
+Step sizes: 1.0000, 1.0000
+Permitted errors: (np.float64(0.011595214753425015), np.float64(0.0001435674738548752), 1)
+
+Results of iteration 6:
+Finishing up: True
+Is central: True, Is primal feasible:  True, Is dual feasible: True
+Using AHO-Direction: False
+Centrality Error: 0.00010076383207162336
+Primal-Dual Error: (np.float64(0.0003760116413825511), np.float64(0.0001630705335914647))
+Sigma: 0
+Ranks X_tt: [3, 7, 11, 16, 9, 3], Z_tt: [3, 6, 6, 7, 5, 3], 
+      Y_tt: [1, 2, 2, 3, 2, 1], T_tt: None 
+
+--- Step 7 ---
+--- Predictor  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction 1
+	Residual inf
+	TT-sol rank: [3, 3, 3, 3, 3, 3]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction -1
+	Residual 5281.082653808663
+	TT-sol rank: [2, 5, 5, 6, 7, 7]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction 1
+	Residual 2.758085692778966
+	TT-sol rank: [4, 8, 8, 9, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction -1
+	Residual 0.7319215355301946
+	TT-sol rank: [2, 6, 9, 11, 11, 4]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction 1
+	Residual 0.17065235772940363
+	TT-sol rank: [3, 8, 11, 14, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 5
+	Direction -1
+	Residual 0.09785979431952417
+	TT-sol rank: [2, 6, 10, 16, 11, 4]
+	Starting Sweep:
+	Max num of sweeps: 6
+	Direction 1
+	Residual 0.1111601463368093
+	TT-sol rank: [4, 9, 13, 18, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 7
+	Direction -1
+	Residual 0.029801746014014172
+	TT-sol rank: [2, 6, 10, 19, 10, 3]
+	Starting Sweep:
+	Max num of sweeps: 8
+	Direction 1
+	Residual 0.03344861214329423
+	TT-sol rank: [3, 8, 12, 21, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 9
+	Direction -1
+	Residual 0.024679998910957502
+	TT-sol rank: [2, 6, 10, 21, 10, 3]
+
+	---Results---
+	Solution rank is [ 2  6 10 21 10  3]
+	Residual  0.024679998910957502
+	Number of sweeps 10
+	Time:  1.6604361534118652
+	Time per sweep:  0.16604394912719728
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [3, 3, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 3, 3, 4, 4, 3]
+	 -----
+	 Solution rank is [1 1 1 2 2 1]
+	Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.019736766815185547
+	 Time per sweep:  0.009869813919067383
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	Starting Sweep: 1
+	Step size: 1.000000
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.03410935401916504
+	 Time per sweep:  0.01705622673034668
+Step sizes: 1.0000, 1.0000
+Permitted errors: (np.float64(0.009555881168867715), np.float64(0.009980065862864505), 1)
+---Terminated---
+Converged in 7 iterations.
+Ranks X_tt: [2, 5, 8, 13, 8, 2], Z_tt: [2, 5, 5, 5, 4, 2], 
+      Y_tt: [1, 2, 2, 3, 2, 1], T_tt: None 
+
+Converged after 7.0 iterations
+Problem created in 0.004s
+Problem solved in 11.452s
+Complementary Slackness: 0.0030652865529308196
+Total feasibility error: 2.130862242779769e-05
+--- Run Summary ---
+Converged after avg 7.0 iterations
+Problem created in avg 0.004s
+Problem solved in avg 11.452s
+Complementary Slackness avg: 0.0030652865529308196
+Total feasibility error avg: 2.130862242779769e-05
+✅ Completed dim=7 successfully
+
+==== All runs completed at Thu May 15 05:59:05 PM BST 2025 ====
+==== Maxcut TT-IPM Batch Run Started at Thu May 15 06:26:11 PM BST 2025 ====
+
+▶ Running dim=7 with config=configs/maxcut_7.yaml at Thu May 15 06:26:11 PM BST 2025
+Seed:  5
+
+Results of iteration 0:
+Finishing up: False
+Is central: False, Is primal feasible:  True, Is dual feasible: False
+Using AHO-Direction: False
+Centrality Error: 0.09077084725284756
+Primal-Dual Error: (np.float64(1.851629348289397e-15), np.float64(6.103963929382101))
+Sigma: 0.5
+Ranks X_tt: [1, 1, 1, 1, 1, 1], Z_tt: [1, 1, 1, 1, 1, 1], 
+      Y_tt: [1, 1, 1, 1, 1, 1], T_tt: None 
+
+--- Step 1 ---
+--- Predictor  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction 1
+	Residual inf
+	TT-sol rank: [3, 3, 3, 3, 3, 3]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction -1
+	Residual 32.58774291892878
+	TT-sol rank: [2, 4, 4, 4, 4, 4]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction 1
+	Residual 0.002027221896995031
+	TT-sol rank: [4, 6, 6, 5, 4, 2]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction -1
+	Residual 0.00040847818790344084
+	TT-sol rank: [2, 5, 5, 5, 5, 4]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction 1
+	Residual 7.754525791264296e-15
+	TT-sol rank: [4, 7, 7, 5, 4, 2]
+
+	---Results---
+	Solution rank is [4 7 7 5 4 2]
+	Residual  7.754525791264296e-15
+	Number of sweeps 5
+	Time:  0.060956716537475586
+	Time per sweep:  0.012191677093505859
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	Starting Sweep: 1
+	Step size: 1.000000
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.025938749313354492
+	 Time per sweep:  0.012970805168151855
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.967072
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 3, 3, 3]
+	Starting Sweep: 1
+	Step size: 0.967072
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 3, 3, 2]
+	 -----
+	 Solution rank is [1 2 2 1 1 1]
+	Step size: 0.967072
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.02029561996459961
+	 Time per sweep:  0.010148763656616211
+
+--- Centering-Corrector  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 7, 7, 7, 7, 6]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 8.402427084649634
+	TT-sol rank: [5, 8, 8, 6, 5, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 5.941182064298573e-05
+	TT-sol rank: [2, 5, 6, 6, 6, 5]
+
+	---Results---
+	Solution rank is [2 5 6 6 6 5]
+	Residual  5.941182064298573e-05
+	Number of sweeps 3
+	Time:  0.04509139060974121
+	Time per sweep:  0.015031178792317709
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	Starting Sweep: 1
+	Step size: 1.000000
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.015480995178222656
+	 Time per sweep:  0.007741570472717285
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.483235
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.483235
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	Step size: 0.483235
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.017938852310180664
+	 Time per sweep:  0.00897073745727539
+Step sizes: 1.0000, 0.4349
+Permitted errors: (np.float64(0.7294584013083107), np.float64(5.0665595163756905e-08), 1)
+
+Results of iteration 1:
+Finishing up: False
+Is central: False, Is primal feasible:  True, Is dual feasible: False
+Using AHO-Direction: False
+Centrality Error: 0.011849649582277298
+Primal-Dual Error: (np.float64(4.371746960069665e-05), np.float64(0.7951651048854649))
+Sigma: 0.002174046961336573
+Ranks X_tt: [3, 6, 6, 5, 5, 3], Z_tt: [3, 6, 6, 5, 5, 3], 
+      Y_tt: [1, 2, 2, 3, 2, 1], T_tt: None 
+
+--- Step 2 ---
+--- Predictor  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction 1
+	Residual inf
+	TT-sol rank: [5, 7, 7, 6, 5, 2]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction -1
+	Residual 6.651873773281636
+	TT-sol rank: [2, 6, 7, 8, 7, 5]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction 1
+	Residual 0.0023687406309800953
+	TT-sol rank: [5, 11, 11, 9, 5, 2]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction -1
+	Residual 0.00044053514621749816
+	TT-sol rank: [2, 6, 9, 11, 8, 5]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction 1
+	Residual 4.1857135724843815e-05
+	TT-sol rank: [5, 12, 13, 10, 5, 2]
+
+	---Results---
+	Solution rank is [ 5 12 13 10  5  2]
+	Residual  4.1857135724843815e-05
+	Number of sweeps 5
+	Time:  0.1052401065826416
+	Time per sweep:  0.021048355102539062
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	Starting Sweep: 1
+	Step size: 1.000000
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.020514488220214844
+	 Time per sweep:  0.010258316993713379
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.740873
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.740873
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	Step size: 0.740873
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.01958918571472168
+	 Time per sweep:  0.009795308113098145
+
+--- Centering-Corrector  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 7, 7, 7, 7, 6]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 27.670300300162502
+	TT-sol rank: [5, 13, 13, 11, 7, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 0.0022101065521482484
+	TT-sol rank: [2, 6, 10, 14, 10, 5]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction 1
+	Residual 5.663825163981782e-05
+	TT-sol rank: [5, 12, 16, 14, 7, 2]
+
+	---Results---
+	Solution rank is [ 5 12 16 14  7  2]
+	Residual  5.663825163981782e-05
+	Number of sweeps 4
+	Time:  0.12453842163085938
+	Time per sweep:  0.031135261058807373
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.887145
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.887145
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	Step size: 0.887145
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.01741933822631836
+	 Time per sweep:  0.008710265159606934
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.377897
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.377897
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	Step size: 0.377897
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.02118849754333496
+	 Time per sweep:  0.010595083236694336
+Step sizes: 0.7984, 0.3401
+Permitted errors: (np.float64(-1.1732348132897918e-05), np.float64(2.3254643695957977e-06), 1)
+
+Results of iteration 2:
+Finishing up: False
+Is central: False, Is primal feasible:  True, Is dual feasible: False
+Using AHO-Direction: False
+Centrality Error: 0.0038140113306954003
+Primal-Dual Error: (np.float64(0.00011971903101277073), np.float64(0.25471389620781143))
+Sigma: 0.03644956761852342
+Ranks X_tt: [3, 7, 11, 13, 7, 3], Z_tt: [3, 6, 6, 6, 5, 3], 
+      Y_tt: [1, 2, 2, 3, 2, 1], T_tt: None 
+
+--- Step 3 ---
+--- Predictor  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 7, 7, 7, 7, 6]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 79.87083970612535
+	TT-sol rank: [5, 13, 14, 12, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 0.035591645313511666
+	TT-sol rank: [2, 6, 10, 14, 11, 5]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction 1
+	Residual 0.0006471738048099936
+	TT-sol rank: [5, 11, 14, 15, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction -1
+	Residual 0.0006358691752331033
+	TT-sol rank: [2, 6, 10, 15, 11, 5]
+	Starting Sweep:
+	Max num of sweeps: 5
+	Direction 1
+	Residual 0.0004300185949894096
+	TT-sol rank: [5, 11, 14, 16, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 6
+	Direction -1
+	Residual 0.0006358301837572823
+	TT-sol rank: [2, 6, 10, 16, 11, 5]
+	Starting Sweep:
+	Max num of sweeps: 7
+	Direction 1
+	Residual 0.00041727967139260503
+	TT-sol rank: [5, 11, 14, 17, 8, 2]
+
+	---Results---
+	Solution rank is [ 5 11 14 17  8  2]
+	Residual  0.00041727967139260503
+	Number of sweeps 8
+	Time:  0.3750135898590088
+	Time per sweep:  0.0468769371509552
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	Starting Sweep: 1
+	Step size: 1.000000
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.018419742584228516
+	 Time per sweep:  0.009210824966430664
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.250773
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.250773
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	Step size: 0.250773
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.021225929260253906
+	 Time per sweep:  0.010613799095153809
+
+--- Centering-Corrector  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 7, 7, 7, 7, 6]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 47.665536259424975
+	TT-sol rank: [5, 11, 11, 9, 7, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 0.44869366090529983
+	TT-sol rank: [2, 6, 10, 12, 10, 5]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction 1
+	Residual 0.008955781149189046
+	TT-sol rank: [5, 9, 12, 13, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction -1
+	Residual 0.0032172561275841264
+	TT-sol rank: [2, 6, 10, 14, 10, 5]
+	Starting Sweep:
+	Max num of sweeps: 5
+	Direction 1
+	Residual 0.001917839233263337
+	TT-sol rank: [5, 9, 12, 14, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 6
+	Direction -1
+	Residual 0.0028679999423434593
+	TT-sol rank: [2, 6, 10, 15, 10, 5]
+	Starting Sweep:
+	Max num of sweeps: 7
+	Direction 1
+	Residual 0.0021036120058036834
+	TT-sol rank: [5, 9, 12, 15, 8, 2]
+
+	---Results---
+	Solution rank is [ 5  9 12 15  8  2]
+	Residual  0.0021036120058036834
+	Number of sweeps 8
+	Time:  0.27637386322021484
+	Time per sweep:  0.034547001123428345
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 3, 3, 4, 4, 3]
+	Starting Sweep: 1
+	Step size: 1.000000
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 3, 3, 4, 4, 2]
+	 -----
+	 Solution rank is [1 1 1 2 2 1]
+	Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.01668381690979004
+	 Time per sweep:  0.008342623710632324
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.186862
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.186862
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	Step size: 0.186862
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.019620418548583984
+	 Time per sweep:  0.009811162948608398
+Step sizes: 1.0000, 0.1682
+Permitted errors: (np.float64(0.19360716286311463), np.float64(3.7623443207117357e-06), 1)
+
+Results of iteration 3:
+Finishing up: False
+Is central: False, Is primal feasible:  True, Is dual feasible: False
+Using AHO-Direction: False
+Centrality Error: 0.0012422320037686833
+Primal-Dual Error: (np.float64(0.00026349323672888997), np.float64(0.1696248076263436))
+Sigma: 0.35451206484348374
+Ranks X_tt: [3, 7, 11, 16, 9, 3], Z_tt: [3, 6, 7, 8, 6, 3], 
+      Y_tt: [1, 2, 2, 3, 2, 1], T_tt: None 
+
+--- Step 4 ---
+--- Predictor  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 7, 7, 7, 7, 6]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 2903.392089872065
+	TT-sol rank: [5, 13, 13, 10, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 1.000579635656214
+	TT-sol rank: [2, 6, 10, 13, 12, 5]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction 1
+	Residual 0.10989113840944362
+	TT-sol rank: [5, 9, 13, 15, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction -1
+	Residual 0.022426287768876868
+	TT-sol rank: [2, 6, 10, 16, 12, 5]
+	Starting Sweep:
+	Max num of sweeps: 5
+	Direction 1
+	Residual 0.021578787020082136
+	TT-sol rank: [5, 9, 13, 17, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 6
+	Direction -1
+	Residual 0.02277514042324192
+	TT-sol rank: [2, 6, 10, 17, 11, 5]
+	Starting Sweep:
+	Max num of sweeps: 7
+	Direction 1
+	Residual 0.016528795335583362
+	TT-sol rank: [5, 9, 13, 18, 8, 2]
+
+	---Results---
+	Solution rank is [ 5  9 13 18  8  2]
+	Residual  0.016528795335583362
+	Number of sweeps 8
+	Time:  0.3940904140472412
+	Time per sweep:  0.04926154017448425
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.774337
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 3, 3, 4, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.439038
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 4, 4, 2]
+	Starting Sweep: 1
+	Step size: 0.399822
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 2
+	Step size: 0.399822
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 6, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	Step size: 0.399822
+	 Residual 0
+	 Number of sweeps 3
+	 Time:  0.037374258041381836
+	 Time per sweep:  0.01245880126953125
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.408524
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.408524
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 6, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	Step size: 0.408524
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.023230791091918945
+	 Time per sweep:  0.011616230010986328
+
+--- Centering-Corrector  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 7, 7, 7, 7, 6]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 1194.5210449975407
+	TT-sol rank: [5, 12, 10, 10, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 1.7988276537927324
+	TT-sol rank: [2, 6, 10, 14, 12, 5]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction 1
+	Residual 0.023784818832904515
+	TT-sol rank: [5, 10, 14, 16, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction -1
+	Residual 0.013972144777619083
+	TT-sol rank: [2, 6, 10, 17, 11, 5]
+	Starting Sweep:
+	Max num of sweeps: 5
+	Direction 1
+	Residual 0.01887334762722965
+	TT-sol rank: [5, 10, 14, 18, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 6
+	Direction -1
+	Residual 0.01445024588642419
+	TT-sol rank: [2, 6, 10, 18, 11, 5]
+	Starting Sweep:
+	Max num of sweeps: 7
+	Direction 1
+	Residual 0.018988741315113234
+	TT-sol rank: [5, 9, 13, 18, 8, 2]
+
+	---Results---
+	Solution rank is [ 5  9 13 18  8  2]
+	Residual  0.018988741315113234
+	Number of sweeps 8
+	Time:  0.46724963188171387
+	Time per sweep:  0.058406442403793335
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.344193
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.344193
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 6, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	Step size: 0.344193
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.020340919494628906
+	 Time per sweep:  0.01017153263092041
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.346227
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.346227
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 6, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	Step size: 0.346227
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.01996755599975586
+	 Time per sweep:  0.009984731674194336
+Step sizes: 0.3098, 0.3116
+Permitted errors: (np.float64(-1.2894298918875169e-05), np.float64(-3.6386064673505497e-07), 1)
+
+Results of iteration 4:
+Finishing up: False
+Is central: False, Is primal feasible:  True, Is dual feasible: False
+Using AHO-Direction: False
+Centrality Error: 0.0005444583217792135
+Primal-Dual Error: (np.float64(0.0003335454971854869), np.float64(0.06450084209342959))
+Sigma: 0.2559412226718708
+Ranks X_tt: [3, 7, 11, 18, 9, 3], Z_tt: [3, 6, 9, 12, 8, 3], 
+      Y_tt: [1, 2, 2, 3, 2, 1], T_tt: None 
+
+--- Step 5 ---
+--- Predictor  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 7, 7, 7, 7, 6]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 11811.515861766484
+	TT-sol rank: [5, 14, 12, 11, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 1.6621444975683557
+	TT-sol rank: [2, 6, 10, 15, 12, 5]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction 1
+	Residual 0.05584855764093271
+	TT-sol rank: [5, 11, 14, 17, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction -1
+	Residual 0.019195706048741084
+	TT-sol rank: [2, 6, 10, 19, 12, 5]
+	Starting Sweep:
+	Max num of sweeps: 5
+	Direction 1
+	Residual 0.03351738587197747
+	TT-sol rank: [5, 11, 14, 20, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 6
+	Direction -1
+	Residual 0.015992988662243694
+	TT-sol rank: [2, 6, 10, 22, 12, 5]
+	Starting Sweep:
+	Max num of sweeps: 7
+	Direction 1
+	Residual 0.022241180920102993
+	TT-sol rank: [5, 11, 14, 22, 8, 2]
+
+	---Results---
+	Solution rank is [ 5 11 14 22  8  2]
+	Residual  0.022241180920102993
+	Number of sweeps 8
+	Time:  0.6447346210479736
+	Time per sweep:  0.0805920958518982
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.838241
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 3, 3, 4, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.413399
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 4, 4, 2]
+	Starting Sweep: 1
+	Step size: 0.319326
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 2
+	Step size: 0.319326
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 6, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	Step size: 0.319326
+	 Residual 0
+	 Number of sweeps 3
+	 Time:  0.03472590446472168
+	 Time per sweep:  0.011575937271118164
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.367316
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.367076
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 6, 4, 2]
+	Starting Sweep: 1
+	Step size: 0.367076
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	Step size: 0.367076
+	 Residual 0
+	 Number of sweeps 3
+	 Time:  0.030223608016967773
+	 Time per sweep:  0.01007517178853353
+
+--- Centering-Corrector  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 7, 7, 7, 7, 6]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 1951.5947700108725
+	TT-sol rank: [5, 13, 11, 10, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 1.0719241319188975
+	TT-sol rank: [2, 6, 11, 14, 12, 5]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction 1
+	Residual 0.06544996385887192
+	TT-sol rank: [5, 11, 15, 16, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction -1
+	Residual 0.015774121775636262
+	TT-sol rank: [2, 6, 11, 18, 12, 5]
+	Starting Sweep:
+	Max num of sweeps: 5
+	Direction 1
+	Residual 0.016142977737163295
+	TT-sol rank: [5, 11, 15, 19, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 6
+	Direction -1
+	Residual 0.014055092685962644
+	TT-sol rank: [2, 6, 11, 21, 12, 5]
+	Starting Sweep:
+	Max num of sweeps: 7
+	Direction 1
+	Residual 0.017537144059625493
+	TT-sol rank: [5, 11, 15, 21, 8, 2]
+
+	---Results---
+	Solution rank is [ 5 11 15 21  8  2]
+	Residual  0.017537144059625493
+	Number of sweeps 8
+	Time:  0.6528856754302979
+	Time per sweep:  0.08161094784736633
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.460101
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 3, 4, 6, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.449598
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 6, 4, 2]
+	Starting Sweep: 1
+	Step size: 0.416139
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 2
+	Step size: 0.416139
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 6, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	Step size: 0.416139
+	 Residual 0
+	 Number of sweeps 3
+	 Time:  0.03412675857543945
+	 Time per sweep:  0.011376142501831055
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.307043
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.307043
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 6, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	Step size: 0.307043
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.018846988677978516
+	 Time per sweep:  0.009424448013305664
+Step sizes: 0.3745, 0.2763
+Permitted errors: (np.float64(-2.4869940416005765e-05), np.float64(4.4635271664121e-06), 1)
+
+Results of iteration 5:
+Finishing up: False
+Is central: False, Is primal feasible:  True, Is dual feasible: False
+Using AHO-Direction: False
+Centrality Error: 0.00022381634237478507
+Primal-Dual Error: (np.float64(0.0003852523541924703), np.float64(0.029374786045357964))
+Sigma: 0.345606023460055
+Ranks X_tt: [3, 7, 11, 18, 9, 3], Z_tt: [3, 6, 10, 13, 8, 3], 
+      Y_tt: [1, 2, 2, 3, 2, 1], T_tt: None 
+
+--- Step 6 ---
+--- Predictor  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 7, 7, 7, 7, 6]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 7537.237053618084
+	TT-sol rank: [5, 12, 12, 11, 7, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 1.4116456160747972
+	TT-sol rank: [2, 6, 11, 15, 11, 5]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction 1
+	Residual 0.1938584921693618
+	TT-sol rank: [5, 11, 15, 17, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction -1
+	Residual 0.05593159567785587
+	TT-sol rank: [2, 6, 11, 19, 12, 5]
+	Starting Sweep:
+	Max num of sweeps: 5
+	Direction 1
+	Residual 0.02023036586831956
+	TT-sol rank: [5, 12, 16, 20, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 6
+	Direction -1
+	Residual 0.034776973637872015
+	TT-sol rank: [2, 6, 11, 22, 12, 5]
+	Starting Sweep:
+	Max num of sweeps: 7
+	Direction 1
+	Residual 0.023524179052394897
+	TT-sol rank: [5, 11, 16, 22, 8, 2]
+
+	---Results---
+	Solution rank is [ 5 11 16 22  8  2]
+	Residual  0.023524179052394897
+	Number of sweeps 8
+	Time:  0.7545325756072998
+	Time per sweep:  0.09431681036949158
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.881214
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 3, 3, 6, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.622008
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 6, 4, 2]
+	Starting Sweep: 1
+	Step size: 0.489693
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 2
+	Step size: 0.489693
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 6, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	Step size: 0.489693
+	 Residual 0
+	 Number of sweeps 3
+	 Time:  0.03562593460083008
+	 Time per sweep:  0.01187602678934733
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 4, 4, 3]
+	Starting Sweep: 1
+	Step size: 1.000000
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.015358924865722656
+	 Time per sweep:  0.007680296897888184
+
+--- Centering-Corrector  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 7, 7, 7, 7, 6]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 2655.9492208231713
+	TT-sol rank: [5, 13, 12, 11, 7, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 0.852172338152656
+	TT-sol rank: [2, 6, 11, 15, 11, 5]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction 1
+	Residual 0.15879962633001937
+	TT-sol rank: [5, 12, 16, 17, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction -1
+	Residual 0.09509790838989964
+	TT-sol rank: [2, 6, 11, 19, 12, 5]
+	Starting Sweep:
+	Max num of sweeps: 5
+	Direction 1
+	Residual 0.02130793268397837
+	TT-sol rank: [5, 12, 15, 20, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 6
+	Direction -1
+	Residual 0.04640898344441973
+	TT-sol rank: [2, 6, 11, 22, 12, 5]
+	Starting Sweep:
+	Max num of sweeps: 7
+	Direction 1
+	Residual 0.022851266207343825
+	TT-sol rank: [5, 12, 15, 22, 8, 2]
+
+	---Results---
+	Solution rank is [ 5 12 15 22  8  2]
+	Residual  0.022851266207343825
+	Number of sweeps 8
+	Time:  0.749009370803833
+	Time per sweep:  0.09362640976905823
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 3, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.401349
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.401349
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 6, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	Step size: 0.401349
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.02030038833618164
+	 Time per sweep:  0.010151386260986328
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.329415
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.324070
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	Starting Sweep: 1
+	Step size: 0.323781
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	Step size: 0.323781
+	 Residual 0
+	 Number of sweeps 3
+	 Time:  0.027774333953857422
+	 Time per sweep:  0.009258747100830078
+Step sizes: 0.3612, 0.2914
+Permitted errors: (np.float64(-1.0512160968496193e-05), np.float64(-1.8363924725071283e-05), 1)
+
+Results of iteration 6:
+Finishing up: False
+Is central: True, Is primal feasible:  True, Is dual feasible: False
+Using AHO-Direction: False
+Centrality Error: 7.90533845471937e-05
+Primal-Dual Error: (np.float64(0.00045481673597214524), np.float64(0.01272000321893722))
+Sigma: 0.09618579363755239
+Ranks X_tt: [3, 7, 11, 17, 9, 3], Z_tt: [3, 6, 10, 14, 8, 3], 
+      Y_tt: [1, 2, 2, 3, 2, 1], T_tt: None 
+
+--- Step 7 ---
+--- Predictor  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 7, 7, 7, 7, 6]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 439032.13050124585
+	TT-sol rank: [5, 14, 14, 14, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 0.2885203306955613
+	TT-sol rank: [2, 6, 12, 21, 17, 5]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction 1
+	Residual 0.019449083450762003
+	TT-sol rank: [5, 13, 23, 27, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction -1
+	Residual 0.001608601707751628
+	TT-sol rank: [2, 6, 12, 35, 17, 5]
+	Starting Sweep:
+	Max num of sweeps: 5
+	Direction 1
+	Residual 0.0005472173821821525
+	TT-sol rank: [5, 13, 24, 30, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 6
+	Direction -1
+	Residual 0.0003541399904270343
+	TT-sol rank: [2, 6, 12, 39, 17, 5]
+	Starting Sweep:
+	Max num of sweeps: 7
+	Direction 1
+	Residual 0.00015349111527239025
+	TT-sol rank: [5, 13, 24, 30, 8, 2]
+
+	---Results---
+	Solution rank is [ 5 13 24 30  8  2]
+	Residual  0.00015349111527239025
+	Number of sweeps 8
+	Time:  1.6472649574279785
+	Time per sweep:  0.20590877532958984
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.02602553367614746
+	 Time per sweep:  0.01301431655883789
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [3, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 3, 4, 6, 4, 3]
+	Starting Sweep: 1
+	Step size: 1.000000
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 6, 4, 2]
+	Starting Sweep: 1
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 2
+	Step size: 1.000000
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 6, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 3
+	 Time:  0.051299333572387695
+	 Time per sweep:  0.01710065205891927
+Step sizes: 1.0000, 1.0000
+Permitted errors: (np.float64(0.001921792680118092), np.float64(0.00010372740504284981), 1)
+
+Results of iteration 7:
+Finishing up: True
+Is central: True, Is primal feasible:  True, Is dual feasible: True
+Using AHO-Direction: False
+Centrality Error: 8.368829668530305e-05
+Primal-Dual Error: (np.float64(0.0004959499426460108), np.float64(0.0003858974191191806))
+Sigma: 0
+Ranks X_tt: [3, 7, 11, 17, 9, 3], Z_tt: [3, 6, 6, 6, 5, 3], 
+      Y_tt: [1, 2, 2, 3, 2, 1], T_tt: None 
+
+--- Step 8 ---
+--- Predictor  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 5, 5, 5, 5, 5]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 68.72463088820471
+	TT-sol rank: [4, 8, 9, 9, 7, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 1.4054862933881433
+	TT-sol rank: [2, 6, 9, 12, 10, 4]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction 1
+	Residual 0.07334857546777517
+	TT-sol rank: [4, 9, 12, 14, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction -1
+	Residual 0.041523436353497985
+	TT-sol rank: [2, 6, 10, 16, 11, 4]
+	Starting Sweep:
+	Max num of sweeps: 5
+	Direction 1
+	Residual 0.031483417100511224
+	TT-sol rank: [4, 8, 12, 18, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 6
+	Direction -1
+	Residual 0.010208647830246137
+	TT-sol rank: [2, 6, 10, 20, 10, 4]
+	Starting Sweep:
+	Max num of sweeps: 7
+	Direction 1
+	Residual 0.13717643221020634
+	TT-sol rank: [4, 8, 12, 21, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 8
+	Direction -1
+	Residual 0.010615644744004397
+	TT-sol rank: [2, 6, 10, 22, 10, 4]
+	Starting Sweep:
+	Max num of sweeps: 9
+	Direction 1
+	Residual 0.02775031592276323
+	TT-sol rank: [4, 8, 12, 23, 8, 2]
+
+	---Results---
+	Solution rank is [ 4  8 12 23  8  2]
+	Residual  0.02775031592276323
+	Number of sweeps 10
+	Time:  0.8833367824554443
+	Time per sweep:  0.08833386898040771
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.820692
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	Step size: 0.820692
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.017982959747314453
+	 Time per sweep:  0.008992552757263184
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 4, 4, 3]
+	Starting Sweep: 1
+	Step size: 1.000000
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 4, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 2 2 1]
+	Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.01780080795288086
+	 Time per sweep:  0.008901119232177734
+Step sizes: 0.7386, 1.0000
+Permitted errors: (np.float64(1.0918380970170727e-08), np.float64(0.01460404859493891), 1)
+---Terminated---
+Converged in 8 iterations.
+Ranks X_tt: [2, 6, 9, 13, 8, 2], Z_tt: [2, 5, 5, 5, 4, 2], 
+      Y_tt: [1, 2, 2, 3, 2, 1], T_tt: None 
+
+Converged after 8.0 iterations
+Problem created in 0.003s
+Problem solved in 8.528s
+Complementary Slackness: 0.03144291951855126
+Total feasibility error: 7.360578195774178e-06
+--- Run Summary ---
+Converged after avg 8.0 iterations
+Problem created in avg 0.003s
+Problem solved in avg 8.528s
+Complementary Slackness avg: 0.03144291951855126
+Total feasibility error avg: 7.360578195774178e-06
+✅ Completed dim=7 successfully
+
+==== All runs completed at Thu May 15 06:26:20 PM BST 2025 ====
+==== Maxcut TT-IPM Batch Run Started at Thu May 15 10:27:38 PM BST 2025 ====
+
+▶ Running dim=7 with config=configs/maxcut_7.yaml at Thu May 15 10:27:38 PM BST 2025
+Seed:  5
+
+Results of iteration 0:
+Finishing up: False
+Is central: False, Is primal feasible:  False, Is dual feasible: False
+Using AHO-Direction: False
+Centrality Error: 1.1195992179751186
+Primal-Dual Error: (np.float64(9.47612892736653), np.float64(64.44309769676639))
+Sigma: 0.5
+Ranks X_tt: [1, 1, 1, 1, 1, 1], Z_tt: [1, 1, 1, 1, 1, 1], 
+      Y_tt: [1, 1, 1, 1, 1, 1], T_tt: None 
+
+--- Step 1 ---
+--- Predictor  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction 1
+	Residual inf
+	TT-sol rank: [3, 3, 3, 3, 3, 3]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction -1
+	Residual 1.504131661121041
+	TT-sol rank: [2, 2, 2, 2, 2, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction 1
+	Residual 5.340808395380213e-05
+	TT-sol rank: [2, 3, 3, 3, 2, 2]
+
+	---Results---
+	Solution rank is [2 3 3 3 2 2]
+	Residual  5.340808395380213e-05
+	Number of sweeps 3
+	Time:  0.06096005439758301
+	Time per sweep:  0.020321130752563477
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	 Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.026044607162475586
+	 Time per sweep:  0.013023734092712402
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	 Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.015589475631713867
+	 Time per sweep:  0.007796525955200195
+
+--- Centering-Corrector  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 7, 7, 7, 6, 6]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 20.690422769041437
+	TT-sol rank: [3, 3, 3, 3, 3, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 5.4223842124230517e-05
+	TT-sol rank: [2, 3, 3, 3, 3, 3]
+
+	---Results---
+	Solution rank is [2 3 3 3 3 3]
+	Residual  5.4223842124230517e-05
+	Number of sweeps 3
+	Time:  0.07492518424987793
+	Time per sweep:  0.024976015090942383
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.545951
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.545951
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	 Step size: 0.545951
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.0315089225769043
+	 Time per sweep:  0.015755653381347656
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 4, 4, 3]
+	 -----
+	 Solution rank is [1 2 2 2 2 1]
+	 Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.013468265533447266
+	 Time per sweep:  0.006735324859619141
+Step sizes: 0.4914, 1.0000
+Permitted errors: (np.float64(1.7183996625647069e-06), np.float64(8.372657521470112), 1)
+
+Results of iteration 1:
+Finishing up: False
+Is central: False, Is primal feasible:  False, Is dual feasible: False
+Using AHO-Direction: False
+Centrality Error: 0.7734739984835607
+Primal-Dual Error: (np.float64(0.16389088811569086), np.float64(64.44269295443742))
+Sigma: 0.0005231360785675855
+Ranks X_tt: [3, 5, 4, 4, 4, 3], Z_tt: [3, 3, 3, 3, 3, 3], 
+      Y_tt: [1, 2, 2, 2, 2, 1], T_tt: None 
+
+--- Step 2 ---
+--- Predictor  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction 1
+	Residual inf
+	TT-sol rank: [3, 5, 4, 4, 3, 2]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction -1
+	Residual 5.49024149451478
+	TT-sol rank: [2, 2, 2, 2, 2, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction 1
+	Residual 4.149562133465446e-05
+	TT-sol rank: [2, 3, 3, 3, 2, 2]
+
+	---Results---
+	Solution rank is [2 3 3 3 2 2]
+	Residual  4.149562133465446e-05
+	Number of sweeps 3
+	Time:  0.037125587463378906
+	Time per sweep:  0.012375831604003906
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [3, 3, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 4, 4, 3]
+	Starting Sweep: 1
+	Step size: 1.000000
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 4, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 2 2 1]
+	 Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.0166165828704834
+	 Time per sweep:  0.008309245109558105
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	 Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.01077723503112793
+	 Time per sweep:  0.005389571189880371
+
+--- Centering-Corrector  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 7, 7, 7, 6, 6]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 33.55266248665811
+	TT-sol rank: [5, 7, 5, 5, 4, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 0.00024912988918762225
+	TT-sol rank: [2, 3, 3, 3, 3, 3]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction 1
+	Residual 0.0001468908749704119
+	TT-sol rank: [3, 4, 4, 4, 3, 2]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction -1
+	Residual 0.00013506838347508826
+	TT-sol rank: [2, 3, 3, 3, 3, 3]
+	Starting Sweep:
+	Max num of sweeps: 5
+	Direction 1
+	Residual 0.00013281940127501677
+	TT-sol rank: [3, 4, 4, 4, 3, 2]
+	Starting Sweep:
+	Max num of sweeps: 6
+	Direction -1
+	Residual 0.00013490354635906993
+	TT-sol rank: [2, 3, 3, 3, 3, 3]
+	Starting Sweep:
+	Max num of sweeps: 7
+	Direction 1
+	Residual 0.0001327911703260097
+	TT-sol rank: [3, 4, 4, 4, 3, 2]
+
+	---Results---
+	Solution rank is [3 4 4 4 3 2]
+	Residual  0.0001327911703260097
+	Number of sweeps 8
+	Time:  0.10251355171203613
+	Time per sweep:  0.012814432382583618
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	Starting Sweep: 1
+	Step size: 1.000000
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	 Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.018255949020385742
+	 Time per sweep:  0.009128928184509277
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.546001
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.546001
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 6, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	 Step size: 0.546001
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.020454883575439453
+	 Time per sweep:  0.010228753089904785
+Step sizes: 1.0000, 0.4914
+Permitted errors: (np.float64(0.7741327405068081), np.float64(-2.7867771379419537e-07), 1)
+
+Results of iteration 2:
+Finishing up: False
+Is central: False, Is primal feasible:  False, Is dual feasible: False
+Using AHO-Direction: False
+Centrality Error: 0.07770409750963396
+Primal-Dual Error: (np.float64(0.16387036456057785), np.float64(1.108174422121219))
+Sigma: 0.0021198716792705566
+Ranks X_tt: [3, 6, 5, 5, 5, 3], Z_tt: [3, 5, 5, 5, 5, 3], 
+      Y_tt: [1, 2, 2, 2, 2, 1], T_tt: None 
+
+--- Step 3 ---
+--- Predictor  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 7, 7, 7, 7, 6]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 834.6150095192452
+	TT-sol rank: [5, 11, 10, 8, 5, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 0.00040998265246841104
+	TT-sol rank: [2, 6, 9, 11, 10, 5]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction 1
+	Residual 6.458108073524443e-05
+	TT-sol rank: [5, 11, 11, 7, 5, 2]
+
+	---Results---
+	Solution rank is [ 5 11 11  7  5  2]
+	Residual  6.458108073524443e-05
+	Number of sweeps 4
+	Time:  0.09984469413757324
+	Time per sweep:  0.024961650371551514
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	Starting Sweep: 1
+	Step size: 1.000000
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	 Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.021735668182373047
+	 Time per sweep:  0.01086890697479248
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.788124
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.788124
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 6, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	 Step size: 0.788124
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.02382659912109375
+	 Time per sweep:  0.011914491653442383
+
+--- Centering-Corrector  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 7, 7, 7, 7, 6]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 120.05742227889561
+	TT-sol rank: [5, 11, 11, 8, 5, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 0.0004912291173917507
+	TT-sol rank: [2, 7, 10, 12, 11, 5]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction 1
+	Residual 7.267650936355285e-05
+	TT-sol rank: [5, 12, 12, 8, 5, 2]
+
+	---Results---
+	Solution rank is [ 5 12 12  8  5  2]
+	Residual  7.267650936355285e-05
+	Number of sweeps 4
+	Time:  0.0999901294708252
+	Time per sweep:  0.024998009204864502
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	Starting Sweep: 1
+	Step size: 1.000000
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	 Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.01926875114440918
+	 Time per sweep:  0.009635567665100098
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.443037
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.443037
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	 Step size: 0.443037
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.024072647094726562
+	 Time per sweep:  0.012037873268127441
+Step sizes: 1.0000, 0.3987
+Permitted errors: (np.float64(0.8280711009487792), np.float64(-2.989494430893913e-07), 1)
+
+Results of iteration 3:
+Finishing up: False
+Is central: False, Is primal feasible:  False, Is dual feasible: False
+Using AHO-Direction: False
+Centrality Error: 0.010936633075305534
+Primal-Dual Error: (np.float64(0.16392759432898282), np.float64(0.22372507417373713))
+Sigma: 0.004605123580837042
+Ranks X_tt: [3, 8, 9, 6, 6, 3], Z_tt: [3, 6, 7, 7, 5, 3], 
+      Y_tt: [1, 2, 2, 3, 2, 1], T_tt: None 
+
+--- Step 4 ---
+--- Predictor  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 7, 7, 7, 7, 6]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 234.77043302588018
+	TT-sol rank: [5, 12, 13, 11, 7, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 0.0012434771803456173
+	TT-sol rank: [2, 7, 13, 17, 13, 5]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction 1
+	Residual 8.100655324702248e-05
+	TT-sol rank: [5, 14, 17, 14, 7, 2]
+
+	---Results---
+	Solution rank is [ 5 14 17 14  7  2]
+	Residual  8.100655324702248e-05
+	Number of sweeps 4
+	Time:  0.18874239921569824
+	Time per sweep:  0.04718613624572754
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	Starting Sweep: 1
+	Step size: 1.000000
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	 Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.019608259201049805
+	 Time per sweep:  0.00980520248413086
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.851665
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 4, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.833017
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 4, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	 Step size: 0.832595
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.020499706268310547
+	 Time per sweep:  0.010251045227050781
+
+--- Centering-Corrector  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 7, 7, 7, 7, 6]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 11.910951751182054
+	TT-sol rank: [5, 13, 14, 11, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 0.001340867273374214
+	TT-sol rank: [2, 7, 13, 17, 13, 5]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction 1
+	Residual 9.767528538761494e-05
+	TT-sol rank: [5, 14, 17, 16, 7, 2]
+
+	---Results---
+	Solution rank is [ 5 14 17 16  7  2]
+	Residual  9.767528538761494e-05
+	Number of sweeps 4
+	Time:  0.17674875259399414
+	Time per sweep:  0.044187843799591064
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [3, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	Starting Sweep: 1
+	Step size: 1.000000
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 4, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 2 2 1]
+	 Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.01798272132873535
+	 Time per sweep:  0.008992433547973633
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.394162
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.394162
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	 Step size: 0.394162
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.025777816772460938
+	 Time per sweep:  0.012890219688415527
+Step sizes: 1.0000, 0.3547
+Permitted errors: (np.float64(0.48810107738387), np.float64(1.5559871649334367e-06), 1)
+
+Results of iteration 4:
+Finishing up: False
+Is central: False, Is primal feasible:  False, Is dual feasible: False
+Using AHO-Direction: False
+Centrality Error: 0.0036144473504785978
+Primal-Dual Error: (np.float64(0.1638450858752366), np.float64(0.06443202542648604))
+Sigma: 0.02904418078224241
+Ranks X_tt: [3, 8, 12, 14, 8, 3], Z_tt: [3, 6, 7, 7, 5, 3], 
+      Y_tt: [1, 2, 2, 3, 2, 1], T_tt: None 
+
+--- Step 5 ---
+--- Predictor  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 7, 7, 7, 7, 6]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 34.36916189166616
+	TT-sol rank: [5, 14, 14, 12, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 0.04834496160770219
+	TT-sol rank: [2, 7, 12, 14, 11, 5]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction 1
+	Residual 0.0013692117286376421
+	TT-sol rank: [5, 11, 14, 15, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction -1
+	Residual 0.00028912494857371527
+	TT-sol rank: [2, 7, 12, 16, 12, 5]
+	Starting Sweep:
+	Max num of sweeps: 5
+	Direction 1
+	Residual 0.0002913821594721167
+	TT-sol rank: [5, 11, 14, 17, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 6
+	Direction -1
+	Residual 0.00030224281181683455
+	TT-sol rank: [2, 7, 12, 18, 12, 5]
+	Starting Sweep:
+	Max num of sweeps: 7
+	Direction 1
+	Residual 0.0002290122711772752
+	TT-sol rank: [5, 11, 15, 18, 8, 2]
+
+	---Results---
+	Solution rank is [ 5 11 15 18  8  2]
+	Residual  0.0002290122711772752
+	Number of sweeps 8
+	Time:  0.6782510280609131
+	Time per sweep:  0.08478161692619324
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.010123
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 6, 4]
+	Starting Sweep: 1
+	Step size: 0.010123
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 5, 6, 4, 2]
+	Starting Sweep: 1
+	Step size: 0.010123
+	Direction: 1
+	Residual 0
+	TT-sol rank: [3, 4, 5, 6, 4, 2]
+	Starting Sweep: 2
+	Step size: 0.010123
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 5, 5, 6, 4, 2]
+	Starting Sweep: 2
+	Step size: 0.002444
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 5, 5, 6, 4, 2]
+	Starting Sweep: 3
+	Step size: 0.002444
+	Direction: -1
+	Residual 0
+	TT-sol rank: [2, 5, 6, 6, 4, 2]
+	Starting Sweep: 3
+	Step size: 0.002444
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 5, 6, 6, 4, 2]
+	Starting Sweep: 4
+	Step size: 0.002444
+	Direction: -1
+	Residual 0
+	TT-sol rank: [2, 5, 6, 6, 4, 2]
+	Starting Sweep: 4
+	Step size: 0.002444
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 5, 6, 6, 4, 2]
+	Starting Sweep: 5
+	Step size: 0.002444
+	Direction: -1
+	Residual 0
+	TT-sol rank: [2, 5, 7, 6, 4, 2]
+	Starting Sweep: 5
+	Step size: 0.002444
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 5, 7, 6, 4, 2]
+	Starting Sweep: 6
+	Step size: 0.002444
+	Direction: -1
+	Residual 0
+	TT-sol rank: [2, 5, 7, 6, 4, 2]
+	Starting Sweep: 6
+	Step size: 0.002444
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 5, 7, 6, 4, 2]
+	Starting Sweep: 7
+	Step size: 0.002444
+	Direction: -1
+	Residual 0
+	TT-sol rank: [2, 6, 8, 6, 4, 2]
+	Starting Sweep: 7
+	Step size: 0.002444
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 6, 8, 6, 4, 2]
+	Starting Sweep: 8
+	Step size: 0.002444
+	Direction: -1
+	Residual 0
+	TT-sol rank: [4, 7, 8, 6, 4, 2]
+	Starting Sweep: 8
+	Step size: 0.002444
+	Direction: 1
+	Residual 0
+	TT-sol rank: [4, 7, 8, 6, 4, 2]
+	Starting Sweep: 9
+	Step size: 0.002444
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 8, 8, 6, 4, 2]
+	 -----
+	 Solution rank is [1 8 8 6 4 2]
+	 Step size: 0.002444
+	 Residual 0
+	 Number of sweeps 10
+	 Time:  0.1483151912689209
+	 Time per sweep:  0.014831805229187011
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.651559
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.280420
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 4, 4, 2]
+	Starting Sweep: 1
+	Step size: 0.193743
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 2
+	Step size: 0.193743
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	 Step size: 0.193743
+	 Residual 0
+	 Number of sweeps 3
+	 Time:  0.030559062957763672
+	 Time per sweep:  0.010187069574991861
+
+--- Centering-Corrector  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 7, 7, 7, 7, 6]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 41.27020914665688
+	TT-sol rank: [4, 11, 10, 9, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 0.24743499922261392
+	TT-sol rank: [2, 7, 10, 12, 10, 4]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction 1
+	Residual 0.004541341785129591
+	TT-sol rank: [4, 8, 12, 12, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction -1
+	Residual 0.0033949678040084085
+	TT-sol rank: [2, 7, 11, 13, 10, 4]
+	Starting Sweep:
+	Max num of sweeps: 5
+	Direction 1
+	Residual 0.0010378204176097264
+	TT-sol rank: [4, 8, 12, 13, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 6
+	Direction -1
+	Residual 0.0007265127318358734
+	TT-sol rank: [2, 7, 11, 14, 10, 4]
+	Starting Sweep:
+	Max num of sweeps: 7
+	Direction 1
+	Residual 0.001019087816093233
+	TT-sol rank: [4, 8, 12, 14, 8, 2]
+
+	---Results---
+	Solution rank is [ 4  8 12 14  8  2]
+	Residual  0.001019087816093233
+	Number of sweeps 8
+	Time:  0.3697516918182373
+	Time per sweep:  0.04621922969818115
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.850537
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 5, 3]
+	Starting Sweep: 1
+	Step size: 0.850537
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	 Step size: 0.850537
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.0269472599029541
+	 Time per sweep:  0.013474702835083008
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [3, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.260862
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.260862
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	 Step size: 0.260862
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.02053999900817871
+	 Time per sweep:  0.010270953178405762
+Step sizes: 0.7655, 0.2348
+Permitted errors: (np.float64(1.4867079745073397e-07), np.float64(8.782230045521408e-06), 1)
+
+Results of iteration 5:
+Finishing up: False
+Is central: False, Is primal feasible:  False, Is dual feasible: False
+Using AHO-Direction: False
+Centrality Error: 0.001069915529863735
+Primal-Dual Error: (np.float64(0.08705286161140169), np.float64(0.03340623125806381))
+Sigma: 0.5387682409818081
+Ranks X_tt: [3, 8, 12, 17, 9, 3], Z_tt: [3, 6, 9, 12, 7, 3], 
+      Y_tt: [1, 2, 2, 3, 2, 1], T_tt: None 
+
+--- Step 6 ---
+--- Predictor  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 7, 7, 7, 7, 6]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 6154.676545509202
+	TT-sol rank: [5, 13, 12, 11, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 0.4512245443379607
+	TT-sol rank: [2, 7, 11, 13, 11, 4]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction 1
+	Residual 0.022039436230525174
+	TT-sol rank: [4, 10, 14, 15, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction -1
+	Residual 0.002923473872013506
+	TT-sol rank: [2, 7, 11, 16, 11, 4]
+	Starting Sweep:
+	Max num of sweeps: 5
+	Direction 1
+	Residual 0.0038678178421207637
+	TT-sol rank: [4, 10, 14, 17, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 6
+	Direction -1
+	Residual 0.002479576340692899
+	TT-sol rank: [2, 7, 11, 17, 11, 4]
+	Starting Sweep:
+	Max num of sweeps: 7
+	Direction 1
+	Residual 0.0024699697087424274
+	TT-sol rank: [4, 10, 14, 18, 8, 2]
+
+	---Results---
+	Solution rank is [ 4 10 14 18  8  2]
+	Residual  0.0024699697087424274
+	Number of sweeps 8
+	Time:  0.7027642726898193
+	Time per sweep:  0.0878458023071289
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.884561
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 6, 3]
+	Starting Sweep: 1
+	Step size: 0.857547
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 6, 4, 2]
+	Starting Sweep: 1
+	Step size: 0.531052
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 4, 4, 3]
+	Starting Sweep: 2
+	Step size: 0.524019
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 6, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	 Step size: 0.524019
+	 Residual 0
+	 Number of sweeps 3
+	 Time:  0.04222702980041504
+	 Time per sweep:  0.01407639185587565
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.474865
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.474839
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	 Step size: 0.474839
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.024370431900024414
+	 Time per sweep:  0.012186169624328613
+
+--- Centering-Corrector  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 7, 7, 7, 7, 6]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 1708.2582084523128
+	TT-sol rank: [5, 13, 11, 10, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 0.2831426329969997
+	TT-sol rank: [2, 7, 12, 13, 11, 4]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction 1
+	Residual 0.013831735886631698
+	TT-sol rank: [4, 10, 15, 15, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction -1
+	Residual 0.0033227038901788987
+	TT-sol rank: [2, 7, 12, 16, 11, 4]
+	Starting Sweep:
+	Max num of sweeps: 5
+	Direction 1
+	Residual 0.002451819735077395
+	TT-sol rank: [4, 10, 15, 17, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 6
+	Direction -1
+	Residual 0.0022653763007576097
+	TT-sol rank: [2, 7, 12, 18, 11, 4]
+	Starting Sweep:
+	Max num of sweeps: 7
+	Direction 1
+	Residual 0.003400397245514837
+	TT-sol rank: [4, 10, 15, 19, 8, 2]
+
+	---Results---
+	Solution rank is [ 4 10 15 19  8  2]
+	Residual  0.003400397245514837
+	Number of sweeps 8
+	Time:  0.8545544147491455
+	Time per sweep:  0.10681957006454468
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.533898
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 6, 4]
+	Starting Sweep: 1
+	Step size: 0.401218
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 6, 4, 2]
+	Starting Sweep: 1
+	Step size: 0.394225
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 2
+	Step size: 0.394225
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 6, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	 Step size: 0.394225
+	 Residual 0
+	 Number of sweeps 3
+	 Time:  0.04253959655761719
+	 Time per sweep:  0.014180580774943033
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.334596
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.334596
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 6, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	 Step size: 0.334596
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.019549846649169922
+	 Time per sweep:  0.009775876998901367
+Step sizes: 0.3548, 0.3011
+Permitted errors: (np.float64(-1.6682613155016845e-05), np.float64(-2.3320819608546248e-07), 1)
+
+Results of iteration 6:
+Finishing up: False
+Is central: False, Is primal feasible:  False, Is dual feasible: False
+Using AHO-Direction: False
+Centrality Error: 0.0004182996715597765
+Primal-Dual Error: (np.float64(0.02536589200299912), np.float64(0.012662233712955641))
+Sigma: 0.1666342431314538
+Ranks X_tt: [3, 7, 11, 18, 9, 3], Z_tt: [3, 7, 11, 12, 7, 3], 
+      Y_tt: [1, 2, 2, 3, 2, 1], T_tt: None 
+
+--- Step 7 ---
+--- Predictor  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 7, 7, 7, 7, 6]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 13048.516978267488
+	TT-sol rank: [5, 13, 12, 11, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 0.630253800436268
+	TT-sol rank: [2, 6, 10, 14, 12, 5]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction 1
+	Residual 0.03230792989091136
+	TT-sol rank: [5, 11, 13, 16, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction -1
+	Residual 0.012826395202426545
+	TT-sol rank: [2, 6, 10, 18, 12, 5]
+	Starting Sweep:
+	Max num of sweeps: 5
+	Direction 1
+	Residual 0.008594082109115208
+	TT-sol rank: [5, 11, 13, 19, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 6
+	Direction -1
+	Residual 0.01203491387493459
+	TT-sol rank: [2, 7, 11, 20, 11, 5]
+	Starting Sweep:
+	Max num of sweeps: 7
+	Direction 1
+	Residual 0.00739101636957031
+	TT-sol rank: [5, 11, 14, 20, 8, 2]
+
+	---Results---
+	Solution rank is [ 5 11 14 20  8  2]
+	Residual  0.00739101636957031
+	Number of sweeps 8
+	Time:  0.7261166572570801
+	Time per sweep:  0.09076479077339172
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.423560
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 6, 6, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.423560
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 6, 6, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	 Step size: 0.423560
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.03310227394104004
+	 Time per sweep:  0.016552090644836426
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	Starting Sweep: 1
+	Step size: 1.000000
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	 Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.018442869186401367
+	 Time per sweep:  0.009222269058227539
+
+--- Centering-Corrector  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 7, 7, 7, 7, 6]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 1578.486650671045
+	TT-sol rank: [5, 12, 12, 10, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 0.6661779515631796
+	TT-sol rank: [2, 7, 11, 13, 11, 4]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction 1
+	Residual 0.03380939808905946
+	TT-sol rank: [4, 11, 14, 15, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction -1
+	Residual 0.019345565852442622
+	TT-sol rank: [2, 7, 11, 16, 11, 4]
+	Starting Sweep:
+	Max num of sweeps: 5
+	Direction 1
+	Residual 0.016041419075584668
+	TT-sol rank: [4, 11, 14, 17, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 6
+	Direction -1
+	Residual 0.013818916198553811
+	TT-sol rank: [2, 7, 11, 18, 11, 4]
+	Starting Sweep:
+	Max num of sweeps: 7
+	Direction 1
+	Residual 0.006777836436960248
+	TT-sol rank: [4, 11, 14, 19, 8, 2]
+
+	---Results---
+	Solution rank is [ 4 11 14 19  8  2]
+	Residual  0.006777836436960248
+	Number of sweeps 8
+	Time:  0.7078344821929932
+	Time per sweep:  0.08847957849502563
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.398247
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.398247
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 6, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	 Step size: 0.398247
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.028241634368896484
+	 Time per sweep:  0.014121770858764648
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.783794
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 4, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.783791
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	 Step size: 0.783791
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.019283294677734375
+	 Time per sweep:  0.009642720222473145
+Step sizes: 0.3584, 0.7054
+Permitted errors: (np.float64(-1.956069473063593e-10), np.float64(4.693439811014749e-05), 1)
+
+Results of iteration 7:
+Finishing up: False
+Is central: True, Is primal feasible:  False, Is dual feasible: False
+Using AHO-Direction: False
+Centrality Error: 8.38253923476055e-05
+Primal-Dual Error: (np.float64(0.007231131325465443), np.float64(0.005793350956208396))
+Sigma: 0.10297085503095933
+Ranks X_tt: [3, 7, 11, 18, 9, 3], Z_tt: [3, 7, 12, 16, 8, 3], 
+      Y_tt: [1, 2, 2, 3, 2, 1], T_tt: None 
+
+--- Step 8 ---
+--- Predictor  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 7, 7, 7, 7, 6]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 495514.21874190524
+	TT-sol rank: [5, 14, 14, 14, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 0.1927041037659419
+	TT-sol rank: [2, 8, 15, 21, 17, 5]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction 1
+	Residual 0.01549032073874699
+	TT-sol rank: [5, 16, 25, 27, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction -1
+	Residual 0.03250728232399777
+	TT-sol rank: [2, 8, 15, 35, 17, 5]
+	Starting Sweep:
+	Max num of sweeps: 5
+	Direction 1
+	Residual 0.005264163402722768
+	TT-sol rank: [5, 15, 26, 30, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 6
+	Direction -1
+	Residual 0.015621799009603992
+	TT-sol rank: [2, 8, 15, 37, 17, 5]
+	Starting Sweep:
+	Max num of sweeps: 7
+	Direction 1
+	Residual 0.0029879351246795706
+	TT-sol rank: [5, 15, 25, 30, 8, 2]
+
+	---Results---
+	Solution rank is [ 5 15 25 30  8  2]
+	Residual  0.0029879351246795706
+	Number of sweeps 8
+	Time:  3.394771099090576
+	Time per sweep:  0.4243466258049011
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	 Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.016321420669555664
+	 Time per sweep:  0.008161664009094238
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 3, 3, 3, 3, 3]
+	Starting Sweep: 1
+	Step size: 1.000000
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 3, 3, 3, 3, 2]
+	 -----
+	 Solution rank is [1 2 2 3 3 2]
+	 Step size: 0.119624
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.01986241340637207
+	 Time per sweep:  0.009932279586791992
+Step sizes: 1.0000, 0.1077
+Permitted errors: (np.float64(0.016376387889591667), np.float64(0.002360686147232489), 1)
+
+Results of iteration 8:
+Finishing up: False
+Is central: True, Is primal feasible:  True, Is dual feasible: False
+Using AHO-Direction: False
+Centrality Error: 9.176237064561815e-05
+Primal-Dual Error: (np.float64(5.228587777301576e-05), np.float64(0.0056932047069902115))
+Sigma: 0
+Ranks X_tt: [3, 7, 11, 18, 9, 3], Z_tt: [3, 7, 11, 14, 8, 3], 
+      Y_tt: [1, 2, 2, 3, 2, 1], T_tt: None 
+
+--- Step 9 ---
+--- Predictor  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 7, 7, 7, 7, 6]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 88952.84957101637
+	TT-sol rank: [5, 14, 14, 14, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 0.32979264910477546
+	TT-sol rank: [2, 8, 15, 21, 17, 5]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction 1
+	Residual 0.15892448430110706
+	TT-sol rank: [5, 16, 27, 28, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction -1
+	Residual 0.07607484599102886
+	TT-sol rank: [2, 8, 16, 35, 17, 5]
+	Starting Sweep:
+	Max num of sweeps: 5
+	Direction 1
+	Residual 0.047764167669797214
+	TT-sol rank: [5, 16, 28, 30, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 6
+	Direction -1
+	Residual 0.021256810820444318
+	TT-sol rank: [2, 8, 16, 41, 17, 5]
+	Starting Sweep:
+	Max num of sweeps: 7
+	Direction 1
+	Residual 0.006347507526561887
+	TT-sol rank: [5, 16, 27, 30, 8, 2]
+
+	---Results---
+	Solution rank is [ 5 16 27 30  8  2]
+	Residual  0.006347507526561887
+	Number of sweeps 8
+	Time:  3.6465654373168945
+	Time per sweep:  0.4558209478855133
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 4, 5, 3]
+	 -----
+	 Solution rank is [1 1 1 2 2 1]
+	 Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.014246225357055664
+	 Time per sweep:  0.007124066352844238
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.878848
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 6, 4]
+	Starting Sweep: 1
+	Step size: 0.064617
+	Direction: -1
+	Residual 0
+	TT-sol rank: [4, 4, 6, 7, 4, 2]
+	Starting Sweep: 1
+	Step size: 0.064617
+	Direction: 1
+	Residual 0
+	TT-sol rank: [4, 4, 6, 7, 4, 2]
+	Starting Sweep: 2
+	Step size: 0.064617
+	Direction: -1
+	Residual 0
+	TT-sol rank: [6, 6, 8, 6, 4, 2]
+	Starting Sweep: 2
+	Step size: 0.064617
+	Direction: 1
+	Residual 0
+	TT-sol rank: [6, 6, 8, 6, 4, 2]
+	Starting Sweep: 3
+	Step size: 0.064617
+	Direction: -1
+	Residual 0
+	TT-sol rank: [6, 8, 8, 6, 4, 2]
+	Starting Sweep: 3
+	Step size: 0.064617
+	Direction: 1
+	Residual 0
+	TT-sol rank: [6, 8, 8, 6, 4, 2]
+	Starting Sweep: 4
+	Step size: 0.064617
+	Direction: -1
+	Residual 0
+	TT-sol rank: [6, 8, 8, 6, 4, 2]
+	Starting Sweep: 4
+	Step size: 0.064617
+	Direction: 1
+	Residual 0
+	TT-sol rank: [6, 8, 8, 6, 4, 2]
+	Starting Sweep: 5
+	Step size: 0.064617
+	Direction: -1
+	Residual 0
+	TT-sol rank: [6, 8, 8, 6, 4, 2]
+	Starting Sweep: 5
+	Step size: 0.064617
+	Direction: 1
+	Residual 0
+	TT-sol rank: [6, 8, 8, 6, 4, 2]
+	Starting Sweep: 6
+	Step size: 0.064617
+	Direction: -1
+	Residual 0
+	TT-sol rank: [6, 8, 8, 6, 4, 2]
+	Starting Sweep: 6
+	Step size: 0.064617
+	Direction: 1
+	Residual 0
+	TT-sol rank: [6, 8, 8, 6, 4, 2]
+	Starting Sweep: 7
+	Step size: 0.064617
+	Direction: -1
+	Residual 0
+	TT-sol rank: [6, 8, 8, 6, 4, 2]
+	Starting Sweep: 7
+	Step size: 0.064617
+	Direction: 1
+	Residual 0
+	TT-sol rank: [6, 8, 8, 6, 4, 2]
+	Starting Sweep: 8
+	Step size: 0.064617
+	Direction: -1
+	Residual 0
+	TT-sol rank: [6, 8, 9, 6, 4, 2]
+	Starting Sweep: 8
+	Step size: 0.064617
+	Direction: 1
+	Residual 0
+	TT-sol rank: [6, 8, 9, 6, 4, 2]
+	Starting Sweep: 9
+	Step size: 0.064617
+	Direction: -1
+	Residual 0
+	TT-sol rank: [6, 8, 8, 6, 4, 2]
+	 -----
+	 Solution rank is [6 8 8 6 4 2]
+	 Step size: 0.064617
+	 Residual 0
+	 Number of sweeps 10
+	 Time:  0.08556222915649414
+	 Time per sweep:  0.008556509017944336
+Step sizes: 1.0000, 0.0582
+Permitted errors: (np.float64(0.01641122935957478), np.float64(0.01031669977736579), 1)
+
+Results of iteration 9:
+Finishing up: False
+Is central: True, Is primal feasible:  True, Is dual feasible: False
+Using AHO-Direction: False
+Centrality Error: 9.935291307251578e-05
+Primal-Dual Error: (np.float64(9.780164794050875e-05), np.float64(0.005965356575742751))
+Sigma: 0
+Ranks X_tt: [3, 7, 11, 18, 9, 3], Z_tt: [3, 7, 10, 13, 8, 3], 
+      Y_tt: [1, 2, 2, 3, 2, 1], T_tt: None 
+
+--- Step 10 ---
+--- Predictor  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 7, 7, 7, 7, 6]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 35880.449218006055
+	TT-sol rank: [5, 14, 14, 14, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 0.785313389404518
+	TT-sol rank: [2, 8, 15, 21, 17, 5]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction 1
+	Residual 0.18931953637980586
+	TT-sol rank: [5, 16, 25, 26, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction -1
+	Residual 0.04425526586865473
+	TT-sol rank: [2, 8, 16, 35, 17, 5]
+	Starting Sweep:
+	Max num of sweeps: 5
+	Direction 1
+	Residual 0.2753020089820061
+	TT-sol rank: [5, 16, 27, 30, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 6
+	Direction -1
+	Residual 0.04541630942084394
+	TT-sol rank: [2, 8, 16, 39, 17, 5]
+	Starting Sweep:
+	Max num of sweeps: 7
+	Direction 1
+	Residual 0.026157635013897947
+	TT-sol rank: [5, 16, 26, 29, 8, 2]
+
+	---Results---
+	Solution rank is [ 5 16 26 29  8  2]
+	Residual  0.026157635013897947
+	Number of sweeps 8
+	Time:  3.534714937210083
+	Time per sweep:  0.44183966517448425
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 3, 3, 4, 5, 3]
+	 -----
+	 Solution rank is [1 1 1 3 2 1]
+	 Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.011415481567382812
+	 Time per sweep:  0.0057086944580078125
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 4, 4, 3]
+	Starting Sweep: 1
+	Step size: 1.000000
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 4, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 2 2 1]
+	 Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.016726255416870117
+	 Time per sweep:  0.008364081382751465
+Step sizes: 1.0000, 1.0000
+Permitted errors: (np.float64(0.016499213557756534), np.float64(0.0012810208470186927), 1)
+
+Results of iteration 10:
+Finishing up: True
+Is central: True, Is primal feasible:  True, Is dual feasible: True
+Using AHO-Direction: False
+Centrality Error: 0.00010294313363829107
+Primal-Dual Error: (np.float64(0.00014845748592359), np.float64(0.00029779958398722366))
+Sigma: 0
+Ranks X_tt: [3, 7, 11, 19, 9, 3], Z_tt: [3, 6, 6, 7, 5, 3], 
+      Y_tt: [1, 2, 2, 3, 2, 1], T_tt: None 
+
+--- Step 11 ---
+--- Predictor  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 5, 5, 5, 5, 5]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 40.9583510307736
+	TT-sol rank: [4, 7, 6, 6, 6, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 0.5559195377311891
+	TT-sol rank: [2, 6, 8, 7, 9, 4]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction 1
+	Residual 0.553325257708899
+	TT-sol rank: [4, 10, 12, 10, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction -1
+	Residual 0.2866706227193717
+	TT-sol rank: [2, 6, 10, 13, 10, 3]
+	Starting Sweep:
+	Max num of sweeps: 5
+	Direction 1
+	Residual 0.17621035066077592
+	TT-sol rank: [4, 9, 12, 15, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 6
+	Direction -1
+	Residual 0.1674162334337853
+	TT-sol rank: [2, 6, 10, 17, 10, 3]
+	Starting Sweep:
+	Max num of sweeps: 7
+	Direction 1
+	Residual 0.17029699886360963
+	TT-sol rank: [4, 9, 12, 18, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 8
+	Direction -1
+	Residual 0.2127475166212135
+	TT-sol rank: [2, 6, 10, 20, 10, 3]
+	Starting Sweep:
+	Max num of sweeps: 9
+	Direction 1
+	Residual 0.2019807571452432
+	TT-sol rank: [4, 9, 12, 22, 8, 2]
+
+	---Results---
+	Solution rank is [ 4  9 12 22  8  2]
+	Residual  0.2019807571452432
+	Number of sweeps 10
+	Time:  1.3013629913330078
+	Time per sweep:  0.13013648986816406
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.057689
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.057689
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 6, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	 Step size: 0.057689
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.028045654296875
+	 Time per sweep:  0.014023900032043457
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 1
+	Step size: 1.000000
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 6, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	 Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.023524761199951172
+	 Time per sweep:  0.011763453483581543
+Step sizes: 0.0519, 1.0000
+Permitted errors: (np.float64(-2.9412097757308686e-11), np.float64(0.01044446221423111), 1)
+---Terminated---
+Converged in 11 iterations.
+Ranks X_tt: [2, 6, 10, 17, 8, 2], Z_tt: [2, 5, 5, 8, 7, 2], 
+      Y_tt: [1, 2, 2, 4, 2, 1], T_tt: None 
+
+Converged after 11.0 iterations
+Problem created in 0.006s
+Problem solved in 18.711s
+Complementary Slackness: 0.3248146343111163
+Total feasibility error: 4.619230603159302e-06
+--- Run Summary ---
+Converged after avg 11.0 iterations
+Problem created in avg 0.006s
+Problem solved in avg 18.711s
+Complementary Slackness avg: 0.3248146343111163
+Total feasibility error avg: 4.619230603159302e-06
+✅ Completed dim=7 successfully
+
+==== All runs completed at Thu May 15 10:27:58 PM BST 2025 ====
+==== Maxcut TT-IPM Batch Run Started at Fri May 16 02:30:19 PM BST 2025 ====
+
+▶ Running dim=7 with config=configs/maxcut_7.yaml at Fri May 16 02:30:19 PM BST 2025
+Seed:  5
+
+Results of iteration 0:
+Finishing up: False
+Is central: False, Is primal feasible:  False, Is dual feasible: False
+Using AHO-Direction: False
+Centrality Error: 1.1195992179751186
+Primal-Dual Error: (np.float64(9.47612892736653), np.float64(64.44309769676639))
+Sigma: 0.5
+Ranks X_tt: [1, 1, 1, 1, 1, 1], Z_tt: [1, 1, 1, 1, 1, 1], 
+      Y_tt: [1, 1, 1, 1, 1, 1], T_tt: None 
+
+--- Step 1 ---
+--- Predictor  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction 1
+	Residual inf
+	TT-sol rank: [3, 3, 3, 3, 3, 3]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction -1
+	Residual 1.504131661121041
+	TT-sol rank: [2, 2, 2, 2, 2, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction 1
+	Residual 5.340808395380213e-05
+	TT-sol rank: [2, 3, 3, 3, 2, 2]
+
+	---Results---
+	Solution rank is [2 3 3 3 2 2]
+	Residual  5.340808395380213e-05
+	Number of sweeps 3
+	Time:  0.04567599296569824
+	Time per sweep:  0.015226046244303385
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	 Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.01682758331298828
+	 Time per sweep:  0.008414864540100098
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	 Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.009671688079833984
+	 Time per sweep:  0.0048367977142333984
+
+--- Centering-Corrector  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 7, 7, 7, 6, 6]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 20.690422769041437
+	TT-sol rank: [3, 3, 3, 3, 3, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 5.4223842124230517e-05
+	TT-sol rank: [2, 3, 3, 3, 3, 3]
+
+	---Results---
+	Solution rank is [2 3 3 3 3 3]
+	Residual  5.4223842124230517e-05
+	Number of sweeps 3
+	Time:  0.06306195259094238
+	Time per sweep:  0.021021525065104168
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.545951
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.545951
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	 Step size: 0.545951
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.021881103515625
+	 Time per sweep:  0.010941624641418457
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 4, 4, 3]
+	 -----
+	 Solution rank is [1 2 2 2 2 1]
+	 Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.010720014572143555
+	 Time per sweep:  0.005361080169677734
+Step sizes: 0.5063, 1.0000
+Permitted errors: (np.float64(1.7183996625647069e-06), np.float64(8.372657521470112), 1)
+
+Results of iteration 1:
+Finishing up: False
+Is central: False, Is primal feasible:  False, Is dual feasible: False
+Using AHO-Direction: False
+Centrality Error: 0.7525957769816461
+Primal-Dual Error: (np.float64(0.11856972683220764), np.float64(64.44269295443742))
+Sigma: 0.0005231360785675855
+Ranks X_tt: [3, 5, 5, 4, 4, 3], Z_tt: [3, 3, 3, 3, 3, 3], 
+      Y_tt: [1, 2, 2, 2, 2, 1], T_tt: None 
+
+--- Step 2 ---
+--- Predictor  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction 1
+	Residual inf
+	TT-sol rank: [3, 5, 4, 4, 3, 2]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction -1
+	Residual 6.264515620403594
+	TT-sol rank: [2, 3, 3, 4, 3, 3]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction 1
+	Residual 8.268530486131635e-05
+	TT-sol rank: [3, 4, 4, 4, 3, 2]
+
+	---Results---
+	Solution rank is [3 4 4 4 3 2]
+	Residual  8.268530486131635e-05
+	Number of sweeps 3
+	Time:  0.04214930534362793
+	Time per sweep:  0.014050483703613281
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [3, 3, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	Starting Sweep: 1
+	Step size: 1.000000
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 4, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 2 2 1]
+	 Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.01790928840637207
+	 Time per sweep:  0.00895535945892334
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.867164
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.867164
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	 Step size: 0.867164
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.0197446346282959
+	 Time per sweep:  0.009873151779174805
+
+--- Centering-Corrector  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 7, 7, 7, 7, 6]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 50.180686138280116
+	TT-sol rank: [4, 7, 6, 6, 4, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 0.00016831759316476974
+	TT-sol rank: [2, 4, 4, 4, 4, 4]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction 1
+	Residual 6.401812254135067e-05
+	TT-sol rank: [4, 5, 5, 5, 4, 2]
+
+	---Results---
+	Solution rank is [4 5 5 5 4 2]
+	Residual  6.401812254135067e-05
+	Number of sweeps 4
+	Time:  0.06539082527160645
+	Time per sweep:  0.01634824275970459
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	Starting Sweep: 1
+	Step size: 1.000000
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	 Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.017830848693847656
+	 Time per sweep:  0.008916378021240234
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.468340
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.468340
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 6, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	 Step size: 0.468340
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.020250558853149414
+	 Time per sweep:  0.010126352310180664
+Step sizes: 1.0000, 0.4325
+Permitted errors: (np.float64(1.033140374315232), np.float64(3.1413149592651735e-07), 1)
+
+Results of iteration 2:
+Finishing up: False
+Is central: False, Is primal feasible:  False, Is dual feasible: False
+Using AHO-Direction: False
+Centrality Error: 0.0621142890087075
+Primal-Dual Error: (np.float64(0.11862211149530794), np.float64(8.702684591820832))
+Sigma: 0.0003392391675458017
+Ranks X_tt: [3, 6, 5, 5, 5, 3], Z_tt: [3, 5, 5, 6, 5, 3], 
+      Y_tt: [1, 2, 2, 2, 2, 1], T_tt: None 
+
+--- Step 3 ---
+--- Predictor  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 7, 7, 7, 7, 6]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 464.0350212741332
+	TT-sol rank: [5, 10, 10, 7, 5, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 0.0004351221814402247
+	TT-sol rank: [2, 5, 7, 9, 10, 5]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction 1
+	Residual 7.211789173890936e-05
+	TT-sol rank: [5, 10, 10, 6, 5, 2]
+
+	---Results---
+	Solution rank is [ 5 10 10  6  5  2]
+	Residual  7.211789173890936e-05
+	Number of sweeps 4
+	Time:  0.0766599178314209
+	Time per sweep:  0.019165515899658203
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 1
+	Step size: 1.000000
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	 Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.020237207412719727
+	 Time per sweep:  0.01011967658996582
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 4, 4, 3]
+	Starting Sweep: 1
+	Step size: 1.000000
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	 Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.015961170196533203
+	 Time per sweep:  0.007981538772583008
+
+--- Centering-Corrector  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 7, 7, 7, 7, 6]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 33.62524123835765
+	TT-sol rank: [5, 11, 11, 8, 5, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 0.0002594618381522764
+	TT-sol rank: [2, 5, 8, 10, 10, 5]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction 1
+	Residual 6.385928103978139e-05
+	TT-sol rank: [5, 10, 10, 6, 5, 2]
+
+	---Results---
+	Solution rank is [ 5 10 10  6  5  2]
+	Residual  6.385928103978139e-05
+	Number of sweeps 4
+	Time:  0.07058906555175781
+	Time per sweep:  0.01764780282974243
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 1
+	Step size: 1.000000
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	 Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.01860809326171875
+	 Time per sweep:  0.00930488109588623
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.506528
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.506528
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 6, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	 Step size: 0.506528
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.02316737174987793
+	 Time per sweep:  0.011584639549255371
+Step sizes: 1.0000, 0.4687
+Permitted errors: (np.float64(0.4904614648582021), np.float64(-8.602358584353098e-07), 1)
+
+Results of iteration 3:
+Finishing up: False
+Is central: False, Is primal feasible:  False, Is dual feasible: False
+Using AHO-Direction: False
+Centrality Error: 0.007397024401062114
+Primal-Dual Error: (np.float64(0.11858504062327602), np.float64(0.5440271100567244))
+Sigma: 0.0010376892730253292
+Ranks X_tt: [3, 7, 9, 7, 6, 3], Z_tt: [3, 7, 9, 7, 5, 3], 
+      Y_tt: [1, 2, 2, 3, 2, 1], T_tt: None 
+
+--- Step 4 ---
+--- Predictor  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 7, 7, 7, 7, 6]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 484.01357712604715
+	TT-sol rank: [5, 14, 14, 12, 7, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 0.0024785226131938476
+	TT-sol rank: [2, 7, 13, 19, 13, 5]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction 1
+	Residual 0.00013981349002719186
+	TT-sol rank: [5, 14, 20, 16, 7, 2]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction -1
+	Residual 7.584563362064025e-05
+	TT-sol rank: [2, 7, 13, 21, 13, 5]
+
+	---Results---
+	Solution rank is [ 2  7 13 21 13  5]
+	Residual  7.584563362064025e-05
+	Number of sweeps 5
+	Time:  0.24445271492004395
+	Time per sweep:  0.04889101982116699
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 1
+	Step size: 1.000000
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	 Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.02005743980407715
+	 Time per sweep:  0.010030269622802734
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.507801
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.507801
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 6, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	 Step size: 0.507801
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.022136688232421875
+	 Time per sweep:  0.011069297790527344
+
+--- Centering-Corrector  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction 1
+	Residual inf
+	TT-sol rank: [6, 7, 7, 7, 7, 2]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction -1
+	Residual 0.15163783640299783
+	TT-sol rank: [2, 7, 10, 14, 13, 5]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction 1
+	Residual 0.001037780144710575
+	TT-sol rank: [5, 14, 18, 16, 7, 2]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction -1
+	Residual 0.0006377754491736414
+	TT-sol rank: [2, 7, 13, 21, 13, 5]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction 1
+	Residual 9.352767215903763e-05
+	TT-sol rank: [5, 14, 19, 17, 7, 2]
+
+	---Results---
+	Solution rank is [ 5 14 19 17  7  2]
+	Residual  9.352767215903763e-05
+	Number of sweeps 5
+	Time:  0.2187023162841797
+	Time per sweep:  0.04374089241027832
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.834702
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.820911
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	Starting Sweep: 1
+	Step size: 0.820911
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	 Step size: 0.820911
+	 Residual 0
+	 Number of sweeps 3
+	 Time:  0.02769303321838379
+	 Time per sweep:  0.009231646855672201
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.296868
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.296868
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	 Step size: 0.296868
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.021578311920166016
+	 Time per sweep:  0.010790228843688965
+Step sizes: 0.7510, 0.2716
+Permitted errors: (np.float64(-1.5074568454620518e-07), np.float64(4.080879763453116e-06), 1)
+
+Results of iteration 4:
+Finishing up: False
+Is central: False, Is primal feasible:  False, Is dual feasible: False
+Using AHO-Direction: False
+Centrality Error: 0.003288194234534212
+Primal-Dual Error: (np.float64(0.05961135544535151), np.float64(0.24810429969033473))
+Sigma: 0.14296210639809112
+Ranks X_tt: [3, 8, 13, 16, 8, 3], Z_tt: [3, 7, 9, 8, 5, 3], 
+      Y_tt: [1, 2, 2, 3, 2, 1], T_tt: None 
+
+--- Step 5 ---
+--- Predictor  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 7, 7, 7, 7, 6]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 160.85597226871042
+	TT-sol rank: [5, 12, 12, 11, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 0.25184291485811594
+	TT-sol rank: [2, 7, 11, 13, 11, 4]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction 1
+	Residual 0.009106872844030939
+	TT-sol rank: [4, 8, 12, 14, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction -1
+	Residual 0.0012266017830382774
+	TT-sol rank: [2, 7, 12, 15, 11, 4]
+	Starting Sweep:
+	Max num of sweeps: 5
+	Direction 1
+	Residual 0.0013021058846884063
+	TT-sol rank: [4, 8, 13, 15, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 6
+	Direction -1
+	Residual 0.001239443772408262
+	TT-sol rank: [2, 7, 12, 16, 11, 4]
+	Starting Sweep:
+	Max num of sweeps: 7
+	Direction 1
+	Residual 0.0012763684150086765
+	TT-sol rank: [4, 8, 13, 16, 8, 2]
+
+	---Results---
+	Solution rank is [ 4  8 13 16  8  2]
+	Residual  0.0012763684150086765
+	Number of sweeps 8
+	Time:  0.569202184677124
+	Time per sweep:  0.07115057110786438
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [3, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 1
+	Step size: 1.000000
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 6, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	 Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.022187232971191406
+	 Time per sweep:  0.01109457015991211
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.209946
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.167898
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	Starting Sweep: 1
+	Step size: 0.167856
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	Starting Sweep: 2
+	Step size: 0.167856
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	 Step size: 0.167856
+	 Residual 0
+	 Number of sweeps 3
+	 Time:  0.029852867126464844
+	 Time per sweep:  0.00995175043741862
+
+--- Centering-Corrector  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 7, 7, 7, 7, 6]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 78.00673293699424
+	TT-sol rank: [4, 11, 10, 9, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 0.7564334623073949
+	TT-sol rank: [2, 7, 10, 11, 10, 4]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction 1
+	Residual 0.013484755771307344
+	TT-sol rank: [3, 7, 11, 12, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction -1
+	Residual 0.010924433467983424
+	TT-sol rank: [2, 7, 11, 13, 10, 4]
+	Starting Sweep:
+	Max num of sweeps: 5
+	Direction 1
+	Residual 0.004243353897010218
+	TT-sol rank: [3, 7, 11, 13, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 6
+	Direction -1
+	Residual 0.005549338781301235
+	TT-sol rank: [2, 7, 11, 14, 10, 4]
+	Starting Sweep:
+	Max num of sweeps: 7
+	Direction 1
+	Residual 0.0035780097795632547
+	TT-sol rank: [3, 7, 11, 14, 8, 2]
+
+	---Results---
+	Solution rank is [ 3  7 11 14  8  2]
+	Residual  0.0035780097795632547
+	Number of sweeps 8
+	Time:  0.2965555191040039
+	Time per sweep:  0.03706970810890198
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.414802
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 5, 3]
+	Starting Sweep: 1
+	Step size: 0.414802
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 6, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	 Step size: 0.414802
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.039505958557128906
+	 Time per sweep:  0.019755005836486816
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.348387
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.348387
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	 Step size: 0.348387
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.03607749938964844
+	 Time per sweep:  0.01804029941558838
+Step sizes: 0.3805, 0.3196
+Permitted errors: (np.float64(1.1543649658385391e-07), np.float64(3.399415762631811e-05), 1)
+
+Results of iteration 5:
+Finishing up: False
+Is central: False, Is primal feasible:  False, Is dual feasible: False
+Using AHO-Direction: False
+Centrality Error: 0.0009956987081954228
+Primal-Dual Error: (np.float64(0.014315683693348603), np.float64(0.08899687490159199))
+Sigma: 0.2212867999545921
+Ranks X_tt: [3, 8, 12, 18, 9, 3], Z_tt: [3, 7, 10, 11, 8, 3], 
+      Y_tt: [1, 2, 2, 4, 2, 1], T_tt: None 
+
+--- Step 6 ---
+--- Predictor  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 7, 7, 7, 7, 6]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 9007.25190232149
+	TT-sol rank: [5, 13, 13, 11, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 1.0155267664529548
+	TT-sol rank: [2, 7, 11, 13, 11, 4]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction 1
+	Residual 0.02261826923688818
+	TT-sol rank: [4, 10, 14, 15, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction -1
+	Residual 0.011665610270668883
+	TT-sol rank: [2, 7, 11, 17, 11, 4]
+	Starting Sweep:
+	Max num of sweeps: 5
+	Direction 1
+	Residual 0.012611998873768368
+	TT-sol rank: [4, 10, 14, 18, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 6
+	Direction -1
+	Residual 0.011059036275063387
+	TT-sol rank: [2, 7, 11, 19, 11, 4]
+	Starting Sweep:
+	Max num of sweeps: 7
+	Direction 1
+	Residual 0.010696149831371496
+	TT-sol rank: [4, 10, 14, 20, 8, 2]
+
+	---Results---
+	Solution rank is [ 4 10 14 20  8  2]
+	Residual  0.010696149831371496
+	Number of sweeps 8
+	Time:  0.8031795024871826
+	Time per sweep:  0.10039776563644409
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.516485
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.516485
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 6, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	 Step size: 0.516485
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.04435014724731445
+	 Time per sweep:  0.02217721939086914
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.383861
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.383660
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	 Step size: 0.383660
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.02971935272216797
+	 Time per sweep:  0.01486194133758545
+
+--- Centering-Corrector  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 7, 7, 7, 7, 6]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 1252.9558673125637
+	TT-sol rank: [5, 12, 12, 11, 7, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 0.7979359722307521
+	TT-sol rank: [2, 7, 11, 14, 11, 4]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction 1
+	Residual 0.0895586420730371
+	TT-sol rank: [4, 10, 14, 16, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction -1
+	Residual 0.012443941685590536
+	TT-sol rank: [2, 7, 11, 17, 11, 4]
+	Starting Sweep:
+	Max num of sweeps: 5
+	Direction 1
+	Residual 0.013209307110448404
+	TT-sol rank: [4, 10, 14, 18, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 6
+	Direction -1
+	Residual 0.009677186780028416
+	TT-sol rank: [2, 7, 11, 19, 11, 4]
+	Starting Sweep:
+	Max num of sweeps: 7
+	Direction 1
+	Residual 0.010180903448355086
+	TT-sol rank: [4, 10, 14, 20, 8, 2]
+
+	---Results---
+	Solution rank is [ 4 10 14 20  8  2]
+	Residual  0.010180903448355086
+	Number of sweeps 8
+	Time:  0.9469451904296875
+	Time per sweep:  0.11836844682693481
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [3, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.434004
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.434004
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 6, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	 Step size: 0.434004
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.019618749618530273
+	 Time per sweep:  0.009810328483581543
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.854017
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 3, 3, 4, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.605824
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 5, 5, 4, 4, 2]
+	Starting Sweep: 1
+	Step size: 0.316638
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 2
+	Step size: 0.316638
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 6, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 3 2 1]
+	 Step size: 0.316638
+	 Residual 0
+	 Number of sweeps 3
+	 Time:  0.03802967071533203
+	 Time per sweep:  0.012677669525146484
+Step sizes: 0.3975, 0.2900
+Permitted errors: (np.float64(-2.6269530064904068e-05), np.float64(-1.0266853034021986e-05), 1)
+
+Results of iteration 6:
+Finishing up: False
+Is central: False, Is primal feasible:  False, Is dual feasible: False
+Using AHO-Direction: False
+Centrality Error: 0.0002960721062288915
+Primal-Dual Error: (np.float64(0.003023194065493855), np.float64(0.03667534761031253))
+Sigma: 0.16972540977419506
+Ranks X_tt: [3, 7, 11, 18, 9, 3], Z_tt: [3, 7, 10, 13, 7, 3], 
+      Y_tt: [1, 2, 2, 3, 2, 1], T_tt: None 
+
+--- Step 7 ---
+--- Predictor  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 7, 7, 7, 7, 6]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 16630.952018694497
+	TT-sol rank: [5, 13, 13, 11, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 1.1216686192445173
+	TT-sol rank: [2, 7, 11, 15, 12, 5]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction 1
+	Residual 0.03988906389161595
+	TT-sol rank: [5, 11, 15, 18, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction -1
+	Residual 0.03011346780962559
+	TT-sol rank: [2, 7, 11, 20, 12, 5]
+	Starting Sweep:
+	Max num of sweeps: 5
+	Direction 1
+	Residual 0.03233327424414225
+	TT-sol rank: [5, 11, 15, 22, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 6
+	Direction -1
+	Residual 0.018453828223035
+	TT-sol rank: [2, 7, 11, 23, 12, 5]
+	Starting Sweep:
+	Max num of sweeps: 7
+	Direction 1
+	Residual 0.029176195659877762
+	TT-sol rank: [5, 11, 15, 23, 8, 2]
+
+	---Results---
+	Solution rank is [ 5 11 15 23  8  2]
+	Residual  0.029176195659877762
+	Number of sweeps 8
+	Time:  1.1788318157196045
+	Time per sweep:  0.14735427498817444
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.946206
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 6, 6, 6, 3]
+	Starting Sweep: 1
+	Step size: 0.602848
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 7, 6, 4, 2]
+	Starting Sweep: 1
+	Step size: 0.479637
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 2
+	Step size: 0.479637
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 6, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	 Step size: 0.479637
+	 Residual 0
+	 Number of sweeps 3
+	 Time:  0.06969308853149414
+	 Time per sweep:  0.023232221603393555
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 3, 3, 3, 4, 3]
+	Starting Sweep: 1
+	Step size: 1.000000
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 3, 4, 4, 2]
+	Starting Sweep: 1
+	Step size: 0.433297
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	Starting Sweep: 2
+	Step size: 0.433009
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	 Step size: 0.433007
+	 Residual 0
+	 Number of sweeps 3
+	 Time:  0.0308382511138916
+	 Time per sweep:  0.010280291239420572
+
+--- Centering-Corrector  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 7, 7, 7, 7, 6]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 1522.3933088359695
+	TT-sol rank: [5, 14, 12, 11, 7, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 1.2767025174620577
+	TT-sol rank: [2, 7, 11, 15, 11, 5]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction 1
+	Residual 0.1519914129664359
+	TT-sol rank: [5, 11, 15, 18, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction -1
+	Residual 0.036250220338659246
+	TT-sol rank: [2, 7, 11, 19, 12, 5]
+	Starting Sweep:
+	Max num of sweeps: 5
+	Direction 1
+	Residual 0.021358519278105784
+	TT-sol rank: [5, 11, 15, 21, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 6
+	Direction -1
+	Residual 0.04959466098039302
+	TT-sol rank: [2, 7, 11, 22, 12, 5]
+	Starting Sweep:
+	Max num of sweeps: 7
+	Direction 1
+	Residual 0.024585900651926604
+	TT-sol rank: [5, 11, 15, 23, 8, 2]
+
+	---Results---
+	Solution rank is [ 5 11 15 23  8  2]
+	Residual  0.024585900651926604
+	Number of sweeps 8
+	Time:  0.9825484752655029
+	Time per sweep:  0.12281879782676697
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.107922
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.107922
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 6, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	 Step size: 0.107922
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.02431321144104004
+	 Time per sweep:  0.012157559394836426
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.256555
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.256555
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 6, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	 Step size: 0.256555
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.021116018295288086
+	 Time per sweep:  0.010559558868408203
+Step sizes: 0.0977, 0.2323
+Permitted errors: (np.float64(-9.014802697739771e-06), np.float64(1.5457031007119152e-06), 1)
+
+Results of iteration 7:
+Finishing up: False
+Is central: False, Is primal feasible:  False, Is dual feasible: False
+Using AHO-Direction: False
+Centrality Error: 0.00024099492383485347
+Primal-Dual Error: (np.float64(0.002488008536267675), np.float64(0.01888666633599561))
+Sigma: 0.18039627042621992
+Ranks X_tt: [3, 7, 11, 19, 9, 3], Z_tt: [3, 6, 10, 13, 7, 3], 
+      Y_tt: [1, 2, 2, 3, 2, 1], T_tt: None 
+
+--- Step 8 ---
+--- Predictor  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 7, 7, 7, 7, 6]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 2319.318402493128
+	TT-sol rank: [5, 12, 12, 11, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 0.9826156858634607
+	TT-sol rank: [2, 6, 11, 14, 12, 4]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction 1
+	Residual 0.09138737564900704
+	TT-sol rank: [4, 10, 15, 16, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction -1
+	Residual 0.028228082417425193
+	TT-sol rank: [2, 6, 11, 18, 12, 5]
+	Starting Sweep:
+	Max num of sweeps: 5
+	Direction 1
+	Residual 0.02280197596904027
+	TT-sol rank: [4, 10, 15, 19, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 6
+	Direction -1
+	Residual 0.02483543197739994
+	TT-sol rank: [2, 6, 11, 21, 12, 5]
+	Starting Sweep:
+	Max num of sweeps: 7
+	Direction 1
+	Residual 0.01842231779167281
+	TT-sol rank: [4, 10, 15, 22, 8, 2]
+
+	---Results---
+	Solution rank is [ 4 10 15 22  8  2]
+	Residual  0.01842231779167281
+	Number of sweeps 8
+	Time:  0.816596269607544
+	Time per sweep:  0.10207483172416687
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.390717
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.390717
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 6, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	 Step size: 0.390717
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.026703596115112305
+	 Time per sweep:  0.013352751731872559
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.512672
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 5, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.512495
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 5, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	 Step size: 0.512431
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.021342039108276367
+	 Time per sweep:  0.010671854019165039
+
+--- Centering-Corrector  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 7, 7, 7, 7, 6]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 1552.1715094882195
+	TT-sol rank: [5, 13, 12, 11, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 1.4938430554698006
+	TT-sol rank: [2, 7, 11, 14, 12, 5]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction 1
+	Residual 0.32431959837357127
+	TT-sol rank: [4, 11, 15, 17, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction -1
+	Residual 0.028784945479596282
+	TT-sol rank: [2, 7, 12, 19, 12, 5]
+	Starting Sweep:
+	Max num of sweeps: 5
+	Direction 1
+	Residual 0.05144745688933821
+	TT-sol rank: [4, 11, 16, 20, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 6
+	Direction -1
+	Residual 0.02848888804042851
+	TT-sol rank: [2, 7, 12, 22, 12, 5]
+	Starting Sweep:
+	Max num of sweeps: 7
+	Direction 1
+	Residual 0.037513391553761086
+	TT-sol rank: [4, 11, 16, 22, 8, 2]
+
+	---Results---
+	Solution rank is [ 4 11 16 22  8  2]
+	Residual  0.037513391553761086
+	Number of sweeps 8
+	Time:  0.9969255924224854
+	Time per sweep:  0.12461596727371216
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.353392
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.353392
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 6, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	 Step size: 0.353392
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.022849082946777344
+	 Time per sweep:  0.011425495147705078
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [3, 3, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 3, 5, 5, 4, 3]
+	Starting Sweep: 1
+	Step size: 1.000000
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 5, 5, 5, 4, 2]
+	Starting Sweep: 1
+	Step size: 0.412761
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 2
+	Step size: 0.412761
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 6, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	 Step size: 0.412761
+	 Residual 0
+	 Number of sweeps 3
+	 Time:  0.034926652908325195
+	 Time per sweep:  0.011642932891845703
+Step sizes: 0.3243, 0.3788
+Permitted errors: (np.float64(-1.5910259518077657e-05), np.float64(-8.833931695349562e-06), 1)
+
+Results of iteration 8:
+Finishing up: False
+Is central: True, Is primal feasible:  False, Is dual feasible: False
+Using AHO-Direction: False
+Centrality Error: 0.0001083515619958681
+Primal-Dual Error: (np.float64(0.0009378242275425939), np.float64(0.003907175875218331))
+Sigma: 0.2461729809632757
+Ranks X_tt: [3, 7, 11, 18, 9, 3], Z_tt: [3, 7, 11, 13, 7, 3], 
+      Y_tt: [1, 2, 2, 3, 2, 1], T_tt: None 
+
+--- Step 9 ---
+--- Predictor  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 7, 7, 7, 7, 6]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 572931.7553273147
+	TT-sol rank: [5, 13, 14, 14, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 0.38359976041346755
+	TT-sol rank: [2, 8, 16, 21, 16, 5]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction 1
+	Residual 0.03071390431595483
+	TT-sol rank: [5, 16, 28, 28, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction -1
+	Residual 0.0033673985791471436
+	TT-sol rank: [2, 8, 16, 35, 16, 5]
+	Starting Sweep:
+	Max num of sweeps: 5
+	Direction 1
+	Residual 0.002794170867017164
+	TT-sol rank: [5, 16, 29, 30, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 6
+	Direction -1
+	Residual 0.00046764973038812617
+	TT-sol rank: [2, 8, 16, 41, 16, 5]
+	Starting Sweep:
+	Max num of sweeps: 7
+	Direction 1
+	Residual 0.00038188660687040415
+	TT-sol rank: [5, 16, 29, 30, 8, 2]
+
+	---Results---
+	Solution rank is [ 5 16 29 30  8  2]
+	Residual  0.00038188660687040415
+	Number of sweeps 8
+	Time:  3.4187543392181396
+	Time per sweep:  0.42734456062316895
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 4, 4, 3]
+	 -----
+	 Solution rank is [1 1 1 2 2 1]
+	 Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.013486623764038086
+	 Time per sweep:  0.0067441463470458984
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 3, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 3, 3, 3, 3, 3]
+	Starting Sweep: 1
+	Step size: 1.000000
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 3, 3, 3, 3, 2]
+	 -----
+	 Solution rank is [1 1 1 1 1 1]
+	 Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.018129587173461914
+	 Time per sweep:  0.009065747261047363
+Step sizes: 1.0000, 1.0000
+Permitted errors: (np.float64(0.0167942765619161), np.float64(0.01243240880338517), 1)
+
+Results of iteration 9:
+Finishing up: True
+Is central: True, Is primal feasible:  True, Is dual feasible: True
+Using AHO-Direction: False
+Centrality Error: 0.00010954353139889532
+Primal-Dual Error: (np.float64(6.448654767722773e-05), np.float64(8.425729074379626e-05))
+Sigma: 0
+Ranks X_tt: [3, 7, 11, 18, 9, 3], Z_tt: [3, 6, 6, 7, 5, 3], 
+      Y_tt: [1, 2, 2, 3, 2, 1], T_tt: None 
+
+--- Step 10 ---
+--- Predictor  step ---
+	Starting Sweep:
+	Max num of sweeps: 0
+	Direction -1
+	Residual inf
+	TT-sol rank: [4, 5, 5, 5, 5, 5]
+	Starting Sweep:
+	Max num of sweeps: 1
+	Direction 1
+	Residual 42.56238473830578
+	TT-sol rank: [4, 7, 6, 6, 5, 2]
+	Starting Sweep:
+	Max num of sweeps: 2
+	Direction -1
+	Residual 0.746731617573102
+	TT-sol rank: [2, 7, 8, 9, 8, 4]
+	Starting Sweep:
+	Max num of sweeps: 3
+	Direction 1
+	Residual 1.8687783955057404
+	TT-sol rank: [3, 8, 10, 13, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 4
+	Direction -1
+	Residual 0.06594866420188983
+	TT-sol rank: [2, 6, 10, 15, 10, 3]
+	Starting Sweep:
+	Max num of sweeps: 5
+	Direction 1
+	Residual 0.018907706959500913
+	TT-sol rank: [3, 8, 12, 16, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 6
+	Direction -1
+	Residual 0.01102475905631926
+	TT-sol rank: [2, 6, 11, 18, 10, 3]
+	Starting Sweep:
+	Max num of sweeps: 7
+	Direction 1
+	Residual 0.006496756613465693
+	TT-sol rank: [3, 8, 13, 19, 8, 2]
+	Starting Sweep:
+	Max num of sweeps: 8
+	Direction -1
+	Residual 0.006823918787287925
+	TT-sol rank: [2, 6, 11, 21, 10, 3]
+	Starting Sweep:
+	Max num of sweeps: 9
+	Direction 1
+	Residual 0.006397496407264389
+	TT-sol rank: [3, 8, 13, 21, 8, 2]
+
+	---Results---
+	Solution rank is [ 3  8 13 21  8  2]
+	Residual  0.006397496407264389
+	Number of sweeps 10
+	Time:  0.7698123455047607
+	Time per sweep:  0.07698144912719726
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.867137
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 6, 4, 3]
+	Starting Sweep: 1
+	Step size: 0.867137
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 6, 4, 2]
+	 -----
+	 Solution rank is [1 2 2 4 2 1]
+	 Step size: 0.867137
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.025973796844482422
+	 Time per sweep:  0.012987971305847168
+Starting Eigen solve with:
+ 	 0.0005 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 4, 4, 4, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 3, 4, 4, 4, 3]
+	Starting Sweep: 1
+	Step size: 1.000000
+	Direction: -1
+	Residual 0
+	TT-sol rank: [3, 4, 4, 4, 4, 2]
+	Starting Sweep: 1
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 4, 4, 4, 3]
+	 -----
+	 Solution rank is [1 2 2 2 2 1]
+	 Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 3
+	 Time:  0.023183584213256836
+	 Time per sweep:  0.00772865613301595
+Step sizes: 0.8180, 1.0000
+Permitted errors: (np.float64(5.8872504787865765e-09), np.float64(0.014536829066098138), 1)
+---Terminated---
+Converged in 10 iterations.
+Ranks X_tt: [2, 6, 8, 13, 8, 2], Z_tt: [2, 5, 5, 5, 4, 2], 
+      Y_tt: [1, 2, 2, 3, 2, 1], T_tt: None 
+
+Converged after 10.0 iterations
+Problem created in 0.003s
+Problem solved in 13.466s
+Complementary Slackness: 0.03369720239515912
+Total feasibility error: 4.068949647634933e-06
+--- Run Summary ---
+Converged after avg 10.0 iterations
+Problem created in avg 0.003s
+Problem solved in avg 13.466s
+Complementary Slackness avg: 0.03369720239515912
+Total feasibility error avg: 4.068949647634933e-06
+✅ Completed dim=7 successfully
+
+==== All runs completed at Fri May 16 02:30:33 PM BST 2025 ====

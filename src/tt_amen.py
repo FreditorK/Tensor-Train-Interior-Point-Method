@@ -211,7 +211,7 @@ def tt_amen(A, b, nswp=50, x0=None, eps=1e-10, rmax=1024, solver_limit=500, kick
                     v = v @ Rmat.T
 
                 r = u.shape[1]
-                v = einsum('ji,jkl->ikl', v, x_cores[k + 1])
+                v = einsum('ji,jkl->ikl', v, x_cores[k + 1], optimize=[(0, 1)])
                 # remove norm correction
                 nrmsc = nrmsc * normA[k] * normx[k] / normb[k]
 
@@ -352,7 +352,7 @@ def _bck_sweep(
             else:
                 r = min(prune_singular_vals(s, real_tol), r_max)
             x_cores[k] = np.reshape(u[:, :r].T, (r, N[k], rx[k + 1]))
-            x_cores[k - 1] = einsum('rdc,cbR->rbdR', x_cores[k - 1], v[:r].T.reshape(rx[k], block_size, r), optimize="greedy")
+            x_cores[k - 1] = einsum('rdc,cbR->rbdR', x_cores[k - 1], v[:r].T.reshape(rx[k], block_size, r), optimize=[(0, 1)])
             norm_now = np.linalg.norm(x_cores[k - 1])
             normx[k - 1] *= norm_now
             x_cores[k - 1] /= norm_now
@@ -429,11 +429,11 @@ def _fwd_sweep(
             v = v.reshape(-1, block_size, rx[k + 1])
             if swp > 0:
                 r_start = min(prune_singular_vals(s, real_tol), r_max)
-                solution_now = cached_einsum("rbR, Rdk -> rbdk", u[:, :, :r_start], v[:r_start])
+                solution_now = einsum("rbR, Rdk -> rbdk", u[:, :, :r_start], v[:r_start], optimize=[(0, 1)])
                 res = _block_local_product(XAX[k], block_A[k], XAX[k + 1], np.transpose(solution_now, (0, 2, 1, 3))) - rhs
                 r = r_start
                 for r in range(r_start - 1, 0, -1):
-                    res -= _block_local_product(XAX[k], block_A[k], XAX[k + 1], cached_einsum("rbR, Rdk -> rdbk", u[:, :, None, r], v[None, r]))
+                    res -= _block_local_product(XAX[k], block_A[k], XAX[k + 1], einsum("rbR, Rdk -> rdbk", u[:, :, None, r], v[None, r], optimize=[(0, 1)]))
                     if np.linalg.norm(res) / norm_rhs > max(2 * real_tol, block_res_new):
                         break
                 r += 1
@@ -441,7 +441,7 @@ def _fwd_sweep(
             else:
                 r = min(prune_singular_vals(s, real_tol), r_max)
 
-            v = cached_einsum("rbR, Rdk -> rbdk", v[:r], x_cores[k + 1])
+            v = einsum("rbR, Rdk -> rbdk", v[:r], x_cores[k + 1], optimize=[(0, 1)])
             norm_now = np.linalg.norm(v)
             normx[k] *= norm_now
             x_cores[k] = u[:, :, :r]
@@ -475,20 +475,18 @@ def tt_block_mals(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, local_solv
         local_solver = _default_local_solver
 
     direction = 1
-    if x0 == None:
+    if x0 is None:
         x_cores = tt_normalise([np.random.randn(1, *c.shape[1:-1], 1) for c in model_entry[:-1]]) + [np.random.randn(1, block_size, *x_shape, 1)]
     else:
         if len(x0[0].shape) > len(x0[-1].shape):
             direction *= -1
-        x_cores = tt_rank_retraction(x0, [2]*(len(x0)-1))
+        x_cores = x0
 
     if verbose:
         t0 = time.time()
 
     N = [c.shape[-2] for c in x_cores]
     d = len(N)
-    rx = np.array([1] + tt_ranks(x_cores) + [1])
-
 
     XAX =  [{key: np.ones((1, 1, 1)) for key in block_A}] + [{key: None for key in block_A} for _ in range(d-1)] + [{key: np.ones((1, 1, 1)) for key in block_A}]  # size is rk x Rk x rk
     Xb = [{key: np.ones((1, 1)) for key in block_b}] + [{key: None for key in block_b} for _ in range(d-1)] + [{key: np.ones((1, 1)) for key in block_b}]   # size is rk x rbk
@@ -503,6 +501,9 @@ def tt_block_mals(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, local_solv
     r_max_final = block_size*int(np.sqrt(d)*d) + block_size
     size_limit = (r_max_final)**2*N[0]/(np.sqrt(d)*d)
     r_max_part = np.linspace(max(r_max_final // nswp, 2), r_max_final, num=nswp, dtype=int)
+
+    x_cores = tt_rank_retraction(x_cores, [r_max_part[0]]*(d-1)) if x0 is not None else x_cores
+    rx = np.array([1] + tt_ranks(x_cores) + [1])
 
     for swp in range(nswp):
         r_max = r_max_part[swp]

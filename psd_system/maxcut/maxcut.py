@@ -71,7 +71,8 @@ if __name__ == "__main__":
                     verbose=config["verbose"],
                     feasibility_tol=config["feasibility_tol"],
                     centrality_tol=config["centrality_tol"],
-                    op_tol=config["op_tol"]
+                    op_tol=config["op_tol"],
+                    aho_direction=False
                 )
                 return X_tt, Y_tt, T_tt, Z_tt, info
 
