@@ -205,7 +205,7 @@ def create_problem(n, max_rank):
     # ---
     # Inequality Operator
     # X
-    ineq_mask = [E(0, 0)] + tt_sub(tt_one_matrix(n), tt_identity(n)) + tt_sub(tt_one_matrix(n), tt_identity(n)) #tt_one_matrix(2*n)
+    ineq_mask = tt_rank_reduce([E(0, 0)] + tt_sub(tt_one_matrix(n), tt_identity(n)) + tt_sub(tt_one_matrix(n), tt_identity(n)))
 
     # ---
 
@@ -214,24 +214,25 @@ def create_problem(n, max_rank):
     pad = tt_sub(pad, [E(0, 1)] + [E(0, 0) + E(1, 0) for _ in range(2 * n)])
     pad = tt_sub(pad, [E(1, 0)] + [E(0, 0) + E(0, 1) for _ in range(2 * n)])
 
-    lag_maps = {
-        "y": tt_rank_reduce(tt_diag(tt_split_bonds(
-            tt_sub(
-                tt_one_matrix(2 * n + 1),
-                tt_sum(
-                    pad,  # P
-                    [E(0, 1)] + [E(0, 0) + E(1, 0) for _ in range(2 * n)],  # 7
-                    [E(1, 0)] + [E(0, 0) + E(0, 1) for _ in range(2 * n)],  # 7
-                    [E(0, 0)] + [E(0, 0) for _ in range(n)] + tt_identity(n),
-                    # 6.1
-                    [E(0, 0)] + tt_identity(n) + tt_sub(tt_one_matrix(n), tt_identity(n)),  # 6.2
-                    partial_tr_J_op_bias,  # 5
-                    [E(0, 0)] + tt_sub(tt_one_matrix(n), tt_identity(n)) + tt_identity(n)  # 4
+    lag_map_y = tt_sub(
+            tt_one_matrix(2 * n + 1),
+            tt_sum(
+                pad,  # P
+                [E(0, 1)] + [E(0, 0) + E(1, 0) for _ in range(2 * n)],  # 7
+                [E(1, 0)] + [E(0, 0) + E(0, 1) for _ in range(2 * n)],  # 7
+                [E(0, 0)] + [E(0, 0) for _ in range(n)] + tt_identity(n),
+                # 6.1
+                [E(0, 0)] + tt_identity(n) + tt_sub(tt_one_matrix(n), tt_identity(n)),  # 6.2
+                partial_tr_J_op_bias,  # 5
+                [E(0, 0)] + tt_sub(tt_one_matrix(n), tt_identity(n)) + tt_identity(n)  # 4
 
-                )
             )
-        ))),
-        "t": tt_rank_reduce(tt_diag(tt_split_bonds(tt_sub(tt_one_matrix(2 * n + 1), ineq_mask))))
+    )
+    lag_map_t = tt_sub(tt_one_matrix(2 * n + 1), ineq_mask)
+
+    lag_maps = {
+        "y": tt_diag_op(lag_map_y),
+        "t": tt_diag_op(lag_map_t)
     }
 
     return C_tt, L_op_tt, eq_bias_tt, ineq_mask, lag_maps

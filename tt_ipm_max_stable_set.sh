@@ -12,8 +12,8 @@ export NUMEXPR_NUM_THREADS=8
 # Parameters
 # ---------------------------
 BASE_TIMEOUT=1800  # 30 minutes
-START_DIM=6
-END_DIM=10
+START_DIM=5
+END_DIM=5
 
 # Cleanup on exit or interrupt
 cleanup() {
@@ -43,7 +43,7 @@ for dim in $(seq $START_DIM $END_DIM); do
     echo -e "\n▶ Running dim=$dim with config=$CONFIG at $(date)"
     CURRENT_TIMEOUT=$((BASE_TIMEOUT * dim))
 
-    timeout "$CURRENT_TIMEOUT" python maxcut.py --config "$CONFIG" --track_mem
+    timeout "$CURRENT_TIMEOUT" python max_stable_set.py --config "$CONFIG" --track_mem
     status=$?
 
     if [ $status -eq 124 ]; then

@@ -1,6 +1,6 @@
 # Common
 dim: !!int 3
-max_rank: !!int 4
+max_rank: !!int 2
 seeds: [5]
 feasibility_tol: !!float 5e-5
 centrality_tol: !!float 8e-4

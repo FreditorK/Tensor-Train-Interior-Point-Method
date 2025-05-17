@@ -12,8 +12,8 @@ export NUMEXPR_NUM_THREADS=8
 # Parameters
 # ---------------------------
 BASE_TIMEOUT=1800  # 30 minutes
-START_DIM=7
-END_DIM=7
+START_DIM=2
+END_DIM=2
 
 # Cleanup on exit or interrupt
 cleanup() {

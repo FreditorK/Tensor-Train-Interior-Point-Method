@@ -46,7 +46,7 @@ def _get_eq_mat_vec(XAX_k, block_A_k, XAX_kp1, x_shape, inv_I):
         result = np.zeros_like(x_core)
         result[0] += K_y(XAX_k_00, block_A_k_00, XAX_kp1_00, x_core[0]).__iadd__(mL(XAX_k_01, block_A_k_01, XAX_kp1_01, x_core[1]))
         result[1] += L_Z(XAX_k_21, block_A_k_21, XAX_kp1_21, x_core[1]).__isub__(
-            inv_I*L_XmL_adj( XAX_k_22, block_A_k_22, XAX_kp1_22,XAX_k_01, block_A_k_01, XAX_kp1_01, x_core[0])
+            L_XmL_adj( XAX_k_22, block_A_k_22, XAX_kp1_22,XAX_k_01, block_A_k_01, XAX_kp1_01, x_core[0]).__imul__(inv_I)
         )
         return result.reshape(-1, 1)
 
@@ -111,38 +111,42 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
     return solution_now, block_res_old, min(block_res_new, block_res_old), rhs, norm_rhs
 
 
-def _ipm_block_local_product_ineq(XAX_k, block_A_k, XAX_kp1, x_core, inv_I):
-    result = np.zeros_like(x_core)
-    result[0] = (
-            cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[(0, 0)], block_A_k[(0, 0)], XAX_kp1[(0, 0)], x_core[0]) # K y
-            + cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[(0, 1)], block_A_k[(0, 1)], XAX_kp1[(0, 1)], x_core[1]) # -L x
-    )
-    result[1] = -inv_I*cached_einsum('lsr,smnS,LSR,lmL->rnR', XAX_k[(0, 1)], block_A_k[(0, 1)], XAX_kp1[(0, 1)], x_core[0]) # invI*L^* y
-    result[1] = cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[(2, 2)], block_A_k[(2, 2)], XAX_kp1[(2, 2)], result[1] - x_core[2]) # L_X
-    result[1] += cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[(2, 1)], block_A_k[(2, 1)], XAX_kp1[(2, 1)], x_core[1]) # L_Z x
-    result[2] = (
-        cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[(3, 1)], block_A_k[(3, 1)], XAX_kp1[(3, 1)], x_core[1])
-        + cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[(3, 3)], block_A_k[(3, 3)], XAX_kp1[(3, 3)], x_core[2])
-    )
-    return result
-
-
 def _get_ineq_mat_vec(XAX_k, block_A_k, XAX_kp1, x_shape, inv_I):
     x_element_shape = (x_shape[0], x_shape[2], x_shape[3])
-    K_y = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k[(0, 0)].shape, block_A_k[(0, 0)].shape,  XAX_kp1[(0, 0)].shape, x_element_shape, optimize="greedy")
-    mL = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k[(0, 1)].shape, block_A_k[(0, 1)].shape,  XAX_kp1[(0, 1)].shape, x_element_shape, optimize="greedy")
-    mL_adj = contract_expression('lsr,smnS,LSR,lmL->rnR', XAX_k[(0, 1)].shape, block_A_k[(0, 1)].shape, XAX_kp1[(0, 1)].shape, x_element_shape, optimize="greedy")
-    L_X = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k[(2, 2)].shape, block_A_k[(2, 2)].shape, XAX_kp1[(2, 2)].shape, x_element_shape, optimize="greedy")
-    L_Z = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k[(2, 1)].shape, block_A_k[(2, 1)].shape, XAX_kp1[(2, 1)].shape, x_element_shape, optimize="greedy")
-    T_op = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k[(3, 1)].shape, block_A_k[(3, 1)].shape, XAX_kp1[(3, 1)].shape, x_element_shape, optimize="greedy")
-    K_t = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k[(3, 3)].shape, block_A_k[(3, 3)].shape, XAX_kp1[(3, 3)].shape, x_element_shape, optimize="greedy")
+    XAX_k_00 = XAX_k[(0, 0)]
+    XAX_k_01 = XAX_k[(0, 1)]
+    XAX_k_21 = XAX_k[(2, 1)]
+    XAX_k_22 = XAX_k[(2, 2)]
+    XAX_k_31 = XAX_k[(3, 1)]
+    XAX_k_33 = XAX_k[(3, 3)]
+    XAX_kp1_00 = XAX_kp1[(0, 0)]
+    XAX_kp1_01 = XAX_kp1[(0, 1)]
+    XAX_kp1_21 = XAX_kp1[(2, 1)]
+    XAX_kp1_22 = XAX_kp1[(2, 2)]
+    XAX_kp1_31 = XAX_kp1[(3, 1)]
+    XAX_kp1_33 = XAX_kp1[(3, 3)]
+    block_A_k_00 = block_A_k[(0, 0)]
+    block_A_k_01 = block_A_k[(0, 1)]
+    block_A_k_21 = block_A_k[(2, 1)]
+    block_A_k_22 = block_A_k[(2, 2)]
+    block_A_k_31 = block_A_k[(3, 1)]
+    block_A_k_33 = block_A_k[(3, 3)]
+    K_y = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k_00.shape, block_A_k_00.shape,  XAX_kp1_00.shape, x_element_shape, optimize="greedy")
+    mL = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k_01.shape, block_A_k_01.shape,  XAX_kp1_01.shape, x_element_shape, optimize="greedy")
+    mL_adj = contract_expression('lsr,smnS,LSR,lmL->rnR', XAX_k_01.shape, block_A_k_01.shape, XAX_kp1_01.shape, x_element_shape, optimize="greedy")
+    L_X = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k_22.shape, block_A_k_22.shape, XAX_kp1_22.shape, x_element_shape, optimize="greedy")
+    L_Z = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k_21.shape, block_A_k_21.shape, XAX_kp1_21.shape, x_element_shape, optimize="greedy")
+    T_op = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k_31.shape, block_A_k_31.shape, XAX_kp1_31.shape, x_element_shape, optimize="greedy")
+    K_t = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k_33.shape, block_A_k_33.shape, XAX_kp1_33.shape, x_element_shape, optimize="greedy")
 
     def mat_vec(x_core):
         x_core = x_core.reshape(3, x_shape[0], x_shape[2], x_shape[3])
         result = np.zeros_like(x_core)
-        result[0] += K_y(XAX_k[(0, 0)], block_A_k[(0, 0)], XAX_kp1[(0, 0)], x_core[0]).__iadd__(mL(XAX_k[(0, 1)], block_A_k[(0, 1)], XAX_kp1[(0, 1)], x_core[1]))
-        result[1] += L_Z(XAX_k[(2, 1)], block_A_k[(2, 1)], XAX_kp1[(2, 1)], x_core[1]).__isub__(L_X( XAX_k[(2, 2)], block_A_k[(2, 2)], XAX_kp1[(2, 2)], (inv_I*mL_adj(XAX_k[(0, 1)], block_A_k[(0, 1)], XAX_kp1[(0, 1)], x_core[0])).__iadd__(x_core[2])))
-        result[2] += T_op(XAX_k[(3, 1)], block_A_k[(3, 1)], XAX_kp1[(3, 1)], x_core[1]).__iadd__(K_t(XAX_k[(3, 3)], block_A_k[(3, 3)], XAX_kp1[(3, 3)], x_core[2]))
+        result[0] += K_y(XAX_k_00, block_A_k_00, XAX_kp1_00, x_core[0]).__iadd__(mL(XAX_k_01, block_A_k_01, XAX_kp1_01, x_core[1]))
+        result[1] += L_Z(XAX_k_21, block_A_k_21, XAX_kp1_21, x_core[1]).__isub__(
+            L_X( XAX_k_22, block_A_k_22, XAX_kp1_22, (mL_adj(XAX_k_01, block_A_k_01, XAX_kp1_01, x_core[0]).__imul__(inv_I)).__iadd__(x_core[2]))
+        )
+        result[2] += T_op(XAX_k_31, block_A_k_31, XAX_kp1_31, x_core[1]).__iadd__(K_t(XAX_k_33, block_A_k_33, XAX_kp1_33, x_core[2]))
         return result.reshape(-1, 1)
 
     return mat_vec
@@ -208,19 +212,18 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
     if m > size_limit:
         mat_vec = _get_ineq_mat_vec(XAX_k, block_A_k, XAX_k1, x_shape, inv_I)
         linear_op = scip.sparse.linalg.LinearOperator((3 * m, 3 * m), matvec=mat_vec)
-        local_rhs = -_ipm_block_local_product_ineq(XAX_k, block_A_k, XAX_k1,
-                                                   np.transpose(previous_solution[:, [0, 1, 3]], (1, 0, 2, 3)), inv_I)
+        local_rhs = -linear_op(np.transpose(previous_solution[:, [0, 1, 3]], (1, 0, 2, 3)).reshape(-1, 1)).reshape(3, x_shape[0], x_shape[2], x_shape[3])
         local_rhs[0] += rhs[:, 0]
         local_rhs[1] += rhs[:, 2] - cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[(2, 2)], block_A_k[(2, 2)],
                                                   XAX_k1[(2, 2)], inv_I * rhs[:, 1])
         local_rhs[2] += rhs[:, 3]
-        iters = int(np.sqrt(m))
-        solution_now, _ = scip.sparse.linalg.gmres(
+        iters = max(int(np.sqrt(m)), 10)
+        solution_now, info = scip.sparse.linalg.gmres(
             linear_op,
             local_rhs.reshape(-1, 1),
             rtol=1e-3 * block_res_old_scalar,
             maxiter=iters,
-            restart=int(max(np.floor(iters/5), 3))
+            restart=int(max(np.floor(iters / 3), 3))
         )
         solution_now = np.transpose(solution_now.reshape(3, x_shape[0], x_shape[2], x_shape[3]),
                                     (1, 0, 2, 3)) + previous_solution[:, [0, 1, 3]]
@@ -598,12 +601,6 @@ def _initialise(ineq_mask, status, dim):
     #print(tt_matrix_to_matrix(tt_reshape(Y_tt, (2,  2))))
     #print(tt_matrix_to_matrix(T_tt))
     return X_tt, Y_tt, Z_tt, T_tt
-
-
-def _constraint_row_scaling(lin_op_tt):
-    pass
-
-
 
 @dataclass
 class IPMStatus:
