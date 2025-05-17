@@ -3,6 +3,8 @@
 # Use a variable for the script
 executable = $(SCRIPT)
 
+requirements = (Machine == "teesta.doc.ic.ac.uk")
+
 # Optional arguments to the script
 arguments  = $(ARGS)
 
