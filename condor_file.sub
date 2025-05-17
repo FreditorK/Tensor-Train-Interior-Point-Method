@@ -1,0 +1,21 @@
+# submit.sub — reusable Condor submit file for any Bash script
+
+# Use a variable for the script
+executable = $(SCRIPT)
+
+# Optional arguments to the script
+arguments  = $(ARGS)
+
+# Environment variables (optional)
+getenv = True
+
+# Logging
+output = logs/$(Cluster)_$(Process).out
+error  = logs/$(Cluster)_$(Process).err
+log    = logs/$(Cluster)_$(Process).condor.log
+
+universe = vanilla
+initialdir = $(PWD)
+
+queue
+
