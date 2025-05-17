@@ -275,8 +275,7 @@ if __name__ == "__main__":
                     ineq_mask,
                     max_iter=config["max_iter"],
                     verbose=config["verbose"],
-                    feasibility_tol=config["feasibility_tol"],
-                    centrality_tol=config["centrality_tol"],
+                    gap_tol=config["gap_tol"],
                     op_tol=config["op_tol"]
                 )
                 return X_tt, Y_tt, T_tt, Z_tt, info
@@ -293,8 +292,7 @@ if __name__ == "__main__":
                 ineq_mask,
                 max_iter=config["max_iter"],
                 verbose=config["verbose"],
-                feasibility_tol=config["feasibility_tol"],
-                centrality_tol=config["centrality_tol"],
+                gap_tol=config["gap_tol"],
                 op_tol=config["op_tol"]
             )
 

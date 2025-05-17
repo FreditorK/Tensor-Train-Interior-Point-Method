@@ -465,7 +465,7 @@ def _fwd_sweep(
     return x_cores, normx, XAX, normA, Xb, normb, nrmsc, rx, local_res, local_dx
 
 
-def tt_block_mals(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, local_solver=None, verbose=False):
+def tt_block_mals(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, size_limit=None, local_solver=None, verbose=False):
 
     block_size = np.max(list(k[0] for k in block_A.keys())) + 1
     model_entry = next(iter(block_b.values()))
@@ -499,7 +499,8 @@ def tt_block_mals(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, local_solv
     normx = np.ones((d - 1))
     real_tol = (tol / np.sqrt(d))
     r_max_final = block_size*int(np.sqrt(d)*d) + block_size
-    size_limit = (r_max_final)**2*N[0]/(np.sqrt(d)*d)
+    if size_limit is None:
+        size_limit = (r_max_final)**2*N[0]/(np.sqrt(d)*d)
     r_max_part = np.linspace(max(r_max_final // nswp, 2), r_max_final, num=nswp, dtype=int)
 
     x_cores = tt_rank_retraction(x_cores, [r_max_part[0]]*(d-1)) if x0 is not None else x_cores

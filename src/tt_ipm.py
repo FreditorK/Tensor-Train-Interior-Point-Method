@@ -328,7 +328,7 @@ def _tt_ipm_newton_step(
     # Predictor
     if status.verbose:
         print("--- Predictor  step ---")
-    Delta_tt, res = solver(lhs_matrix_tt, rhs_vec_tt, status.x0, 8 + status.is_last_iter*2 + status.with_ineq)
+    Delta_tt, res = solver(lhs_matrix_tt, rhs_vec_tt, status.x0, 8 + status.is_last_iter*2 + status.with_ineq, 0 if status.is_last_iter else None)
     status.x0 = Delta_tt
     if res < status.local_res_bound:
         Delta_X_tt = _tt_symmetrise(tt_reshape(_tt_get_block(1, Delta_tt), (2, 2)), status.eps)
@@ -394,7 +394,7 @@ def _tt_ipm_newton_step(
                 + z_step_size * (tt_inner_prod(X_tt, Delta_T_tt) + status.boundary_val*tt_entrywise_sum(Delta_T_tt))
                 + x_step_size * tt_inner_prod(Delta_X_tt, T_tt)
             )
-            status.sigma = (mu_aff/(ZX + TX))**3
+            status.sigma = min(1, (mu_aff/(ZX + TX))**3)
             rhs_3 = tt_add(
                     tt_scale(status.sigma * status.mu, tt_reshape(ineq_mask, (4,))),
                     tt_sub(
@@ -412,7 +412,7 @@ def _tt_ipm_newton_step(
                 + z_step_size * tt_inner_prod(X_tt,Delta_Z_tt)
                 + x_step_size * tt_inner_prod(Delta_X_tt, Z_tt)
             )
-            status.sigma = (mu_aff/ZX) ** 3
+            status.sigma = min(1, (mu_aff/ZX) ** 3)
 
 
         rhs_vec_tt[2] = tt_rank_reduce(
@@ -425,7 +425,7 @@ def _tt_ipm_newton_step(
             ),
             status.op_tol
         ) if status.sigma > 0 else tt_add(rhs_vec_tt[2], tt_reshape(Delta_XZ_term, (4, )))
-        Delta_tt_cc, res = solver(lhs_matrix_tt, rhs_vec_tt, status.x0, 8 + status.with_ineq)
+        Delta_tt_cc, res = solver(lhs_matrix_tt, rhs_vec_tt, status.x0, 8 + status.with_ineq, 0 if status.is_last_iter else None)
         status.x0 = Delta_tt_cc
         if res < status.local_res_bound:
             Delta_X_tt_cc = _tt_symmetrise(tt_reshape(_tt_get_block(1, Delta_tt_cc), (2, 2)), status.eps)
@@ -494,7 +494,7 @@ def _tt_line_search(
         X_tt = tt_add(X_tt, tt_scale(status.boundary_val+status.op_tol, tt_identity(len(X_tt))))
         Z_tt = tt_add(Z_tt, tt_scale(status.boundary_val+status.op_tol, tt_identity(len(Z_tt))))
 
-    x_step_size, permitted_err_x = tt_max_generalised_eigen(X_tt, Delta_X_tt, tol=status.feasibility_tol, verbose=status.verbose)
+    x_step_size, permitted_err_x = tt_max_generalised_eigen(X_tt, Delta_X_tt, tol=0.5*status.feasibility_tol, verbose=status.verbose)
 
     ############################
     #A = tt_matrix_to_matrix(Z_tt)
@@ -506,7 +506,7 @@ def _tt_line_search(
     #print("Step size:", step_size)
     ##############################
 
-    z_step_size, permitted_err_z = tt_max_generalised_eigen(Z_tt, Delta_Z_tt, tol=status.feasibility_tol, verbose=status.verbose)
+    z_step_size, permitted_err_z = tt_max_generalised_eigen(Z_tt, Delta_Z_tt, tol=0.5*status.feasibility_tol, verbose=status.verbose)
 
     #print(z_step_size)
     #print()
@@ -640,13 +640,14 @@ def tt_ipm(
     bias_tt,
     ineq_mask=None,
     max_iter=100,
-    feasibility_tol=1e-5,
-    centrality_tol=1e-3,
+    gap_tol=1e-4,
     aho_direction=True,
     op_tol=1e-5,
     eps=1e-12,
     verbose=False,
 ):
+    centrality_tol = gap_tol
+    feasibility_tol = 2*gap_tol
     dim = len(obj_tt)
     status = IPMStatus(
         feasibility_tol,
@@ -669,13 +670,14 @@ def tt_ipm(
     )
     lhs_skeleton = {}
     if status.with_ineq:
-        solver = lambda lhs, rhs, x0, nwsp: tt_block_mals(
+        solver = lambda lhs, rhs, x0, nwsp, size_limit: tt_block_mals(
             lhs,
             rhs,
             x0=x0,
             local_solver=_ipm_local_solver_ineq,
-            tol=0.1 * min(feasibility_tol, centrality_tol),
+            tol=0.5 * min(feasibility_tol, centrality_tol),
             nswp=nwsp,
+            size_limit=size_limit,
             verbose=verbose
         )
         status.num_ineq_constraints = tt_inner_prod(ineq_mask, ineq_mask)
@@ -683,13 +685,14 @@ def tt_ipm(
         status.lag_map_t = lag_maps["t"]
         lhs_skeleton[(1, 3)] = tt_reshape(tt_identity(2 * dim), (4, 4))
     else:
-        solver = lambda lhs, rhs, x0, nwsp: tt_block_mals(
+        solver = lambda lhs, rhs, x0, nwsp, size_limit: tt_block_mals(
             lhs,
             rhs,
             x0=x0,
             local_solver=_ipm_local_solver,
             tol=0.5 * min(feasibility_tol, centrality_tol),
             nswp=nwsp,
+            size_limit=size_limit,
             verbose=verbose
         )
         status.num_ineq_constraints = 0
@@ -715,15 +718,8 @@ def tt_ipm(
     X_tt, Y_tt, Z_tt, T_tt = _initialise(ineq_mask, status, dim)
 
     iteration = 0
-    finishing_steps = 1
+    finishing_steps = 3
     while finishing_steps > 0:
-        #print()
-        #print("Norms: ", tt_norm(X_tt), tt_norm(Y_tt), tt_norm(Z_tt), tt_norm(T_tt), np.min(tt_matrix_to_matrix(T_tt)))
-        #print()
-        #print(tt_matrix_to_matrix(X_tt))
-        #print(tt_matrix_to_matrix(Z_tt))
-        #print(tt_matrix_to_matrix(tt_reshape(Y_tt, (2,  2))))
-        #print(tt_matrix_to_matrix(T_tt))
         iteration += 1
         ZX = tt_inner_prod(Z_tt, X_tt)
         TX = tt_inner_prod(X_tt, T_tt) + status.boundary_val*tt_entrywise_sum(T_tt) if status.with_ineq else 0

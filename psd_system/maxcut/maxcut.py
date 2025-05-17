@@ -11,14 +11,10 @@ from src.tt_ipm import tt_ipm
 from memory_profiler import memory_usage
 
 
-def tt_diag_op(dim):
+def tt_diag_constraint_op(dim):
     identity = tt_identity(dim)
     basis = tt_diag(tt_split_bonds(identity))
     return basis
-
-def tt_diag_op_adj(dim):
-    return tt_diag_op(dim)
-
 
 def tt_obj_matrix(rank, dim):
     graph_tt = tt_rank_reduce(tt_random_graph(dim, rank))
@@ -49,12 +45,12 @@ if __name__ == "__main__":
         rank = config["max_rank"] if args.rank == 0 else args.rank
         G_tt = tt_obj_matrix(rank, config["dim"])
         t1 = time.time()
-        L_tt = tt_diag_op(config["dim"])
+        L_tt = tt_diag_constraint_op(config["dim"])
         bias_tt = tt_identity(config["dim"])
 
-        lag_maps = {"y": tt_rank_reduce(tt_diag(tt_split_bonds(tt_sub(tt_one_matrix(config["dim"]), tt_identity(config["dim"])))))}
+        lag_y = tt_sub(tt_one_matrix(config["dim"]), tt_identity(config["dim"]))
+        lag_maps = {"y": tt_diag_op(lag_y)}
 
-        lag_maps = {key: tt_reshape(value, (4, 4)) for key, value in lag_maps.items()}
         G_tt = tt_reshape(G_tt, (4,))
         L_tt = tt_reshape(L_tt, (4, 4))
         bias_tt = tt_reshape(bias_tt, (4,))
@@ -69,8 +65,7 @@ if __name__ == "__main__":
                     bias_tt,
                     max_iter=config["max_iter"],
                     verbose=config["verbose"],
-                    feasibility_tol=config["feasibility_tol"],
-                    centrality_tol=config["centrality_tol"],
+                    gap_tol=config["gap_tol"],
                     op_tol=config["op_tol"],
                     aho_direction=False
                 )
@@ -87,8 +82,7 @@ if __name__ == "__main__":
                 bias_tt,
                 max_iter=config["max_iter"],
                 verbose=config["verbose"],
-                feasibility_tol=config["feasibility_tol"],
-                centrality_tol=config["centrality_tol"],
+                gap_tol=config["gap_tol"],
                 op_tol=config["op_tol"],
                 aho_direction=False
             )
