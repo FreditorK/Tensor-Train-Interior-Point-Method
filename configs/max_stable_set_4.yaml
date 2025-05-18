@@ -5,9 +5,7 @@ seeds: [5]
 gap_tol: !!float 2e-4
 verbose: True
 # TT-IPM
-tau: 0.9
 op_tol: !!float 8e-4
 max_iter: !!int 15
 # Sketchy CGAL
 sketch_cgal_rank: !!int 2
-duality_tol: 0.5

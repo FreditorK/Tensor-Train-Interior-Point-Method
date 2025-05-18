@@ -7,6 +7,3 @@ verbose: False
 # TT-IPM
 op_tol: !!float 5e-5
 max_iter: !!int 20
-# Sketchy CGAL
-sketch_cgal_rank: !!int 10
-duality_tol: 0.5

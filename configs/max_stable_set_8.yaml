@@ -9,4 +9,3 @@ op_tol: !!float 6e-5
 max_iter: !!int 18
 # Sketchy CGAL
 sketch_cgal_rank: !!int 128
-duality_tol: 0.1

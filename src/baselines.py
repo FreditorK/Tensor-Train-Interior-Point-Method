@@ -40,8 +40,9 @@ def cgal(obj_matrix, constraint_matrices, bias, trace_params, duality_tol=1e-2, 
     return X, duality_gaps
 
 
-def sketchy_cgal(obj_matrix, constraint_matrices, bias, trace_params, R=1, duality_tol=1e-2, feasability_tol=1e-5, num_iter=100, verbose=False):
-    # TODO: scaling needed
+def sketchy_cgal(obj_matrix, constraint_matrices, bias, trace_params, R=1, gap_tol=1e-5, num_iter=100, verbose=False):
+    feasability_tol = 2*gap_tol
+    bias_norm = np.linalg.norm(bias)
     Omega, S = nystrom_sketch_init(obj_matrix.shape[0], R)
     res = -bias
     lag_mul_1 = np.zeros((len(constraint_matrices), 1))
@@ -74,7 +75,7 @@ def sketchy_cgal(obj_matrix, constraint_matrices, bias, trace_params, R=1, duali
             print(f"---Step {it}---")
             print(f"Est. Duality gap: {duality_gap}")
             print(f"Est. Feasibility error: {np.sum(res.T @ res)}")
-        if duality_gap < duality_tol and res.T @ res < feasability_tol:
+        if duality_gap/(1+abs(p)) < gap_tol and np.sqrt(res.T @ res) / (1+bias_norm) < feasability_tol:
             break
     U, Lambda = nystrom_sketch_reconstruct(S, Omega)
     U = U[:, :R]

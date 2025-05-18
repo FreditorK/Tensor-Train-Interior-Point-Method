@@ -1,0 +1,16 @@
+==== maxcut SCGAL Batch Run Started at Sun May 18 05:25:58 PM BST 2025 ====
+
+▶ Running dim=6 with config=configs/maxcut_6.yaml at Sun May 18 05:25:58 PM BST 2025
+/home/fred/miniconda3/envs/ttipm/lib/python3.10/site-packages/numpy/_core/fromnumeric.py:3904: RuntimeWarning: Mean of empty slice.
+  return _methods._mean(a, axis=axis, dtype=dtype,
+/home/fred/miniconda3/envs/ttipm/lib/python3.10/site-packages/numpy/_core/_methods.py:147: RuntimeWarning: invalid value encountered in scalar divide
+  ret = ret.dtype.type(ret / rcount)
+Converged after avg 5803.8 iterations
+Problem created in avg 0.001s
+Problem solved in avg 3.808s
+Peak memory avg nan MB
+Aux duality gap avg: 0.27990247892944353
+Total feasibility error avg: 8.528212563377004e-06
+✅ Completed dim=6 successfully
+
+==== All runs completed at Sun May 18 05:26:17 PM BST 2025 ====
