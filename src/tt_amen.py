@@ -11,6 +11,53 @@ from src.tt_ops import *
 from opt_einsum import contract as einsum
 
 
+class TTBlockMatrix:
+    def __init__(self):
+        self._data = {}
+
+    def __getitem__(self, key):
+        # Access by (row, col)
+        if isinstance(key, tuple) and len(key) == 2:
+            return self._data.setdefault(key, [])
+        # Access by just list_index → return view object
+        elif isinstance(key, int):
+            return TTBlockMatrixView(self._data, key)
+        else:
+            raise KeyError(f"Invalid key format: {key}")
+
+    def __setitem__(self, key, value):
+        if isinstance(key, tuple) and len(key) == 2:
+            self._data[key] = value
+        else:
+            raise KeyError(f"Invalid key format: {key}")
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self._data})"
+
+    def keys(self):
+        return self._data.keys()
+
+
+class TTBlockMatrixView:
+    """View object that lets you access [row, col] for fixed list index."""
+    def __init__(self, data, list_index):
+        self._data = data
+        self._idx = list_index
+
+    def __getitem__(self, key):
+        if not isinstance(key, tuple) or len(key) != 2:
+            raise KeyError("Key must be (row, col)")
+        return self._data[key][self._idx]
+
+    def items(self):
+        """Iterate over ((row, col), value) for fixed index."""
+        for coord, values in self._data.items():
+            if len(values) > self._idx:
+                yield coord, values[self._idx]
+
+    def __repr__(self):
+        return f"IndexView({self._idx}) → {{...}}"
+
 
 def _local_product(Phi_right, Phi_left, coreA, core):
 
@@ -490,8 +537,8 @@ def tt_block_mals(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, size_limit
 
     XAX =  [{key: np.ones((1, 1, 1)) for key in block_A}] + [{key: None for key in block_A} for _ in range(d-1)] + [{key: np.ones((1, 1, 1)) for key in block_A}]  # size is rk x Rk x rk
     Xb = [{key: np.ones((1, 1)) for key in block_b}] + [{key: None for key in block_b} for _ in range(d-1)] + [{key: np.ones((1, 1)) for key in block_b}]   # size is rk x rbk
-    block_A = [{(i, j): block_A[(i, j)][k] for (i,  j) in block_A} for k in range(d)]
-    block_b = [{i: block_b[i][k] for i in block_b} for k in range(d)]
+    block_A = [dict(zip(block_A.keys(), values)) for values in zip(*block_A.values())]
+    block_b = [dict(zip(block_b.keys(), values)) for values in zip(*block_b.values())]
 
     normA = np.ones(d - 1) # norm of each row in the block matrix
     normb = np.ones(d - 1) # norm of each row of the rhs
@@ -575,6 +622,7 @@ def tt_block_mals(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, size_limit
     normx = np.exp(np.sum(np.log(normx)) / d)
 
     return [normx * core for core in x_cores], np.mean(local_res)
+
 
 
 def tt_divide(vec_tt_1, vec_tt_2, degenerate=False, eps=1e-10):
