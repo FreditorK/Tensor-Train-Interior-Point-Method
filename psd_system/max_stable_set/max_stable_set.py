@@ -1,15 +1,14 @@
 import copy
 import sys
 import os
-from itertools import product
 
 import yaml
 import argparse
 
 sys.path.append(os.getcwd() + '/../../')
 
-from src.tt_ops import *
-from src.tt_ipm import tt_ipm
+from src.tt_ipm import *
+from src.tt_eigen import tt_approx_mat_mat_mul
 from memory_profiler import memory_usage
 import time
 

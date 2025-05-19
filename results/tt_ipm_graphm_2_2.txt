@@ -1,6 +1,6 @@
-==== graphm TT-IPM Batch Run Started at Mon May 19 04:07:56 PM BST 2025 ====
+==== graphm TT-IPM Batch Run Started at Mon May 19 06:22:46 PM BST 2025 ====
 
-▶ Running dim=2 with config=configs/graphm_2.yaml at Mon May 19 04:07:56 PM BST 2025
+▶ Running dim=2 with config=configs/graphm_2.yaml at Mon May 19 06:22:46 PM BST 2025
 Seed:  5
 Creating Problem...
 
@@ -46,8 +46,8 @@ Ranks X_tt: [1, 1, 1, 1], Z_tt: [1, 1, 1, 1],
 	Solution rank is [ 5 10  7  4]
 	Residual  2.4663002977272457e-06
 	Number of sweeps 5
-	Time:  0.49788999557495117
-	Time per sweep:  0.099578857421875
+	Time:  0.4356698989868164
+	Time per sweep:  0.08713469505310059
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -71,8 +71,8 @@ Starting Eigen solve with:
 	 Step size: 0.943504
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.03064703941345215
-	 Time per sweep:  0.01532590389251709
+	 Time:  0.03212332725524902
+	 Time per sweep:  0.016063928604125977
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -96,8 +96,8 @@ Starting Eigen solve with:
 	 Step size: 1.000000
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.024413108825683594
-	 Time per sweep:  0.012208938598632812
+	 Time:  0.025552749633789062
+	 Time per sweep:  0.012778759002685547
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -117,8 +117,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 9.459127842908716e-18
 	 Number of sweeps 2
-	 Time:  0.01695561408996582
-	 Time per sweep:  0.008478879928588867
+	 Time:  0.023569345474243164
+	 Time per sweep:  0.011786222457885742
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -138,8 +138,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 3.6912133301112805e-17
 	 Number of sweeps 2
-	 Time:  0.013482093811035156
-	 Time per sweep:  0.006742358207702637
+	 Time:  0.0183107852935791
+	 Time per sweep:  0.00915682315826416
 
 --- Centering-Corrector  step ---
 	Starting Sweep:
@@ -192,8 +192,8 @@ Starting Eigen solve with:
 	Solution rank is [ 4  9 13 14]
 	Residual  0.42092071976850837
 	Number of sweeps 9
-	Time:  0.6324951648712158
-	Time per sweep:  0.07027784983317058
+	Time:  0.6581227779388428
+	Time per sweep:  0.07312538888719347
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -217,8 +217,8 @@ Starting Eigen solve with:
 	 Step size: 0.242908
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.024103641510009766
-	 Time per sweep:  0.012053966522216797
+	 Time:  0.02580738067626953
+	 Time per sweep:  0.01290595531463623
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -242,8 +242,8 @@ Starting Eigen solve with:
 	 Step size: 0.420457
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.023202180862426758
-	 Time per sweep:  0.011603236198425293
+	 Time:  0.02578568458557129
+	 Time per sweep:  0.012895464897155762
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -263,8 +263,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 2.268606771995049e-16
 	 Number of sweeps 2
-	 Time:  0.01602458953857422
-	 Time per sweep:  0.008013606071472168
+	 Time:  0.018827438354492188
+	 Time per sweep:  0.009415388107299805
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -280,8 +280,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 1.4117564209440302e-15
 	 Number of sweeps 2
-	 Time:  0.012013912200927734
-	 Time per sweep:  0.006008505821228027
+	 Time:  0.013796091079711914
+	 Time per sweep:  0.006899595260620117
 Step sizes: 0.0033, 0.3785
 
 Results of iteration 1:
@@ -346,8 +346,8 @@ Ranks X_tt: [5, 9, 7, 5], Z_tt: [5, 10, 12, 5],
 	Solution rank is [11 13  8  4]
 	Residual  0.6882698207281279
 	Number of sweeps 9
-	Time:  0.5421905517578125
-	Time per sweep:  0.06024389796786838
+	Time:  0.5929858684539795
+	Time per sweep:  0.06588790151807997
 ==================================
  Inaccurate results: Regularising!
 ==================================
@@ -415,8 +415,8 @@ Ranks X_tt: [5, 9, 7, 5], Z_tt: [5, 10, 12, 5],
 	Solution rank is [ 4  9 10  8]
 	Residual  0.8837972184231965
 	Number of sweeps 9
-	Time:  0.5904829502105713
-	Time per sweep:  0.0656096405453152
+	Time:  0.48513102531433105
+	Time per sweep:  0.05390466584099664
 ==================================
  Inaccurate results: Regularising!
 ==================================
@@ -484,8 +484,8 @@ Ranks X_tt: [5, 9, 7, 5], Z_tt: [5, 10, 12, 5],
 	Solution rank is [ 8 12  7  4]
 	Residual  0.083007266122731
 	Number of sweeps 9
-	Time:  0.5094707012176514
-	Time per sweep:  0.056608464982774526
+	Time:  0.4029850959777832
+	Time per sweep:  0.04477665159437391
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -509,8 +509,8 @@ Starting Eigen solve with:
 	 Step size: 0.780948
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.0325777530670166
-	 Time per sweep:  0.016290903091430664
+	 Time:  0.06606578826904297
+	 Time per sweep:  0.03303647041320801
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -534,8 +534,8 @@ Starting Eigen solve with:
 	 Step size: 0.994297
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.02259993553161621
-	 Time per sweep:  0.011301994323730469
+	 Time:  0.056137800216674805
+	 Time per sweep:  0.028072476387023926
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -555,8 +555,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 1.7728918944347548e-17
 	 Number of sweeps 2
-	 Time:  0.016948938369750977
-	 Time per sweep:  0.008475542068481445
+	 Time:  0.0344233512878418
+	 Time per sweep:  0.01721370220184326
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -576,8 +576,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 1.3333098553955344e-13
 	 Number of sweeps 2
-	 Time:  0.013319969177246094
-	 Time per sweep:  0.006661534309387207
+	 Time:  0.03445100784301758
+	 Time per sweep:  0.017228007316589355
 
 --- Centering-Corrector  step ---
 	Starting Sweep:
@@ -630,8 +630,8 @@ Starting Eigen solve with:
 	Solution rank is [ 4  9 12 10]
 	Residual  0.07444531555187554
 	Number of sweeps 9
-	Time:  0.5351245403289795
-	Time per sweep:  0.059458679623074
+	Time:  0.6521172523498535
+	Time per sweep:  0.07245792282952203
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -655,8 +655,8 @@ Starting Eigen solve with:
 	 Step size: 0.310612
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.028272390365600586
-	 Time per sweep:  0.014138340950012207
+	 Time:  0.03626704216003418
+	 Time per sweep:  0.018136262893676758
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -680,8 +680,8 @@ Starting Eigen solve with:
 	 Step size: 0.314494
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.02366805076599121
-	 Time per sweep:  0.011836051940917969
+	 Time:  0.03223276138305664
+	 Time per sweep:  0.01611936092376709
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -701,8 +701,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 2.236763179717731e-19
 	 Number of sweeps 2
-	 Time:  0.012892484664916992
-	 Time per sweep:  0.006447434425354004
+	 Time:  0.010321617126464844
+	 Time per sweep:  0.005161881446838379
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -722,8 +722,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 4.418950397849154e-17
 	 Number of sweeps 2
-	 Time:  0.013351678848266602
-	 Time per sweep:  0.006677746772766113
+	 Time:  0.00925898551940918
+	 Time per sweep:  0.004630327224731445
 Step sizes: 0.1172, 0.2851
 
 Results of iteration 4:
@@ -788,8 +788,8 @@ Ranks X_tt: [5, 15, 17, 5], Z_tt: [5, 15, 17, 5],
 	Solution rank is [12 14  8  4]
 	Residual  0.27788997948871424
 	Number of sweeps 9
-	Time:  0.700573205947876
-	Time per sweep:  0.07784205012851292
+	Time:  0.3772428035736084
+	Time per sweep:  0.041916078991360135
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -813,8 +813,8 @@ Starting Eigen solve with:
 	 Step size: 0.239021
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.053000688552856445
-	 Time per sweep:  0.026503562927246094
+	 Time:  0.01827406883239746
+	 Time per sweep:  0.009137988090515137
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -838,8 +838,8 @@ Starting Eigen solve with:
 	 Step size: 0.098139
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.02610015869140625
-	 Time per sweep:  0.013052105903625488
+	 Time:  0.015527486801147461
+	 Time per sweep:  0.007764697074890137
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -859,8 +859,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 1.0439886200936168e-18
 	 Number of sweeps 2
-	 Time:  0.013076305389404297
-	 Time per sweep:  0.006539463996887207
+	 Time:  0.008088350296020508
+	 Time per sweep:  0.004045009613037109
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -880,8 +880,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 2.261068008045096e-17
 	 Number of sweeps 2
-	 Time:  0.010655403137207031
-	 Time per sweep:  0.0053293704986572266
+	 Time:  0.008075952529907227
+	 Time per sweep:  0.004038810729980469
 
 --- Centering-Corrector  step ---
 	Starting Sweep:
@@ -934,8 +934,8 @@ Starting Eigen solve with:
 	Solution rank is [ 4 12 27 16]
 	Residual  0.016978137035492332
 	Number of sweeps 9
-	Time:  1.367896318435669
-	Time per sweep:  0.15198882420857748
+	Time:  0.6857743263244629
+	Time per sweep:  0.07619735929701063
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -959,8 +959,8 @@ Starting Eigen solve with:
 	 Step size: 0.183181
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.021289587020874023
-	 Time per sweep:  0.010646343231201172
+	 Time:  0.013329267501831055
+	 Time per sweep:  0.006665706634521484
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -984,8 +984,8 @@ Starting Eigen solve with:
 	 Step size: 1.000000
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.019295215606689453
-	 Time per sweep:  0.009649395942687988
+	 Time:  0.012120723724365234
+	 Time per sweep:  0.006061434745788574
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -1005,8 +1005,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 6.84526300289416e-19
 	 Number of sweeps 2
-	 Time:  0.01120138168334961
-	 Time per sweep:  0.0056018829345703125
+	 Time:  0.007440805435180664
+	 Time per sweep:  0.0037211179733276367
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -1026,8 +1026,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 1.0546452324985995e-17
 	 Number of sweeps 2
-	 Time:  0.01510310173034668
-	 Time per sweep:  0.0075528621673583984
+	 Time:  0.0077362060546875
+	 Time per sweep:  0.0038688182830810547
 Step sizes: 0.1335, 1.0000
 
 Results of iteration 5:
@@ -1092,8 +1092,8 @@ Ranks X_tt: [5, 17, 17, 5], Z_tt: [5, 17, 17, 5],
 	Solution rank is [10 26 11  4]
 	Residual  0.08361445854455272
 	Number of sweeps 9
-	Time:  1.5496435165405273
-	Time per sweep:  0.17218303680419922
+	Time:  0.8901364803314209
+	Time per sweep:  0.09890429178873698
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -1117,8 +1117,8 @@ Starting Eigen solve with:
 	 Step size: 0.603456
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.030026912689208984
-	 Time per sweep:  0.015015363693237305
+	 Time:  0.014627933502197266
+	 Time per sweep:  0.00731503963470459
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -1142,8 +1142,8 @@ Starting Eigen solve with:
 	 Step size: 0.581541
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.022075414657592773
-	 Time per sweep:  0.011040568351745605
+	 Time:  0.01264333724975586
+	 Time per sweep:  0.006322622299194336
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -1167,8 +1167,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 2.9228099225462395e-18
 	 Number of sweeps 3
-	 Time:  0.01748943328857422
-	 Time per sweep:  0.005830526351928711
+	 Time:  0.010367870330810547
+	 Time per sweep:  0.0034565130869547525
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -1188,8 +1188,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 9.530786368900846e-14
 	 Number of sweeps 2
-	 Time:  0.009682655334472656
-	 Time per sweep:  0.004842281341552734
+	 Time:  0.0073740482330322266
+	 Time per sweep:  0.003687739372253418
 
 --- Centering-Corrector  step ---
 	Starting Sweep:
@@ -1242,8 +1242,8 @@ Starting Eigen solve with:
 	Solution rank is [ 4 14 28 16]
 	Residual  0.030212518963841528
 	Number of sweeps 9
-	Time:  3.4988744258880615
-	Time per sweep:  0.38876427544487846
+	Time:  1.7703754901885986
+	Time per sweep:  0.19670859972635904
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -1267,8 +1267,8 @@ Starting Eigen solve with:
 	 Step size: 0.371234
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.027164936065673828
-	 Time per sweep:  0.013585209846496582
+	 Time:  0.013419389724731445
+	 Time per sweep:  0.006710648536682129
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -1292,8 +1292,8 @@ Starting Eigen solve with:
 	 Step size: 0.634569
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.0270233154296875
-	 Time per sweep:  0.013513922691345215
+	 Time:  0.013608932495117188
+	 Time per sweep:  0.006805539131164551
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -1313,8 +1313,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 4.785575907167217e-19
 	 Number of sweeps 2
-	 Time:  0.014165401458740234
-	 Time per sweep:  0.007084488868713379
+	 Time:  0.0072879791259765625
+	 Time per sweep:  0.003644704818725586
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -1334,8 +1334,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 6.175967476464844e-05
 	 Number of sweeps 2
-	 Time:  0.00882411003112793
-	 Time per sweep:  0.004413008689880371
+	 Time:  0.0071904659271240234
+	 Time per sweep:  0.003596067428588867
 Step sizes: 0.0082, 0.4110
 
 Results of iteration 6:
@@ -1400,8 +1400,8 @@ Ranks X_tt: [5, 17, 17, 5], Z_tt: [5, 17, 17, 5],
 	Solution rank is [13 31 14  4]
 	Residual  0.01762184250948836
 	Number of sweeps 9
-	Time:  4.10032057762146
-	Time per sweep:  0.4555914666917589
+	Time:  2.9945244789123535
+	Time per sweep:  0.3327251805199517
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -1425,8 +1425,8 @@ Starting Eigen solve with:
 	 Step size: 0.937179
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.014871358871459961
-	 Time per sweep:  0.0074367523193359375
+	 Time:  0.014388084411621094
+	 Time per sweep:  0.007195115089416504
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -1450,8 +1450,8 @@ Starting Eigen solve with:
 	 Step size: 0.914194
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.012999773025512695
-	 Time per sweep:  0.0065010786056518555
+	 Time:  0.012352228164672852
+	 Time per sweep:  0.006177067756652832
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -1471,8 +1471,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 1.6991763660254434e-17
 	 Number of sweeps 2
-	 Time:  0.007880210876464844
-	 Time per sweep:  0.0039408206939697266
+	 Time:  0.007344245910644531
+	 Time per sweep:  0.0036728382110595703
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -1500,8 +1500,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 1.928580146255264e-13
 	 Number of sweeps 3
-	 Time:  0.011993408203125
-	 Time per sweep:  0.0039984385172526045
+	 Time:  0.011610984802246094
+	 Time per sweep:  0.0038710435231526694
 
 --- Centering-Corrector  step ---
 	Starting Sweep:
@@ -1554,8 +1554,8 @@ Starting Eigen solve with:
 	Solution rank is [ 4 16 39 16]
 	Residual  0.004811097587831042
 	Number of sweeps 9
-	Time:  3.2364184856414795
-	Time per sweep:  0.35960231886969674
+	Time:  4.359200954437256
+	Time per sweep:  0.48435600598653156
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -1579,8 +1579,8 @@ Starting Eigen solve with:
 	 Step size: 0.474138
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.015403509140014648
-	 Time per sweep:  0.0077027082443237305
+	 Time:  0.02257061004638672
+	 Time per sweep:  0.011286497116088867
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -1604,8 +1604,8 @@ Starting Eigen solve with:
 	 Step size: 0.540010
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.012891054153442383
-	 Time per sweep:  0.006446480751037598
+	 Time:  0.019495010375976562
+	 Time per sweep:  0.00974893569946289
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -1629,8 +1629,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 1.953988747675019e-18
 	 Number of sweeps 3
-	 Time:  0.00908517837524414
-	 Time per sweep:  0.00302886962890625
+	 Time:  0.014995098114013672
+	 Time per sweep:  0.0049991607666015625
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -1650,8 +1650,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 1.3960168758728684e-17
 	 Number of sweeps 2
-	 Time:  0.00725245475769043
-	 Time per sweep:  0.0036269426345825195
+	 Time:  0.01172018051147461
+	 Time per sweep:  0.005861043930053711
 Step sizes: 0.4380, 0.4680
 
 Results of iteration 7:
@@ -1716,8 +1716,8 @@ Ranks X_tt: [5, 17, 17, 5], Z_tt: [5, 17, 17, 5],
 	Solution rank is [13 39 16  4]
 	Residual  0.0015816251111909116
 	Number of sweeps 9
-	Time:  3.3082454204559326
-	Time per sweep:  0.3675830629136827
+	Time:  3.3250086307525635
+	Time per sweep:  0.3694456418355306
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -1741,8 +1741,8 @@ Starting Eigen solve with:
 	 Step size: 0.674175
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.013887166976928711
-	 Time per sweep:  0.006944537162780762
+	 Time:  0.013195514678955078
+	 Time per sweep:  0.006598711013793945
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -1766,8 +1766,8 @@ Starting Eigen solve with:
 	 Step size: 1.000000
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.012761116027832031
-	 Time per sweep:  0.006381630897521973
+	 Time:  0.012010812759399414
+	 Time per sweep:  0.006006360054016113
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -1787,8 +1787,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 1.2361408210098835e-18
 	 Number of sweeps 2
-	 Time:  0.007965087890625
-	 Time per sweep:  0.003983259201049805
+	 Time:  0.007483959197998047
+	 Time per sweep:  0.0037425756454467773
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -1816,8 +1816,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 1.1597532079655877e-15
 	 Number of sweeps 3
-	 Time:  0.012427806854248047
-	 Time per sweep:  0.004143238067626953
+	 Time:  0.011823892593383789
+	 Time per sweep:  0.003941853841145833
 
 --- Centering-Corrector  step ---
 	Starting Sweep:
@@ -1870,8 +1870,8 @@ Starting Eigen solve with:
 	Solution rank is [ 4 16 43 16]
 	Residual  0.005382397344833801
 	Number of sweeps 9
-	Time:  3.333796501159668
-	Time per sweep:  0.3704220453898112
+	Time:  3.2457938194274902
+	Time per sweep:  0.36064402262369794
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -1895,8 +1895,8 @@ Starting Eigen solve with:
 	 Step size: 0.355891
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.01397252082824707
-	 Time per sweep:  0.006987094879150391
+	 Time:  0.01483154296875
+	 Time per sweep:  0.0074166059494018555
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -1920,8 +1920,8 @@ Starting Eigen solve with:
 	 Step size: 0.541986
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.025225400924682617
-	 Time per sweep:  0.01261436939239502
+	 Time:  0.01581716537475586
+	 Time per sweep:  0.007909536361694336
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -1949,8 +1949,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 3.37162234146271e-18
 	 Number of sweeps 3
-	 Time:  0.018566131591796875
-	 Time per sweep:  0.006189425786336263
+	 Time:  0.012224674224853516
+	 Time per sweep:  0.004075447718302409
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -1970,8 +1970,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 3.3788348327885488e-15
 	 Number of sweeps 2
-	 Time:  0.011566638946533203
-	 Time per sweep:  0.005784392356872559
+	 Time:  0.007805585861206055
+	 Time per sweep:  0.003903627395629883
 Step sizes: 0.3266, 0.4559
 
 Results of iteration 8:
@@ -2036,8 +2036,8 @@ Ranks X_tt: [5, 17, 17, 5], Z_tt: [5, 17, 17, 5],
 	Solution rank is [13 47 16  4]
 	Residual  0.00490727824870503
 	Number of sweeps 9
-	Time:  4.305162668228149
-	Time per sweep:  0.4783517254723443
+	Time:  3.2896296977996826
+	Time per sweep:  0.3655146492852105
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -2061,8 +2061,8 @@ Starting Eigen solve with:
 	 Step size: 0.746666
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.01992940902709961
-	 Time per sweep:  0.009966492652893066
+	 Time:  0.012885332107543945
+	 Time per sweep:  0.006443619728088379
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -2086,8 +2086,8 @@ Starting Eigen solve with:
 	 Step size: 0.996156
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.023502826690673828
-	 Time per sweep:  0.011752963066101074
+	 Time:  0.014655351638793945
+	 Time per sweep:  0.00732874870300293
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -2107,8 +2107,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 1.208857971159766e-17
 	 Number of sweeps 2
-	 Time:  0.010692358016967773
-	 Time per sweep:  0.005347251892089844
+	 Time:  0.007538795471191406
+	 Time per sweep:  0.0037702322006225586
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -2128,8 +2128,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 3.0869837262729105e-16
 	 Number of sweeps 2
-	 Time:  0.010654449462890625
-	 Time per sweep:  0.00532841682434082
+	 Time:  0.0075836181640625
+	 Time per sweep:  0.0037927627563476562
 
 --- Centering-Corrector  step ---
 	Starting Sweep:
@@ -2182,8 +2182,8 @@ Starting Eigen solve with:
 	Solution rank is [ 4 16 48 16]
 	Residual  0.004822884505961256
 	Number of sweeps 9
-	Time:  4.32502293586731
-	Time per sweep:  0.48055852784050834
+	Time:  3.5529909133911133
+	Time per sweep:  0.3947770595550537
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -2207,8 +2207,8 @@ Starting Eigen solve with:
 	 Step size: 0.422704
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.020768404006958008
-	 Time per sweep:  0.010385751724243164
+	 Time:  0.013422012329101562
+	 Time per sweep:  0.006712079048156738
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -2232,8 +2232,8 @@ Starting Eigen solve with:
 	 Step size: 0.469105
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.024947166442871094
-	 Time per sweep:  0.012475132942199707
+	 Time:  0.01450657844543457
+	 Time per sweep:  0.007254242897033691
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -2253,8 +2253,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 1.282789626907688e-17
 	 Number of sweeps 2
-	 Time:  0.011549234390258789
-	 Time per sweep:  0.0057756900787353516
+	 Time:  0.00767827033996582
+	 Time per sweep:  0.003839850425720215
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -2274,8 +2274,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 1.5895050030136593e-18
 	 Number of sweeps 2
-	 Time:  0.012397289276123047
-	 Time per sweep:  0.006199836730957031
+	 Time:  0.0078089237213134766
+	 Time per sweep:  0.0039052963256835938
 Step sizes: 0.3894, 0.4321
 
 Results of iteration 9:
@@ -2340,8 +2340,8 @@ Ranks X_tt: [5, 17, 17, 5], Z_tt: [5, 17, 17, 5],
 	Solution rank is [13 48 16  4]
 	Residual  0.02158664415293705
 	Number of sweeps 9
-	Time:  4.866747617721558
-	Time per sweep:  0.5407501326666938
+	Time:  3.3148436546325684
+	Time per sweep:  0.3683163589901394
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -2365,8 +2365,8 @@ Starting Eigen solve with:
 	 Step size: 0.725955
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.020964622497558594
-	 Time per sweep:  0.010484099388122559
+	 Time:  0.023818254470825195
+	 Time per sweep:  0.01191091537475586
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -2385,8 +2385,8 @@ Starting Eigen solve with:
 	 Step size: 0.918697
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.016532421112060547
-	 Time per sweep:  0.008267760276794434
+	 Time:  0.018036603927612305
+	 Time per sweep:  0.009019970893859863
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -2406,8 +2406,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 4.97810615137364e-18
 	 Number of sweeps 2
-	 Time:  0.01195073127746582
-	 Time per sweep:  0.005976557731628418
+	 Time:  0.012778759002685547
+	 Time per sweep:  0.006390571594238281
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -2427,8 +2427,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 6.451943416435782e-18
 	 Number of sweeps 2
-	 Time:  0.011955976486206055
-	 Time per sweep:  0.005979299545288086
+	 Time:  0.012603759765625
+	 Time per sweep:  0.0063027143478393555
 
 --- Centering-Corrector  step ---
 	Starting Sweep:
@@ -2481,8 +2481,8 @@ Starting Eigen solve with:
 	Solution rank is [ 4 16 48 16]
 	Residual  0.012843093618555205
 	Number of sweeps 9
-	Time:  3.283761501312256
-	Time per sweep:  0.364862600962321
+	Time:  3.6344189643859863
+	Time per sweep:  0.4038247797224257
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -2506,8 +2506,8 @@ Starting Eigen solve with:
 	 Step size: 0.425726
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.012900829315185547
-	 Time per sweep:  0.006451249122619629
+	 Time:  0.01439976692199707
+	 Time per sweep:  0.007200837135314941
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -2531,8 +2531,8 @@ Starting Eigen solve with:
 	 Step size: 0.478817
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.013336420059204102
-	 Time per sweep:  0.006669163703918457
+	 Time:  0.013734817504882812
+	 Time per sweep:  0.0068683624267578125
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -2552,8 +2552,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 6.870935728342643e-18
 	 Number of sweeps 2
-	 Time:  0.007264852523803711
-	 Time per sweep:  0.00363314151763916
+	 Time:  0.007600069046020508
+	 Time per sweep:  0.0038007497787475586
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -2581,8 +2581,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 1.4969379934866067e-17
 	 Number of sweeps 3
-	 Time:  0.018847227096557617
-	 Time per sweep:  0.006283203760782878
+	 Time:  0.011877775192260742
+	 Time per sweep:  0.003959814707438151
 Step sizes: 0.3922, 0.4411
 
 Results of iteration 10:
@@ -2647,8 +2647,8 @@ Ranks X_tt: [5, 17, 17, 5], Z_tt: [5, 17, 17, 5],
 	Solution rank is [13 48 16  4]
 	Residual  0.037579777819078036
 	Number of sweeps 9
-	Time:  4.797716379165649
-	Time per sweep:  0.5330799685584174
+	Time:  4.168952703475952
+	Time per sweep:  0.46321744389004177
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -2672,8 +2672,8 @@ Starting Eigen solve with:
 	 Step size: 0.870404
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.021712064743041992
-	 Time per sweep:  0.010857939720153809
+	 Time:  0.020112276077270508
+	 Time per sweep:  0.010057926177978516
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -2697,8 +2697,8 @@ Starting Eigen solve with:
 	 Step size: 0.901855
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.02248549461364746
-	 Time per sweep:  0.011244416236877441
+	 Time:  0.02157449722290039
+	 Time per sweep:  0.010788798332214355
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -2718,8 +2718,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 1.5829553487033464e-17
 	 Number of sweeps 2
-	 Time:  0.012791156768798828
-	 Time per sweep:  0.006396889686584473
+	 Time:  0.01282358169555664
+	 Time per sweep:  0.006412982940673828
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -2739,8 +2739,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 3.76167770748908e-18
 	 Number of sweeps 2
-	 Time:  0.009546995162963867
-	 Time per sweep:  0.004774212837219238
+	 Time:  0.012381792068481445
+	 Time per sweep:  0.00619196891784668
 
 --- Centering-Corrector  step ---
 	Starting Sweep:
@@ -2793,8 +2793,8 @@ Starting Eigen solve with:
 	Solution rank is [ 4 16 48 16]
 	Residual  0.010085518411698637
 	Number of sweeps 9
-	Time:  4.550168991088867
-	Time per sweep:  0.5055748886532254
+	Time:  3.347188949584961
+	Time per sweep:  0.37191009521484375
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -2818,8 +2818,8 @@ Starting Eigen solve with:
 	 Step size: 0.465353
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.021271467208862305
-	 Time per sweep:  0.010637402534484863
+	 Time:  0.014010906219482422
+	 Time per sweep:  0.007006406784057617
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -2843,8 +2843,8 @@ Starting Eigen solve with:
 	 Step size: 0.471456
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.023620128631591797
-	 Time per sweep:  0.011811375617980957
+	 Time:  0.014650106430053711
+	 Time per sweep:  0.007326006889343262
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -2864,8 +2864,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 7.706517021013212e-18
 	 Number of sweeps 2
-	 Time:  0.011595726013183594
-	 Time per sweep:  0.005799055099487305
+	 Time:  0.0073566436767578125
+	 Time per sweep:  0.003679037094116211
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -2885,8 +2885,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 2.0571137453028917e-18
 	 Number of sweeps 2
-	 Time:  0.01263570785522461
-	 Time per sweep:  0.006318449974060059
+	 Time:  0.007429599761962891
+	 Time per sweep:  0.00371551513671875
 Step sizes: 0.4296, 0.4325
 
 Results of iteration 11:
@@ -2951,8 +2951,8 @@ Ranks X_tt: [5, 17, 17, 5], Z_tt: [5, 15, 17, 5],
 	Solution rank is [13 48 16  4]
 	Residual  0.058011179799357694
 	Number of sweeps 9
-	Time:  3.890249252319336
-	Time per sweep:  0.4322503407796224
+	Time:  3.097745895385742
+	Time per sweep:  0.3441941738128662
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -2976,8 +2976,8 @@ Starting Eigen solve with:
 	 Step size: 0.926399
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.021020889282226562
-	 Time per sweep:  0.010511994361877441
+	 Time:  0.014307022094726562
+	 Time per sweep:  0.007154583930969238
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -3001,8 +3001,8 @@ Starting Eigen solve with:
 	 Step size: 0.654157
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.023068904876708984
-	 Time per sweep:  0.011536002159118652
+	 Time:  0.014630556106567383
+	 Time per sweep:  0.0073163509368896484
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -3022,8 +3022,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 8.798856263987837e-18
 	 Number of sweeps 2
-	 Time:  0.011958599090576172
-	 Time per sweep:  0.005980372428894043
+	 Time:  0.007506132125854492
+	 Time per sweep:  0.003753662109375
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -3043,8 +3043,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 1.5757103293293745e-18
 	 Number of sweeps 2
-	 Time:  0.008607625961303711
-	 Time per sweep:  0.004304409027099609
+	 Time:  0.007596254348754883
+	 Time per sweep:  0.0037987232208251953
 
 --- Centering-Corrector  step ---
 	Starting Sweep:
@@ -3097,8 +3097,8 @@ Starting Eigen solve with:
 	Solution rank is [ 4 16 42 16]
 	Residual  0.02364347313012628
 	Number of sweeps 9
-	Time:  3.0586299896240234
-	Time per sweep:  0.33984804153442383
+	Time:  3.807551622390747
+	Time per sweep:  0.4230615297953288
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -3122,8 +3122,8 @@ Starting Eigen solve with:
 	 Step size: 0.473615
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.015105485916137695
-	 Time per sweep:  0.007554292678833008
+	 Time:  0.013300895690917969
+	 Time per sweep:  0.006651401519775391
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -3147,8 +3147,8 @@ Starting Eigen solve with:
 	 Step size: 0.405701
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.02428722381591797
-	 Time per sweep:  0.012144923210144043
+	 Time:  0.02377939224243164
+	 Time per sweep:  0.011891365051269531
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -3168,8 +3168,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 1.8969999276804e-17
 	 Number of sweeps 2
-	 Time:  0.011717796325683594
-	 Time per sweep:  0.005859971046447754
+	 Time:  0.012798547744750977
+	 Time per sweep:  0.006400465965270996
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -3189,8 +3189,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 2.9273195068484843e-18
 	 Number of sweeps 2
-	 Time:  0.011821985244750977
-	 Time per sweep:  0.005912065505981445
+	 Time:  0.012168407440185547
+	 Time per sweep:  0.006085395812988281
 Step sizes: 0.4359, 0.3734
 
 Results of iteration 12:
@@ -3255,8 +3255,8 @@ Ranks X_tt: [5, 14, 17, 5], Z_tt: [5, 12, 17, 5],
 	Solution rank is [11 28 16  4]
 	Residual  0.06850045199261783
 	Number of sweeps 9
-	Time:  1.6979711055755615
-	Time per sweep:  0.18866388003031412
+	Time:  1.3224492073059082
+	Time per sweep:  0.14693903923034668
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -3280,8 +3280,8 @@ Starting Eigen solve with:
 	 Step size: 1.000000
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.021985530853271484
-	 Time per sweep:  0.010994315147399902
+	 Time:  0.014640092849731445
+	 Time per sweep:  0.007320880889892578
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -3305,8 +3305,8 @@ Starting Eigen solve with:
 	 Step size: 0.534696
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.025560617446899414
-	 Time per sweep:  0.012781858444213867
+	 Time:  0.01614522933959961
+	 Time per sweep:  0.00807344913482666
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -3326,8 +3326,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 7.910387599139966e-18
 	 Number of sweeps 2
-	 Time:  0.011978864669799805
-	 Time per sweep:  0.005990505218505859
+	 Time:  0.007573604583740234
+	 Time per sweep:  0.003787398338317871
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -3347,8 +3347,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 5.388866782055173e-19
 	 Number of sweeps 2
-	 Time:  0.011725425720214844
-	 Time per sweep:  0.005863308906555176
+	 Time:  0.007559299468994141
+	 Time per sweep:  0.003780364990234375
 
 --- Centering-Corrector  step ---
 	Starting Sweep:
@@ -3401,8 +3401,8 @@ Starting Eigen solve with:
 	Solution rank is [ 4 13 31 16]
 	Residual  0.8667362406148048
 	Number of sweeps 9
-	Time:  2.4602606296539307
-	Time per sweep:  0.27336253060234916
+	Time:  2.7406325340270996
+	Time per sweep:  0.3045150174034966
 ==================================
  Inaccurate results: Regularising!
 ==================================
@@ -3470,8 +3470,8 @@ Ranks X_tt: [5, 12, 17, 5], Z_tt: [5, 11, 17, 5],
 	Solution rank is [11 28 16  4]
 	Residual  0.05724669455604446
 	Number of sweeps 9
-	Time:  1.0209417343139648
-	Time per sweep:  0.1134384208255344
+	Time:  0.9062285423278809
+	Time per sweep:  0.10069229867723253
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -3495,8 +3495,8 @@ Starting Eigen solve with:
 	 Step size: 1.000000
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.021441221237182617
-	 Time per sweep:  0.010722517967224121
+	 Time:  0.014004945755004883
+	 Time per sweep:  0.007003426551818848
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -3520,8 +3520,8 @@ Starting Eigen solve with:
 	 Step size: 0.546396
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.025423288345336914
-	 Time per sweep:  0.012713193893432617
+	 Time:  0.015738725662231445
+	 Time per sweep:  0.007870197296142578
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -3541,8 +3541,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 2.5627217308020023e-19
 	 Number of sweeps 2
-	 Time:  0.011656045913696289
-	 Time per sweep:  0.005829215049743652
+	 Time:  0.00792241096496582
+	 Time per sweep:  0.003962039947509766
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -3562,8 +3562,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 2.0650568893629607e-18
 	 Number of sweeps 2
-	 Time:  0.011783361434936523
-	 Time per sweep:  0.005892753601074219
+	 Time:  0.007687091827392578
+	 Time per sweep:  0.0038442611694335938
 
 --- Centering-Corrector  step ---
 	Starting Sweep:
@@ -3616,8 +3616,8 @@ Starting Eigen solve with:
 	Solution rank is [ 4 10 27 16]
 	Residual  0.08311699338958645
 	Number of sweeps 9
-	Time:  1.6954963207244873
-	Time per sweep:  0.1883888774447971
+	Time:  1.310502052307129
+	Time per sweep:  0.14561157756381565
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -3641,8 +3641,8 @@ Starting Eigen solve with:
 	 Step size: 0.574985
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.020781517028808594
-	 Time per sweep:  0.01039266586303711
+	 Time:  0.014527320861816406
+	 Time per sweep:  0.007264614105224609
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -3666,8 +3666,8 @@ Starting Eigen solve with:
 	 Step size: 0.438012
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.022477388381958008
-	 Time per sweep:  0.011240005493164062
+	 Time:  0.015240907669067383
+	 Time per sweep:  0.0076215267181396484
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -3687,8 +3687,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 4.014041398263444e-18
 	 Number of sweeps 2
-	 Time:  0.012433767318725586
-	 Time per sweep:  0.006218075752258301
+	 Time:  0.00735163688659668
+	 Time per sweep:  0.0036764144897460938
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -3712,8 +3712,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 6.579377963994394e-18
 	 Number of sweeps 3
-	 Time:  0.01566171646118164
-	 Time per sweep:  0.005220890045166016
+	 Time:  0.010332822799682617
+	 Time per sweep:  0.0034447511037190757
 Step sizes: 0.5301, 0.4038
 
 Results of iteration 14:
@@ -3778,8 +3778,8 @@ Ranks X_tt: [5, 11, 17, 5], Z_tt: [5, 11, 17, 5],
 	Solution rank is [11 30 16  4]
 	Residual  0.029083551706054995
 	Number of sweeps 9
-	Time:  1.2012462615966797
-	Time per sweep:  0.13347231017218697
+	Time:  1.2272675037384033
+	Time per sweep:  0.13636347982618544
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -3803,8 +3803,8 @@ Starting Eigen solve with:
 	 Step size: 0.373932
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.024183034896850586
-	 Time per sweep:  0.012093186378479004
+	 Time:  0.025142192840576172
+	 Time per sweep:  0.012573003768920898
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -3828,8 +3828,8 @@ Starting Eigen solve with:
 	 Step size: 0.763067
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.02153491973876953
-	 Time per sweep:  0.010769128799438477
+	 Time:  0.022829771041870117
+	 Time per sweep:  0.011416435241699219
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -3849,8 +3849,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 2.8165190144944124e-18
 	 Number of sweeps 2
-	 Time:  0.012310981750488281
-	 Time per sweep:  0.006156802177429199
+	 Time:  0.011946678161621094
+	 Time per sweep:  0.005974531173706055
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -3870,8 +3870,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 1.1639998702578126e-19
 	 Number of sweeps 2
-	 Time:  0.010361433029174805
-	 Time per sweep:  0.005181431770324707
+	 Time:  0.009684324264526367
+	 Time per sweep:  0.004842877388000488
 
 --- Centering-Corrector  step ---
 	Starting Sweep:
@@ -3924,8 +3924,8 @@ Starting Eigen solve with:
 	Solution rank is [ 4 11 30 16]
 	Residual  0.0067688110830767595
 	Number of sweeps 9
-	Time:  1.4421684741973877
-	Time per sweep:  0.1602412329779731
+	Time:  1.3936331272125244
+	Time per sweep:  0.15484833717346191
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -3949,8 +3949,8 @@ Starting Eigen solve with:
 	 Step size: 0.373006
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.014328241348266602
-	 Time per sweep:  0.007164955139160156
+	 Time:  0.013863563537597656
+	 Time per sweep:  0.006932616233825684
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -3974,8 +3974,8 @@ Starting Eigen solve with:
 	 Step size: 0.471448
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.014396190643310547
-	 Time per sweep:  0.007198929786682129
+	 Time:  0.013615131378173828
+	 Time per sweep:  0.0068084001541137695
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -3995,8 +3995,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 3.93700488202912e-19
 	 Number of sweeps 2
-	 Time:  0.007699728012084961
-	 Time per sweep:  0.003850579261779785
+	 Time:  0.007345676422119141
+	 Time per sweep:  0.0036734342575073242
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -4020,8 +4020,8 @@ Starting Eigen solve with:
 	 Solution rank is [1 1 1 1]
 	 Residual 8.49873546052659e-18
 	 Number of sweeps 3
-	 Time:  0.009638547897338867
-	 Time per sweep:  0.0032133261362711587
+	 Time:  0.009192466735839844
+	 Time per sweep:  0.003064711888631185
 Step sizes: 0.3427, 0.4331
 
 Results of iteration 15:
@@ -4044,60 +4044,60 @@ Ranks X_tt: [5, 10, 17, 5], Z_tt: [5, 11, 17, 5],
 	Starting Sweep:
 	Max num of sweeps: 1
 	Direction -1
-	Residual 557.9252272030296
+	Residual 557.9252269497565
 	TT-sol rank: [4, 8, 8, 8]
 	Starting Sweep:
 	Max num of sweeps: 2
 	Direction 1
-	Residual 7.416237067727927
+	Residual 7.400298329582482
 	TT-sol rank: [12, 12, 12, 4]
 	Starting Sweep:
 	Max num of sweeps: 3
 	Direction -1
-	Residual 15.991765899957507
+	Residual 15.862772051549364
 	TT-sol rank: [4, 15, 17, 16]
 	Starting Sweep:
 	Max num of sweeps: 4
 	Direction 1
-	Residual 8.220294689938338
+	Residual 8.07781749512435
 	TT-sol rank: [13, 21, 16, 4]
 	Starting Sweep:
 	Max num of sweeps: 5
 	Direction -1
-	Residual 4.472656859825374
+	Residual 4.412153365000662
 	TT-sol rank: [4, 16, 26, 16]
 	Starting Sweep:
 	Max num of sweeps: 6
 	Direction 1
-	Residual 0.3244503941462333
+	Residual 0.28813362338261755
 	TT-sol rank: [13, 30, 16, 4]
 	Starting Sweep:
 	Max num of sweeps: 7
 	Direction -1
-	Residual 0.8218979187512857
+	Residual 0.8288373547550796
 	TT-sol rank: [4, 16, 34, 16]
 	Starting Sweep:
 	Max num of sweeps: 8
 	Direction 1
-	Residual 0.24620308568808166
+	Residual 0.25665832618015777
 	TT-sol rank: [13, 39, 16, 4]
 	Starting Sweep:
 	Max num of sweeps: 9
 	Direction -1
-	Residual 0.2755991830439067
+	Residual 0.25722924713748846
 	TT-sol rank: [4, 16, 43, 16]
 	Starting Sweep:
 	Max num of sweeps: 10
 	Direction 1
-	Residual 0.13809942189855576
+	Residual 0.11350178764286104
 	TT-sol rank: [13, 39, 16, 4]
 
 	---Results---
 	Solution rank is [13 39 16  4]
-	Residual  0.13809942189855576
+	Residual  0.11350178764286104
 	Number of sweeps 11
-	Time:  10.870753765106201
-	Time per sweep:  0.9882505590265448
+	Time:  10.522690773010254
+	Time per sweep:  0.9566084471615878
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -4107,22 +4107,22 @@ Starting Eigen solve with:
 	Residual inf
 	TT-sol rank: [4, 4, 4, 2]
 	Starting Sweep: 0
-	Step size: 0.628273
+	Step size: 0.628255
 	Direction: 1
 	Residual 0
 	TT-sol rank: [2, 4, 6, 4]
 	Starting Sweep: 1
-	Step size: 0.628273
+	Step size: 0.628255
 	Direction: -1
 	Residual 0
 	TT-sol rank: [4, 5, 4, 2]
 	 -----
 	 Solution rank is [2 3 4 2]
-	 Step size: 0.628273
+	 Step size: 0.628255
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.016080141067504883
-	 Time per sweep:  0.008041143417358398
+	 Time:  0.015027284622192383
+	 Time per sweep:  0.0075147151947021484
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -4141,8 +4141,8 @@ Starting Eigen solve with:
 	 Step size: 1.000000
 	 Residual 0
 	 Number of sweeps 2
-	 Time:  0.009992599487304688
-	 Time per sweep:  0.004997134208679199
+	 Time:  0.009654760360717773
+	 Time per sweep:  0.004828333854675293
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -4152,18 +4152,18 @@ Starting Eigen solve with:
 	TT-sol rank: [4, 4, 4, 4]
 	Starting Sweep: 0
 	Direction: 1
-	Residual 0.06002553681329004
+	Residual 0.06002469150448197
 	TT-sol rank: [3, 3, 3, 3]
 	Starting Sweep: 1
 	Direction: -1
-	Residual 4.930989964166649e-10
+	Residual 7.997221365239381e-10
 	TT-sol rank: [3, 3, 3, 3]
 	 -----
 	 Solution rank is [1 1 1 1]
-	 Residual 2.929468632196738e-19
+	 Residual 5.404258300999575e-18
 	 Number of sweeps 2
-	 Time:  0.0074634552001953125
-	 Time per sweep:  0.0037325620651245117
+	 Time:  0.006951808929443359
+	 Time per sweep:  0.0034766197204589844
 Starting Eigen solve with:
  	 0.0006000000035896463 
  	 sweeps: 10
@@ -4173,29 +4173,29 @@ Starting Eigen solve with:
 	TT-sol rank: [4, 4, 4, 4]
 	Starting Sweep: 0
 	Direction: 1
-	Residual 0.020668554749130767
+	Residual 0.02067286570444045
 	TT-sol rank: [3, 3, 3, 3]
 	Starting Sweep: 1
 	Direction: -1
-	Residual 2.4071514519925323e-17
+	Residual 1.8599936283754696e-16
 	TT-sol rank: [3, 3, 3, 3]
 	 -----
 	 Solution rank is [1 1 1 1]
-	 Residual 3.841317520951355e-18
+	 Residual 2.1363136682596264e-17
 	 Number of sweeps 2
-	 Time:  0.007046937942504883
-	 Time per sweep:  0.003524184226989746
+	 Time:  0.006926774978637695
+	 Time per sweep:  0.003464221954345703
 Step sizes: 0.5852, 1.0000
 
 Results of iteration 16:
 Finishing up: True
 Is central: True, Is primal feasible:  True, Is dual feasible: True
 Using AHO-Direction: True
-Centrality Error: 4.6417780721121506e-05
-Primal-Dual Error: (np.float64(0.00037438328261658795), np.float64(0.0006176805729774806))
+Centrality Error: 4.644139913214505e-05
+Primal-Dual Error: (np.float64(0.0003742218609222187), np.float64(0.0006212898919029197))
 Sigma: 0
 Ranks X_tt: [4, 9, 16, 4], Z_tt: [4, 9, 16, 4], 
-      Y_tt: [4, 9, 14, 4], T_tt: [2, 6, 13, 6] 
+      Y_tt: [4, 9, 14, 4], T_tt: [1, 4, 12, 4] 
 
 --- Step 17 ---
 --- Predictor  step ---
@@ -4207,77 +4207,77 @@ Ranks X_tt: [4, 9, 16, 4], Z_tt: [4, 9, 16, 4],
 	Starting Sweep:
 	Max num of sweeps: 1
 	Direction 1
-	Residual 289.174786688588
+	Residual 293.08099354735685
 	TT-sol rank: [8, 8, 8, 4]
 	Starting Sweep:
 	Max num of sweeps: 2
 	Direction -1
-	Residual 1.6817840356297882
+	Residual 1.9154307460868971
 	TT-sol rank: [4, 12, 12, 12]
 	Starting Sweep:
 	Max num of sweeps: 3
 	Direction 1
-	Residual 3.4312920141964125
+	Residual 3.500801098463162
 	TT-sol rank: [12, 17, 16, 4]
 	Starting Sweep:
 	Max num of sweeps: 4
 	Direction -1
-	Residual 2.804715951938012
+	Residual 3.013831431834788
 	TT-sol rank: [4, 13, 21, 16]
 	Starting Sweep:
 	Max num of sweeps: 5
 	Direction 1
-	Residual 1.2733481804104765
+	Residual 1.5243916587022548
 	TT-sol rank: [12, 26, 16, 4]
 	Starting Sweep:
 	Max num of sweeps: 6
 	Direction -1
-	Residual 1.554361693055822
-	TT-sol rank: [4, 13, 30, 16]
+	Residual 2.64099768736786
+	TT-sol rank: [4, 14, 30, 16]
 	Starting Sweep:
 	Max num of sweeps: 7
 	Direction 1
-	Residual 1.56567121944608
-	TT-sol rank: [12, 30, 16, 4]
+	Residual 1.0643354840598325
+	TT-sol rank: [12, 34, 16, 4]
 	Starting Sweep:
 	Max num of sweeps: 8
 	Direction -1
-	Residual 3.373853682695453
-	TT-sol rank: [4, 13, 38, 16]
+	Residual 6.023703061795905
+	TT-sol rank: [4, 14, 39, 16]
 	Starting Sweep:
 	Max num of sweeps: 9
 	Direction 1
-	Residual 1.4426032468752465
+	Residual 1.2803328679965218
 	TT-sol rank: [12, 34, 16, 4]
 	Starting Sweep:
 	Max num of sweeps: 10
 	Direction -1
-	Residual 6.783197010037239
-	TT-sol rank: [4, 13, 27, 16]
+	Residual 2.8071401516093326
+	TT-sol rank: [4, 14, 40, 16]
 
 	---Results---
-	Solution rank is [ 4 13 27 16]
-	Residual  6.783197010037239
+	Solution rank is [ 4 14 40 16]
+	Residual  2.8071401516093326
 	Number of sweeps 11
-	Time:  10.36188554763794
-	Time per sweep:  0.9419897469607267
+	Time:  10.137123823165894
+	Time per sweep:  0.9215569279410623
 Step sizes: 1.0000, 1.0000
 ---Terminated---
 Converged in 17 iterations.
 Ranks X_tt: [4, 9, 16, 4], Z_tt: [4, 9, 16, 4], 
-      Y_tt: [4, 9, 14, 4], T_tt: [2, 6, 13, 6] 
+      Y_tt: [4, 9, 14, 4], T_tt: [1, 4, 12, 4] 
 
 Converged after 17.0 iterations
-Problem created in 0.126s
-Problem solved in 92.195s
-Complementary Slackness: 0.0016544539057234964
-Total feasibility error: 6.704291438255826e-06
+Problem created in 0.079s
+Problem solved in 82.043s
+Complementary Slackness: 0.0016610003339754265
+Total feasibility error: 6.698511346921629e-06
 --- Run Summary ---
 Converged after avg 17.0 iterations
-Problem created in avg 0.126s
-Problem solved in avg 92.195s
-Complementary Slackness avg: 0.0016544539057234964
-Total feasibility error avg: 6.704291438255826e-06
+Problem created in avg 0.079s
+Problem solved in avg 82.043s
+Complementary Slackness avg: 0.0016610003339754265
+Total feasibility error avg: 6.698511346921629e-06
 ✅ Completed dim=2 successfully
 
-==== All runs completed at Mon May 19 04:09:29 PM BST 2025 ====
+==== All runs completed at Mon May 19 06:24:09 PM BST 2025 ====
