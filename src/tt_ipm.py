@@ -96,7 +96,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
             local_rhs.reshape(-1, 1),
             rtol=1e-3*block_res_old,
             maxiter=10,
-            restart=int(np.floor(np.sqrt(m)))
+            restart=max(int(np.floor(np.sqrt(m))), 50)
         )
         solution_now = np.transpose(solution_now.reshape(2, x_shape[0], x_shape[2], x_shape[3]), (1, 0, 2, 3)).__iadd__(previous_solution[:, :2])
         z = inv_I * (rhs[:, 1] - cached_einsum('lsr,smnS,LSR,lmL->rnR', XAX_k[(0, 1)], block_A_k[(0, 1)], XAX_k1[(0, 1)], solution_now[:, 0]))
@@ -221,7 +221,7 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
             local_rhs.reshape(-1, 1),
             rtol=1e-3*block_res_old_scalar,
             maxiter=10,
-            restart=int(np.floor(np.sqrt(m)))
+            restart=max(int(np.floor(np.sqrt(m))), 50)
         )
         solution_now = np.transpose(solution_now.reshape(3, x_shape[0], x_shape[2], x_shape[3]),
                                     (1, 0, 2, 3)) + previous_solution[:, [0, 1, 3]]
