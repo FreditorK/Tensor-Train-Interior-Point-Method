@@ -4,7 +4,7 @@ import os
 sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
-from src.tt_amen import tt_block_mals, _block_local_product, cached_einsum, TTBlockMatrix, TTBlockVector
+from src.tt_amen import tt_block_mals, cached_einsum, TTBlockMatrix, TTBlockVector
 from src.tt_eigen import tt_max_generalised_eigen, tt_min_eig, tt_mat_mat_mul
 from dataclasses import dataclass
 
@@ -61,7 +61,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
     rhs[:, 2] = cached_einsum('br,bmB,BR->rmR', Xb_k[2], nrmsc * block_b_k[2], Xb_k1[2]) if 2 in block_b_k else 0
     inv_I = np.divide(1, cached_einsum('lsr,smnS,LSR->lmL', XAX_k[(1, 2)], block_A_k[(1, 2)], XAX_k1[(1, 2)]))
     norm_rhs = np.linalg.norm(rhs)
-    block_res_old = np.linalg.norm(_block_local_product(XAX_k, block_A_k, XAX_k1, previous_solution) - rhs) / norm_rhs
+    block_res_old = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution) - rhs) / norm_rhs
     if block_res_old < rtol:
         return previous_solution, block_res_old, block_res_old, rhs, norm_rhs
     if m <= size_limit:
@@ -95,14 +95,13 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
             linear_op,
             local_rhs.reshape(-1, 1),
             rtol=1e-3*block_res_old,
-            maxiter=10,
-            restart=max(int(np.floor(np.sqrt(m))), 50)
+            maxiter=25
         )
         solution_now = np.transpose(solution_now.reshape(2, x_shape[0], x_shape[2], x_shape[3]), (1, 0, 2, 3)).__iadd__(previous_solution[:, :2])
         z = inv_I * (rhs[:, 1] - cached_einsum('lsr,smnS,LSR,lmL->rnR', XAX_k[(0, 1)], block_A_k[(0, 1)], XAX_k1[(0, 1)], solution_now[:, 0]))
         solution_now = np.concatenate((solution_now, z.reshape(x_shape[0], 1, x_shape[2], x_shape[3])), axis=1)
 
-    block_res_new = np.linalg.norm(_block_local_product(XAX_k, block_A_k, XAX_k1, solution_now).__isub__(rhs)) / norm_rhs
+    block_res_new = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, solution_now).__isub__(rhs)) / norm_rhs
 
     if block_res_old < block_res_new:
         solution_now = previous_solution
@@ -160,7 +159,7 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
     rhs[:, 3] = cached_einsum('br,bmB,BR->rmR', Xb_k[3], nrmsc * block_b_k[3], Xb_k1[3]) if 3 in block_b_k else 0
     inv_I = np.divide(1, cached_einsum('lsr,smnS,LSR->lmL', XAX_k[(1, 2)], block_A_k[(1, 2)], XAX_k1[(1, 2)]))
     norm_rhs = np.linalg.norm(rhs)
-    block_res_old_scalar = np.linalg.norm(_block_local_product(XAX_k, block_A_k, XAX_k1, previous_solution) - rhs) / norm_rhs
+    block_res_old_scalar = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution) - rhs) / norm_rhs
     if block_res_old_scalar < rtol:
         return previous_solution, block_res_old_scalar, block_res_old_scalar, rhs, norm_rhs
     if m <= size_limit:
@@ -174,7 +173,7 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
             mR_t = rhs[:, 3].reshape(m, 1)
             L_L_Z_inv_mR_c = forward_backward_sub(L_L_Z, rhs[:, 2].reshape(m, 1))
             L_X = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(2, 2)], block_A_k[(2, 2)], XAX_k1[(2, 2)]).reshape(m, m)
-            mL_eq = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(0, 1)], block_A_k[(0, 1)], XAX_k1[(0, 1)]).reshape(m,m)
+            mL_eq = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(0, 1)], block_A_k[(0, 1)], XAX_k1[(0, 1)]).reshape(m, m)
             T_op = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(3, 1)], block_A_k[(3, 1)], XAX_k1[(3, 1)]).reshape(m, m)
             A = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(0, 0)], block_A_k[(0, 0)],XAX_k1[(0, 0)]).reshape(m, m).__iadd__(mL_eq @ forward_backward_sub(L_L_Z, L_X * inv_I.reshape(1, -1) @ mL_eq.T, overwrite_b=True))
             B = mL_eq @ forward_backward_sub(L_L_Z, L_X)
@@ -220,8 +219,7 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
             linear_op,
             local_rhs.reshape(-1, 1),
             rtol=1e-3*block_res_old_scalar,
-            maxiter=10,
-            restart=max(int(np.floor(np.sqrt(m))), 50)
+            maxiter=25,
         )
         solution_now = np.transpose(solution_now.reshape(3, x_shape[0], x_shape[2], x_shape[3]),
                                     (1, 0, 2, 3)) + previous_solution[:, [0, 1, 3]]
@@ -231,7 +229,7 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
         solution_now = np.concatenate(
             (solution_now[:, :2], z.reshape(x_shape[0], 1, x_shape[2], x_shape[3]), solution_now[:, None, -1]), axis=1)
 
-    block_res_new_scalar = np.linalg.norm(_block_local_product(XAX_k, block_A_k, XAX_k1, solution_now) - rhs) / norm_rhs
+    block_res_new_scalar = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, solution_now) - rhs) / norm_rhs
 
     if block_res_old_scalar < block_res_new_scalar:
         solution_now = previous_solution
@@ -670,9 +668,10 @@ def tt_ipm(
         verbose,
         1,
         1,
-        local_res_bound=max(1e-3*2**dim, 0.01)
+        local_res_bound=max(1e-3*2**dim, 0.5)
     )
     lhs_skeleton = TTBlockMatrix()
+    lhs_skeleton[1, 2] = tt_reshape(tt_identity(2 * dim), (4, 4))
     if status.with_ineq:
         solver = lambda lhs, rhs, x0, nwsp, size_limit: tt_block_mals(
             lhs,
@@ -687,7 +686,7 @@ def tt_ipm(
         status.num_ineq_constraints = tt_inner_prod(ineq_mask, ineq_mask)
         status.compl_ineq_mask = tt_rank_reduce(tt_sub(tt_one_matrix(dim), ineq_mask), eps=op_tol)
         status.lag_map_t = lag_maps["t"]
-        lhs_skeleton[1, 3] = tt_reshape(tt_identity(2 * dim), (4, 4))
+        lhs_skeleton.add_alias((1, 2), (1, 3)) #[(1, 3)] = tt_reshape(tt_identity(2 * dim), (4, 4))
     else:
         solver = lambda lhs, rhs, x0, nwsp, size_limit: tt_block_mals(
             lhs,
@@ -715,17 +714,19 @@ def tt_ipm(
     # KKT-system prep
     lin_op_tt_adj = tt_transpose(lin_op_tt)
     lhs_skeleton[0, 1] = tt_scale(-1, lin_op_tt)
-    lhs_skeleton[1, 0] = tt_scale(-1, lin_op_tt_adj)
+    lhs_skeleton.add_alias((0, 1), (1, 0), is_transpose=True)
     lhs_skeleton[0, 0] = lag_maps["y"]
     status.lag_map_y = lag_maps["y"]
-    lhs_skeleton[1, 2] = tt_reshape(tt_identity(2 * dim), (4, 4))
 
     X_tt, Y_tt, Z_tt, T_tt = _initialise(ineq_mask, status, dim)
 
     iteration = 0
     finishing_steps = 1
-    max_iter = 2
     while finishing_steps > 0:
+        #print(tt_matrix_to_matrix(X_tt))
+        #print(tt_matrix_to_matrix(Z_tt))
+        #print(tt_matrix_to_matrix(tt_reshape(Y_tt, (2,  2))))
+        #print(tt_matrix_to_matrix(T_tt))
         iteration += 1
         ZX = tt_inner_prod(Z_tt, X_tt)
         TX = tt_inner_prod(X_tt, T_tt) + status.boundary_val*tt_entrywise_sum(T_tt) if status.with_ineq else 0
@@ -786,7 +787,7 @@ def tt_ipm(
         if status.with_ineq:
             T_tt = _tt_mask_symmetrise(tt_add(T_tt, tt_scale(z_step_size, Delta_T_tt)), ineq_mask, op_tol)
 
-        if status.is_last_iter or max_iter >= iteration:
+        if status.is_last_iter or max_iter-1 <= iteration:
             if ZX + TX <= (1 + status.with_ineq)*1e-3 and status.primal_error < 1e-3 and status.dual_error < 1e-3:
                 finishing_steps -= 1
             else:

@@ -65,6 +65,15 @@ class TTBlockVectorView:
 class TTBlockMatrix:
     def __init__(self):
         self._data = {}
+        self._aliases = {}
+        self._transposes = {}
+
+
+    def add_alias(self, key1, key2, is_transpose=False):
+        if is_transpose:
+            self._transposes[key1] = key2
+        else:
+            self._aliases[key1] = key2
 
     def __getitem__(self, key):
         # Access by (row, col)
@@ -72,7 +81,7 @@ class TTBlockMatrix:
             return self._data.setdefault(key, [])
         # Access by just list_index → return view object
         elif isinstance(key, int):
-            return TTBlockMatrixView(self._data, key)
+            return TTBlockMatrixView(self._data, self._aliases, self._transposes, key)
         else:
             raise KeyError(f"Invalid key format: {key}")
 
@@ -94,8 +103,10 @@ class TTBlockMatrix:
 
 class TTBlockMatrixView:
     """View object that lets you access [row, col] for fixed list index."""
-    def __init__(self, data, list_index):
+    def __init__(self, data, aliases, transposes, list_index):
         self._data = data
+        self._aliases = aliases
+        self._transposes = transposes
         self._idx = list_index
 
     def __getitem__(self, key):
@@ -114,6 +125,18 @@ class TTBlockMatrixView:
 
     def __iter__(self):
         return iter(self._data)
+
+    def block_local_product(self, XAX_k, XAX_kp1, x_core):
+        result = np.zeros_like(x_core)
+        for (i, j) in self._data.keys():
+            result[:, i] += cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[i, j], self._data[i, j][self._idx], XAX_kp1[i, j], x_core[:, j])
+            if (i, j) in self._transposes:
+                k, t = self._transposes[i, j]
+                result[:, k] += cached_einsum('lsr,smnS,LSR,lmL->rnR', XAX_k[i, j], self._data[i, j][self._idx], XAX_kp1[i, j], x_core[:, t])
+            if (i, j) in self._aliases:
+                k, t = self._aliases[i,  j]
+                result[:, k] += cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[i, j], self._data[i, j][self._idx], XAX_kp1[i, j], x_core[:, t])
+        return result
 
 
 def _local_product(Phi_right, Phi_left, coreA, core):
@@ -443,10 +466,10 @@ def _bck_sweep(
             if swp > 0:
                 r_start = min(prune_singular_vals(s, real_tol), r_max)
                 solution_now = np.reshape((u[:, :r_start] @ v[:r_start]).T, (rx[k], block_size, N[k], rx[k + 1]))
-                res = _block_local_product(XAX[k], block_A[k], XAX[k + 1], solution_now) - rhs
+                res = block_A[k].block_local_product(XAX[k], XAX[k + 1], solution_now) - rhs
                 r = r_start
                 for r in range(r_start - 1, 0, -1):
-                    res -= _block_local_product(XAX[k], block_A[k], XAX[k + 1],
+                    res -= block_A[k].block_local_product(XAX[k], XAX[k + 1],
                                                 np.reshape((u[:, None, r] @ v[None, r, :]).T,
                                                            (rx[k], block_size, N[k], rx[k + 1])))
                     if np.linalg.norm(res) / norm_rhs > max(2 * real_tol, block_res_new):
@@ -462,9 +485,11 @@ def _bck_sweep(
             x_cores[k - 1] /= norm_now
             rx[k] = r
 
-            XAX[k] = {(i, j): _compute_phi_bck_A(XAX[k + 1][(i, j)], x_cores[k], block_A[k][(i, j)], x_cores[k]) for (i, j)
-                      in block_A[k]}
-            normA[k - 1] = max(np.sqrt(sum(np.sum(v ** 2) for v in XAX[k].values())), eps)
+            XAX[k] = {(i, j): _compute_phi_bck_A(XAX[k + 1][(i, j)], x_cores[k], block_A[k][(i, j)], x_cores[k]) for (i, j) in block_A[k]}
+            normA[k - 1] = max(
+                np.sqrt(sum((1 + ((i, j) in block_A[k]._aliases) + ((i, j) in block_A[k]._transposes))*np.sum(XAX[k][i, j] ** 2) for (i, j) in block_A[k]._data)),
+                eps
+            )
             XAX[k] = {(i, j): XAX[k][(i, j)] / normA[k - 1] for (i, j) in block_A[k]}
 
             Xb[k] = {i: _compute_phi_bck_rhs(Xb[k + 1][i], block_b[k][i], x_cores[k]) for i in block_b[k]}
@@ -534,10 +559,10 @@ def _fwd_sweep(
             if swp > 0:
                 r_start = min(prune_singular_vals(s, real_tol), r_max)
                 solution_now = einsum("rbR, Rdk -> rbdk", u[:, :, :r_start], v[:r_start], optimize=[(0, 1)])
-                res = _block_local_product(XAX[k], block_A[k], XAX[k + 1], np.transpose(solution_now, (0, 2, 1, 3))) - rhs
+                res = block_A[k].block_local_product(XAX[k], XAX[k + 1], np.transpose(solution_now, (0, 2, 1, 3))) - rhs
                 r = r_start
                 for r in range(r_start - 1, 0, -1):
-                    res -= _block_local_product(XAX[k], block_A[k], XAX[k + 1], einsum("rbR, Rdk -> rdbk", u[:, :, None, r], v[None, r], optimize=[(0, 1)]))
+                    res -= block_A[k].block_local_product(XAX[k], XAX[k + 1], einsum("rbR, Rdk -> rdbk", u[:, :, None, r], v[None, r], optimize=[(0, 1)]))
                     if np.linalg.norm(res) / norm_rhs > max(2 * real_tol, block_res_new):
                         break
                 r += 1
@@ -554,7 +579,11 @@ def _fwd_sweep(
 
             XAX[k + 1] = {(i, j): _compute_phi_fwd_A(XAX[k][(i, j)], x_cores[k], block_A[k][(i, j)], x_cores[k]) for
                           (i, j) in block_A[k]}
-            normA[k] = max(np.sqrt(sum(np.sum(v ** 2) for v in XAX[k + 1].values())), eps)
+            normA[k] = max(
+                np.sqrt(
+                    sum((1 + ((i, j) in block_A[k]._aliases) + ((i, j) in block_A[k]._transposes))*np.sum(XAX[k+1][i, j] ** 2) for (i, j) in block_A[k]._data)),
+                eps
+            )
             XAX[k + 1] = {(i, j): XAX[k + 1][(i, j)] / normA[k] for (i, j) in block_A[k]}
 
             Xb[k + 1] = {i: _compute_phi_fwd_rhs(Xb[k][i], block_b[k][i], x_cores[k]) for i in block_b[k]}
@@ -676,7 +705,7 @@ def tt_block_mals(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, size_limit
 
     normx = np.exp(np.sum(np.log(normx)) / d)
 
-    return [normx * core for core in x_cores], np.mean(local_res)
+    return [normx * core for core in x_cores], np.max(local_res)
 
 
 
@@ -688,13 +717,6 @@ def tt_divide(vec_tt_1, vec_tt_2, degenerate=False, eps=1e-10):
     A = tt_rank_reduce(A, eps)
     sol, _ = tt_amen(A, b)
     return sol
-
-
-def _block_local_product(XAX_k, block_A_k, XAX_kp1, x_core):
-    result = np.zeros_like(x_core)
-    for (i, j) in block_A_k:
-        result[:, i] += cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[(i, j)], block_A_k[(i, j)], XAX_kp1[(i, j)], x_core[:, j])
-    return result
 
 def _default_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous_solution, nrmsc, size_limit, rtol):
     x_shape = previous_solution.shape
@@ -714,21 +736,21 @@ def _default_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, prev
         solution_now = np.transpose(scip.linalg.solve(B, np.transpose(rhs, (1, 0, 2, 3)).reshape(-1, 1) - B @ np.transpose(previous_solution, (1, 0, 2, 3)).reshape(-1, 1), check_finite=False).reshape(*x_shape), (1, 0, 2, 3))
     else:
         def mat_vec(x_vec):
-            return np.transpose(_block_local_product(
-                XAX_k, block_A_k, XAX_k1,
+            return np.transpose(block_A_k.block_local_product(
+                XAX_k, XAX_k1,
                 np.transpose(x_vec.reshape(*x_shape), (1, 0, 2, 3))
             ), (1, 0, 2, 3)).reshape(-1, 1)
 
         linear_op = scip.sparse.linalg.LinearOperator((block_size * m, block_size * m), matvec=mat_vec)
         solution_now, info = scip.sparse.linalg.bicgstab(linear_op, np.transpose(
-            rhs - _block_local_product(XAX_k, block_A_k, XAX_k1, previous_solution), (1, 0, 2, 3)).reshape(-1, 1), rtol=rtol)
+            rhs - block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution), (1, 0, 2, 3)).reshape(-1, 1), rtol=rtol)
         solution_now = np.transpose(solution_now.reshape(*x_shape), (1, 0, 2, 3))
 
     solution_now += previous_solution
     block_res_new = np.linalg.norm(
-        _block_local_product(XAX_k, block_A_k, XAX_k1, solution_now) - rhs) / norm_rhs
+        block_A_k.block_local_product(XAX_k, XAX_k1, solution_now) - rhs) / norm_rhs
     block_res_old = np.linalg.norm(
-        _block_local_product(XAX_k, block_A_k, XAX_k1, previous_solution) - rhs) / norm_rhs
+        block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution) - rhs) / norm_rhs
 
     if block_res_old < block_res_new:
         solution_now = previous_solution

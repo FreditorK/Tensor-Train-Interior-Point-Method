@@ -1,0 +1,10 @@
+==== max_stable_set TT-IPM Batch Run Started at Mon May 19 03:25:29 PM BST 2025 ====
+
+▶ Running dim=1 with config=configs/max_stable_set_1.yaml at Mon May 19 03:25:29 PM BST 2025
+Traceback (most recent call last):
+  File "/home/fred/Projects/TT-IPM/psd_system/max_stable_set/max_stable_set.py", line 44, in <module>
+    with open(os.getcwd() + '/../../' + args.config, "r") as file:
+FileNotFoundError: [Errno 2] No such file or directory: '/home/fred/Projects/TT-IPM/psd_system/max_stable_set/../../configs/max_stable_set_1.yaml'
+❌ Error occurred for dim=1 (exit code 1)
+
+==== All runs completed at Mon May 19 03:25:29 PM BST 2025 ====
