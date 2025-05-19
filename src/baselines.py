@@ -41,7 +41,7 @@ def cgal(obj_matrix, constraint_matrices, bias, trace_params, duality_tol=1e-2, 
 
 
 def sketchy_cgal(obj_matrix, constraint_matrices, bias, trace_params, R=1, gap_tol=1e-5, num_iter=100, verbose=False):
-    feasability_tol = 2*gap_tol
+    feasability_tol = gap_tol
     bias_norm = np.linalg.norm(bias)
     Omega, S = nystrom_sketch_init(obj_matrix.shape[0], R)
     res = -bias

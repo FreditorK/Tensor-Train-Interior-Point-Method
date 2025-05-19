@@ -4,7 +4,7 @@ import os
 sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
-from src.tt_amen import tt_block_mals, _block_local_product, cached_einsum, TTBlockMatrix
+from src.tt_amen import tt_block_mals, _block_local_product, cached_einsum, TTBlockMatrix, TTBlockVector
 from src.tt_eigen import tt_max_generalised_eigen, tt_min_eig, tt_mat_mat_mul
 from dataclasses import dataclass
 
@@ -24,10 +24,10 @@ def _get_eq_mat_vec(XAX_k, block_A_k, XAX_kp1, x_shape, inv_I):
     XAX_kp1_01 = XAX_kp1[(0, 1)]
     XAX_kp1_21 = XAX_kp1[(2, 1)]
     XAX_kp1_22 = XAX_kp1[(2, 2)]
-    block_A_k_00 = block_A_k[(0, 0)]
-    block_A_k_01 = block_A_k[(0, 1)]
-    block_A_k_21 = block_A_k[(2, 1)]
-    block_A_k_22 = block_A_k[(2, 2)]
+    block_A_k_00 = block_A_k[0, 0]
+    block_A_k_01 = block_A_k[0, 1]
+    block_A_k_21 = block_A_k[2, 1]
+    block_A_k_22 = block_A_k[2, 2]
 
     K_y = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k_00.shape, block_A_k_00.shape,  XAX_kp1_00.shape, x_element_shape, optimize="greedy")
     mL = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k_01.shape, block_A_k_01.shape,  XAX_kp1_01.shape, x_element_shape, optimize="greedy")
@@ -91,13 +91,12 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         local_rhs = -linear_op(np.transpose(previous_solution[:, :2], (1, 0, 2, 3)).reshape(-1, 1)).reshape(2, x_shape[0], x_shape[2], x_shape[3])
         local_rhs[0] += rhs[:, 0]
         local_rhs[1] += rhs[:, 2] - cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[(2, 2)], block_A_k[(2, 2)], XAX_k1[(2, 2)], inv_I*rhs[:, 1])
-        iters = max(int(np.sqrt(m)), 10)
         solution_now, info = scip.sparse.linalg.gmres(
             linear_op,
             local_rhs.reshape(-1, 1),
             rtol=1e-3*block_res_old,
-            maxiter=iters,
-            restart=int(max(np.floor(iters / 3), 3))
+            maxiter=10,
+            restart=int(np.floor(np.sqrt(m)))
         )
         solution_now = np.transpose(solution_now.reshape(2, x_shape[0], x_shape[2], x_shape[3]), (1, 0, 2, 3)).__iadd__(previous_solution[:, :2])
         z = inv_I * (rhs[:, 1] - cached_einsum('lsr,smnS,LSR,lmL->rnR', XAX_k[(0, 1)], block_A_k[(0, 1)], XAX_k1[(0, 1)], solution_now[:, 0]))
@@ -125,12 +124,12 @@ def _get_ineq_mat_vec(XAX_k, block_A_k, XAX_kp1, x_shape, inv_I):
     XAX_kp1_22 = XAX_kp1[(2, 2)]
     XAX_kp1_31 = XAX_kp1[(3, 1)]
     XAX_kp1_33 = XAX_kp1[(3, 3)]
-    block_A_k_00 = block_A_k[(0, 0)]
-    block_A_k_01 = block_A_k[(0, 1)]
-    block_A_k_21 = block_A_k[(2, 1)]
-    block_A_k_22 = block_A_k[(2, 2)]
-    block_A_k_31 = block_A_k[(3, 1)]
-    block_A_k_33 = block_A_k[(3, 3)]
+    block_A_k_00 = block_A_k[0, 0]
+    block_A_k_01 = block_A_k[0, 1]
+    block_A_k_21 = block_A_k[2, 1]
+    block_A_k_22 = block_A_k[2, 2]
+    block_A_k_31 = block_A_k[3, 1]
+    block_A_k_33 = block_A_k[3, 3]
     K_y = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k_00.shape, block_A_k_00.shape,  XAX_kp1_00.shape, x_element_shape, optimize="greedy")
     mL = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k_01.shape, block_A_k_01.shape,  XAX_kp1_01.shape, x_element_shape, optimize="greedy")
     mL_adj = contract_expression('lsr,smnS,LSR,lmL->rnR', XAX_k_01.shape, block_A_k_01.shape, XAX_kp1_01.shape, x_element_shape, optimize="greedy")
@@ -217,13 +216,12 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
         local_rhs[1] += rhs[:, 2] - cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[(2, 2)], block_A_k[(2, 2)],
                                                   XAX_k1[(2, 2)], inv_I * rhs[:, 1])
         local_rhs[2] += rhs[:, 3]
-        iters = max(int(np.sqrt(m)), 10)
         solution_now, info = scip.sparse.linalg.gmres(
             linear_op,
             local_rhs.reshape(-1, 1),
-            rtol=1e-3 * block_res_old_scalar,
-            maxiter=iters,
-            restart=int(max(np.floor(iters / 3), 3))
+            rtol=1e-3*block_res_old_scalar,
+            maxiter=10,
+            restart=int(np.floor(np.sqrt(m)))
         )
         solution_now = np.transpose(solution_now.reshape(3, x_shape[0], x_shape[2], x_shape[3]),
                                     (1, 0, 2, 3)) + previous_solution[:, [0, 1, 3]]
@@ -253,7 +251,7 @@ def tt_infeasible_newton_system(
         ineq_mask,
         status
 ):
-    rhs = {}
+    rhs = TTBlockVector()
     if status.aho_direction:
         lhs[2, 1] = tt_psd_rank_reduce(tt_scale(0.5, tt_add(tt_IkronM(Z_tt), tt_MkronI(Z_tt))), eps=status.op_tol)
         lhs[2, 2] = tt_psd_rank_reduce(tt_scale(0.5, tt_add(tt_MkronI(X_tt), tt_IkronM(X_tt))), eps=status.op_tol)
@@ -340,7 +338,7 @@ def _tt_ipm_newton_step(
             Delta_T_tt = tt_rank_reduce(_tt_get_block(3, Delta_tt), eps=status.eps)
             Delta_T_tt = tt_fast_hadammard(ineq_mask, tt_reshape(Delta_T_tt, (2, 2)), status.eps)
 
-        x_step_size, z_step_size, permitted_error = _tt_line_search(
+        x_step_size, z_step_size = _tt_line_search(
             X_tt,
             Z_tt,
             T_tt,
@@ -351,8 +349,6 @@ def _tt_ipm_newton_step(
             status
         )
     else:
-        if status.verbose:
-            print("==================================\n Inaccurate results: Regularising!\n==================================")
         dim = len(X_tt)
         if status.is_last_iter:
             Delta_X_tt = tt_zero_matrix(dim, (2, 2))
@@ -363,8 +359,9 @@ def _tt_ipm_newton_step(
                 Delta_T_tt = tt_zero_matrix(dim, (2, 2))
             x_step_size = 1
             z_step_size = 1
-            permitted_error = (0, 0, 0)
         else:
+            if status.verbose:
+                print("==================================\n Inaccurate results: Regularising!\n==================================")
             # regularise
             Delta_X_tt = tt_scale(3*status.op_tol, tt_identity(dim))
             Delta_Z_tt = tt_scale(3*status.op_tol, tt_identity(dim))
@@ -374,10 +371,10 @@ def _tt_ipm_newton_step(
                 Delta_T_tt = tt_scale(3*status.eps, ineq_mask)
             x_step_size = 1
             z_step_size = 1
-            permitted_error = (status.op_tol, status.op_tol, status.eps)
-        return x_step_size, z_step_size, Delta_X_tt, Delta_Y_tt, Delta_Z_tt, Delta_T_tt, status, permitted_error
+        return x_step_size, z_step_size, Delta_X_tt, Delta_Y_tt, Delta_Z_tt, Delta_T_tt, status
 
     if not status.is_central and not status.is_last_iter:
+
         # Corrector
         if status.verbose:
             print("\n--- Centering-Corrector  step ---")
@@ -396,14 +393,15 @@ def _tt_ipm_newton_step(
                 + z_step_size * (tt_inner_prod(X_tt, Delta_T_tt) + status.boundary_val*tt_entrywise_sum(Delta_T_tt))
                 + x_step_size * tt_inner_prod(Delta_X_tt, T_tt)
             )
-            status.sigma = min(0.99, (mu_aff/(ZX + TX))**3)
+            e = max(1, 3 * min(x_step_size, z_step_size) ** 2)
+            status.sigma = min(0.99, (mu_aff/(ZX + TX))**e)
             rhs_3 = tt_add(
                     tt_scale(status.sigma * status.mu, tt_reshape(ineq_mask, (4,))),
                     tt_sub(
-                        rhs_vec_tt[3],
+                        rhs_vec_tt.get_row(3),
                         tt_reshape(tt_fast_hadammard(Delta_T_tt, Delta_X_tt, status.op_tol), (4,))
                     )
-                ) if status.sigma > 0 else tt_sub(rhs_vec_tt[3], tt_reshape(tt_fast_hadammard(Delta_T_tt, Delta_X_tt, status.op_tol), (4,)))
+                ) if status.sigma > 0 else tt_sub(rhs_vec_tt.get_row(3), tt_reshape(tt_fast_hadammard(Delta_T_tt, Delta_X_tt, status.op_tol), (4,)))
             rhs_vec_tt[3] = tt_rank_reduce(
                 rhs_3,
                 status.op_tol
@@ -414,19 +412,20 @@ def _tt_ipm_newton_step(
                 + z_step_size * tt_inner_prod(X_tt,Delta_Z_tt)
                 + x_step_size * tt_inner_prod(Delta_X_tt, Z_tt)
             )
-            status.sigma = min(0.99, (mu_aff/ZX) ** 3)
+            e = max(1, 3*min(x_step_size, z_step_size)**2)
+            status.sigma = min(0.99, (mu_aff/ZX) ** e)
 
 
         rhs_vec_tt[2] = tt_rank_reduce(
             tt_add(
                 tt_scale(status.sigma*status.mu, tt_reshape(tt_identity(len(X_tt)), (4, ))),
                 tt_add(
-                rhs_vec_tt[2],
+                rhs_vec_tt.get_row(2),
                 tt_reshape(Delta_XZ_term, (4, ))
                 )
             ),
             status.op_tol
-        ) if status.sigma > 0 else tt_add(rhs_vec_tt[2], tt_reshape(Delta_XZ_term, (4, )))
+        ) if status.sigma > 0 else tt_add(rhs_vec_tt.get_row(2), tt_reshape(Delta_XZ_term, (4, )))
         Delta_tt_cc, res = solver(lhs_matrix_tt, rhs_vec_tt, status.x0, 8 + status.with_ineq, 0 if status.is_last_iter else None)
         status.x0 = Delta_tt_cc
         if res < status.local_res_bound:
@@ -439,7 +438,7 @@ def _tt_ipm_newton_step(
                 Delta_T_tt_cc = tt_fast_hadammard(ineq_mask, tt_reshape(Delta_T_tt_cc, (2, 2)), status.eps)
                 Delta_T_tt = tt_rank_reduce(tt_add(Delta_T_tt_cc, Delta_T_tt), eps=status.eps)
 
-            x_step_size, z_step_size, permitted_error = _tt_line_search(
+            x_step_size, z_step_size = _tt_line_search(
                 X_tt,
                 Z_tt,
                 T_tt,
@@ -453,8 +452,6 @@ def _tt_ipm_newton_step(
             Delta_Y_tt_cc = tt_rank_reduce(tt_sub(Delta_Y_tt_cc, tt_fast_matrix_vec_mul(status.lag_map_y, Delta_Y_tt_cc, status.eps)), eps=status.eps)
             Delta_Y_tt = tt_rank_reduce(tt_add(Delta_Y_tt_cc, Delta_Y_tt), eps=status.eps)
         else:
-            if status.verbose:
-                print("==================================\n Inaccurate results: Regularising!\n==================================")
             dim = len(X_tt)
             if status.is_last_iter:
                 Delta_X_tt = tt_zero_matrix(dim, (2, 2))
@@ -465,8 +462,9 @@ def _tt_ipm_newton_step(
                     Delta_T_tt = tt_zero_matrix(dim, (2, 2))
                 x_step_size = 1
                 z_step_size = 1
-                permitted_error = (0, 0, 0)
             else:
+                if status.verbose:
+                    print("==================================\n Inaccurate results: Regularising!\n==================================")
                 # regularise
                 Delta_X_tt = tt_scale(3*status.op_tol, tt_identity(dim))
                 Delta_Z_tt = tt_scale(3*status.op_tol, tt_identity(dim))
@@ -476,12 +474,11 @@ def _tt_ipm_newton_step(
                     Delta_T_tt = tt_scale(3*status.eps, ineq_mask)
                 x_step_size = 1
                 z_step_size = 1
-                permitted_error = (status.op_tol, status.op_tol, status.eps)
-            return x_step_size, z_step_size, Delta_X_tt, Delta_Y_tt, Delta_Z_tt, Delta_T_tt, status, permitted_error
+            return x_step_size, z_step_size, Delta_X_tt, Delta_Y_tt, Delta_Z_tt, Delta_T_tt, status
     else:
         status.sigma = 0
 
-    return x_step_size, z_step_size, Delta_X_tt, Delta_Y_tt, Delta_Z_tt, Delta_T_tt, status, permitted_error
+    return x_step_size, z_step_size, Delta_X_tt, Delta_Y_tt, Delta_Z_tt, Delta_T_tt, status
 
 
 def _tt_line_search(
@@ -498,7 +495,7 @@ def _tt_line_search(
         X_tt = tt_add(X_tt, tt_scale(status.boundary_val+status.op_tol, tt_identity(len(X_tt))))
         Z_tt = tt_add(Z_tt, tt_scale(status.boundary_val+status.op_tol, tt_identity(len(Z_tt))))
 
-    x_step_size, permitted_err_x = tt_max_generalised_eigen(X_tt, Delta_X_tt, tol=0.5*status.feasibility_tol, verbose=status.verbose)
+    x_step_size = tt_max_generalised_eigen(X_tt, Delta_X_tt, tol=0.5*status.feasibility_tol, verbose=status.verbose)
 
     ############################
     #A = tt_matrix_to_matrix(Z_tt)
@@ -510,18 +507,19 @@ def _tt_line_search(
     #print("Step size:", step_size)
     ##############################
 
-    z_step_size, permitted_err_z = tt_max_generalised_eigen(Z_tt, Delta_Z_tt, tol=0.5*status.feasibility_tol, verbose=status.verbose)
+    z_step_size = tt_max_generalised_eigen(Z_tt, Delta_Z_tt, tol=0.5*status.feasibility_tol, verbose=status.verbose)
 
     #print(z_step_size)
     #print()
     permitted_err_t = 1
-    if status.with_ineq and not status.is_last_iter:
-        x_step_size, z_step_size, permitted_err_ineq = _tt_line_search_ineq(x_step_size, z_step_size, X_tt, T_tt, Delta_X_tt, Delta_T_tt, ineq_mask, status)
-        permitted_err_x = min(permitted_err_x, permitted_err_ineq[0])
-        permitted_err_t = permitted_err_ineq[1]
+    if status.with_ineq:
+        if status.is_last_iter:
+            X_tt = tt_add(X_tt, tt_scale(status.boundary_val + status.op_tol, ineq_mask))
+            T_tt = tt_add(T_tt, tt_scale(status.boundary_val + status.op_tol, ineq_mask))
+        x_step_size, z_step_size = _tt_line_search_ineq(x_step_size, z_step_size, X_tt, T_tt, Delta_X_tt, Delta_T_tt, ineq_mask, status)
     tau_x = 0.9 + 0.05*min(x_step_size,  z_step_size) if x_step_size < 1 else 1.0
     tau_z = 0.9 + 0.05*min(x_step_size,  z_step_size) if z_step_size < 1 else 1.0
-    return tau_x*x_step_size, tau_z*z_step_size, (permitted_err_x, permitted_err_z, permitted_err_t)
+    return tau_x*x_step_size, tau_z*z_step_size
 
 
 def _ineq_step_size(A_tt, Delta_tt, status):
@@ -529,7 +527,7 @@ def _ineq_step_size(A_tt, Delta_tt, status):
     if status.compl_ineq_mask:
         sum_tt = tt_add(sum_tt, tt_scale(tt_entrywise_sum(sum_tt)/status.num_ineq_constraints, status.compl_ineq_mask))
     sum_tt = tt_rank_reduce(sum_tt, status.eps)
-    e_tt, min_eval = tt_min_eig(tt_diag_op(sum_tt, status.eps), verbose=status.verbose)
+    e_tt, min_eval = tt_min_eig(tt_diag_op(sum_tt, status.eps), tol=0.5*status.feasibility_tol, verbose=status.verbose)
     e_tt = tt_reshape(tt_normalise(tt_fast_hadammard(e_tt, e_tt, status.eps)), (2, 2))
     min_A_val = tt_inner_prod(A_tt, e_tt)
     min_Delta_val = tt_inner_prod(Delta_tt, e_tt)
@@ -537,18 +535,15 @@ def _ineq_step_size(A_tt, Delta_tt, status):
         step_size = 1
     else:
         step_size = np.clip(-(1-status.op_tol)*min_A_val/min_Delta_val, a_min=0, a_max=1)
-    permitted_error = min_A_val + step_size*min_Delta_val
-    return step_size, permitted_error
+    return step_size
 
 
 def _tt_line_search_ineq(x_step_size, z_step_size, X_tt, T_tt, Delta_X_tt, Delta_T_tt, ineq_mask, status):
 
-    permitted_err_x = 1
-    permitted_err_t = status.eps
     if x_step_size > 0:
         masked_X_tt = tt_fast_hadammard(ineq_mask, X_tt, status.eps)
         masked_Delta_X_tt = tt_fast_hadammard(ineq_mask, Delta_X_tt, status.eps)
-        x_ineq_step_size, permitted_err_x = _ineq_step_size(
+        x_ineq_step_size = _ineq_step_size(
             tt_add(masked_X_tt, tt_scale(status.boundary_val, ineq_mask)),
             tt_scale(x_step_size, masked_Delta_X_tt),
             status
@@ -556,32 +551,35 @@ def _tt_line_search_ineq(x_step_size, z_step_size, X_tt, T_tt, Delta_X_tt, Delta
         x_step_size *= x_ineq_step_size
 
     if z_step_size > 0:
-        t_step_size, permitted_err_t = _ineq_step_size(
+        t_step_size = _ineq_step_size(
             T_tt,
             tt_scale(z_step_size, Delta_T_tt),
             status
         )
         z_step_size *= t_step_size
 
-    return x_step_size, z_step_size, (permitted_err_x, permitted_err_t)
+    return x_step_size, z_step_size
 
 
-def _update(x_step_size, z_step_size, X_tt, Z_tt, Delta_X_tt, Delta_Z_tt, status, permitted_error):
+def _update(x_step_size, z_step_size, X_tt, Z_tt, Delta_X_tt, Delta_Z_tt, status):
     #print()
     #print("Before: ", np.min(np.linalg.eigvalsh(tt_matrix_to_matrix(X_tt))),
     #     np.min(np.linalg.eigvalsh(tt_matrix_to_matrix(Z_tt))))
     #print()
     #print("Mid: ", np.min(np.linalg.eigvalsh(tt_matrix_to_matrix(tt_add(X_tt, tt_scale(x_step_size, Delta_X_tt))))), np.min(np.linalg.eigvalsh(tt_matrix_to_matrix(tt_add(Z_tt, tt_scale(z_step_size, Delta_Z_tt))))))
-    if x_step_size > 0:
-        if status.is_last_iter:
-            X_tt = _tt_symmetrise(tt_add(X_tt, tt_scale(x_step_size, Delta_X_tt)), status.op_tol)
-        else:
-            X_tt = _tt_psd_symmetrise(tt_add(X_tt, tt_scale(x_step_size, Delta_X_tt)), status.op_tol)
-    if z_step_size > 0:
-        if status.is_last_iter:
-            Z_tt = _tt_symmetrise(tt_add(Z_tt, tt_scale(z_step_size, Delta_Z_tt)), status.op_tol)
-        else:
-            Z_tt = _tt_psd_symmetrise(tt_add(Z_tt, tt_scale(z_step_size, Delta_Z_tt)), status.op_tol)
+    if x_step_size <1e-4 and z_step_size < 1e-4:
+        status.is_last_iter = True
+    else:
+        if x_step_size > 1e-4:
+            if status.is_last_iter:
+                X_tt = _tt_symmetrise(tt_add(X_tt, tt_scale(x_step_size, Delta_X_tt)), status.op_tol)
+            else:
+                X_tt = _tt_psd_symmetrise(tt_add(X_tt, tt_scale(x_step_size, Delta_X_tt)), status.op_tol)
+        if z_step_size > 1e-4:
+            if status.is_last_iter:
+                Z_tt = _tt_symmetrise(tt_add(Z_tt, tt_scale(z_step_size, Delta_Z_tt)), status.op_tol)
+            else:
+                Z_tt = _tt_psd_symmetrise(tt_add(Z_tt, tt_scale(z_step_size, Delta_Z_tt)), status.op_tol)
 
     #print()
     #print("After: ", np.min(np.linalg.eigvalsh(tt_matrix_to_matrix(X_tt))),
@@ -597,7 +595,7 @@ def _initialise(ineq_mask, status, dim):
     T_tt = None
 
     if status.with_ineq:
-        T_tt = tt_scale(status.boundary_val, ineq_mask)
+        T_tt = tt_zero_matrix(dim)
 
 
     #print(tt_matrix_to_matrix(X_tt))
@@ -619,6 +617,7 @@ class IPMStatus:
     is_dual_feasible: bool
     dual_error: float
     is_central: bool
+    centrality_error: float
     mu: float
     is_last_iter: bool
     with_ineq: bool
@@ -665,6 +664,7 @@ def tt_ipm(
         np.inf,
         False,
         np.inf,
+        np.inf,
         False,
         ineq_mask is not None,
         verbose,
@@ -672,7 +672,7 @@ def tt_ipm(
         1,
         local_res_bound=max(1e-3*2**dim, 0.01)
     )
-    lhs_skeleton = {}
+    lhs_skeleton = TTBlockMatrix()
     if status.with_ineq:
         solver = lambda lhs, rhs, x0, nwsp, size_limit: tt_block_mals(
             lhs,
@@ -701,10 +701,10 @@ def tt_ipm(
         )
         status.num_ineq_constraints = 0
 
-    lag_maps = {key: tt_rank_reduce(value, eps=op_tol) for key, value in lag_maps.items()}
-    obj_tt = tt_rank_reduce(obj_tt, eps=op_tol)
-    lin_op_tt = tt_rank_reduce(lin_op_tt, eps=op_tol)
-    bias_tt = tt_rank_reduce(bias_tt, eps=op_tol)
+    lag_maps = {key: tt_rank_reduce(value, eps=eps) for key, value in lag_maps.items()}
+    obj_tt = tt_rank_reduce(obj_tt, eps=eps)
+    lin_op_tt = tt_rank_reduce(lin_op_tt, eps=eps)
+    bias_tt = tt_rank_reduce(bias_tt, eps=eps)
 
     # Normalisation
     # We normalise the objective to the scale of the average constraint
@@ -724,13 +724,14 @@ def tt_ipm(
 
     iteration = 0
     finishing_steps = 1
+    max_iter = 2
     while finishing_steps > 0:
         iteration += 1
         ZX = tt_inner_prod(Z_tt, X_tt)
         TX = tt_inner_prod(X_tt, T_tt) + status.boundary_val*tt_entrywise_sum(T_tt) if status.with_ineq else 0
         status.mu = np.divide(ZX + TX, (2 ** dim + status.num_ineq_constraints))
-        centrality_error = status.mu / (1 + abs(tt_inner_prod(obj_tt, tt_reshape(X_tt, (4, )))))
-        status.is_central = np.less(centrality_error, (1 + status.with_ineq)*centrality_tol)
+        status.centrality_error = status.mu / (1 + abs(tt_inner_prod(obj_tt, tt_reshape(X_tt, (4, )))))
+        status.is_central = np.less(status.centrality_error, (1 + status.with_ineq)*centrality_tol)
 
         lhs_matrix_tt, rhs_vec_tt, status = tt_infeasible_newton_system(
             lhs_skeleton,
@@ -752,7 +753,7 @@ def tt_ipm(
             print(f"Finishing up: {status.is_last_iter}")
             print(f"Is central: {status.is_central}, Is primal feasible:  {status.is_primal_feasible}, Is dual feasible: {status.is_dual_feasible}")
             print(f"Using AHO-Direction: {status.aho_direction}")
-            print(f"Centrality Error: {centrality_error}")
+            print(f"Centrality Error: {status.centrality_error}")
             print(f"Primal-Dual Error: {status.primal_error, status.dual_error}")
             print(f"Sigma: {status.sigma}")
             print(
@@ -761,7 +762,7 @@ def tt_ipm(
             )
             print(f"--- Step {iteration} ---")
 
-        x_step_size, z_step_size, Delta_X_tt, Delta_Y_tt, Delta_Z_tt, Delta_T_tt, status, permitted_error = _tt_ipm_newton_step(
+        x_step_size, z_step_size, Delta_X_tt, Delta_Y_tt, Delta_Z_tt, Delta_T_tt, status = _tt_ipm_newton_step(
             lhs_matrix_tt,
             rhs_vec_tt,
             ineq_mask,
@@ -775,10 +776,9 @@ def tt_ipm(
         )
         if verbose:
             print(f"Step sizes: {x_step_size:.4f}, {z_step_size:.4f}")
-            print(f"Permitted errors: {permitted_error}")
 
 
-        X_tt, Z_tt = _update(x_step_size, z_step_size, X_tt, Z_tt, Delta_X_tt, Delta_Z_tt, status, permitted_error)
+        X_tt, Z_tt = _update(x_step_size, z_step_size, X_tt, Z_tt, Delta_X_tt, Delta_Z_tt, status)
 
         # TODO: transpose without reshape
         Y_tt = tt_reshape(_tt_symmetrise(tt_reshape(tt_add(Y_tt, tt_scale(z_step_size, Delta_Y_tt)), (2, 2)), op_tol), (4, ))
@@ -786,8 +786,8 @@ def tt_ipm(
         if status.with_ineq:
             T_tt = _tt_mask_symmetrise(tt_add(T_tt, tt_scale(z_step_size, Delta_T_tt)), ineq_mask, op_tol)
 
-        if status.is_last_iter or max_iter == iteration:
-            if ZX + TX <= 1e-3:
+        if status.is_last_iter or max_iter >= iteration:
+            if ZX + TX <= (1 + status.with_ineq)*1e-3 and status.primal_error < 1e-3 and status.dual_error < 1e-3:
                 finishing_steps -= 1
             else:
                 finishing_steps -= 1/3

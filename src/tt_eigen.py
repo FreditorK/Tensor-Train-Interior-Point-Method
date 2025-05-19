@@ -216,10 +216,7 @@ def tt_max_generalised_eigen(A, Delta, x0=None, kick_rank=None, nswp=10, tol=1e-
 
     if max_res > tol:
         step_size = 0
-        min_eig_value = 0
-    else:
-        min_eig_value = tt_inner_prod(x_cores, tt_fast_matrix_vec_mul(A, x_cores, tol)) + step_size * tt_inner_prod(x_cores, tt_fast_matrix_vec_mul(Delta, x_cores, tol)).squeeze()
-    return step_size, min_eig_value
+    return step_size
 
 
 def tt_min_eig(A, x0=None, kick_rank=None, nswp=10, tol=1e-12, verbose=False):
@@ -279,7 +276,7 @@ def tt_min_eig(A, x0=None, kick_rank=None, nswp=10, tol=1e-12, verbose=False):
         if max_res < tol or swp == nswp - 1:
             last = True
         if verbose:
-            print('\tStarting Sweep:\n\tMax num of sweeps: %d' % swp)
+            print('\tStarting Sweep: %d' % swp)
             print(f"\tDirection: {-1}")
             print(f'\tResidual {max_res}')
             print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
@@ -315,7 +312,7 @@ def tt_min_eig(A, x0=None, kick_rank=None, nswp=10, tol=1e-12, verbose=False):
         if max_res < tol:
             last = True
         if verbose:
-            print('\tStarting Sweep:\n\tMax num of sweeps: %d' % swp)
+            print('\tStarting Sweep: %d' % swp)
             print(f"\tDirection: {1}")
             print(f'\tResidual {max_res}')
             print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
@@ -340,20 +337,22 @@ def _eigen_local_solve(previous_solution, XAX_k, A_k, XAX_k1, m, size_limit, eps
             eig_val, solution_now = scip.sparse.linalg.eigsh(A, tol=eps, k=1, which="SA", v0=previous_solution)
         except:
             solution_now = previous_solution
-        old_res = np.linalg.norm(previous_solution.reshape(-1, 1).T @ A @ previous_solution * previous_solution.reshape(-1, 1) - A @ previous_solution)
+            eig_val = previous_solution.T @ A @ previous_solution
+        old_res = np.linalg.norm(eig_val * previous_solution - A @ previous_solution)
         return solution_now, old_res
 
     x_shape = previous_solution.shape
     previous_solution = previous_solution.reshape(-1, 1)
     _mat_vec_A = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k.shape, A_k.shape, XAX_k1.shape, x_shape, optimize="greedy")
-    mat_vec_A = lambda x_vec: -_mat_vec_A(XAX_k, A_k, XAX_k1, x_vec.reshape(*x_shape)).reshape(-1, 1)
+    mat_vec_A = lambda x_vec: _mat_vec_A(XAX_k, A_k, XAX_k1, x_vec.reshape(*x_shape)).reshape(-1, 1)
     A_op = scip.sparse.linalg.LinearOperator((m, m), matvec=mat_vec_A)
     try:
         eig_val, solution_now = scip.sparse.linalg.eigsh(A_op, tol=eps, k=1, which="SA", v0=previous_solution)
     except:
         solution_now = previous_solution
+        eig_val = previous_solution.T @ A_op(previous_solution)
 
-    old_res = np.linalg.norm(previous_solution.reshape(-1, 1).T @ A_op(previous_solution.reshape(-1, 1)) * previous_solution.reshape(-1, 1) - A_op(previous_solution.reshape(-1, 1)))
+    old_res = np.linalg.norm(eig_val * previous_solution - A_op(previous_solution))
 
     return solution_now.reshape(-1, 1), old_res
 

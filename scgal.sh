@@ -65,12 +65,18 @@ cd psd_system/$1
 # ---------------------------
 # Loop through configs
 # ---------------------------
+for arg in "$@"; do
+    if [ "$arg" == "--track_mem" ]; then
+        TRACK_MEM="--track_mem"
+    fi
+done
+
 for dim in $(seq $START_DIM $END_DIM); do
     CONFIG="configs/$1_${dim}.yaml"
     echo -e "\n▶ Running dim=$dim with config=$CONFIG at $(date)"
     CURRENT_TIMEOUT=$((BASE_TIMEOUT * dim))
 
-    timeout "$CURRENT_TIMEOUT" python $1_scgal.py --config "$CONFIG"
+    timeout "$CURRENT_TIMEOUT" python $1_scgal.py --config "$CONFIG" $TRACK_MEM
     status=$?
 
     if [ $status -eq 124 ]; then
