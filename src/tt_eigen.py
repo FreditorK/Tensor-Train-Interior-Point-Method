@@ -95,7 +95,7 @@ def tt_max_generalised_eigen(A, Delta, x0=None, kick_rank=None, nswp=10, tol=1e-
     if x0 is None:
         x_cores = tt_random_gaussian([2]*(len(A)-1), (A[0].shape[2],))
         if kick_rank is None:
-            kick_rank = np.maximum(np.ceil(symmetric_powers_of_two(len(A)-1) / nswp)-np.array(tt_ranks(x_cores)), 2).astype(int)
+            kick_rank = np.maximum(np.ceil(symmetric_powers_of_two(len(A)-1) - np.array(tt_ranks(x_cores)) / nswp), 2).astype(int)
     else:
         x_cores = x0
         if kick_rank is None:
