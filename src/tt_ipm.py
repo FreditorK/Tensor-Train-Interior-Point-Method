@@ -378,6 +378,9 @@ def _tt_ipm_newton_step(
                 Delta_T_tt = tt_scale(3*status.eps, ineq_mask)
             x_step_size = 1
             z_step_size = 1
+            status.primal_error += 3 * status.op_tol
+            status.dual_error += 3 * status.op_tol
+            status.centrality_error += 6 * status.op_tol
         return x_step_size, z_step_size, Delta_X_tt, Delta_Y_tt, Delta_Z_tt, Delta_T_tt, status
 
     if not status.is_central and not status.is_last_iter:
@@ -493,6 +496,9 @@ def _tt_ipm_newton_step(
                     Delta_T_tt = tt_scale(3*status.eps, ineq_mask)
                 x_step_size = 1
                 z_step_size = 1
+                status.primal_error += 3*status.op_tol
+                status.dual_error += 3*status.op_tol
+                status.centrality_error += 6*status.op_tol
             return x_step_size, z_step_size, Delta_X_tt, Delta_Y_tt, Delta_Z_tt, Delta_T_tt, status
     else:
         status.sigma = 0
@@ -746,7 +752,7 @@ def tt_ipm(
     X_tt, Y_tt, Z_tt, T_tt = _initialise(ineq_mask, status, dim)
 
     iteration = 0
-    finishing_steps = 1
+    finishing_steps = max_refinement
     prev_primal_error = status.primal_error
     prev_dual_error = status.dual_error
     prev_centrality_error = status.centrality_error
@@ -826,11 +832,15 @@ def tt_ipm(
             else:
                 finishing_steps -= 1
 
-        status.is_last_iter = status.is_last_iter or (
-                prev_primal_error - status.primal_error < 0.5*op_tol
-                and prev_dual_error - status.dual_error < 0.5*op_tol
-                and prev_centrality_error - status.centrality_error < 0.5*op_tol
-        )
+        if (
+                abs(prev_primal_error - status.primal_error) < 0.1*gap_tol
+                and abs(prev_dual_error - status.dual_error) < 0.1*gap_tol
+                and abs(prev_centrality_error - status.centrality_error) < 0.1*gap_tol
+        ):
+            if status.verbose:
+                print(
+                    "==================================\n Progress stalled!\n==================================")
+            status.is_last_iter = True
         prev_primal_error = status.primal_error
         prev_dual_error = status.dual_error
         prev_centrality_error = status.centrality_error
