@@ -90,7 +90,7 @@ def _add_kick_rank(u, v, r_add=2):
 
 def tt_max_generalised_eigen(A, Delta, x0=None, kick_rank=None, nswp=10, tol=1e-12, verbose=False):
     if verbose:
-        print(f"Starting Eigen solve with:\n \t {tol} \n \t sweeps: {nswp}")
+        print(f"\nStarting Eigen solve with:\n \t {tol} \n \t sweeps: {nswp}")
         t0 = time.time()
     if x0 is None:
         x_cores = tt_random_gaussian([2]*(len(A)-1), (A[0].shape[2],))
@@ -212,16 +212,16 @@ def tt_max_generalised_eigen(A, Delta, x0=None, kick_rank=None, nswp=10, tol=1e-
         print(f"\t Residual {max_res}")
         print('\t Number of sweeps', swp + 1)
         print('\t Time: ', time.time() - t0)
-        print('\t Time per sweep: ', (time.time() - t0) / (swp + 1))
+        print('\t Time per sweep: ', (time.time() - t0) / (swp + 1), flush=True)
 
     if max_res > tol:
         step_size = 0
-    return step_size
+    return step_size, x_cores
 
 
 def tt_min_eig(A, x0=None, kick_rank=None, nswp=10, tol=1e-12, verbose=False):
     if verbose:
-        print(f"Starting Eigen solve with:\n \t {tol} \n \t sweeps: {nswp}")
+        print(f"\nStarting Eigen solve with:\n \t {tol} \n \t sweeps: {nswp}")
         t0 = time.time()
     if x0 is None:
         x_cores = tt_random_gaussian([2]*(len(A)-1), (A[0].shape[2],))
@@ -323,7 +323,7 @@ def tt_min_eig(A, x0=None, kick_rank=None, nswp=10, tol=1e-12, verbose=False):
         print(f"\t Residual {max_res}")
         print('\t Number of sweeps', swp + 1)
         print('\t Time: ', time.time() - t0)
-        print('\t Time per sweep: ', (time.time() - t0) / (swp + 1))
+        print('\t Time per sweep: ', (time.time() - t0) / (swp + 1),flush=True)
 
     min_eig_value = tt_inner_prod(x_cores, tt_fast_matrix_vec_mul(A, x_cores, tol)).squeeze()
     return x_cores, min_eig_value
@@ -353,7 +353,6 @@ def _eigen_local_solve(previous_solution, XAX_k, A_k, XAX_k1, m, size_limit, eps
         eig_val = previous_solution.T @ A_op(previous_solution)
 
     old_res = np.linalg.norm(eig_val * previous_solution - A_op(previous_solution))
-
     return solution_now.reshape(-1, 1), old_res
 
 
@@ -480,7 +479,7 @@ def symmetric_powers_of_two(length):
 
 def tt_approx_mat_mat_mul(A, D, x0=None, kick_rank=None, nswp=20, tol=1e-6, verbose=False):
     if verbose:
-        print(f"Starting Eigen solve with:\n \t {tol} \n \t sweeps: {nswp}")
+        print(f"\nStarting MM solve with:\n \t {tol} \n \t sweeps: {nswp}")
         t0 = time.time()
     if x0 is None:
         x_cores = tt_random_gaussian([2]*(len(A)-1), A[0].shape[1:-1])
@@ -603,14 +602,14 @@ def tt_approx_mat_mat_mul(A, D, x0=None, kick_rank=None, nswp=20, tol=1e-6, verb
         print(f"\t Residual {max_res}")
         print('\t Number of sweeps', swp + 1)
         print('\t Time: ', time.time() - t0)
-        print('\t Time per sweep: ', (time.time() - t0) / (swp + 1))
+        print('\t Time per sweep: ', (time.time() - t0) / (swp + 1), flush=True)
 
     normx = np.exp(np.sum(np.log(normx)) / d)
 
     return [normx * core for core in x_cores]
 
 
-def tt_mat_mat_mul(mat1, mat2, op_tol, eps):
+def tt_mat_mat_mul(mat1, mat2, op_tol, eps, verbose=False):
     if np.max(np.array(tt_ranks(mat1))*np.array(tt_ranks(mat2))) <= 2**(len(mat1)-1):
         return tt_rank_reduce(tt_fast_mat_mat_mul(mat1, mat2, eps), eps=op_tol)
-    return tt_approx_mat_mat_mul(mat1, mat2, tol=op_tol)
+    return tt_approx_mat_mat_mul(mat1, mat2, tol=op_tol, verbose=verbose)

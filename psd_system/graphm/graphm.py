@@ -276,7 +276,8 @@ if __name__ == "__main__":
                     max_iter=config["max_iter"],
                     verbose=config["verbose"],
                     gap_tol=config["gap_tol"],
-                    op_tol=config["op_tol"]
+                    op_tol=config["op_tol"],
+                    aho_direction=False
                 )
                 return X_tt, Y_tt, T_tt, Z_tt, info
 
@@ -293,7 +294,8 @@ if __name__ == "__main__":
                 max_iter=config["max_iter"],
                 verbose=config["verbose"],
                 gap_tol=config["gap_tol"],
-                op_tol=config["op_tol"]
+                op_tol=config["op_tol"],
+                aho_direction=False
             )
 
         t3 = time.time()

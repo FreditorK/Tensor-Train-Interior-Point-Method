@@ -332,9 +332,9 @@ def _tt_ipm_newton_step(
 
     # Predictor
     if status.verbose:
-        print("--- Predictor  step ---")
-    Delta_tt, res = solver(lhs_matrix_tt, rhs_vec_tt, status.x0, 8 + status.is_last_iter*2 + status.with_ineq, 0 if status.is_last_iter else None)
-    status.x0 = Delta_tt
+        print("--- Predictor  step ---", flush=True)
+    Delta_tt, res = solver(lhs_matrix_tt, rhs_vec_tt, status.mals_delta0, 8 + status.is_last_iter * 2 + status.with_ineq, 0 if status.is_last_iter else None)
+    status.mals_delta0 = Delta_tt
     if res < status.local_res_bound:
         Delta_X_tt = _tt_symmetrise(tt_reshape(_tt_get_block(1, Delta_tt), (2, 2)), status.eps)
         Delta_Z_tt = _tt_symmetrise(tt_reshape(_tt_get_block(2, Delta_tt), (2, 2)), status.eps)
@@ -382,18 +382,14 @@ def _tt_ipm_newton_step(
 
     if not status.is_central and not status.is_last_iter:
 
+        DXZ = tt_inner_prod(Delta_X_tt, Delta_Z_tt)
         # Corrector
         if status.verbose:
-            print("\n--- Centering-Corrector  step ---")
-
-        if status.aho_direction:
-            Delta_XZ_term = tt_scale(-1, _tt_symmetrise(tt_mat_mat_mul(Delta_X_tt, Delta_Z_tt, status.op_tol, status.eps), status.op_tol))
-        else:
-            Delta_XZ_term = tt_scale(-1, tt_mat_mat_mul(Delta_Z_tt, Delta_X_tt, status.op_tol, status.eps))
+            print(f"\n--- Centering-Corrector  step ---", flush=True)
 
         if status.with_ineq:
             mu_aff = (
-                ZX + x_step_size * z_step_size * tt_inner_prod(Delta_X_tt, Delta_Z_tt)
+                ZX + x_step_size * z_step_size * DXZ
                 + z_step_size * tt_inner_prod(X_tt, Delta_Z_tt)
                 + x_step_size * tt_inner_prod(Delta_X_tt, Z_tt)
                 + TX + x_step_size * z_step_size * tt_inner_prod(Delta_T_tt, Delta_X_tt)
@@ -402,6 +398,8 @@ def _tt_ipm_newton_step(
             )
             e = max(1, 3 * min(x_step_size, z_step_size) ** 2)
             status.sigma = min(0.99, (mu_aff/(ZX + TX))**e)
+            """
+            #Too expensive
             rhs_3 = tt_add(
                     tt_scale(status.sigma * status.mu, tt_reshape(ineq_mask, (4,))),
                     tt_sub(
@@ -413,9 +411,10 @@ def _tt_ipm_newton_step(
                 rhs_3,
                 status.op_tol
         )
+        """
         else:
             mu_aff = (
-                ZX + x_step_size * z_step_size * tt_inner_prod(Delta_X_tt, Delta_Z_tt)
+                ZX + x_step_size * z_step_size * DXZ
                 + z_step_size * tt_inner_prod(X_tt,Delta_Z_tt)
                 + x_step_size * tt_inner_prod(Delta_X_tt, Z_tt)
             )
@@ -423,18 +422,31 @@ def _tt_ipm_newton_step(
             status.sigma = min(0.99, (mu_aff/ZX) ** e)
 
 
-        rhs_vec_tt[2] = tt_rank_reduce(
-            tt_add(
-                tt_scale(status.sigma*status.mu, tt_reshape(tt_identity(len(X_tt)), (4, ))),
+        if DXZ > status.op_tol:
+            if status.aho_direction:
+                Delta_XZ_term = tt_scale(-1, _tt_symmetrise(tt_mat_mat_mul(Delta_X_tt, Delta_Z_tt, status.op_tol, status.eps, verbose=status.verbose), status.op_tol))
+            else:
+                Delta_XZ_term = tt_scale(-1, tt_mat_mat_mul(Delta_Z_tt, Delta_X_tt, status.op_tol, status.eps, verbose=status.verbose))
+            rhs_vec_tt[2] = tt_rank_reduce(
                 tt_add(
-                rhs_vec_tt.get_row(2),
-                tt_reshape(Delta_XZ_term, (4, ))
-                )
-            ),
-            status.op_tol
-        ) if status.sigma > 0 else tt_add(rhs_vec_tt.get_row(2), tt_reshape(Delta_XZ_term, (4, )))
-        Delta_tt_cc, res = solver(lhs_matrix_tt, rhs_vec_tt, status.x0, 8 + status.with_ineq, 0 if status.is_last_iter else None)
-        status.x0 = Delta_tt_cc
+                    tt_scale(status.sigma * status.mu, tt_reshape(tt_identity(len(X_tt)), (4,))),
+                    tt_add(
+                        rhs_vec_tt.get_row(2),
+                        tt_reshape(Delta_XZ_term, (4,))
+                    )
+                ),
+                status.op_tol
+            ) if status.sigma > 0 else tt_add(rhs_vec_tt.get_row(2), tt_reshape(Delta_XZ_term, (4,)))
+        else:
+            rhs_vec_tt[2] = tt_rank_reduce(
+                tt_add(
+                    tt_scale(status.sigma * status.mu, tt_reshape(tt_identity(len(X_tt)), (4,))),
+                    rhs_vec_tt.get_row(2)
+                ),
+                status.op_tol
+            ) if status.sigma > 0 else rhs_vec_tt.get_row(2)
+        Delta_tt_cc, res = solver(lhs_matrix_tt, rhs_vec_tt, status.mals_delta0, 8 + status.with_ineq, 0 if status.is_last_iter else None)
+        status.mals_delta0 = Delta_tt_cc
         if res < status.local_res_bound:
             Delta_X_tt_cc = _tt_symmetrise(tt_reshape(_tt_get_block(1, Delta_tt_cc), (2, 2)), status.eps)
             Delta_Z_tt_cc = _tt_symmetrise(tt_reshape(_tt_get_block(2, Delta_tt_cc), (2, 2)), status.eps)
@@ -502,7 +514,7 @@ def _tt_line_search(
         X_tt = tt_add(X_tt, tt_scale(status.boundary_val+status.op_tol, tt_identity(len(X_tt))))
         Z_tt = tt_add(Z_tt, tt_scale(status.boundary_val+status.op_tol, tt_identity(len(Z_tt))))
 
-    x_step_size = tt_max_generalised_eigen(X_tt, Delta_X_tt, tol=0.5*status.feasibility_tol, verbose=status.verbose)
+    x_step_size, status.eigen_x0 = tt_max_generalised_eigen(X_tt, Delta_X_tt, x0=status.eigen_x0, tol=0.5*status.feasibility_tol, verbose=status.verbose)
 
     ############################
     #A = tt_matrix_to_matrix(Z_tt)
@@ -514,7 +526,7 @@ def _tt_line_search(
     #print("Step size:", step_size)
     ##############################
 
-    z_step_size = tt_max_generalised_eigen(Z_tt, Delta_Z_tt, tol=0.5*status.feasibility_tol, verbose=status.verbose)
+    z_step_size, status.eigen_z0 = tt_max_generalised_eigen(Z_tt, Delta_Z_tt, x0=status.eigen_z0, tol=0.5*status.feasibility_tol, verbose=status.verbose)
 
     #print(z_step_size)
     #print()
@@ -640,7 +652,9 @@ class IPMStatus:
     lag_map_t: list = None
     lag_map_y: list = None
     compl_ineq_mask = None
-    x0 = None
+    mals_delta0 = None
+    eigen_x0 = None
+    eigen_z0 = None
 
 
 def tt_ipm(
@@ -733,6 +747,10 @@ def tt_ipm(
 
     iteration = 0
     finishing_steps = 1
+    prev_primal_error = status.primal_error
+    prev_dual_error = status.dual_error
+    prev_centrality_error = status.centrality_error
+
     while finishing_steps > 0:
         #print(tt_matrix_to_matrix(X_tt))
         #print(tt_matrix_to_matrix(Z_tt))
@@ -807,6 +825,15 @@ def tt_ipm(
                 finishing_steps -= max_refinement
             else:
                 finishing_steps -= 1
+
+        status.is_last_iter = status.is_last_iter or (
+                prev_primal_error - status.primal_error < 0.5*op_tol
+                and prev_dual_error - status.dual_error < 0.5*op_tol
+                and prev_centrality_error - status.centrality_error < 0.5*op_tol
+        )
+        prev_primal_error = status.primal_error
+        prev_dual_error = status.dual_error
+        prev_centrality_error = status.centrality_error
 
     print(f"---Terminated---")
     print(f"Converged in {iteration} iterations.")
