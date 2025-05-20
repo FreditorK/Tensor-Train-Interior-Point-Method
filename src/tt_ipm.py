@@ -650,9 +650,11 @@ def tt_ipm(
     bias_tt,
     ineq_mask=None,
     max_iter=100,
+    max_refinement=3,
     gap_tol=1e-4,
     aho_direction=True,
     op_tol=1e-5,
+    abs_tol=1e-3,
     eps=1e-12,
     verbose=False,
 ):
@@ -693,7 +695,7 @@ def tt_ipm(
             verbose=verbose
         )
         status.num_ineq_constraints = tt_inner_prod(ineq_mask, ineq_mask)
-        status.compl_ineq_mask = tt_rank_reduce(tt_sub(tt_one_matrix(dim), ineq_mask), eps=op_tol)
+        status.compl_ineq_mask = tt_rank_reduce(tt_sub(tt_one_matrix(dim), ineq_mask), eps=eps)
         status.lag_map_t = lag_maps["t"]
         lhs_skeleton.add_alias((1, 2), (1, 3)) #[(1, 3)] = tt_reshape(tt_identity(2 * dim), (4, 4))
     else:
@@ -718,7 +720,7 @@ def tt_ipm(
     # We normalise the objective to the scale of the average constraint
     status.primal_error_normalisation = 1 + tt_norm(bias_tt)
     status.dual_error_normalisation = 1 + tt_norm(obj_tt)
-    status.feasibility_tol = feasibility_tol + (op_tol/2)*2**dim/min(status.primal_error_normalisation, status.dual_error_normalisation) # account for error introduced in psd_rank_reduce
+    status.feasibility_tol = feasibility_tol + (op_tol/2) # account for error introduced in psd_rank_reduce
 
     # KKT-system prep
     lin_op_tt_adj = tt_transpose(lin_op_tt)
@@ -737,6 +739,7 @@ def tt_ipm(
         #print(tt_matrix_to_matrix(tt_reshape(Y_tt, (2,  2))))
         #print(tt_matrix_to_matrix(T_tt))
         iteration += 1
+        status.is_last_iter = status.is_last_iter or (max_iter <= iteration)
         ZX = tt_inner_prod(Z_tt, X_tt)
         TX = tt_inner_prod(X_tt, T_tt) + status.boundary_val*tt_entrywise_sum(T_tt) if status.with_ineq else 0
         status.mu = np.divide(ZX + TX, (2 ** dim + status.num_ineq_constraints))
@@ -785,7 +788,7 @@ def tt_ipm(
             solver
         )
         if verbose:
-            print(f"Step sizes: {x_step_size:.4f}, {z_step_size:.4f}")
+            print(f"Step sizes: {x_step_size}, {z_step_size}")
 
 
         X_tt, Z_tt = _update(x_step_size, z_step_size, X_tt, Z_tt, Delta_X_tt, Delta_Z_tt, status)
@@ -799,11 +802,11 @@ def tt_ipm(
             else:
                 T_tt = _tt_mask_symmetrise(tt_add(T_tt, tt_scale(z_step_size, Delta_T_tt)), ineq_mask, op_tol)
 
-        if status.is_last_iter or max_iter-1 <= iteration:
-            if ZX + TX <= (1 + status.with_ineq)*1e-3 and status.primal_error < 1e-3 and status.dual_error < 1e-3:
-                finishing_steps -= 1
+        if status.is_last_iter:
+            if abs(ZX) + abs(TX) <= (1 + status.with_ineq)*abs_tol and status.primal_error < abs_tol and status.dual_error < abs_tol:
+                finishing_steps -= max_refinement
             else:
-                finishing_steps -= 1/3
+                finishing_steps -= 1
 
     print(f"---Terminated---")
     print(f"Converged in {iteration} iterations.")
