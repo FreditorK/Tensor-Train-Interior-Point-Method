@@ -13,14 +13,14 @@ from memory_profiler import memory_usage
 
 def tt_diag_constraint_op(dim):
     identity = tt_identity(dim)
-    basis = tt_diag(tt_split_bonds(identity))
-    return basis, tt_identity(dim)
+    basis = tt_diag_op(identity)
+    return basis, tt_reshape(identity, (4,))
 
 def tt_obj_matrix(rank, dim):
     scale = 2**(7 - dim)
     graph_tt = tt_rank_reduce(tt_random_graph(dim, rank))
     laplacian_tt = tt_sub(tt_diag(tt_fast_matrix_vec_mul(graph_tt, [np.ones((1, 2, 1)) for _ in range(dim)],  1e-12)), graph_tt)
-    return tt_normalise(laplacian_tt, radius=scale)
+    return tt_reshape(tt_normalise(laplacian_tt, radius=scale), (4,))
 
 
 if __name__ == "__main__":
@@ -47,13 +47,8 @@ if __name__ == "__main__":
         G_tt = tt_obj_matrix(rank, config["dim"])
         t1 = time.time()
         L_tt, bias_tt = tt_diag_constraint_op(config["dim"])
-
         lag_y = tt_sub(tt_one_matrix(config["dim"]), tt_identity(config["dim"]))
         lag_maps = {"y": tt_diag_op(lag_y)}
-
-        G_tt = tt_reshape(G_tt, (4,))
-        L_tt = tt_reshape(L_tt, (4, 4))
-        bias_tt = tt_reshape(bias_tt, (4,))
         t2 = time.time()
         if args.track_mem:
             start_mem = memory_usage(max_usage=True)

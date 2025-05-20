@@ -1,6 +1,6 @@
-==== maxcut TT-IPM Batch Run Started at Mon May 19 02:40:26 PM BST 2025 ====
+==== maxcut TT-IPM Batch Run Started at Tue May 20 10:45:21 PM BST 2025 ====
 
-▶ Running dim=2 with config=configs/maxcut_2.yaml at Mon May 19 02:40:26 PM BST 2025
+▶ Running dim=2 with config=configs/maxcut_2.yaml at Tue May 20 10:45:21 PM BST 2025
 Seed:  5
 ---Terminated---
 Converged in 8 iterations.
@@ -9,15 +9,15 @@ Ranks X_tt: [1], Z_tt: [2],
 
 Converged after 8.0 iterations
 Problem created in 0.001s
-Problem solved in 0.404s
-Complementary Slackness: 3.132393544547085e-07
-Total feasibility error: 5.352203504863994e-17
+Problem solved in 0.673s
+Complementary Slackness: 7.842314952100082e-05
+Total feasibility error: 2.9729341917297218e-12
 --- Run Summary ---
 Converged after avg 8.0 iterations
 Problem created in avg 0.001s
-Problem solved in avg 0.404s
-Complementary Slackness avg: 3.132393544547085e-07
-Total feasibility error avg: 5.352203504863994e-17
+Problem solved in avg 0.673s
+Complementary Slackness avg: 7.842314952100082e-05
+Total feasibility error avg: 2.9729341917297218e-12
 ✅ Completed dim=2 successfully
 
-==== All runs completed at Mon May 19 02:40:27 PM BST 2025 ====
+==== All runs completed at Tue May 20 10:45:22 PM BST 2025 ====

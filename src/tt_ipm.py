@@ -16,14 +16,14 @@ def forward_backward_sub(L, b, overwrite_b=False):
 
 def _get_eq_mat_vec(XAX_k, block_A_k, XAX_kp1, x_shape, inv_I):
     x_element_shape = (x_shape[0], x_shape[2], x_shape[3])
-    XAX_k_00 = XAX_k[(0, 0)]
-    XAX_k_01 = XAX_k[(0, 1)]
-    XAX_k_21 = XAX_k[(2, 1)]
-    XAX_k_22 = XAX_k[(2, 2)]
-    XAX_kp1_00 = XAX_kp1[(0, 0)]
-    XAX_kp1_01 = XAX_kp1[(0, 1)]
-    XAX_kp1_21 = XAX_kp1[(2, 1)]
-    XAX_kp1_22 = XAX_kp1[(2, 2)]
+    XAX_k_00 = XAX_k[0, 0]
+    XAX_k_01 = XAX_k[0, 1]
+    XAX_k_21 = XAX_k[2, 1]
+    XAX_k_22 = XAX_k[2, 2]
+    XAX_kp1_00 = XAX_kp1[0, 0]
+    XAX_kp1_01 = XAX_kp1[0, 1]
+    XAX_kp1_21 = XAX_kp1[2, 1]
+    XAX_kp1_22 = XAX_kp1[2, 2]
     block_A_k_00 = block_A_k[0, 0]
     block_A_k_01 = block_A_k[0, 1]
     block_A_k_21 = block_A_k[2, 1]
@@ -59,7 +59,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
     rhs[:, 0] = cached_einsum('br,bmB,BR->rmR', Xb_k[0], nrmsc * block_b_k[0], Xb_k1[0]) if 0 in block_b_k else 0
     rhs[:, 1] = cached_einsum('br,bmB,BR->rmR', Xb_k[1], nrmsc * block_b_k[1], Xb_k1[1]) if 1 in block_b_k else 0
     rhs[:, 2] = cached_einsum('br,bmB,BR->rmR', Xb_k[2], nrmsc * block_b_k[2], Xb_k1[2]) if 2 in block_b_k else 0
-    inv_I = np.divide(1, cached_einsum('lsr,smnS,LSR->lmL', XAX_k[(1, 2)], block_A_k[(1, 2)], XAX_k1[(1, 2)]))
+    inv_I = np.divide(1, cached_einsum('lsr,smnS,LSR->lmL', XAX_k[1, 2], block_A_k[1, 2], XAX_k1[1, 2]))
     norm_rhs = np.linalg.norm(rhs)
     block_res_old = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution) - rhs) / norm_rhs
     if block_res_old < rtol:
@@ -67,15 +67,15 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
     if m <= size_limit:
         try:
             L_L_Z = scip.linalg.cholesky(
-                cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(2, 1)], block_A_k[(2, 1)], XAX_k1[(2, 1)]).reshape(m, m),
+                cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[2, 1], block_A_k[2, 1], XAX_k1[2, 1]).reshape(m, m),
                 check_finite=False, lower=True, overwrite_a=True
             )
             mR_p = rhs[:, 0].reshape(m, 1)
             mR_d = rhs[:, 1].reshape(m, 1)
             mR_c = rhs[:, 2].reshape(m, 1)
-            L_X = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(2, 2)], block_A_k[(2, 2)], XAX_k1[(2, 2)]).reshape(m, m)
-            mL_eq = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(0, 1)], block_A_k[(0, 1)], XAX_k1[(0, 1)]).reshape(m, m)
-            A = mL_eq @ forward_backward_sub(L_L_Z, L_X * inv_I.reshape(1, -1), overwrite_b=True) @ mL_eq.T + cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(0, 0)], block_A_k[(0, 0)], XAX_k1[(0, 0)]).reshape(m, m)
+            L_X = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[2, 2], block_A_k[2, 2], XAX_k1[2, 2]).reshape(m, m)
+            mL_eq = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[0, 1], block_A_k[0, 1], XAX_k1[0, 1]).reshape(m, m)
+            A = mL_eq @ forward_backward_sub(L_L_Z, L_X * inv_I.reshape(1, -1), overwrite_b=True) @ mL_eq.T + cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[0, 0], block_A_k[0, 0], XAX_k1[0, 0]).reshape(m, m)
             b = mR_p - mL_eq @ forward_backward_sub(L_L_Z, mR_c - (L_X * inv_I.reshape(1, -1)) @ mR_d, overwrite_b=True) - A @ np.transpose(previous_solution, (1, 0, 2, 3))[1].reshape(-1, 1)
             y = scip.linalg.solve(A, b, check_finite=False, overwrite_a=True, overwrite_b=True) + np.transpose(previous_solution, (1, 0, 2, 3))[1].reshape(-1, 1)
             z = inv_I.reshape(-1, 1) * (mR_d - mL_eq.T @ y)
@@ -90,7 +90,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         linear_op = scip.sparse.linalg.LinearOperator((2 * m, 2 * m), matvec=mat_vec)
         local_rhs = -linear_op(np.transpose(previous_solution[:, :2], (1, 0, 2, 3)).reshape(-1, 1)).reshape(2, x_shape[0], x_shape[2], x_shape[3])
         local_rhs[0] += rhs[:, 0]
-        local_rhs[1] += rhs[:, 2] - cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[(2, 2)], block_A_k[(2, 2)], XAX_k1[(2, 2)], inv_I*rhs[:, 1])
+        local_rhs[1] += rhs[:, 2] - cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[2, 2], block_A_k[2, 2], XAX_k1[2, 2], inv_I*rhs[:, 1])
         solution_now, info = scip.sparse.linalg.gmres(
             linear_op,
             local_rhs.reshape(-1, 1),
@@ -98,7 +98,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
             maxiter=25
         )
         solution_now = np.transpose(solution_now.reshape(2, x_shape[0], x_shape[2], x_shape[3]), (1, 0, 2, 3)).__iadd__(previous_solution[:, :2])
-        z = inv_I * (rhs[:, 1] - cached_einsum('lsr,smnS,LSR,lmL->rnR', XAX_k[(0, 1)], block_A_k[(0, 1)], XAX_k1[(0, 1)], solution_now[:, 0]))
+        z = inv_I * (rhs[:, 1] - cached_einsum('lsr,smnS,LSR,lmL->rnR', XAX_k[0, 1], block_A_k[0, 1], XAX_k1[0, 1], solution_now[:, 0]))
         solution_now = np.concatenate((solution_now, z.reshape(x_shape[0], 1, x_shape[2], x_shape[3])), axis=1)
 
     block_res_new = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, solution_now).__isub__(rhs)) / norm_rhs
@@ -111,18 +111,18 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
 
 def _get_ineq_mat_vec(XAX_k, block_A_k, XAX_kp1, x_shape, inv_I):
     x_element_shape = (x_shape[0], x_shape[2], x_shape[3])
-    XAX_k_00 = XAX_k[(0, 0)]
-    XAX_k_01 = XAX_k[(0, 1)]
-    XAX_k_21 = XAX_k[(2, 1)]
-    XAX_k_22 = XAX_k[(2, 2)]
-    XAX_k_31 = XAX_k[(3, 1)]
-    XAX_k_33 = XAX_k[(3, 3)]
-    XAX_kp1_00 = XAX_kp1[(0, 0)]
-    XAX_kp1_01 = XAX_kp1[(0, 1)]
-    XAX_kp1_21 = XAX_kp1[(2, 1)]
-    XAX_kp1_22 = XAX_kp1[(2, 2)]
-    XAX_kp1_31 = XAX_kp1[(3, 1)]
-    XAX_kp1_33 = XAX_kp1[(3, 3)]
+    XAX_k_00 = XAX_k[0, 0]
+    XAX_k_01 = XAX_k[0, 1]
+    XAX_k_21 = XAX_k[2, 1]
+    XAX_k_22 = XAX_k[2, 2]
+    XAX_k_31 = XAX_k[3, 1]
+    XAX_k_33 = XAX_k[3, 3]
+    XAX_kp1_00 = XAX_kp1[0, 0]
+    XAX_kp1_01 = XAX_kp1[0, 1]
+    XAX_kp1_21 = XAX_kp1[2, 1]
+    XAX_kp1_22 = XAX_kp1[2, 2]
+    XAX_kp1_31 = XAX_kp1[3, 1]
+    XAX_kp1_33 = XAX_kp1[3, 3]
     block_A_k_00 = block_A_k[0, 0]
     block_A_k_01 = block_A_k[0, 1]
     block_A_k_21 = block_A_k[2, 1]
@@ -172,13 +172,13 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
             mR_d = rhs[:, 1].reshape(m, 1)
             mR_t = rhs[:, 3].reshape(m, 1)
             L_L_Z_inv_mR_c = forward_backward_sub(L_L_Z, rhs[:, 2].reshape(m, 1))
-            L_X = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(2, 2)], block_A_k[(2, 2)], XAX_k1[(2, 2)]).reshape(m, m)
-            mL_eq = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(0, 1)], block_A_k[(0, 1)], XAX_k1[(0, 1)]).reshape(m, m)
-            T_op = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(3, 1)], block_A_k[(3, 1)], XAX_k1[(3, 1)]).reshape(m, m)
-            A = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(0, 0)], block_A_k[(0, 0)],XAX_k1[(0, 0)]).reshape(m, m).__iadd__(mL_eq @ forward_backward_sub(L_L_Z, L_X * inv_I.reshape(1, -1) @ mL_eq.T, overwrite_b=True))
+            L_X = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[2, 2], block_A_k[2, 2], XAX_k1[2, 2]).reshape(m, m)
+            mL_eq = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[0, 1], block_A_k[0, 1], XAX_k1[0, 1]).reshape(m, m)
+            T_op = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[3, 1], block_A_k[3, 1], XAX_k1[3, 1]).reshape(m, m)
+            A = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[0, 0], block_A_k[0, 0],XAX_k1[0, 0]).reshape(m, m).__iadd__(mL_eq @ forward_backward_sub(L_L_Z, L_X * inv_I.reshape(1, -1) @ mL_eq.T, overwrite_b=True))
             B = mL_eq @ forward_backward_sub(L_L_Z, L_X)
             C = T_op @ forward_backward_sub(L_L_Z, (L_X * inv_I.reshape(1, -1)) @ mL_eq.T, overwrite_b=True)
-            D = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(3, 3)], block_A_k[(3, 3)], XAX_k1[(3, 3)]).reshape(m, m).__iadd__(T_op @ forward_backward_sub(L_L_Z, L_X))
+            D = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[3, 3], block_A_k[3, 3], XAX_k1[3, 3]).reshape(m, m).__iadd__(T_op @ forward_backward_sub(L_L_Z, L_X))
 
             u = (
                     mR_p - mL_eq @ (L_L_Z_inv_mR_c - forward_backward_sub(L_L_Z, (L_X * inv_I.reshape(1, -1)) @ mR_d, overwrite_b=True))
@@ -212,8 +212,8 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
         linear_op = scip.sparse.linalg.LinearOperator((3 * m, 3 * m), matvec=mat_vec)
         local_rhs = -linear_op(np.transpose(previous_solution[:, [0, 1, 3]], (1, 0, 2, 3)).reshape(-1, 1)).reshape(3, x_shape[0], x_shape[2], x_shape[3])
         local_rhs[0] += rhs[:, 0]
-        local_rhs[1] += rhs[:, 2] - cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[(2, 2)], block_A_k[(2, 2)],
-                                                  XAX_k1[(2, 2)], inv_I * rhs[:, 1])
+        local_rhs[1] += rhs[:, 2] - cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[2, 2], block_A_k[2, 2],
+                                                  XAX_k1[2, 2], inv_I * rhs[:, 1])
         local_rhs[2] += rhs[:, 3]
         solution_now, info = scip.sparse.linalg.gmres(
             linear_op,
@@ -224,7 +224,7 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
         solution_now = np.transpose(solution_now.reshape(3, x_shape[0], x_shape[2], x_shape[3]),
                                     (1, 0, 2, 3)) + previous_solution[:, [0, 1, 3]]
         z = inv_I * (
-                    rhs[:, 1] - cached_einsum('lsr,smnS,LSR,lmL->rnR', XAX_k[(0, 1)], block_A_k[(0, 1)], XAX_k1[(0, 1)],
+                    rhs[:, 1] - cached_einsum('lsr,smnS,LSR,lmL->rnR', XAX_k[0, 1], block_A_k[0, 1], XAX_k1[0, 1],
                                               solution_now[:, 0])) - solution_now[:, 2]
         solution_now = np.concatenate(
             (solution_now[:, :2], z.reshape(x_shape[0], 1, x_shape[2], x_shape[3]), solution_now[:, None, -1]), axis=1)
@@ -264,6 +264,9 @@ def tt_infeasible_newton_system(
     status.is_dual_feasible = np.less(status.dual_error, (1 + status.with_ineq)*status.feasibility_tol)
 
     status.is_last_iter = status.is_last_iter or (status.is_primal_feasible and status.is_dual_feasible and status.is_central)
+
+    if status.is_last_iter:
+        status.aho_direction = True
 
     if status.aho_direction:
         if status.is_last_iter:
@@ -370,17 +373,18 @@ def _tt_ipm_newton_step(
             if status.verbose:
                 print("==================================\n Inaccurate results: Regularising!\n==================================")
             # regularise
-            Delta_X_tt = tt_scale(3*status.op_tol, tt_identity(dim))
-            Delta_Z_tt = tt_scale(3*status.op_tol, tt_identity(dim))
+            reg_tt = tt_scale(2*status.op_tol, tt_identity(dim))
+            Delta_X_tt = reg_tt
+            Delta_Z_tt = reg_tt
             Delta_Y_tt = [np.zeros((1, 4, 1)) for _ in range(dim)]
             Delta_T_tt = None
             if status.with_ineq:
-                Delta_T_tt = tt_scale(3*status.eps, ineq_mask)
+                Delta_T_tt = tt_scale(2*status.eps, ineq_mask)
             x_step_size = 1
             z_step_size = 1
-            status.primal_error += 3 * status.op_tol
-            status.dual_error += 3 * status.op_tol
-            status.centrality_error += 6 * status.op_tol
+            status.primal_error += 2 * status.op_tol
+            status.dual_error += 2 * status.op_tol
+            status.centrality_error += 4 * status.op_tol
         return x_step_size, z_step_size, Delta_X_tt, Delta_Y_tt, Delta_Z_tt, Delta_T_tt, status
 
     if not status.is_central and not status.is_last_iter:
@@ -488,17 +492,18 @@ def _tt_ipm_newton_step(
                 if status.verbose:
                     print("==================================\n Inaccurate results: Regularising!\n==================================")
                 # regularise
-                Delta_X_tt = tt_scale(3*status.op_tol, tt_identity(dim))
-                Delta_Z_tt = tt_scale(3*status.op_tol, tt_identity(dim))
+                reg_tt = tt_scale(2 * status.op_tol, tt_identity(dim))
+                Delta_X_tt = reg_tt
+                Delta_Z_tt = reg_tt
                 Delta_Y_tt = [np.zeros((1, 4, 1)) for _ in range(dim)]
                 Delta_T_tt = None
                 if status.with_ineq:
-                    Delta_T_tt = tt_scale(3*status.eps, ineq_mask)
+                    Delta_T_tt = tt_scale(2*status.eps, ineq_mask)
                 x_step_size = 1
                 z_step_size = 1
-                status.primal_error += 3*status.op_tol
-                status.dual_error += 3*status.op_tol
-                status.centrality_error += 6*status.op_tol
+                status.primal_error += 2*status.op_tol
+                status.dual_error += 2*status.op_tol
+                status.centrality_error += 4*status.op_tol
             return x_step_size, z_step_size, Delta_X_tt, Delta_Y_tt, Delta_Z_tt, Delta_T_tt, status
     else:
         status.sigma = 0
@@ -612,7 +617,7 @@ def _update(x_step_size, z_step_size, X_tt, Z_tt, Delta_X_tt, Delta_Z_tt, status
     #print()
     return X_tt, Z_tt
 
-def _initialise(ineq_mask, status, dim):
+def _initialise(status, dim):
     scale = 2**(dim/2)
     X_tt = tt_scale(scale, tt_identity(dim))
     Z_tt = tt_scale(scale, tt_identity(dim))
@@ -749,7 +754,7 @@ def tt_ipm(
     lhs_skeleton[0, 0] = lag_maps["y"]
     status.lag_map_y = lag_maps["y"]
 
-    X_tt, Y_tt, Z_tt, T_tt = _initialise(ineq_mask, status, dim)
+    X_tt, Y_tt, Z_tt, T_tt = _initialise(status, dim)
 
     iteration = 0
     finishing_steps = max_refinement

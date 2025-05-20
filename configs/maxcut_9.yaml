@@ -1,11 +1,11 @@
 # Common
 dim: !!int 9
 max_rank: !!int 4
-seeds: [0, 1] #[3:0.79, 4:0.83, 5:0.93]
+seeds: [0, 1, 3, 4, 5] #[0:0.45, 1: 0.82, 3:0.79, 4:0.83, 5:0.93]
 gap_tol: !!float 2e-4
-verbose: True
+verbose: False
 # TT-IPM
-op_tol: !!float 1e-4
+op_tol: !!float 8e-5
 max_iter: !!int 25
 # Sketchy CGAL
 sketch_cgal_rank: !!int 64
