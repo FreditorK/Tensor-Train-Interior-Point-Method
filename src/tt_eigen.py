@@ -362,7 +362,7 @@ def _eigen_local_solve(previous_solution, XAX_k, A_k, XAX_k1, m, size_limit, eps
 
 def tt_elementwise_max(vec_tt, val, nswp=4, eps=1e-10, verbose=False):
     if verbose:
-        print(f"Starting Eigen solve with:\n \t {eps} \n \t sweeps: {nswp}")
+        print(f"\nStarting Eigen solve with:\n \t {eps} \n \t sweeps: {nswp}")
         t0 = time.time()
     vec_tt_norm = np.sqrt(tt_inner_prod(vec_tt, vec_tt))
     A = tt_scale(np.divide(1, vec_tt_norm), tt_diag(vec_tt))

@@ -265,8 +265,7 @@ def tt_infeasible_newton_system(
 
     status.is_last_iter = status.is_last_iter or (status.is_primal_feasible and status.is_dual_feasible and status.is_central)
 
-    if status.is_last_iter:
-        status.aho_direction = True
+    status.aho_direction = 2*status.centrality_error < max(status.primal_error, status.is_dual_feasible)
 
     if status.aho_direction:
         if status.is_last_iter:
@@ -336,7 +335,7 @@ def _tt_ipm_newton_step(
     # Predictor
     if status.verbose:
         print("--- Predictor  step ---", flush=True)
-    Delta_tt, res = solver(lhs_matrix_tt, rhs_vec_tt, status.mals_delta0, 8 + status.is_last_iter * 2 + status.with_ineq, 0 if status.is_last_iter else None)
+    Delta_tt, res = solver(lhs_matrix_tt, rhs_vec_tt, status.mals_delta0, status.kkt_iterations, 0 if status.is_last_iter else None)
     status.mals_delta0 = Delta_tt
     if res < status.local_res_bound:
         Delta_X_tt = _tt_symmetrise(tt_reshape(_tt_get_block(1, Delta_tt), (2, 2)), status.eps)
@@ -360,6 +359,7 @@ def _tt_ipm_newton_step(
         )
     else:
         dim = len(X_tt)
+        status.kkt_iterations = min(status.kkt_iterations + 1, 20)
         if status.is_last_iter:
             Delta_X_tt = tt_zero_matrix(dim, (2, 2))
             Delta_Z_tt = tt_zero_matrix(dim, (2, 2))
@@ -452,7 +452,7 @@ def _tt_ipm_newton_step(
                 ),
                 status.op_tol
             ) if status.sigma > 0 else rhs_vec_tt.get_row(2)
-        Delta_tt_cc, res = solver(lhs_matrix_tt, rhs_vec_tt, status.mals_delta0, 8 + status.with_ineq, 0 if status.is_last_iter else None)
+        Delta_tt_cc, res = solver(lhs_matrix_tt, rhs_vec_tt, status.mals_delta0, status.kkt_iterations, 0 if status.is_last_iter else None)
         status.mals_delta0 = Delta_tt_cc
         if res < status.local_res_bound:
             Delta_X_tt_cc = _tt_symmetrise(tt_reshape(_tt_get_block(1, Delta_tt_cc), (2, 2)), status.eps)
@@ -479,6 +479,7 @@ def _tt_ipm_newton_step(
             Delta_Y_tt = tt_rank_reduce(tt_add(Delta_Y_tt_cc, Delta_Y_tt), eps=status.eps)
         else:
             dim = len(X_tt)
+            status.kkt_iterations = min(status.kkt_iterations + 1, 20)
             if status.is_last_iter:
                 Delta_X_tt = tt_zero_matrix(dim, (2, 2))
                 Delta_Z_tt = tt_zero_matrix(dim, (2, 2))
@@ -522,8 +523,8 @@ def _tt_line_search(
         status
 ):
     if status.is_last_iter:
-        X_tt = tt_add(X_tt, tt_scale(status.boundary_val+status.op_tol, tt_identity(len(X_tt))))
-        Z_tt = tt_add(Z_tt, tt_scale(status.boundary_val+status.op_tol, tt_identity(len(Z_tt))))
+        X_tt = tt_add(X_tt, tt_scale(status.boundary_val, tt_identity(len(X_tt))))
+        Z_tt = tt_add(Z_tt, tt_scale(status.boundary_val, tt_identity(len(Z_tt))))
 
     x_step_size, status.eigen_x0 = tt_max_generalised_eigen(X_tt, Delta_X_tt, x0=status.eigen_x0, tol=0.5*status.feasibility_tol, verbose=status.verbose)
 
@@ -544,8 +545,8 @@ def _tt_line_search(
     permitted_err_t = 1
     if status.with_ineq:
         if status.is_last_iter:
-            X_tt = tt_add(X_tt, tt_scale(status.boundary_val + status.op_tol, ineq_mask))
-            T_tt = tt_add(T_tt, tt_scale(status.boundary_val + status.op_tol, ineq_mask))
+            X_tt = tt_add(X_tt, tt_scale(status.boundary_val, ineq_mask))
+            T_tt = tt_add(T_tt, tt_scale(status.boundary_val, ineq_mask))
         x_step_size, z_step_size = _tt_line_search_ineq(x_step_size, z_step_size, X_tt, T_tt, Delta_X_tt, Delta_T_tt, ineq_mask, status)
     tau_x = 0.9 + 0.05*min(x_step_size,  z_step_size) if x_step_size < 1 else 1.0
     tau_z = 0.9 + 0.05*min(x_step_size,  z_step_size) if z_step_size < 1 else 1.0
@@ -666,6 +667,7 @@ class IPMStatus:
     mals_delta0 = None
     eigen_x0 = None
     eigen_z0 = None
+    kkt_iterations = 6
 
 
 def tt_ipm(
@@ -675,7 +677,7 @@ def tt_ipm(
     bias_tt,
     ineq_mask=None,
     max_iter=100,
-    max_refinement=3,
+    max_refinement=5,
     gap_tol=1e-4,
     aho_direction=True,
     op_tol=1e-5,
@@ -841,6 +843,7 @@ def tt_ipm(
                 abs(prev_primal_error - status.primal_error) < 0.1*gap_tol
                 and abs(prev_dual_error - status.dual_error) < 0.1*gap_tol
                 and abs(prev_centrality_error - status.centrality_error) < 0.1*gap_tol
+                and not status.is_last_iter
         ):
             if status.verbose:
                 print(

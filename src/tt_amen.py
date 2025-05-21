@@ -631,7 +631,7 @@ def tt_block_mals(block_A, block_b, tol, eps=1e-10, nswp=22, x0=None, size_limit
     real_tol = (tol / np.sqrt(d))
     r_max_final = block_size*int(np.ceil(np.sqrt(d)*d)) + block_size*int(np.ceil(np.sqrt(block_size)))
     size_limit = (r_max_final)**2*N[0]/(np.sqrt(d)*d) if size_limit is None else size_limit
-    r_max_part0 = max(int(np.ceil(r_max_final / nswp)), 2)
+    r_max_part0 = min(15, r_max_final - 1)
     r_max_part = np.linspace(r_max_part0, r_max_final, num=nswp, dtype=int)
     x_cores = tt_rank_retraction(x_cores, [r_max_part0]*(d-1)) if x0 is not None else x_cores
     rx = np.array([1] + tt_ranks(x_cores) + [1])
