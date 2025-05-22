@@ -95,11 +95,11 @@ def tt_max_generalised_eigen(A, Delta, x0=None, kick_rank=None, nswp=10, tol=1e-
     if x0 is None:
         x_cores = tt_random_gaussian([2]*(len(A)-1), (A[0].shape[2],))
         if kick_rank is None:
-            kick_rank = np.maximum(np.ceil(symmetric_powers_of_two(len(A)-1) - np.array(tt_ranks(x_cores)) / nswp), 2).astype(int)
+            kick_rank = np.maximum(np.ceil(symmetric_powers_of_two(len(A)-1) / nswp), 2).astype(int)
     else:
         x_cores = x0
         if kick_rank is None:
-            kick_rank = np.maximum(np.ceil(symmetric_powers_of_two(len(A)-1) / nswp), 2).astype(int)
+            kick_rank = np.maximum(np.ceil((symmetric_powers_of_two(len(A)-1) - np.array(tt_ranks(x_cores))) / nswp), 2).astype(int)
 
     d = len(x_cores)
     rx = np.array([1] + tt_ranks(x_cores) + [1])
@@ -156,7 +156,7 @@ def tt_max_generalised_eigen(A, Delta, x0=None, kick_rank=None, nswp=10, tol=1e-
         x_cores = tt_normalise(x_cores)
         if last:
             break
-        if np.max(local_res[0]) < tol or swp == nswp - 1 or abs(prev_step_size - step_size) < tol:
+        if np.max(local_res[0]) < tol or swp == nswp - 1:
             last = True
         if verbose:
             print('\tStarting Sweep: %d' % swp)
@@ -164,7 +164,6 @@ def tt_max_generalised_eigen(A, Delta, x0=None, kick_rank=None, nswp=10, tol=1e-
             print(f"\tDirection: {-1}")
             print(f'\tResidual {max_res}')
             print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
-        prev_step_size = step_size
         max_res = 0
         for k in range(d):
             previous_solution = x_cores[k]

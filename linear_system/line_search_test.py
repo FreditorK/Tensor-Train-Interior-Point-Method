@@ -35,6 +35,6 @@ for seed in range(10,  20):
 
     #print(tt_min_eig(tt_add(X_tt, s_matrix_tt))[0], np.linalg.eigvals(A + B))
     alpha, a = tt_max_generalised_eigen(X_tt, s_matrix_tt, verbose=True)
-    print(alpha, a)
+    print(alpha)
     if 0 <= step_size <= 1:
         assert abs(step_size - alpha) < 1e-5, f"UNequal {seed}!!!"

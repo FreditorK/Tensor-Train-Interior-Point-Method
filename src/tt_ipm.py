@@ -265,7 +265,7 @@ def tt_infeasible_newton_system(
 
     status.is_last_iter = status.is_last_iter or (status.is_primal_feasible and status.is_dual_feasible and status.is_central)
 
-    status.aho_direction = 2*status.centrality_error < max(status.primal_error, status.is_dual_feasible)
+    status.aho_direction = (2*status.centrality_error < max(status.primal_error, status.dual_error))
 
     if status.aho_direction:
         if status.is_last_iter:
@@ -593,11 +593,6 @@ def _tt_line_search_ineq(x_step_size, z_step_size, X_tt, T_tt, Delta_X_tt, Delta
 
 
 def _update(x_step_size, z_step_size, X_tt, Z_tt, Delta_X_tt, Delta_Z_tt, status):
-    #print()
-    #print("Before: ", np.min(np.linalg.eigvalsh(tt_matrix_to_matrix(X_tt))),
-    #     np.min(np.linalg.eigvalsh(tt_matrix_to_matrix(Z_tt))))
-    #print()
-    #print("Mid: ", np.min(np.linalg.eigvalsh(tt_matrix_to_matrix(tt_add(X_tt, tt_scale(x_step_size, Delta_X_tt))))), np.min(np.linalg.eigvalsh(tt_matrix_to_matrix(tt_add(Z_tt, tt_scale(z_step_size, Delta_Z_tt))))))
     if x_step_size <1e-4 and z_step_size < 1e-4:
         status.is_last_iter = True
     else:
@@ -606,16 +601,16 @@ def _update(x_step_size, z_step_size, X_tt, Z_tt, Delta_X_tt, Delta_Z_tt, status
                 X_tt = _tt_symmetrise(tt_add(X_tt, tt_scale(x_step_size, Delta_X_tt)), status.op_tol)
             else:
                 X_tt = _tt_psd_symmetrise(tt_add(X_tt, tt_scale(x_step_size, Delta_X_tt)), status.op_tol)
+        elif z_step_size > 1e-4:
+            X_tt = tt_add(X_tt, tt_scale(status.op_tol, tt_identity(len(X_tt))))
         if z_step_size > 1e-4:
             if status.is_last_iter:
                 Z_tt = _tt_symmetrise(tt_add(Z_tt, tt_scale(z_step_size, Delta_Z_tt)), status.op_tol)
             else:
                 Z_tt = _tt_psd_symmetrise(tt_add(Z_tt, tt_scale(z_step_size, Delta_Z_tt)), status.op_tol)
+        elif x_step_size > 1e-4:
+            Z_tt = tt_add(Z_tt, tt_scale(status.op_tol, tt_identity(len(Z_tt))))
 
-    #print()
-    #print("After: ", np.min(np.linalg.eigvalsh(tt_matrix_to_matrix(X_tt))),
-    #     np.min(np.linalg.eigvalsh(tt_matrix_to_matrix(Z_tt))))
-    #print()
     return X_tt, Z_tt
 
 def _initialise(status, dim):
@@ -719,7 +714,8 @@ def tt_ipm(
             tol=0.5 * min(feasibility_tol, centrality_tol),
             nswp=nwsp,
             size_limit=size_limit,
-            verbose=verbose
+            verbose=verbose,
+            amen=False
         )
         status.num_ineq_constraints = tt_inner_prod(ineq_mask, ineq_mask)
         status.compl_ineq_mask = tt_rank_reduce(tt_sub(tt_one_matrix(dim), ineq_mask), eps=eps)
@@ -734,7 +730,8 @@ def tt_ipm(
             tol=0.5 * min(feasibility_tol, centrality_tol),
             nswp=nwsp,
             size_limit=size_limit,
-            verbose=verbose
+            verbose=verbose,
+            amen=False
         )
         status.num_ineq_constraints = 0
 
@@ -752,7 +749,7 @@ def tt_ipm(
     # KKT-system prep
     lin_op_tt_adj = tt_transpose(lin_op_tt)
     lhs_skeleton[0, 1] = tt_scale(-1, lin_op_tt)
-    lhs_skeleton.add_alias((0, 1), (1, 0), is_transpose=True)
+    lhs_skeleton.add_alias((0, 1), (1, 0), is_transpose=True) #lhs_skeleton[1, 0] = tt_scale(-1, lin_op_tt_adj) #lhs_skeleton.add_alias((0, 1), (1, 0), is_transpose=True)
     lhs_skeleton[0, 0] = lag_maps["y"]
     status.lag_map_y = lag_maps["y"]
 

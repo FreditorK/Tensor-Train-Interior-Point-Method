@@ -1,3 +1,3 @@
-==== maxcut TT-IPM Batch Run Started at Tue May 20 10:46:36 PM BST 2025 ====
+==== maxcut TT-IPM Batch Run Started at Thu May 22 12:08:05 PM BST 2025 ====
 
-▶ Running dim=6 with config=configs/maxcut_6.yaml at Tue May 20 10:46:36 PM BST 2025
+▶ Running dim=6 with config=configs/maxcut_6.yaml at Thu May 22 12:08:05 PM BST 2025
