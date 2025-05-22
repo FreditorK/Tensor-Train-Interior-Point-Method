@@ -411,6 +411,7 @@ def tt_block_als(block_A, block_b, tol, eps=1e-12, nswp=22, x0=None, size_limit=
     rx = np.array([1] + tt_ranks(x_cores) + [1])
     local_res_fwd = np.inf
     local_res_bwd = np.inf
+    last = False
 
     for swp in range(nswp):
         r_max = r_max_part[swp]
@@ -465,8 +466,21 @@ def tt_block_als(block_A, block_b, tol, eps=1e-12, nswp=22, x0=None, size_limit=
             print(f'\tResidual {max(local_res_fwd, local_res_bwd)}')
             print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
 
-        if min(local_res_fwd, local_res_bwd) < tol or local_dx < eps:
+
+        if last:
             break
+
+        if swp == nswp - 1 or min(local_res_fwd, local_res_bwd) < tol or local_dx < eps:
+            if local_res_fwd < local_res_bwd:
+                if direction < 0:
+                    break
+                else:
+                    last = True
+            else:
+                if direction > 0:
+                    break
+                else:
+                    last = True
 
         direction *= -1
 

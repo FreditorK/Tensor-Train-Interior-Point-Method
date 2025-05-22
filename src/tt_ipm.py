@@ -315,9 +315,8 @@ def _tt_mask_symmetrise(matrix_tt, mask_tt, err_bound):
     return tt_mask_rank_reduce(tt_scale(0.5, tt_add(matrix_tt, tt_transpose(matrix_tt))), mask_tt, eps=err_bound)
 
 def _tt_get_block(i, block_matrix_tt):
-    if len(block_matrix_tt[0].shape) < len(block_matrix_tt[-1].shape):
-        return block_matrix_tt[:-1] + [block_matrix_tt[-1][:, i]]
-    return [block_matrix_tt[0][:, i]] + block_matrix_tt[1:]
+    b = np.argmax([len(c.shape) for c in block_matrix_tt])
+    return block_matrix_tt[:b] + [block_matrix_tt[b][:, i]] + block_matrix_tt[b+1:]
 
 def _tt_ipm_newton_step(
         lhs_matrix_tt,
@@ -701,7 +700,7 @@ def tt_ipm(
         verbose,
         1,
         1,
-        local_res_bound=max(1e-3*2**dim, 0.5)
+        local_res_bound=0.5
     )
     lhs_skeleton = TTBlockMatrix()
     lhs_skeleton[1, 2] = tt_reshape(tt_identity(2 * dim), (4, 4))
