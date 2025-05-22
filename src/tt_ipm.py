@@ -4,7 +4,7 @@ import os
 sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
-from src.tt_amen import tt_block_amen, cached_einsum, TTBlockMatrix, TTBlockVector
+from src.tt_amen import tt_block_als, cached_einsum, TTBlockMatrix, TTBlockVector
 from src.tt_eigen import tt_max_generalised_eigen, tt_min_eig, tt_mat_mat_mul
 from dataclasses import dataclass
 
@@ -706,7 +706,7 @@ def tt_ipm(
     lhs_skeleton = TTBlockMatrix()
     lhs_skeleton[1, 2] = tt_reshape(tt_identity(2 * dim), (4, 4))
     if status.with_ineq:
-        solver = lambda lhs, rhs, x0, nwsp, size_limit: tt_block_amen(
+        solver = lambda lhs, rhs, x0, nwsp, size_limit: tt_block_als(
             lhs,
             rhs,
             x0=x0,
@@ -722,7 +722,7 @@ def tt_ipm(
         status.lag_map_t = lag_maps["t"]
         lhs_skeleton.add_alias((1, 2), (1, 3)) #[(1, 3)] = tt_reshape(tt_identity(2 * dim), (4, 4))
     else:
-        solver = lambda lhs, rhs, x0, nwsp, size_limit: tt_block_amen(
+        solver = lambda lhs, rhs, x0, nwsp, size_limit: tt_block_als(
             lhs,
             rhs,
             x0=x0,
