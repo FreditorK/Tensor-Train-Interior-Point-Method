@@ -1,11 +1,13 @@
 import sys
 import os
+from pickletools import read_string1
 
 sys.path.append(os.getcwd() + '/../')
 from src.tt_ops import *
 from src.ops import *
 from src.tt_ops import tt_rank_reduce
 from src.tt_amen import tt_block_als, TTBlockMatrix, TTBlockVector
+from src.tt_ipm import _tt_get_block
 
 np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=4, suppress=True)
 np.random.seed(9)
@@ -40,8 +42,18 @@ block_b_tt = TTBlockVector()
 block_b_tt[0] = b_1_tt
 block_b_tt[1] = b_2_tt
 block_b_tt[2] = b_3_tt
-sol, _ = tt_block_als(block_matrix_tt, block_b_tt, tol=1e-7, nswp=15, verbose=True)
-block_sol_1 = sol[:-1] + [sol[-1][:, 0]]
-block_sol_2 = sol[:-1] + [sol[-1][:, 1]]
+sol, _ = tt_block_als(block_matrix_tt, block_b_tt, tol=1e-5, nswp=8, verbose=True)
+block_sol_1 = _tt_get_block(0, sol)
+block_sol_2 =  _tt_get_block(1, sol)
+block_sol_3 =  _tt_get_block(2, sol)
+
+res_1 = tt_sub(tt_fast_matrix_vec_mul(block_00_tt, block_sol_1), b_1_tt)
+res_2 = tt_sub(tt_add(tt_fast_matrix_vec_mul(block_11_tt, block_sol_2), tt_fast_matrix_vec_mul(tt_transpose(block_21_tt), block_sol_3)), b_2_tt)
+res_3 = tt_sub(tt_add(tt_fast_matrix_vec_mul(block_22_tt, block_sol_3), tt_fast_matrix_vec_mul(block_21_tt, block_sol_2)), b_3_tt)
+
+print(tt_inner_prod(res_1, res_1))
+print(tt_inner_prod(res_2, res_2))
+print(tt_inner_prod(res_3, res_3))
+
 
 

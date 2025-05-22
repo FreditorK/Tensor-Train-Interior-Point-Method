@@ -209,7 +209,7 @@ def _bck_sweep(
                                                                                      size_limit, eps)
 
             local_res = max(local_res, block_res_old)
-            dx = np.linalg.norm(solution_now - previous_solution) / np.linalg.norm(solution_now)
+            dx = np.linalg.norm(solution_now - previous_solution) / max(np.linalg.norm(solution_now), eps)
             local_dx = max(dx, local_dx)
 
             solution_now = np.reshape(solution_now, (rx[k] * block_size, N[k] * rx[k + 1])).T
@@ -228,14 +228,14 @@ def _bck_sweep(
             v = s.reshape(-1, 1) * v
 
             if swp > 0:
-                r_start = min(prune_singular_vals(s, max(0,  real_tol - block_res_new)), r_max)
+                r_start = min(prune_singular_vals(s, max(real_tol, 2*block_res_new)), r_max)
                 res = block_A_k.block_local_product(XAX[k], XAX[k + 1], np.reshape(solution_now, (rx[k], block_size, N[k], rx[k + 1]))) - rhs
                 r = r_start
                 for r in range(r_start - 1, 0, -1):
                     res -= block_A_k.block_local_product(XAX[k], XAX[k + 1],
                                                 np.reshape((u[:, None, r] @ v[None, r, :]).T,
                                                            (rx[k], block_size, N[k], rx[k + 1])))
-                    if np.linalg.norm(res) / norm_rhs > max(real_tol, block_res_new):
+                    if np.linalg.norm(res) / norm_rhs > max(real_tol, 2*block_res_new):
                         break
                 r += 1
                 u = np.reshape(u[:, :r].T, (r, N[k], rx[k + 1]))
@@ -248,7 +248,7 @@ def _bck_sweep(
 
             x_cores[k] = u
             x_cores[k - 1] = einsum('rdc,cbR->rbdR', x_cores[k - 1], v, optimize=[(0, 1)])
-            norm_now = np.linalg.norm(x_cores[k - 1])
+            norm_now = max(np.linalg.norm(x_cores[k - 1]), eps)
             normx[k - 1] *= norm_now
             x_cores[k - 1] /= norm_now
             rx[k] = r
@@ -307,7 +307,7 @@ def _fwd_sweep(
             )
 
             local_res = max(local_res, block_res_old)
-            dx = np.linalg.norm(solution_now - previous_solution) / np.linalg.norm(solution_now)
+            dx = np.linalg.norm(solution_now - previous_solution) / max(np.linalg.norm(solution_now), eps)
             local_dx = max(dx, local_dx)
 
             solution_now = np.transpose(solution_now, (0, 2, 1, 3))
@@ -329,12 +329,12 @@ def _fwd_sweep(
             v = v.reshape(-1, block_size, rx[k + 1])
 
             if swp > 0:
-                r_start = min(prune_singular_vals(s, max(0,  real_tol - block_res_new)), r_max)
+                r_start = min(prune_singular_vals(s, max(real_tol,  2*block_res_new)), r_max)
                 res = block_A_k.block_local_product(XAX[k], XAX[k + 1], np.transpose(np.reshape(solution_now, (rx[k], N[k], block_size, rx[k + 1])), (0, 2, 1, 3))) - rhs
                 r = r_start
                 for r in range(r_start - 1, 0, -1):
                     res -= block_A_k.block_local_product(XAX[k], XAX[k + 1], einsum("rbR, Rdk -> rdbk", u[:, :, None, r], v[None, r], optimize=[(0, 1)]))
-                    if np.linalg.norm(res) / norm_rhs > max(real_tol, block_res_new):
+                    if np.linalg.norm(res) / norm_rhs > max(real_tol, 2*block_res_new):
                         break
                 r += 1
                 u = u[:, :, :r]
@@ -346,7 +346,7 @@ def _fwd_sweep(
                 v = v[:r]
 
             v = einsum("rbR, Rdk -> rbdk", v, x_cores[k + 1], optimize=[(0, 1)])
-            norm_now = np.linalg.norm(v)
+            norm_now = max(np.linalg.norm(v), eps)
             normx[k] *= norm_now
             x_cores[k] = u
             x_cores[k + 1] = (v / norm_now).reshape(r, block_size, N[k + 1], rx[k + 2])
@@ -405,16 +405,17 @@ def tt_block_als(block_A, block_b, tol, eps=1e-12, nswp=22, x0=None, size_limit=
     real_tol = (tol / np.sqrt(d))
     r_max_final = block_size*int(np.ceil(np.sqrt(d)*d)) + block_size*int(np.ceil(np.sqrt(block_size)))
     size_limit = (r_max_final)**2*N[0]/(np.sqrt(d)*d) if size_limit is None else size_limit
-    r_max_part0 = min(15, r_max_final - 1)
+    r_max_part0 = max(int(np.ceil(r_max_final / np.sqrt(np.sqrt(d)*d))) - 2, 2)
     r_max_part = np.linspace(r_max_part0, r_max_final, num=nswp, dtype=int)
     x_cores = tt_rank_retraction(x_cores, [r_max_part0]*(d-1)) if x0 is not None else x_cores
     rx = np.array([1] + tt_ranks(x_cores) + [1])
-    last = False
+    local_res_fwd = np.inf
+    local_res_bwd = np.inf
 
     for swp in range(nswp):
         r_max = r_max_part[swp]
         if direction > 0:
-            x_cores, normx, XAX, normA, Xb, normb, nrmsc, rx, local_res, local_dx = _bck_sweep(
+            x_cores, normx, XAX, normA, Xb, normb, nrmsc, rx, local_res_bwd, local_dx = _bck_sweep(
                 local_solver,
                 x_cores,
                 normx,
@@ -436,7 +437,7 @@ def tt_block_als(block_A, block_b, tol, eps=1e-12, nswp=22, x0=None, size_limit=
                 r_max
             )
         else:
-            x_cores, normx, XAX, normA, Xb, normb, nrmsc, rx, local_res, local_dx = _fwd_sweep(
+            x_cores, normx, XAX, normA, Xb, normb, nrmsc, rx, local_res_fwd, local_dx = _fwd_sweep(
                 local_solver,
                 x_cores,
                 normx,
@@ -459,15 +460,13 @@ def tt_block_als(block_A, block_b, tol, eps=1e-12, nswp=22, x0=None, size_limit=
             )
 
         if verbose:
-            print('\tStarting Sweep:\n\tMax num of sweeps: %d' % swp)
+            print('\tStarting Sweep: %d' % swp)
             print(f'\tDirection {direction}')
-            print(f'\tResidual {local_res}')
+            print(f'\tResidual {max(local_res_fwd, local_res_bwd)}')
             print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
 
-        if last:
+        if min(local_res_fwd, local_res_bwd) < tol or local_dx < eps:
             break
-        if local_res < tol or local_dx < eps:
-            last = True
 
         direction *= -1
 
@@ -475,14 +474,14 @@ def tt_block_als(block_A, block_b, tol, eps=1e-12, nswp=22, x0=None, size_limit=
     if verbose:
         print("\n\t---Results---")
         print('\tSolution rank is', rx[1:-1])
-        print('\tResidual ', local_res)
+        print('\tResidual ', min(local_res_fwd, local_res_bwd))
         print('\tNumber of sweeps', swp+1)
         print('\tTime: ', time.time() - t0)
         print('\tTime per sweep: ', (time.time() - t0) / (swp+1), flush=True)
 
     normx = np.exp(np.sum(np.log(normx)) / d)
 
-    return [normx * core for core in x_cores], np.max(local_res)
+    return [normx * core for core in x_cores], min(local_res_fwd, local_res_bwd)
 
 def _default_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous_solution, nrmsc, _, rtol):
     x_shape = previous_solution.shape

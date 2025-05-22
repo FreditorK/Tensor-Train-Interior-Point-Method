@@ -60,7 +60,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
     rhs[:, 1] = cached_einsum('br,bmB,BR->rmR', Xb_k[1], nrmsc * block_b_k[1], Xb_k1[1]) if 1 in block_b_k else 0
     rhs[:, 2] = cached_einsum('br,bmB,BR->rmR', Xb_k[2], nrmsc * block_b_k[2], Xb_k1[2]) if 2 in block_b_k else 0
     inv_I = np.divide(1, cached_einsum('lsr,smnS,LSR->lmL', XAX_k[1, 2], block_A_k[1, 2], XAX_k1[1, 2]))
-    norm_rhs = np.linalg.norm(rhs)
+    norm_rhs = max(np.linalg.norm(rhs), 1e-12)
     block_res_old = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution) - rhs) / norm_rhs
     if block_res_old < rtol:
         return previous_solution, block_res_old, block_res_old, rhs, norm_rhs
@@ -158,7 +158,7 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
     rhs[:, 2] = cached_einsum('br,bmB,BR->rmR', Xb_k[2], nrmsc * block_b_k[2], Xb_k1[2]) if 2 in block_b_k else 0
     rhs[:, 3] = cached_einsum('br,bmB,BR->rmR', Xb_k[3], nrmsc * block_b_k[3], Xb_k1[3]) if 3 in block_b_k else 0
     inv_I = np.divide(1, cached_einsum('lsr,smnS,LSR->lmL', XAX_k[(1, 2)], block_A_k[(1, 2)], XAX_k1[(1, 2)]))
-    norm_rhs = np.linalg.norm(rhs)
+    norm_rhs = max(np.linalg.norm(rhs), 1e-12)
     block_res_old_scalar = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution) - rhs) / norm_rhs
     if block_res_old_scalar < rtol:
         return previous_solution, block_res_old_scalar, block_res_old_scalar, rhs, norm_rhs
@@ -601,14 +601,14 @@ def _update(x_step_size, z_step_size, X_tt, Z_tt, Delta_X_tt, Delta_Z_tt, status
                 X_tt = _tt_symmetrise(tt_add(X_tt, tt_scale(x_step_size, Delta_X_tt)), status.op_tol)
             else:
                 X_tt = _tt_psd_symmetrise(tt_add(X_tt, tt_scale(x_step_size, Delta_X_tt)), status.op_tol)
-        elif z_step_size > 1e-4:
+        elif z_step_size > 1e-4 and not status.is_last_iter:
             X_tt = tt_add(X_tt, tt_scale(status.op_tol, tt_identity(len(X_tt))))
         if z_step_size > 1e-4:
             if status.is_last_iter:
                 Z_tt = _tt_symmetrise(tt_add(Z_tt, tt_scale(z_step_size, Delta_Z_tt)), status.op_tol)
             else:
                 Z_tt = _tt_psd_symmetrise(tt_add(Z_tt, tt_scale(z_step_size, Delta_Z_tt)), status.op_tol)
-        elif x_step_size > 1e-4:
+        elif x_step_size > 1e-4 and not status.is_last_iter:
             Z_tt = tt_add(Z_tt, tt_scale(status.op_tol, tt_identity(len(Z_tt))))
 
     return X_tt, Z_tt
@@ -714,8 +714,7 @@ def tt_ipm(
             tol=0.5 * min(feasibility_tol, centrality_tol),
             nswp=nwsp,
             size_limit=size_limit,
-            verbose=verbose,
-            amen=False
+            verbose=verbose
         )
         status.num_ineq_constraints = tt_inner_prod(ineq_mask, ineq_mask)
         status.compl_ineq_mask = tt_rank_reduce(tt_sub(tt_one_matrix(dim), ineq_mask), eps=eps)
@@ -730,8 +729,7 @@ def tt_ipm(
             tol=0.5 * min(feasibility_tol, centrality_tol),
             nswp=nwsp,
             size_limit=size_limit,
-            verbose=verbose,
-            amen=False
+            verbose=verbose
         )
         status.num_ineq_constraints = 0
 
@@ -766,7 +764,7 @@ def tt_ipm(
         status.is_last_iter = status.is_last_iter or (max_iter <= iteration)
         ZX = tt_inner_prod(Z_tt, X_tt)
         TX = tt_inner_prod(X_tt, T_tt) + status.boundary_val*tt_entrywise_sum(T_tt) if status.with_ineq else 0
-        status.mu = np.divide(ZX + TX, (2 ** dim + status.num_ineq_constraints))
+        status.mu = np.divide(abs(ZX) + abs(TX), (2 ** dim + status.num_ineq_constraints))
         status.centrality_error = status.mu / (1 + abs(tt_inner_prod(obj_tt, tt_reshape(X_tt, (4, )))))
         status.is_central = np.less(status.centrality_error, (1 + status.with_ineq)*centrality_tol)
 
@@ -827,10 +825,11 @@ def tt_ipm(
                 T_tt = _tt_mask_symmetrise(tt_add(T_tt, tt_scale(z_step_size, Delta_T_tt)), ineq_mask, op_tol)
 
         if status.is_last_iter:
-            if abs(ZX) + abs(TX) <= (1 + status.with_ineq)*abs_tol and status.primal_error < abs_tol and status.dual_error < abs_tol:
+            if abs(ZX) + abs(TX) <= abs_tol and status.primal_error < abs_tol and status.dual_error < abs_tol:
                 finishing_steps -= max_refinement
             else:
                 finishing_steps -= 1
+            status.kkt_iterations += (finishing_steps == 1)
 
         if (
                 abs(prev_primal_error - status.primal_error) < 0.1*gap_tol
