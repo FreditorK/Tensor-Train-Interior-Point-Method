@@ -4,7 +4,7 @@ import os
 sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
-from src.tt_amen import tt_block_mals, cached_einsum, TTBlockMatrix, TTBlockVector
+from src.tt_amen import tt_block_amen, cached_einsum, TTBlockMatrix, TTBlockVector
 from src.tt_eigen import tt_max_generalised_eigen, tt_min_eig, tt_mat_mat_mul
 from dataclasses import dataclass
 
@@ -613,7 +613,7 @@ def _update(x_step_size, z_step_size, X_tt, Z_tt, Delta_X_tt, Delta_Z_tt, status
 
     return X_tt, Z_tt
 
-def _initialise(status, dim):
+def _initialise(ineq_mask, status, dim):
     scale = 2**(dim/2)
     X_tt = tt_scale(scale, tt_identity(dim))
     Z_tt = tt_scale(scale, tt_identity(dim))
@@ -621,7 +621,7 @@ def _initialise(status, dim):
     T_tt = None
 
     if status.with_ineq:
-        T_tt = tt_zero_matrix(dim)
+        T_tt = tt_scale(scale, ineq_mask)
 
 
     #print(tt_matrix_to_matrix(X_tt))
@@ -706,7 +706,7 @@ def tt_ipm(
     lhs_skeleton = TTBlockMatrix()
     lhs_skeleton[1, 2] = tt_reshape(tt_identity(2 * dim), (4, 4))
     if status.with_ineq:
-        solver = lambda lhs, rhs, x0, nwsp, size_limit: tt_block_mals(
+        solver = lambda lhs, rhs, x0, nwsp, size_limit: tt_block_amen(
             lhs,
             rhs,
             x0=x0,
@@ -722,7 +722,7 @@ def tt_ipm(
         status.lag_map_t = lag_maps["t"]
         lhs_skeleton.add_alias((1, 2), (1, 3)) #[(1, 3)] = tt_reshape(tt_identity(2 * dim), (4, 4))
     else:
-        solver = lambda lhs, rhs, x0, nwsp, size_limit: tt_block_mals(
+        solver = lambda lhs, rhs, x0, nwsp, size_limit: tt_block_amen(
             lhs,
             rhs,
             x0=x0,
@@ -749,11 +749,11 @@ def tt_ipm(
     # KKT-system prep
     lin_op_tt_adj = tt_transpose(lin_op_tt)
     lhs_skeleton[0, 1] = tt_scale(-1, lin_op_tt)
-    lhs_skeleton.add_alias((0, 1), (1, 0), is_transpose=True) #lhs_skeleton[1, 0] = tt_scale(-1, lin_op_tt_adj) #lhs_skeleton.add_alias((0, 1), (1, 0), is_transpose=True)
+    lhs_skeleton.add_alias((0, 1), (1, 0), is_transpose=True) #lhs_skeleton[1, 0] = tt_scale(-1, lin_op_tt_adj)
     lhs_skeleton[0, 0] = lag_maps["y"]
     status.lag_map_y = lag_maps["y"]
 
-    X_tt, Y_tt, Z_tt, T_tt = _initialise(status, dim)
+    X_tt, Y_tt, Z_tt, T_tt = _initialise(ineq_mask, status, dim)
 
     iteration = 0
     finishing_steps = max_refinement
@@ -762,10 +762,6 @@ def tt_ipm(
     prev_centrality_error = status.centrality_error
 
     while finishing_steps > 0:
-        #print(tt_matrix_to_matrix(X_tt))
-        #print(tt_matrix_to_matrix(Z_tt))
-        #print(tt_matrix_to_matrix(tt_reshape(Y_tt, (2,  2))))
-        #print(tt_matrix_to_matrix(T_tt))
         iteration += 1
         status.is_last_iter = status.is_last_iter or (max_iter <= iteration)
         ZX = tt_inner_prod(Z_tt, X_tt)

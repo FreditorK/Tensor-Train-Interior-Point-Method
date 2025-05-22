@@ -5,7 +5,7 @@ sys.path.append(os.getcwd() + '/../')
 from src.tt_ops import *
 from src.ops import *
 from src.tt_ops import tt_rank_reduce
-from src.tt_amen import tt_amen, tt_block_mals, TTBlockMatrix, TTBlockVector
+from src.tt_amen import tt_amen, tt_block_amen, TTBlockMatrix, TTBlockVector
 
 np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=4, suppress=True)
 np.random.seed(9)
@@ -37,7 +37,7 @@ block_b_tt = TTBlockVector()
 block_b_tt[0] = b_1_tt
 block_b_tt[1] = b_2_tt
 block_b_tt[2] = b_3_tt
-sol, _ = tt_block_mals(block_matrix_tt, block_b_tt, tol=1e-7, nswp=10, verbose=True, amen=True)
+sol, _ = tt_block_amen(block_matrix_tt, block_b_tt, tol=1e-7, nswp=10, verbose=True, amen=True)
 block_sol_1 = sol[:-1] + [sol[-1][:, 0]]
 block_sol_2 = sol[:-1] + [sol[-1][:, 1]]
 
