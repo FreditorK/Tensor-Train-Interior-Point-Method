@@ -52,13 +52,13 @@ def _get_eq_mat_vec(XAX_k, block_A_k, XAX_kp1, x_shape, inv_I):
 
     return mat_vec
 
-def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous_solution, nrmsc, size_limit, rtol):
+def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous_solution, size_limit, rtol):
     x_shape = previous_solution.shape
     m = x_shape[0] * x_shape[2] * x_shape[3]
     rhs = np.zeros_like(previous_solution)
-    rhs[:, 0] = cached_einsum('br,bmB,BR->rmR', Xb_k[0], nrmsc * block_b_k[0], Xb_k1[0]) if 0 in block_b_k else 0
-    rhs[:, 1] = cached_einsum('br,bmB,BR->rmR', Xb_k[1], nrmsc * block_b_k[1], Xb_k1[1]) if 1 in block_b_k else 0
-    rhs[:, 2] = cached_einsum('br,bmB,BR->rmR', Xb_k[2], nrmsc * block_b_k[2], Xb_k1[2]) if 2 in block_b_k else 0
+    rhs[:, 0] = cached_einsum('br,bmB,BR->rmR', Xb_k[0], block_b_k[0], Xb_k1[0]) if 0 in block_b_k else 0
+    rhs[:, 1] = cached_einsum('br,bmB,BR->rmR', Xb_k[1], block_b_k[1], Xb_k1[1]) if 1 in block_b_k else 0
+    rhs[:, 2] = cached_einsum('br,bmB,BR->rmR', Xb_k[2], block_b_k[2], Xb_k1[2]) if 2 in block_b_k else 0
     inv_I = np.divide(1, cached_einsum('lsr,smnS,LSR->lmL', XAX_k[1, 2], block_A_k[1, 2], XAX_k1[1, 2]))
     norm_rhs = max(np.linalg.norm(rhs), 1e-12)
     block_res_old = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution) - rhs) / norm_rhs
@@ -149,14 +149,14 @@ def _get_ineq_mat_vec(XAX_k, block_A_k, XAX_kp1, x_shape, inv_I):
 
     return mat_vec
 
-def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous_solution, nrmsc, size_limit, rtol):
+def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous_solution, size_limit, rtol):
     x_shape = previous_solution.shape
     m = x_shape[0] * x_shape[2] * x_shape[3]
     rhs = np.zeros_like(previous_solution)
-    rhs[:, 0] = cached_einsum('br,bmB,BR->rmR', Xb_k[0], nrmsc * block_b_k[0], Xb_k1[0]) if 0 in block_b_k else 0
-    rhs[:, 1] = cached_einsum('br,bmB,BR->rmR', Xb_k[1], nrmsc * block_b_k[1], Xb_k1[1]) if 1 in block_b_k else 0
-    rhs[:, 2] = cached_einsum('br,bmB,BR->rmR', Xb_k[2], nrmsc * block_b_k[2], Xb_k1[2]) if 2 in block_b_k else 0
-    rhs[:, 3] = cached_einsum('br,bmB,BR->rmR', Xb_k[3], nrmsc * block_b_k[3], Xb_k1[3]) if 3 in block_b_k else 0
+    rhs[:, 0] = cached_einsum('br,bmB,BR->rmR', Xb_k[0], block_b_k[0], Xb_k1[0]) if 0 in block_b_k else 0
+    rhs[:, 1] = cached_einsum('br,bmB,BR->rmR', Xb_k[1], block_b_k[1], Xb_k1[1]) if 1 in block_b_k else 0
+    rhs[:, 2] = cached_einsum('br,bmB,BR->rmR', Xb_k[2], block_b_k[2], Xb_k1[2]) if 2 in block_b_k else 0
+    rhs[:, 3] = cached_einsum('br,bmB,BR->rmR', Xb_k[3], block_b_k[3], Xb_k1[3]) if 3 in block_b_k else 0
     inv_I = np.divide(1, cached_einsum('lsr,smnS,LSR->lmL', XAX_k[(1, 2)], block_A_k[(1, 2)], XAX_k1[(1, 2)]))
     norm_rhs = max(np.linalg.norm(rhs), 1e-12)
     block_res_old_scalar = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution) - rhs) / norm_rhs
@@ -265,7 +265,7 @@ def tt_infeasible_newton_system(
 
     status.is_last_iter = status.is_last_iter or (status.is_primal_feasible and status.is_dual_feasible and status.is_central)
 
-    status.aho_direction = (2*status.centrality_error < max(status.primal_error, status.dual_error))
+    status.aho_direction = status.aho_direction or (2*status.centrality_error < max(status.primal_error, status.dual_error))
 
     if status.aho_direction:
         if status.is_last_iter:
@@ -333,7 +333,7 @@ def _tt_ipm_newton_step(
 
     # Predictor
     if status.verbose:
-        print("--- Predictor  step ---", flush=True)
+        print("\n--- Predictor  step ---", flush=True)
     Delta_tt, res = solver(lhs_matrix_tt, rhs_vec_tt, status.mals_delta0, status.kkt_iterations, 0 if status.is_last_iter else None)
     status.mals_delta0 = Delta_tt
     if res < status.local_res_bound:
@@ -612,6 +612,24 @@ def _update(x_step_size, z_step_size, X_tt, Z_tt, Delta_X_tt, Delta_Z_tt, status
 
     return X_tt, Z_tt
 
+def _postprocessing(X_tt, Z_tt, status):
+    lhs = TTBlockMatrix()
+    rhs = TTBlockVector()
+    XZ_res = tt_reshape(tt_scale(-1, _tt_symmetrise(tt_mat_mat_mul(X_tt, Z_tt, status.eps, status.eps), status.eps)), (4, ))
+    rhs[0] = XZ_res
+    rhs[1] = XZ_res
+    lhs[0, 0] = tt_rank_reduce(tt_scale(0.5, tt_add(tt_IkronM(Z_tt), tt_MkronI(Z_tt))), eps=status.eps)
+    lhs[1, 1] = tt_rank_reduce(tt_scale(0.5, tt_add(tt_MkronI(X_tt), tt_IkronM(X_tt))), eps=status.eps)
+    Delta_tt, _ = tt_block_als(lhs, rhs, status.eps, nswp=6, verbose=status.verbose)
+    Delta_X_tt = tt_reshape(_tt_get_block(0,  Delta_tt), (2, 2))
+    Delta_Z_tt = tt_reshape(_tt_get_block(1, Delta_tt), (2, 2))
+    X_tt = _tt_symmetrise(tt_add(X_tt, Delta_X_tt), status.eps)
+    Z_tt = _tt_symmetrise(tt_add(Z_tt, Delta_Z_tt), status.eps)
+    return X_tt, Z_tt
+
+
+
+
 def _initialise(ineq_mask, status, dim):
     scale = 2**(dim/2)
     X_tt = tt_scale(scale, tt_identity(dim))
@@ -700,7 +718,7 @@ def tt_ipm(
         verbose,
         1,
         1,
-        local_res_bound=0.5
+        local_res_bound=0.3
     )
     lhs_skeleton = TTBlockMatrix()
     lhs_skeleton[1, 2] = tt_reshape(tt_identity(2 * dim), (4, 4))
@@ -725,7 +743,7 @@ def tt_ipm(
             rhs,
             x0=x0,
             local_solver=_ipm_local_solver,
-            tol=0.5 * min(feasibility_tol, centrality_tol),
+            tol=0.5 * min(feasibility_tol, centrality_tol, op_tol),
             nswp=nwsp,
             size_limit=size_limit,
             verbose=verbose
@@ -831,15 +849,18 @@ def tt_ipm(
             status.kkt_iterations += (finishing_steps == 1)
 
         if (
-                abs(prev_primal_error - status.primal_error) < 0.1*gap_tol
-                and abs(prev_dual_error - status.dual_error) < 0.1*gap_tol
-                and abs(prev_centrality_error - status.centrality_error) < 0.1*gap_tol
+                abs(prev_primal_error - status.primal_error) < 0.05*gap_tol
+                and abs(prev_dual_error - status.dual_error) < 0.05*gap_tol
+                and abs(prev_centrality_error - status.centrality_error) < 0.05*gap_tol
                 and not status.is_last_iter
         ):
             if status.verbose:
                 print(
                     "==================================\n Progress stalled!\n==================================")
-            status.is_last_iter = True
+            if not status.aho_direction:
+                status.aho_direction = True
+            else:
+                status.is_last_iter = True
         prev_primal_error = status.primal_error
         prev_dual_error = status.dual_error
         prev_centrality_error = status.centrality_error
