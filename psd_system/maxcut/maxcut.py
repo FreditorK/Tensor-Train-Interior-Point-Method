@@ -12,10 +12,9 @@ from memory_profiler import memory_usage
 
 
 def tt_diag_constraint_op(dim):
-    scale = 2 ** (7 - dim)
     identity = tt_identity(dim)
     basis = tt_diag_op(identity)
-    return tt_scale(scale, basis), tt_scale(scale, tt_reshape(identity, (4,)))
+    return basis, tt_reshape(identity, (4,))
 
 def tt_obj_matrix(rank, dim):
     scale = 2**(7 - dim)

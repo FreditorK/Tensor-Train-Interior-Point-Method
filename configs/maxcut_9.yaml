@@ -1,11 +1,11 @@
 # Common
 dim: !!int 9
 max_rank: !!int 4
-seeds: [52, 93, 245] #[0, 434, 416]  prefer 3, 4 for speed Tier 1: [3333, 33333], Tier 2: [3]
+seeds: [245, 3333, 33333, 3, 4] # Tier 1: [3333, 33333], Tier 2: [3]
 gap_tol: !!float 2e-4
 verbose: False
 # TT-IPM
-op_tol: !!float 1e-6
+op_tol: !!float 5e-6
 max_iter: !!int 30
 # Sketchy CGAL
 sketch_cgal_rank: !!int 64

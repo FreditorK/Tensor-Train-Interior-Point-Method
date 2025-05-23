@@ -265,7 +265,7 @@ def tt_infeasible_newton_system(
 
     status.is_last_iter = status.is_last_iter or (status.is_primal_feasible and status.is_dual_feasible and status.is_central)
 
-    status.aho_direction = status.aho_direction or (2*status.centrality_error < max(status.primal_error, status.dual_error))
+    status.aho_direction = (2*status.centrality_error < max(status.primal_error, status.dual_error))
 
     if status.aho_direction:
         if status.is_last_iter:
@@ -628,8 +628,6 @@ def _postprocessing(X_tt, Z_tt, status):
     return X_tt, Z_tt
 
 
-
-
 def _initialise(ineq_mask, status, dim):
     scale = 2**(dim/2)
     X_tt = tt_scale(scale, tt_identity(dim))
@@ -849,18 +847,16 @@ def tt_ipm(
             status.kkt_iterations += (finishing_steps == 1)
 
         if (
-                abs(prev_primal_error - status.primal_error) < 0.05*gap_tol
-                and abs(prev_dual_error - status.dual_error) < 0.05*gap_tol
-                and abs(prev_centrality_error - status.centrality_error) < 0.05*gap_tol
+                abs(prev_primal_error - status.primal_error) < 0.02*gap_tol
+                and abs(prev_dual_error - status.dual_error) < 0.02*gap_tol
+                and abs(prev_centrality_error - status.centrality_error) < 0.02*gap_tol
                 and not status.is_last_iter
         ):
             if status.verbose:
                 print(
                     "==================================\n Progress stalled!\n==================================")
-            if not status.aho_direction:
-                status.aho_direction = True
-            else:
-                status.is_last_iter = True
+            status.is_last_iter = True
+            status.aho_direction = True
         prev_primal_error = status.primal_error
         prev_dual_error = status.dual_error
         prev_centrality_error = status.centrality_error
