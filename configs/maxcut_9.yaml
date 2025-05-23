@@ -1,7 +1,7 @@
 # Common
 dim: !!int 9
 max_rank: !!int 4
-seeds: [0, 434, 416] #[12, 14, 32, 55, 3]  prefer 3, 4 for speed Tier 1: [3333, 33333], Tier 2: [3]
+seeds: [52, 93, 245] #[0, 434, 416]  prefer 3, 4 for speed Tier 1: [3333, 33333], Tier 2: [3]
 gap_tol: !!float 2e-4
 verbose: False
 # TT-IPM

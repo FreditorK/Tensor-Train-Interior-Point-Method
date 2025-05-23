@@ -7,11 +7,12 @@ echo "Running: $1"
 BASE_TIMEOUT=1800  # 30 minutes
 START_DIM=$2
 END_DIM=$3
+TXT_IDENTIFIER=$4
 
 # ---------------------------
 # Delete log file if it exists
 # ---------------------------
-LOGFILE="results/tt_ipm_$1_${START_DIM}_${END_DIM}.txt"
+LOGFILE="results/tt_ipm_$1_${START_DIM}_${END_DIM}_${TXT_IDENTIFIER}.txt"
 if [ -f "$LOGFILE" ]; then
     rm "$LOGFILE"
 fi
