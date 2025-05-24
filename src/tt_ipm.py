@@ -252,14 +252,14 @@ def tt_infeasible_newton_system(
     rhs = TTBlockVector()
 
     # Check primal feasibility and compute residual
-    primal_feas = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(lin_op_tt, tt_reshape(X_tt, (4, )), status.eps), bias_tt), status.op_tol)  # primal feasibility
+    primal_feas = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(lin_op_tt, tt_reshape(X_tt, (4, )), status.eps), bias_tt), min(status.op_tol, status.primal_error))  # primal feasibility
     status.primal_error = np.divide(tt_norm(primal_feas), status.primal_error_normalisation)
     status.is_primal_feasible = np.less(status.primal_error, status.feasibility_tol)
 
     # Check dual feasibility and compute residual
-    dual_feas = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(lin_op_tt_adj, Y_tt, status.eps), tt_rank_reduce(tt_add(tt_reshape(Z_tt, (4, )), obj_tt), status.eps)), status.eps if status.with_ineq else status.op_tol)
+    dual_feas = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(lin_op_tt_adj, Y_tt, status.eps), tt_rank_reduce(tt_add(tt_reshape(Z_tt, (4, )), obj_tt), status.eps)), status.eps if status.with_ineq else min(status.op_tol, status.dual_error))
     if status.with_ineq:
-        dual_feas = tt_rank_reduce(tt_sub(dual_feas, tt_reshape(T_tt, (4, ))), status.op_tol)
+        dual_feas = tt_rank_reduce(tt_sub(dual_feas, tt_reshape(T_tt, (4, ))), min(status.op_tol, status.dual_error))
     status.dual_error = np.divide(tt_norm(dual_feas), status.dual_error_normalisation)
     status.is_dual_feasible = np.less(status.dual_error, (1 + status.with_ineq)*status.feasibility_tol)
 
@@ -269,18 +269,18 @@ def tt_infeasible_newton_system(
 
     if status.aho_direction:
         if status.is_last_iter:
-            lhs[2, 1] = tt_rank_reduce(tt_scale(0.5, tt_add(tt_IkronM(Z_tt), tt_MkronI(Z_tt))), eps=status.op_tol)
-            lhs[2, 2] = tt_rank_reduce(tt_scale(0.5, tt_add(tt_MkronI(X_tt), tt_IkronM(X_tt))), eps=status.op_tol)
+            lhs[2, 1] = tt_rank_reduce(tt_scale(0.5, tt_add(tt_IkronM(Z_tt), tt_MkronI(Z_tt))), eps=min(status.op_tol, status.mu))
+            lhs[2, 2] = tt_rank_reduce(tt_scale(0.5, tt_add(tt_MkronI(X_tt), tt_IkronM(X_tt))), eps=min(status.op_tol, status.mu))
         else:
-            lhs[2, 1] = tt_psd_rank_reduce(tt_scale(0.5, tt_add(tt_IkronM(Z_tt), tt_MkronI(Z_tt))), eps=status.op_tol)
-            lhs[2, 2] = tt_psd_rank_reduce(tt_scale(0.5, tt_add(tt_MkronI(X_tt), tt_IkronM(X_tt))), eps=status.op_tol)
+            lhs[2, 1] = tt_psd_rank_reduce(tt_scale(0.5, tt_add(tt_IkronM(Z_tt), tt_MkronI(Z_tt))), eps=min(status.op_tol, status.mu))
+            lhs[2, 2] = tt_psd_rank_reduce(tt_scale(0.5, tt_add(tt_MkronI(X_tt), tt_IkronM(X_tt))), eps=min(status.op_tol, status.mu))
     else:
         if status.is_last_iter:
-            lhs[2, 1] = tt_rank_reduce(tt_MkronI(Z_tt), eps=status.op_tol)
-            lhs[2, 2] = tt_rank_reduce(tt_IkronM(X_tt), eps=status.op_tol)
+            lhs[2, 1] = tt_rank_reduce(tt_MkronI(Z_tt), eps=min(status.op_tol, status.mu))
+            lhs[2, 2] = tt_rank_reduce(tt_IkronM(X_tt), eps=min(status.op_tol, status.mu))
         else:
-            lhs[2, 1] = tt_psd_rank_reduce(tt_MkronI(Z_tt), eps=status.op_tol)
-            lhs[2, 2] = tt_psd_rank_reduce(tt_IkronM(X_tt), eps=status.op_tol)
+            lhs[2, 1] = tt_psd_rank_reduce(tt_MkronI(Z_tt), eps=min(status.op_tol, status.mu))
+            lhs[2, 2] = tt_psd_rank_reduce(tt_IkronM(X_tt), eps=min(status.op_tol, status.mu))
 
     if not status.is_primal_feasible or status.is_last_iter:
         rhs[0] = primal_feas
@@ -290,17 +290,17 @@ def tt_infeasible_newton_system(
 
     if not status.is_central or status.is_last_iter:
         if status.aho_direction:
-            rhs[2] = tt_reshape(tt_scale(-1, _tt_symmetrise(tt_mat_mat_mul(X_tt, Z_tt, status.op_tol, status.eps), status.op_tol)), (4, ))
+            rhs[2] = tt_reshape(tt_scale(-1, _tt_symmetrise(tt_mat_mat_mul(X_tt, Z_tt, status.op_tol, status.eps), min(status.op_tol, status.mu))), (4, ))
         else:
-            rhs[2] = tt_reshape(tt_scale(-1, tt_mat_mat_mul(Z_tt, X_tt, status.op_tol, status.eps)), (4,))
+            rhs[2] = tt_reshape(tt_scale(-1, tt_mat_mat_mul(Z_tt, X_tt, min(status.op_tol, status.mu), status.eps)), (4,))
 
 
     if status.with_ineq:
         lhs[3, 1] =  tt_diag_op(T_tt, status.op_tol)
         masked_X_tt = tt_rank_reduce(tt_add(tt_scale(status.boundary_val, ineq_mask), tt_fast_hadammard(ineq_mask, X_tt, status.eps)), eps=status.eps)
-        lhs[3, 3] = tt_rank_reduce(tt_add(status.lag_map_t, tt_diag_op(masked_X_tt, status.eps)), eps=status.op_tol)
+        lhs[3, 3] = tt_rank_reduce(tt_add(status.lag_map_t, tt_diag_op(masked_X_tt, status.eps)), eps=min(status.op_tol, status.mu))
         if not status.is_central or status.is_last_iter:
-            rhs[3] = tt_rank_reduce(tt_reshape(tt_scale(-1, tt_fast_hadammard(masked_X_tt, T_tt, status.eps)), (4, )), eps=status.op_tol)
+            rhs[3] = tt_rank_reduce(tt_reshape(tt_scale(-1, tt_fast_hadammard(masked_X_tt, T_tt, status.eps)), (4, )), eps=min(status.op_tol, status.mu))
 
     return lhs, rhs, status
 
@@ -403,7 +403,7 @@ def _tt_ipm_newton_step(
                 + x_step_size * tt_inner_prod(Delta_X_tt, T_tt)
             )
             e = max(1, 3 * min(x_step_size, z_step_size) ** 2)
-            status.sigma = min(0.99, (mu_aff/(ZX + TX))**e)
+            status.sigma = min(0.9, (mu_aff/(ZX + TX))**e)
             """
             #Too expensive
             rhs_3 = tt_add(
@@ -425,14 +425,14 @@ def _tt_ipm_newton_step(
                 + x_step_size * tt_inner_prod(Delta_X_tt, Z_tt)
             )
             e = max(1, 3*min(x_step_size, z_step_size)**2)
-            status.sigma = min(0.99, (mu_aff/ZX) ** e)
+            status.sigma = min(0.9, (mu_aff/ZX) ** e)
 
 
         if DXZ > status.op_tol:
             if status.aho_direction:
-                Delta_XZ_term = tt_scale(-1, _tt_symmetrise(tt_mat_mat_mul(Delta_X_tt, Delta_Z_tt, status.op_tol, status.eps, verbose=status.verbose), status.op_tol))
+                Delta_XZ_term = tt_scale(-1, _tt_symmetrise(tt_mat_mat_mul(Delta_X_tt, Delta_Z_tt, min(status.op_tol, status.mu), status.eps, verbose=status.verbose), min(status.op_tol, status.mu)))
             else:
-                Delta_XZ_term = tt_scale(-1, tt_mat_mat_mul(Delta_Z_tt, Delta_X_tt, status.op_tol, status.eps, verbose=status.verbose))
+                Delta_XZ_term = tt_scale(-1, tt_mat_mat_mul(Delta_Z_tt, Delta_X_tt, min(status.op_tol, status.mu), status.eps, verbose=status.verbose))
             rhs_vec_tt[2] = tt_rank_reduce(
                 tt_add(
                     tt_scale(status.sigma * status.mu, tt_reshape(tt_identity(len(X_tt)), (4,))),
@@ -441,15 +441,15 @@ def _tt_ipm_newton_step(
                         tt_reshape(Delta_XZ_term, (4,))
                     )
                 ),
-                status.op_tol
-            ) if status.sigma > 0 else tt_add(rhs_vec_tt.get_row(2), tt_reshape(Delta_XZ_term, (4,)))
+                min(status.op_tol, status.mu)
+            ) if status.sigma > 0 else tt_rank_reduce(tt_add(rhs_vec_tt.get_row(2), tt_reshape(Delta_XZ_term, (4,))), min(status.op_tol, status.mu))
         else:
             rhs_vec_tt[2] = tt_rank_reduce(
                 tt_add(
                     tt_scale(status.sigma * status.mu, tt_reshape(tt_identity(len(X_tt)), (4,))),
                     rhs_vec_tt.get_row(2)
                 ),
-                status.op_tol
+                min(status.op_tol, status.mu)
             ) if status.sigma > 0 else rhs_vec_tt.get_row(2)
         Delta_tt_cc, res = solver(lhs_matrix_tt, rhs_vec_tt, status.mals_delta0, status.kkt_iterations, 0 if status.is_last_iter else None)
         status.mals_delta0 = Delta_tt_cc

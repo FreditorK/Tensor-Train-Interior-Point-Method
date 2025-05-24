@@ -20,7 +20,7 @@ def tt_obj_matrix(rank, dim):
     scale = 2**(7 - dim)
     graph_tt = tt_rank_reduce(tt_random_graph(dim, rank))
     laplacian_tt = tt_sub(tt_diag(tt_fast_matrix_vec_mul(graph_tt, [np.ones((1, 2, 1)) for _ in range(dim)],  1e-12)), graph_tt)
-    return tt_reshape(tt_normalise(laplacian_tt, radius=scale), (4,))
+    return tt_reshape(tt_normalise(laplacian_tt, radius=1), (4,))
 
 
 if __name__ == "__main__":
