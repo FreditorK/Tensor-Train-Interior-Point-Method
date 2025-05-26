@@ -112,10 +112,23 @@ class TTBlockMatrix:
         return self._data.keys() | self._aliases.values()
 
     def all_keys(self):
-        return self._data.keys() | self._aliases.values() | self._transposes.values()
+        return self._data.keys() | set(self._aliases.values()) | set(self._transposes.values())
 
     def __iter__(self):
         return iter(self._data)
+
+    def get_submatrix(self, row_index, col_index):
+        data = {(i, j): v for (i, j), v in self._data.items() if i <= row_index and j <= col_index}
+        aliases = {(i, j):  (k, t) for (i, j), (k, t) in self._aliases.items() if k <= row_index and t <= col_index}
+        transposes = {(i, j):  (k, t) for (i, j), (k, t) in self._transposes.items() if k <= row_index and t <= col_index}
+        return TTBlockSubMatrix(data, aliases, transposes)
+
+
+class TTBlockSubMatrix(TTBlockMatrix):
+    def __init__(self, data, aliases, transposes):
+        self._data = data
+        self._aliases = aliases
+        self._transposes = transposes
 
 
 class TTBlockMatrixView:

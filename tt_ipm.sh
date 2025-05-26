@@ -4,7 +4,7 @@ echo "Running: $1"
 # ---------------------------
 # Parameters
 # ---------------------------
-BASE_TIMEOUT=1800  # 30 minutes
+BASE_TIMEOUT=3200  # 1h
 START_DIM=$2
 END_DIM=$3
 TXT_IDENTIFIER=$4
