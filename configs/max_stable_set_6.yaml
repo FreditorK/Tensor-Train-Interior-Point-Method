@@ -1,11 +1,12 @@
 # Common
 dim: !!int 6
 max_rank: !!int 4
-seeds: [5, 6, 7, 8, 9]
+seeds: [7, 6, 8, 5, 9] # Tier 1: 7, 6, 8, 5, 9 Tier 2: Tier 3:
 gap_tol: !!float 2e-4
 verbose: False
 # TT-IPM
 op_tol: !!float 1e-4
 max_iter: !!int 18
+warm_up: !!int 8
 # Sketchy CGAL
 sketch_cgal_rank: !!int 32

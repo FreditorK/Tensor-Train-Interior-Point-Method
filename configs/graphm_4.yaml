@@ -1,9 +1,10 @@
 # Common
 dim: !!int 4
 max_rank: !!int 2
-seeds: [52, 53, 7, 3, 5] # Tier 1: 5
+seeds: [87] # Tier 1: 5, Tier 2: Tier 3:
 gap_tol: !!float 5e-4
-verbose: False
+verbose: True
 # TT-IPM
-op_tol: !!float 5e-6
+op_tol: !!float 1e-5
 max_iter: !!int 25
+warm_up: !!int 3

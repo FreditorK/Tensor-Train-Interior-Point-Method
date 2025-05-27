@@ -60,7 +60,7 @@ def tt_diag_block_sum_linear_op(block_size, dim):
     op_tt = []
     for c in tt_split_bonds(tt_identity(dim - block_size)):
         core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
-        core[:, 0, :] = c
+        core[:, 0] = c
         op_tt.append(core)
     block_matrix = tt_identity(block_size)
     op_tt = op_tt + tt_diag(tt_split_bonds(block_matrix))
@@ -277,6 +277,7 @@ if __name__ == "__main__":
                     verbose=config["verbose"],
                     gap_tol=config["gap_tol"],
                     op_tol=config["op_tol"],
+                    warm_up=config["warm_up"],
                     aho_direction=False
                 )
                 return X_tt, Y_tt, T_tt, Z_tt, info
@@ -295,6 +296,7 @@ if __name__ == "__main__":
                 verbose=config["verbose"],
                 gap_tol=config["gap_tol"],
                 op_tol=config["op_tol"],
+                warm_up=config["warm_up"],
                 aho_direction=False
             )
 

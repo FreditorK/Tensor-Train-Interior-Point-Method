@@ -7,3 +7,4 @@ verbose: True
 # TT-IPM
 op_tol: !!float 1e-4
 max_iter: !!int 10
+warm_up: !!int 3

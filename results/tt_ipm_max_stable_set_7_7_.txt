@@ -1,0 +1,23 @@
+==== max_stable_set TT-IPM Batch Run Started at Tue May 27 01:08:50 PM BST 2025 ====
+
+▶ Running dim=7 with config=configs/max_stable_set_7.yaml at Tue May 27 01:08:50 PM BST 2025
+Seed:  84
+---Terminated---
+Converged in 12 iterations.
+Ranks X_tt: [2, 8, 14, 25, 10, 4], Z_tt: [4, 12, 19, 31, 10, 4], 
+      Y_tt: [4, 13, 24, 34, 9, 4], T_tt: None 
+
+Converged after 12.0 iterations
+Problem created in 0.004s
+Problem solved in 113.769s
+Complementary Slackness: 3.1845571850375176e-06
+Total feasibility error: 1.499771218730496e-10
+--- Run Summary ---
+Converged after avg 12.0 iterations
+Problem created in avg 0.004s
+Problem solved in avg 113.769s
+Complementary Slackness avg: 3.1845571850375176e-06
+Total feasibility error  avg: 1.499771218730496e-10
+✅ Completed dim=7 successfully
+
+==== All runs completed at Tue May 27 01:10:45 PM BST 2025 ====

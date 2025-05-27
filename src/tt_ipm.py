@@ -728,7 +728,7 @@ def tt_ipm(
     ineq_mask=None,
     max_iter=100,
     max_refinement=5,
-    warm_up=8,
+    warm_up=3, #8
     gap_tol=1e-4,
     aho_direction=True,
     op_tol=1e-5,
