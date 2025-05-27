@@ -5,7 +5,7 @@ seeds: [94, 56, 3333, 33333, 45] #[245, 3333, 33333, 3, 4] # Tier 1: [45, 3333, 
 gap_tol: !!float 2e-4
 verbose: False
 # TT-IPM
-op_tol: !!float 5e-6
-max_iter: !!int 30
+op_tol: !!float 1e-5
+max_iter: !!int 35
 # Sketchy CGAL
 sketch_cgal_rank: !!int 64

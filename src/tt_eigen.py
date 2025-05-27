@@ -229,7 +229,7 @@ def tt_min_eig(A, x0=None, kick_rank=None, nswp=10, tol=1e-12, verbose=False):
     if x0 is None:
         x_cores = tt_random_gaussian([2]*(len(A)-1), (A[0].shape[2],))
     else:
-        x_cores = x0
+        x_cores = tt_rank_retraction(x0, [2]*(len(A)-1))
     if kick_rank is None:
         kick_rank = np.maximum((symmetric_powers_of_two(len(A))/(nswp -1)), 2).astype(int)
     d = len(x_cores)
