@@ -211,9 +211,9 @@ def _bck_sweep(
         swp,
         size_limit,
         eps,
-        r_max,
-        local_res
+        r_max
 ):
+    local_res = np.inf if swp == 0 else 0
     for k in range(d - 1, -1, -1):
         block_A_k = block_A[k]
         if swp > 0:
@@ -223,7 +223,7 @@ def _bck_sweep(
                                                                                      previous_solution,
                                                                                      size_limit, eps)
 
-            local_res[k] = block_res_old
+            local_res = max(local_res, block_res_old)
 
             solution_now = np.reshape(solution_now, (rx[k] * block_size, N[k] * rx[k + 1])).T
         else:
@@ -275,9 +275,9 @@ def _fwd_sweep(
         swp,
         size_limit,
         eps,
-        r_max,
-        local_res
+        r_max
 ):
+    local_res = np.inf if swp == 0 else 0
     for k in range(d):
         block_A_k = block_A[k]
         if swp > 0:
@@ -289,7 +289,7 @@ def _fwd_sweep(
                 eps
             )
 
-            local_res[k] = block_res_old
+            local_res = max(local_res, block_res_old)
 
             solution_now = np.transpose(solution_now, (0, 2, 1, 3))
             solution_now = np.reshape(solution_now, (rx[k] * N[k], block_size * rx[k + 1]))
@@ -366,13 +366,15 @@ def tt_block_als(block_A, block_b, tol, termination_tol=1e-3, eps=1e-12, nswp=22
     r_max_part = [r_max_part0]*warm_up + [r_max_final]*nswp
     x_cores = tt_rank_retraction(x_cores, [r_max_part0]*(d-1)) if x0 is not None else x_cores
     rx = np.array([1] + tt_ranks(x_cores) + [1])
-    local_res = np.inf*np.ones(d)
     nswp += warm_up
+    local_res_fwd = np.inf
+    local_res_bwd = np.inf
+    last = False
 
     for swp in range(nswp):
         r_max = r_max_part[swp]
         if direction > 0:
-            x_cores, XAX, Xb, rx, local_res = _bck_sweep(
+            x_cores, XAX, Xb, rx, local_res_fwd = _bck_sweep(
                 local_solver,
                 x_cores,
                 XAX,
@@ -387,11 +389,10 @@ def tt_block_als(block_A, block_b, tol, termination_tol=1e-3, eps=1e-12, nswp=22
                 swp,
                 size_limit,
                 eps,
-                r_max,
-                local_res
+                r_max
             )
         else:
-            x_cores, XAX, Xb, rx, local_res = _fwd_sweep(
+            x_cores, XAX, Xb, rx, local_res_bwd = _fwd_sweep(
                 local_solver,
                 x_cores,
                 XAX,
@@ -406,19 +407,24 @@ def tt_block_als(block_A, block_b, tol, termination_tol=1e-3, eps=1e-12, nswp=22
                 swp,
                 size_limit,
                 eps,
-                r_max,
-                local_res
+                r_max
             )
 
         if verbose:
             print('\tStarting Sweep: %d' % swp)
             print(f'\tDirection {direction}')
-            print(f'\tResidual {np.max(local_res)}')
+            print(f'\tResidual {max(local_res_fwd, local_res_bwd)}')
             print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
 
 
-        if np.max(local_res) < termination_tol or swp == nswp:
+        if last:
             break
+
+        if min(local_res_bwd, local_res_fwd) < termination_tol or swp == nswp:
+            if (local_res_bwd < local_res_fwd and direction > 0) or (local_res_bwd > local_res_fwd and direction < 0):
+                break
+            else:
+                last = True
 
         direction *= -1
 
@@ -426,12 +432,12 @@ def tt_block_als(block_A, block_b, tol, termination_tol=1e-3, eps=1e-12, nswp=22
     if verbose:
         print("\n\t---Results---")
         print('\tSolution rank is', rx[1:-1])
-        print('\tResidual ', np.max(local_res))
+        print('\tResidual ', min(local_res_fwd, local_res_bwd))
         print('\tNumber of sweeps', swp+1)
         print('\tTime: ', time.time() - t0)
         print('\tTime per sweep: ', (time.time() - t0) / (swp+1), flush=True)
 
-    return tt_scale(rescale, x_cores), np.max(local_res)
+    return tt_scale(rescale, x_cores), min(local_res_fwd, local_res_bwd)
 
 def _default_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous_solution, _, rtol):
     x_shape = previous_solution.shape

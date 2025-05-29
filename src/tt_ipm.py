@@ -59,10 +59,10 @@ def _get_eq_mat_vec(XAX_k, block_A_k, XAX_kp1, x_shape, inv_I):
     def mat_vec(x_core):
         x_core = x_core.reshape(2, x_shape[0], x_shape[2], x_shape[3])
         result = np.zeros_like(x_core)
-        result[0] += K_y(XAX_k_00, block_A_k_00, XAX_kp1_00, x_core[0]).__iadd__(mL(XAX_k_01, block_A_k_01, XAX_kp1_01, x_core[1]))
-        result[1] += L_Z(XAX_k_21, block_A_k_21, XAX_kp1_21, x_core[1]).__isub__(
-            L_XmL_adj( XAX_k_22, block_A_k_22, XAX_kp1_22,XAX_k_01, block_A_k_01, XAX_kp1_01, x_core[0]).__imul__(inv_I)
-        )
+        K_y(XAX_k_00, block_A_k_00, XAX_kp1_00, x_core[0], out=result[0])
+        L_Z(XAX_k_21, block_A_k_21, XAX_kp1_21, x_core[1], out=result[1])
+        result[0] += mL(XAX_k_01, block_A_k_01, XAX_kp1_01, x_core[1])
+        result[1] -= L_XmL_adj( XAX_k_22, block_A_k_22, XAX_kp1_22,XAX_k_01, block_A_k_01, XAX_kp1_01, x_core[0]).__imul__(inv_I)
         return result.reshape(-1, 1)
 
     return mat_vec
@@ -81,6 +81,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         return previous_solution, block_res_old, block_res_old, rhs, norm_rhs
     if m <= size_limit:
         try:
+            solution_now = np.zeros(*x_shape)
             L_L_Z = scip.linalg.cholesky(
                 cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[2, 1], block_A_k[2, 1], XAX_k1[2, 1]).reshape(m, m),
                 check_finite=False, lower=True, overwrite_a=True
@@ -96,13 +97,10 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
                                                                                          XAX_k1[0, 0]).reshape(m, m)
             b = mR_p - mL_eq @ forward_backward_sub(L_L_Z, mR_c - (L_X * inv_I.reshape(1, -1)) @ mR_d,
                                                     overwrite_b=True) - A @ \
-                np.transpose(previous_solution, (1, 0, 2, 3))[1].reshape(-1, 1)
-            y = scip.linalg.solve(A, b, check_finite=False, overwrite_a=True, overwrite_b=True) + \
-                np.transpose(previous_solution, (1, 0, 2, 3))[1].reshape(-1, 1)
-            z = inv_I.reshape(-1, 1) * (mR_d - mL_eq.T @ y)
-            x = forward_backward_sub(L_L_Z, mR_c - L_X @ z, overwrite_b=True)
-            solution_now = np.transpose(np.vstack((y, x, z)).reshape(x_shape[1], x_shape[0], x_shape[2], x_shape[3]),
-                                        (1, 0, 2, 3))
+                np.transpose(previous_solution, (1, 0, 2, 3))[0].reshape(-1, 1)
+            solution_now[:, 0] += scip.linalg.solve(A, b, check_finite=False, overwrite_a=True, overwrite_b=True, assume_a="gen").reshape(x_shape[0], x_shape[2], x_shape[3]).__iadd__(previous_solution[:, 0])
+            solution_now[:, 2] +=  (mR_d - mL_eq.T @ solution_now[:, 0].reshape(-1, 1)).__imul__(inv_I.reshape(-1, 1)).reshape(x_shape[0], x_shape[2], x_shape[3])
+            solution_now[:, 1] += forward_backward_sub(L_L_Z, mR_c - L_X @ solution_now[:, 2].reshape(-1, 1), overwrite_b=True).reshape(x_shape[0], x_shape[2], x_shape[3])
         except:
             size_limit = 0
 
@@ -165,11 +163,14 @@ def _get_ineq_mat_vec(XAX_k, block_A_k, XAX_kp1, x_shape, inv_I):
     def mat_vec(x_core):
         x_core = x_core.reshape(3, x_shape[0], x_shape[2], x_shape[3])
         result = np.zeros_like(x_core)
-        result[0] += K_y(XAX_k_00, block_A_k_00, XAX_kp1_00, x_core[0]).__iadd__(mL(XAX_k_01, block_A_k_01, XAX_kp1_01, x_core[1]))
-        result[1] += L_Z(XAX_k_21, block_A_k_21, XAX_kp1_21, x_core[1]).__isub__(
+        K_y(XAX_k_00, block_A_k_00, XAX_kp1_00, x_core[0], out=result[0])
+        L_Z(XAX_k_21, block_A_k_21, XAX_kp1_21, x_core[1], out=result[1])
+        T_op(XAX_k_31, block_A_k_31, XAX_kp1_31, x_core[1], out=result[2])
+        result[0] += mL(XAX_k_01, block_A_k_01, XAX_kp1_01, x_core[1])
+        result[1] -= (
             L_X( XAX_k_22, block_A_k_22, XAX_kp1_22, (mL_adj(XAX_k_01, block_A_k_01, XAX_kp1_01, x_core[0]).__imul__(inv_I)).__iadd__(x_core[2]))
         )
-        result[2] += T_op(XAX_k_31, block_A_k_31, XAX_kp1_31, x_core[1]).__iadd__(K_t(XAX_k_33, block_A_k_33, XAX_kp1_33, x_core[2]))
+        result[2] += K_t(XAX_k_33, block_A_k_33, XAX_kp1_33, x_core[2])
         return result.reshape(-1, 1)
 
     return mat_vec
@@ -207,12 +208,12 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
 
             u = (
                     mR_p - mL_eq @ (L_L_Z_inv_mR_c - forward_backward_sub(L_L_Z, (L_X * inv_I.reshape(1, -1)) @ mR_d, overwrite_b=True))
-                    - A @ previous_solution[:, 1].reshape(-1, 1)
+                    - A @ previous_solution[:, 0].reshape(-1, 1)
                     - B @ previous_solution[:, 3].reshape(-1, 1)
             )
             v = (
                     mR_t - T_op @ (L_L_Z_inv_mR_c - forward_backward_sub(L_L_Z, (L_X * inv_I.reshape(1, -1)) @ mR_d, overwrite_b=True))
-                    - C @ previous_solution[:, 1].reshape(-1, 1)
+                    - C @ previous_solution[:, 0].reshape(-1, 1)
                     - D @ previous_solution[:, 3].reshape(-1, 1)
             )
             Dlu, Dpiv = scip.linalg.lu_factor(D, check_finite=False, overwrite_a=True)
@@ -220,7 +221,7 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
             lhs_l = A.__isub__(B.__imatmul__(scip.linalg.lu_solve((Dlu, Dpiv), C, check_finite=False)))
             y = scip.linalg.lu_solve(scip.linalg.lu_factor(lhs_l, check_finite=False, overwrite_a=True), rhs_l, check_finite=False, overwrite_b=True)
             t = scip.linalg.lu_solve((Dlu, Dpiv), v.__isub__(C @ y), check_finite=False, overwrite_b=True)
-            y += previous_solution[:, 1].reshape(-1, 1)
+            y += previous_solution[:, 0].reshape(-1, 1)
             t += previous_solution[:, 3].reshape(-1, 1)
             z = (inv_I.reshape(-1, 1) * (mR_d - mL_eq.T @ y)).__isub__(t)
             x = L_L_Z_inv_mR_c.__isub__(forward_backward_sub(L_L_Z, L_X @ z, overwrite_b=True))
@@ -245,6 +246,7 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
             local_rhs.reshape(-1, 1),
             rtol=rtol,
             maxiter=25,
+            store_outer_Av=False
         )
         solution_now = np.transpose(solution_now.reshape(3, x_shape[0], x_shape[2], x_shape[3]),
                                     (1, 0, 2, 3)) + previous_solution[:, [0, 1, 3]]
