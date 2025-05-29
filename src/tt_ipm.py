@@ -53,7 +53,7 @@ def _get_eq_mat_vec(XAX_k, block_A_k, XAX_kp1, x_shape, inv_I):
         XAX_k_22.shape, block_A_k_22.shape, XAX_kp1_22.shape,
         XAX_k_01.shape, block_A_k_01.shape, XAX_kp1_01.shape,
         x_element_shape,
-        optimize="optimal"
+        optimize="greedy"
     )
 
     def mat_vec(x_core):
@@ -91,13 +91,12 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
             mR_c = rhs[:, 2].reshape(m, 1)
             L_X = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[2, 2], block_A_k[2, 2], XAX_k1[2, 2]).reshape(m, m)
             mL_eq = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[0, 1], block_A_k[0, 1], XAX_k1[0, 1]).reshape(m, m)
-            A = mL_eq @ forward_backward_sub(L_L_Z, L_X * inv_I.reshape(1, -1),
-                                             overwrite_b=True) @ mL_eq.T + cached_einsum('lsr,smnS,LSR->lmLrnR',
+            A = (mL_eq @ forward_backward_sub(L_L_Z, L_X * inv_I.reshape(1, -1),
+                                             overwrite_b=True) @ mL_eq.T).__iadd__(cached_einsum('lsr,smnS,LSR->lmLrnR',
                                                                                          XAX_k[0, 0], block_A_k[0, 0],
-                                                                                         XAX_k1[0, 0]).reshape(m, m)
+                                                                                         XAX_k1[0, 0]).reshape(m, m))
             b = mR_p - mL_eq @ forward_backward_sub(L_L_Z, mR_c - (L_X * inv_I.reshape(1, -1)) @ mR_d,
-                                                    overwrite_b=True) - A @ \
-                np.transpose(previous_solution, (1, 0, 2, 3))[0].reshape(-1, 1)
+                                                    overwrite_b=True) - A @ previous_solution[:, 0].reshape(-1, 1)
             solution_now[:, 0] += scip.linalg.solve(A, b, check_finite=False, overwrite_a=True, overwrite_b=True, assume_a="gen").reshape(x_shape[0], x_shape[2], x_shape[3]).__iadd__(previous_solution[:, 0])
             solution_now[:, 2] +=  (mR_d - mL_eq.T @ solution_now[:, 0].reshape(-1, 1)).__imul__(inv_I.reshape(-1, 1)).reshape(x_shape[0], x_shape[2], x_shape[3])
             solution_now[:, 1] += forward_backward_sub(L_L_Z, mR_c - L_X @ solution_now[:, 2].reshape(-1, 1), overwrite_b=True).reshape(x_shape[0], x_shape[2], x_shape[3])
@@ -110,7 +109,8 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         linear_op = scip.sparse.linalg.LinearOperator((2 * m, 2 * m), matvec=mat_vec)
         local_rhs = -linear_op(np.transpose(previous_solution[:, :2], (1, 0, 2, 3)).reshape(-1, 1)).reshape(2, x_shape[0], x_shape[2], x_shape[3])
         local_rhs[0] += rhs[:, 0]
-        local_rhs[1] += rhs[:, 2] - cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[2, 2], block_A_k[2, 2], XAX_k1[2, 2], inv_I*rhs[:, 1])
+        local_rhs[1] += rhs[:, 2]
+        local_rhs[1] -= cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[2, 2], block_A_k[2, 2], XAX_k1[2, 2], inv_I*rhs[:, 1])
         solution_now, info = scip.sparse.linalg.lgmres(
             linear_op,
             local_rhs.reshape(-1, 1),
@@ -183,7 +183,7 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
     rhs[:, 1] = cached_einsum('br,bmB,BR->rmR', Xb_k[1], block_b_k[1], Xb_k1[1]) if 1 in block_b_k else 0
     rhs[:, 2] = cached_einsum('br,bmB,BR->rmR', Xb_k[2], block_b_k[2], Xb_k1[2]) if 2 in block_b_k else 0
     rhs[:, 3] = cached_einsum('br,bmB,BR->rmR', Xb_k[3], block_b_k[3], Xb_k1[3]) if 3 in block_b_k else 0
-    inv_I = np.divide(1, cached_einsum('lsr,smnS,LSR->lmL', XAX_k[(1, 2)], block_A_k[(1, 2)], XAX_k1[(1, 2)]))
+    inv_I = np.divide(1, cached_einsum('lsr,smnS,LSR->lmL', XAX_k[1, 2], block_A_k[1, 2], XAX_k1[1, 2]))
     norm_rhs = max(np.linalg.norm(rhs), 1e-12)
     block_res_old_scalar = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution) - rhs) / norm_rhs
     if block_res_old_scalar < rtol:
@@ -191,7 +191,7 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
     if m <= size_limit:
         try:
             L_L_Z = scip.linalg.cholesky(
-                cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[(2, 1)], block_A_k[(2, 1)], XAX_k1[(2, 1)]).reshape(m, m),
+                cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[2, 1], block_A_k[2, 1], XAX_k1[2, 1]).reshape(m, m),
                 check_finite=False, lower=True,  overwrite_a=True
             )
             mR_p = rhs[:, 0].reshape(m, 1)
@@ -789,7 +789,7 @@ def tt_ipm(
         rhs,
         x0=x0,
         local_solver=_ipm_local_solver_ineq,
-        tol=0.5 * min(feasibility_tol, centrality_tol),
+        tol=0.5 * min(feasibility_tol, centrality_tol, op_tol),
         nswp=nwsp,
         size_limit=size_limit,
         verbose=verbose

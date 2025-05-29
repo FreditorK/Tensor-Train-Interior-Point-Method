@@ -1,15 +1,11 @@
 import sys
 import os
 import time
-import copy
-
-import numpy as np
 
 sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
 from opt_einsum import contract as einsum
-from sklearn.utils.extmath import randomized_svd
 
 class TTBlockVector:
     def __init__(self):
@@ -239,7 +235,7 @@ def _bck_sweep(
                 u = u[:, idx]
                 v = v[idx, :]
             else:
-                u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True)
+                u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
             v = s.reshape(-1, 1) * v
 
             r = min(prune_singular_vals(s, max(real_tol, 2*block_res_new)), r_max)
@@ -305,7 +301,7 @@ def _fwd_sweep(
                 u = u[:, idx]
                 v = v[idx, :]
             else:
-                u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True)
+                u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
             v = s.reshape(-1, 1) * v
             u = u.reshape(rx[k], N[k], -1)
             v = v.reshape(-1, block_size, rx[k + 1])
@@ -363,7 +359,8 @@ def tt_block_als(block_A, block_b, tol, termination_tol=1e-3, eps=1e-12, nswp=22
     r_max_final = block_size*int(np.ceil(np.sqrt(d)*d)) + block_size*int(np.ceil(np.sqrt(block_size)))
     size_limit = (r_max_final)**2*N[0]/(np.sqrt(d)*d) if size_limit is None else size_limit
     r_max_part0 = max(int(np.ceil(r_max_final / np.sqrt(np.sqrt(d)*d))) - 2, 2)
-    r_max_part = [r_max_part0]*warm_up + [r_max_final]*nswp
+    steps = np.linspace(r_max_part0+2, max(r_max_final, r_max_part0+nswp), nswp // 2, dtype=int)
+    r_max_part = np.concatenate(([r_max_part0]*warm_up,  np.column_stack((steps, steps)).ravel(), [r_max_final]))
     x_cores = tt_rank_retraction(x_cores, [r_max_part0]*(d-1)) if x0 is not None else x_cores
     rx = np.array([1] + tt_ranks(x_cores) + [1])
     nswp += warm_up

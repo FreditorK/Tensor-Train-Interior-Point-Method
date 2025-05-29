@@ -1,4 +1,3 @@
-import copy
 import sys
 import os
 import time
@@ -41,7 +40,7 @@ def _step_size_local_solve(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k, A_k
         _mat_vec_D = contract_expression('lsr,smnS,LSR,rnR->lmL', XDX_k.shape, Delta_k.shape, XDX_k1.shape, x_shape, optimize="greedy")
         mat_vec_D = lambda x_vec: -_mat_vec_D(XDX_k, Delta_k, XDX_k1, x_vec.reshape(*x_shape)).reshape(-1, 1)
         D_op = scip.sparse.linalg.LinearOperator((m, m), matvec=mat_vec_D)
-        AD_op = scip.sparse.linalg.LinearOperator((m, m), matvec=lambda x_vec: mat_vec_A(x_vec) / step_size - mat_vec_D(x_vec))
+        AD_op = scip.sparse.linalg.LinearOperator((m, m), matvec=lambda x_vec: (mat_vec_A(x_vec) / step_size).__isub__(mat_vec_D(x_vec)))
 
         try:
             eig_val, solution_now = scip.sparse.linalg.eigsh(AD_op, tol=eps, k=1, which="SA", v0=previous_solution)
@@ -56,7 +55,7 @@ def _step_size_local_solve(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k, A_k
                 solution_now = previous_solution
 
         eig_val = previous_solution.T @ AD_op(previous_solution)
-        old_res = np.linalg.norm(AD_op(previous_solution) - eig_val * previous_solution)
+        old_res = np.linalg.norm(AD_op(previous_solution).__isub__(eig_val * previous_solution))
 
     return solution_now.reshape(-1, 1), step_size, old_res
 
@@ -106,7 +105,7 @@ def tt_max_generalised_eigen(A, Delta, x0=None, kick_rank=None, nswp=10, tol=1e-
     N = np.array([c.shape[1] for c in x_cores])
 
     XAX = [np.ones((1, 1, 1))] + [None] * (d - 1) + [np.ones((1, 1, 1))]  # size is rk x Rk x rk
-    XDX = copy.deepcopy(XAX)
+    XDX = [np.ones((1, 1, 1))] + [None] * (d - 1) + [np.ones((1, 1, 1))]
 
     step_size = 1
     last = False
