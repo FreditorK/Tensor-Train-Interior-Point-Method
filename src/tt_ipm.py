@@ -53,7 +53,7 @@ def _get_eq_mat_vec(XAX_k, block_A_k, XAX_kp1, x_shape, inv_I):
         XAX_k_22.shape, block_A_k_22.shape, XAX_kp1_22.shape,
         XAX_k_01.shape, block_A_k_01.shape, XAX_kp1_01.shape,
         x_element_shape,
-        optimize = "greedy"
+        optimize="optimal"
     )
 
     def mat_vec(x_core):
@@ -90,12 +90,19 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
             mR_c = rhs[:, 2].reshape(m, 1)
             L_X = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[2, 2], block_A_k[2, 2], XAX_k1[2, 2]).reshape(m, m)
             mL_eq = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[0, 1], block_A_k[0, 1], XAX_k1[0, 1]).reshape(m, m)
-            A = mL_eq @ forward_backward_sub(L_L_Z, L_X * inv_I.reshape(1, -1), overwrite_b=True) @ mL_eq.T + cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[0, 0], block_A_k[0, 0], XAX_k1[0, 0]).reshape(m, m)
-            b = mR_p - mL_eq @ forward_backward_sub(L_L_Z, mR_c - (L_X * inv_I.reshape(1, -1)) @ mR_d, overwrite_b=True) - A @ np.transpose(previous_solution, (1, 0, 2, 3))[1].reshape(-1, 1)
-            y = scip.linalg.solve(A, b, check_finite=False, overwrite_a=True, overwrite_b=True) + np.transpose(previous_solution, (1, 0, 2, 3))[1].reshape(-1, 1)
+            A = mL_eq @ forward_backward_sub(L_L_Z, L_X * inv_I.reshape(1, -1),
+                                             overwrite_b=True) @ mL_eq.T + cached_einsum('lsr,smnS,LSR->lmLrnR',
+                                                                                         XAX_k[0, 0], block_A_k[0, 0],
+                                                                                         XAX_k1[0, 0]).reshape(m, m)
+            b = mR_p - mL_eq @ forward_backward_sub(L_L_Z, mR_c - (L_X * inv_I.reshape(1, -1)) @ mR_d,
+                                                    overwrite_b=True) - A @ \
+                np.transpose(previous_solution, (1, 0, 2, 3))[1].reshape(-1, 1)
+            y = scip.linalg.solve(A, b, check_finite=False, overwrite_a=True, overwrite_b=True) + \
+                np.transpose(previous_solution, (1, 0, 2, 3))[1].reshape(-1, 1)
             z = inv_I.reshape(-1, 1) * (mR_d - mL_eq.T @ y)
             x = forward_backward_sub(L_L_Z, mR_c - L_X @ z, overwrite_b=True)
-            solution_now = np.transpose(np.vstack((y, x, z)).reshape(x_shape[1], x_shape[0], x_shape[2], x_shape[3]), (1, 0, 2, 3))
+            solution_now = np.transpose(np.vstack((y, x, z)).reshape(x_shape[1], x_shape[0], x_shape[2], x_shape[3]),
+                                        (1, 0, 2, 3))
         except:
             size_limit = 0
 
@@ -106,13 +113,15 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         local_rhs = -linear_op(np.transpose(previous_solution[:, :2], (1, 0, 2, 3)).reshape(-1, 1)).reshape(2, x_shape[0], x_shape[2], x_shape[3])
         local_rhs[0] += rhs[:, 0]
         local_rhs[1] += rhs[:, 2] - cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[2, 2], block_A_k[2, 2], XAX_k1[2, 2], inv_I*rhs[:, 1])
-        solution_now, info = scip.sparse.linalg.gmres(
+        solution_now, info = scip.sparse.linalg.lgmres(
             linear_op,
             local_rhs.reshape(-1, 1),
-            rtol=1e-3*block_res_old,
-            maxiter=30
+            rtol=rtol,
+            maxiter=25
         )
+
         solution_now = np.transpose(solution_now.reshape(2, x_shape[0], x_shape[2], x_shape[3]), (1, 0, 2, 3)).__iadd__(previous_solution[:, :2])
+
         z = inv_I * (rhs[:, 1] - cached_einsum('lsr,smnS,LSR,lmL->rnR', XAX_k[0, 1], block_A_k[0, 1], XAX_k1[0, 1], solution_now[:, 0]))
         solution_now = np.concatenate((solution_now, z.reshape(x_shape[0], 1, x_shape[2], x_shape[3])), axis=1)
 
@@ -230,11 +239,11 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
         local_rhs[1] += rhs[:, 2] - cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[2, 2], block_A_k[2, 2],
                                                   XAX_k1[2, 2], inv_I * rhs[:, 1])
         local_rhs[2] += rhs[:, 3]
-        solution_now, info = scip.sparse.linalg.gmres(
+        solution_now, info = scip.sparse.linalg.lgmres(
             linear_op,
             local_rhs.reshape(-1, 1),
-            rtol=1e-3*block_res_old_scalar,
-            maxiter=30,
+            rtol=rtol,
+            maxiter=25,
         )
         solution_now = np.transpose(solution_now.reshape(3, x_shape[0], x_shape[2], x_shape[3]),
                                     (1, 0, 2, 3)) + previous_solution[:, [0, 1, 3]]
@@ -350,18 +359,18 @@ def tt_infeasible_newton_system(
 
     if status.aho_direction:
         if status.is_last_iter:
-            lhs[2, 1] = tt_rank_reduce(tt_scale(0.5, tt_add(tt_IkronM(Z_tt), tt_MkronI(Z_tt))), eps=min(status.op_tol, status.mu))
-            lhs[2, 2] = tt_rank_reduce(tt_scale(0.5, tt_add(tt_MkronI(X_tt), tt_IkronM(X_tt))), eps=min(status.op_tol, status.mu))
+            lhs[2, 1] = tt_rank_reduce(tt_scale(0.5, tt_add(tt_IkronM(Z_tt), tt_MkronI(Z_tt))), eps=status.op_tol)
+            lhs[2, 2] = tt_rank_reduce(tt_scale(0.5, tt_add(tt_MkronI(X_tt), tt_IkronM(X_tt))), eps=status.op_tol)
         else:
-            lhs[2, 1] = tt_psd_rank_reduce(tt_scale(0.5, tt_add(tt_IkronM(Z_tt), tt_MkronI(Z_tt))), eps=min(status.op_tol, status.mu))
-            lhs[2, 2] = tt_psd_rank_reduce(tt_scale(0.5, tt_add(tt_MkronI(X_tt), tt_IkronM(X_tt))), eps=min(status.op_tol, status.mu))
+            lhs[2, 1] = tt_psd_rank_reduce(tt_scale(0.5, tt_add(tt_IkronM(Z_tt), tt_MkronI(Z_tt))), eps=status.op_tol)
+            lhs[2, 2] = tt_psd_rank_reduce(tt_scale(0.5, tt_add(tt_MkronI(X_tt), tt_IkronM(X_tt))), eps=status.op_tol)
     else:
         if status.is_last_iter:
-            lhs[2, 1] = tt_rank_reduce(tt_MkronI(Z_tt), eps=min(status.op_tol, status.mu))
-            lhs[2, 2] = tt_rank_reduce(tt_IkronM(X_tt), eps=min(status.op_tol, status.mu))
+            lhs[2, 1] = tt_rank_reduce(tt_MkronI(Z_tt), eps=status.op_tol)
+            lhs[2, 2] = tt_rank_reduce(tt_IkronM(X_tt), eps=status.op_tol)
         else:
-            lhs[2, 1] = tt_psd_rank_reduce(tt_MkronI(Z_tt), eps=min(status.op_tol, status.mu))
-            lhs[2, 2] = tt_psd_rank_reduce(tt_IkronM(X_tt), eps=min(status.op_tol, status.mu))
+            lhs[2, 1] = tt_psd_rank_reduce(tt_MkronI(Z_tt), eps=status.op_tol)
+            lhs[2, 2] = tt_psd_rank_reduce(tt_IkronM(X_tt), eps=status.op_tol)
 
     if not status.is_primal_feasible or status.is_last_iter:
         rhs[0] = primal_feas
@@ -375,9 +384,9 @@ def tt_infeasible_newton_system(
     if status.ineq_status is IneqStatus.ACTIVE:
         lhs[3, 1] =  tt_diag_op(T_tt, status.op_tol)
         masked_X_tt = tt_rank_reduce(tt_add(tt_scale(status.boundary_val, ineq_mask), tt_fast_hadammard(ineq_mask, X_tt, status.eps)), eps=status.eps)
-        lhs[3, 3] = tt_rank_reduce(tt_add(status.lag_map_t, tt_diag_op(masked_X_tt, status.eps)), eps=min(status.op_tol, status.mu))
+        lhs[3, 3] = tt_rank_reduce(tt_add(status.lag_map_t, tt_diag_op(masked_X_tt, status.eps)), eps=status.op_tol)
         if not status.is_central or status.is_last_iter:
-            rhs[3] = tt_rank_reduce(tt_reshape(tt_scale(-1, tt_fast_hadammard(masked_X_tt, T_tt, status.eps)), (4, )), eps=min(status.op_tol, status.mu))
+            rhs[3] = tt_rank_reduce(tt_reshape(tt_scale(-1, tt_fast_hadammard(masked_X_tt, T_tt, status.eps)), (4, )), eps=min(status.op_tol, 0.1*status.mu))
 
     return lhs, rhs, status
 
@@ -717,7 +726,7 @@ class IPMStatus:
     eigen_z0 = None
     eigen_xt0 = None
     eigen_zt0 = None
-    kkt_iterations = 6
+    kkt_iterations = 4
 
 
 def tt_ipm(
@@ -901,6 +910,7 @@ def tt_ipm(
             lhs = lhs_skeleton.get_submatrix(2, 2)
             status.mals_delta0 = None
             status.ineq_status = IneqStatus.INACTIVE
+            T_tt = tt_scale(status.eps, ineq_mask)
         elif status.ineq_status is IneqStatus.SETTING_ACTIVE:
             solver = solver_ineq
             lhs = lhs_skeleton
