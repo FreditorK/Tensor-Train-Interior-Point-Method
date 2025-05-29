@@ -117,7 +117,8 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
             linear_op,
             local_rhs.reshape(-1, 1),
             rtol=rtol,
-            maxiter=25
+            maxiter=25,
+            store_outer_Av=False
         )
 
         solution_now = np.transpose(solution_now.reshape(2, x_shape[0], x_shape[2], x_shape[3]), (1, 0, 2, 3)).__iadd__(previous_solution[:, :2])
@@ -726,7 +727,7 @@ class IPMStatus:
     eigen_z0 = None
     eigen_xt0 = None
     eigen_zt0 = None
-    kkt_iterations = 4
+    kkt_iterations = 6
 
 
 def tt_ipm(
