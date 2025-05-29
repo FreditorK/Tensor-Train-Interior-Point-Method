@@ -451,31 +451,15 @@ def _tt_ipm_newton_step(
             status
         )
     else:
-        dim = len(X_tt)
+        if status.verbose:
+            print("==================================\n Inaccurate results!\n==================================")
         status.kkt_iterations = min(status.kkt_iterations + 1, 20)
-        if status.is_last_iter:
-            Delta_X_tt = None
-            Delta_Z_tt = None
-            Delta_Y_tt = None
-            Delta_T_tt = None
-            x_step_size = 0
-            z_step_size = 0
-        else:
-            if status.verbose:
-                print("==================================\n Inaccurate results: Regularising!\n==================================")
-            # regularise
-            reg_tt = tt_scale(3*status.op_tol, tt_identity(dim))
-            Delta_X_tt = reg_tt
-            Delta_Z_tt = reg_tt
-            Delta_Y_tt = [np.zeros((1, 4, 1)) for _ in range(dim)]
-            Delta_T_tt = None
-            if status.ineq_status is IneqStatus.ACTIVE:
-                Delta_T_tt = tt_scale(2*status.eps, ineq_mask)
-            x_step_size = 1
-            z_step_size = 1
-            status.primal_error += 3 * status.op_tol
-            status.dual_error += 3 * status.op_tol
-            status.centrality_error += 9 * status.op_tol
+        Delta_X_tt = None
+        Delta_Z_tt = None
+        Delta_Y_tt = None
+        Delta_T_tt = None
+        x_step_size = 0
+        z_step_size = 0
         return x_step_size, z_step_size, Delta_X_tt, Delta_Y_tt, Delta_Z_tt, Delta_T_tt, status
 
     if not status.is_central and not status.is_last_iter:
@@ -560,31 +544,15 @@ def _tt_ipm_newton_step(
                 status
             )
         else:
-            dim = len(X_tt)
+            if status.verbose:
+                print("==================================\n Inaccurate results!\n==================================")
             status.kkt_iterations = min(status.kkt_iterations + 1, 20)
-            if status.is_last_iter:
-                Delta_X_tt = None
-                Delta_Z_tt = None
-                Delta_Y_tt = None
-                Delta_T_tt = None
-                x_step_size = 0
-                z_step_size = 0
-            else:
-                if status.verbose:
-                    print("==================================\n Inaccurate results: Regularising!\n==================================")
-                # regularise
-                reg_tt = tt_scale(2 * status.op_tol, tt_identity(dim))
-                Delta_X_tt = reg_tt
-                Delta_Z_tt = reg_tt
-                Delta_Y_tt = [np.zeros((1, 4, 1)) for _ in range(dim)]
-                Delta_T_tt = None
-                if status.ineq_status is IneqStatus.ACTIVE:
-                    Delta_T_tt = tt_scale(2*status.eps, ineq_mask)
-                x_step_size = 1
-                z_step_size = 1
-                status.primal_error += 2*status.op_tol
-                status.dual_error += 2*status.op_tol
-                status.centrality_error += 4*status.op_tol
+            Delta_X_tt = None
+            Delta_Z_tt = None
+            Delta_Y_tt = None
+            Delta_T_tt = None
+            x_step_size = 0
+            z_step_size = 0
             return x_step_size, z_step_size, Delta_X_tt, Delta_Y_tt, Delta_Z_tt, Delta_T_tt, status
     else:
         status.sigma = 0
@@ -646,12 +614,13 @@ def _tt_line_search_ineq(x_step_size, z_step_size, X_tt, T_tt, Delta_X_tt, Delta
             status.eigen_xt0,
             status
         )
-        if 1 - x_ineq_step_size < status.eps:
-            if status.ineq_status is IneqStatus.ACTIVE:
-                status.ineq_status = IneqStatus.SETTING_INACTIVE
-        else:
-            if status.ineq_status is IneqStatus.INACTIVE:
-                status.ineq_status = IneqStatus.SETTING_ACTIVE
+        if not status.is_last_iter:
+            if 1 - x_ineq_step_size < status.eps:
+                if status.ineq_status is IneqStatus.ACTIVE:
+                    status.ineq_status = IneqStatus.SETTING_INACTIVE
+            else:
+                if status.ineq_status is IneqStatus.INACTIVE:
+                    status.ineq_status = IneqStatus.SETTING_ACTIVE
         x_step_size *= x_ineq_step_size
 
     if z_step_size > 0 and status.ineq_status is IneqStatus.ACTIVE:
