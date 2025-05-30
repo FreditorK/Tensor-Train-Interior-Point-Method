@@ -7,100 +7,375 @@ cdef extern from "numpy/arrayobject.h":
 
 import numpy as np
 cimport numpy as cnp  # This allows Cython to understand NumPy's C-API
+cimport cython
+import scipy as scp
 
 
-
+@cython.boundscheck(False)
+@cython.wraparound(False)
 cpdef list tt_identity(int dim):
-    cdef list result = []
-    cdef cnp.ndarray[cnp.float64_t, ndim=4] I = np.eye(2).reshape(1, 2, 2, 1)
+    cdef list result = [None] * dim  # Preallocate the list
+    cdef cnp.ndarray[cnp.float64_t, ndim=4] I = np.eye(2, dtype=np.float64).reshape(1, 2, 2, 1)
     cdef int i
 
     for i in range(dim):
-        result.append(I)
+        result[i] = I
 
     return result
 
-cpdef list tt_zero_matrix(int dim, tuple shape=(2, 2)):
-    cdef list result = []
-    cdef cnp.ndarray[cnp.float64_t, ndim=4] zeros_array = np.zeros((1, *shape, 1))
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cpdef list tt_zero_matrix(int dim):
+    cdef list result = [None] * dim  # Preallocate the list
+    cdef cnp.ndarray[cnp.float64_t, ndim=4] zeros_array = np.zeros((1, 2, 2, 1))
     cdef int i
 
     for i in range(dim):
-        result.append(zeros_array)
+        result[i] = zeros_array
 
     return result
  
-
-cpdef list tt_one_matrix(int dim, tuple shape=(2, 2)):
-    cdef list result = []
-    cdef cnp.ndarray[cnp.float64_t, ndim=4] ones_array = np.ones((1, *shape, 1))
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cpdef list tt_one_matrix(int dim):
+    cdef list result = [None] * dim
+    cdef cnp.ndarray[cnp.float64_t, ndim=4] ones_array = np.ones((1, 2, 2, 1))
     cdef int i
 
     for i in range(dim):
-        result.append(ones_array)
+        result[i] = ones_array
 
     return result
 
+@cython.boundscheck(False)
+@cython.wraparound(False)
 cpdef list tt_transpose(list matrix_tt):
-    cdef list shape_lengths = [len(c.shape) for c in matrix_tt]
-    cdef int split_idx = np.argmax(shape_lengths)
-    cdef list transposed_cores = matrix_tt[:split_idx]
+    cdef Py_ssize_t split_idx = 0
+    cdef Py_ssize_t iters = len(matrix_tt)
+    cdef Py_ssize_t i
+    cdef cnp.ndarray[cnp.float64_t, ndim=4] core
     cdef cnp.ndarray[cnp.float64_t, ndim=4] swapped_core
-    cdef int iters = len(matrix_tt)
-    cdef int i
+    cdef list transposed_cores = [None] * iters
 
+    # Determine split index based on the maximum shape length
+    split_idx = np.argmax([np.ndim(c) for c in matrix_tt])
+
+    # Copy first part without change
+    for i in range(split_idx):
+        transposed_cores[i] = matrix_tt[i]
+
+    # Transpose from split_idx onward
     for i in range(split_idx, iters):
-        swapped_core = matrix_tt[i]
-        swapped_core = np.swapaxes(swapped_core, axis1=1, axis2=2)
-        transposed_cores.append(swapped_core)
+        core = matrix_tt[i]
+        swapped_core = np.swapaxes(core, 1, 2)
+        transposed_cores[i] = swapped_core
 
     return transposed_cores
 
-
+@cython.boundscheck(False)
+@cython.wraparound(False)
 cpdef list tt_ranks(list train_tt):
-    cdef int n = len(train_tt)
-    cdef list ranks = []
-    cdef int rank
+    cdef Py_ssize_t n = len(train_tt)
+    cdef Py_ssize_t i
     cdef cnp.ndarray core
-    cdef int i
+    cdef list ranks = [0] * (n - 1)  # Preallocate result list
 
     for i in range(1, n):
         core = train_tt[i]
-        rank = len(core)
-        ranks.append(rank)
+        ranks[i - 1] = core.shape[0]  # Or len(core) if it's guaranteed to be 1D along axis 0
 
     return ranks
 
-
+@cython.boundscheck(False)
+@cython.wraparound(False)
 cpdef list tt_scale(float alpha, list train_tt):
-    cdef int n = len(train_tt)
-    cdef int idx = np.random.randint(low=0, high=n)
-    cdef list scaled_tt = []
+    cdef Py_ssize_t n = len(train_tt)
+    cdef Py_ssize_t i, idx = np.random.randint(0, n)
+    cdef list scaled_tt = [None] * n
     cdef cnp.ndarray core
-    cdef int i
 
+    # Copy unchanged cores before the scaled one
     for i in range(idx):
-        core = train_tt[i]
-        scaled_tt.append(core)
+        scaled_tt[i] = train_tt[i]
 
-    core = alpha * train_tt[idx]
-    scaled_tt.append(core)
+    # Scale selected core
+    core = train_tt[idx]
+    scaled_tt[idx] = alpha * core
 
+    # Copy remaining cores after the scaled one
     for i in range(idx + 1, n):
-        core = train_tt[i]
-        scaled_tt.append(core)
+        scaled_tt[i] = train_tt[i]
 
     return scaled_tt
 
+@cython.boundscheck(False)
+@cython.wraparound(False)
 cpdef list tt_swap_all(list tt_train):
-    cdef int n = len(tt_train)
-    cdef list swapped_tt = []
-    cdef int i
+    cdef Py_ssize_t n = len(tt_train)
+    cdef list swapped_tt = [None] * n  # preallocate list
+    cdef Py_ssize_t i
     cdef cnp.ndarray core
 
-    for i in range(n - 1, -1, -1):
-        core = tt_train[i]
-        core = np.swapaxes(core, 0, -1)
-        swapped_tt.append(core)
+    for i in range(n):
+        core = tt_train[n - 1 - i]
+        swapped_tt[i] = np.swapaxes(core, 0, -1)
 
     return swapped_tt
+
+@cython.boundscheck(False)
+cpdef tt_rl_orthogonalise(list train_tt):
+    cdef int dim = len(train_tt)
+    cdef int i
+    cdef tuple shape_i, shape_im1
+    cdef int shape_length
+    cdef int new_rank
+    cdef cnp.ndarray q_T, r
+    if dim == 1:
+        return train_tt
+    for i in range(dim - 1, -1, -1):
+        shape_i = train_tt[i].shape
+        shape_im1 = train_tt[i - 1].shape
+        shape_length = len(shape_i)
+
+        # QR decomposition
+        q_T, r = scp.linalg.qr(
+            train_tt[i].reshape(shape_i[0], np.prod(shape_i[1:])).T,
+            check_finite=False,
+            mode="economic"
+        )
+        new_rank = r.shape[0]
+
+        train_tt[i] = q_T.T.reshape(new_rank, *shape_i[1:])
+        train_tt[i - 1] = (
+                train_tt[i - 1].reshape(-1, shape_i[0]) @ r.T
+        ).reshape(*shape_im1[:shape_length-1], new_rank)
+
+    return train_tt
+
+@cython.boundscheck(False)
+cpdef int prune_singular_vals(cnp.ndarray[cnp.double_t, ndim=1] s, double eps):
+    cdef double norm_s = np.linalg.norm(s)
+    cdef cnp.ndarray[cnp.double_t, ndim=1] sc
+    cdef int R
+
+    if norm_s == 0.0:
+        return 1
+
+    sc = np.cumsum(np.abs(s[::-1]) ** 2)[::-1]
+
+    R = np.argmax(sc < eps ** 2)
+    R = max(R, 1)
+    if sc[-1] > eps ** 2:
+        R = s.size
+
+    return R
+
+@cython.boundscheck(False)
+cpdef list tt_rank_reduce(list train_tt, double eps=1e-18):
+    cdef int dim = len(train_tt)
+    cdef list ranks_py = tt_ranks(train_tt)
+    cdef cnp.ndarray[int, ndim=1] ranks = np.array([1] + ranks_py + [1], dtype=np.int32)
+
+    if dim == 1 or np.all(ranks == 1):
+        return train_tt
+
+    eps = eps / np.sqrt(dim - 1)
+    train_tt = tt_rl_orthogonalise(train_tt)
+
+    cdef int rank = 1
+    cdef int idx, next_rank
+    cdef tuple idx_shape, next_idx_shape
+    cdef cnp.ndarray u, s, v_t
+    cdef cnp.ndarray reshaped_core, reshaped_next
+
+    for idx in range(dim - 1):
+        idx_shape = train_tt[idx].shape
+        next_idx_shape = train_tt[idx + 1].shape
+
+        reshaped_core = train_tt[idx].reshape(
+            rank * int(np.prod(idx_shape[1:-1], dtype=np.int32)), -1
+        )
+
+        u, s, v_t = scp.linalg.svd(
+            reshaped_core,
+            full_matrices=False,
+            check_finite=False,
+            overwrite_a=True,
+            lapack_driver="gesvd"
+        )
+
+        next_rank = prune_singular_vals(s, eps)
+
+        train_tt[idx] = u[:, :next_rank].reshape(
+            rank, *idx_shape[1:-1], next_rank
+        )
+
+        reshaped_next = train_tt[idx + 1].reshape(next_idx_shape[0], -1)
+        train_tt[idx + 1] = (
+            s[:next_rank].reshape(-1, 1) * v_t[:next_rank, :] @ reshaped_next
+        ).reshape(next_rank, *next_idx_shape[1:-1], -1)
+
+        rank = next_rank
+
+    return train_tt
+
+cpdef cnp.ndarray _block_diag_tensor(object tensor_1, object tensor_2):
+    """
+    For internal use: Concatenates two tensors to a block diagonal tensor.
+    Works for tensors with shape (r1, n1, ..., nd, r2)
+    """
+
+    cdef tuple shape_1 = tensor_1.shape
+    cdef tuple shape_2 = tensor_2.shape
+    cdef cnp.ndarray result = np.zeros((shape_1[0] + shape_2[0], *shape_1[1:-1], shape_1[-1] + shape_2[-1]))
+    N = tuple([slice(s) for s in shape_1[1:-1]])
+    result[(slice(0, shape_1[0]), *N, slice(0, shape_1[-1]))] = tensor_1
+    result[(slice(shape_1[0], shape_1[0] + shape_2[0]), *N, slice(shape_1[-1], shape_1[-1] + shape_2[-1]))] = tensor_2
+    return result
+
+cpdef tt_add(list train_1_tt, list train_2_tt):
+    """
+    Adds two tensor trains
+    """
+    cdef int n = len(train_1_tt)
+    if n > 1:
+        return [
+            np.concatenate((train_1_tt[0], train_2_tt[0]), axis=-1)
+        ] + [
+            _block_diag_tensor(core_1, core_2) for core_1, core_2 in zip(train_1_tt[1:-1], train_2_tt[1:-1])
+        ] + [
+            np.concatenate((train_1_tt[-1], train_2_tt[-1]), axis=0)
+        ]
+    else:
+        return [train_1_tt[0] + train_2_tt[0]]
+
+
+
+@cython.boundscheck(False)
+cpdef list tt_psd_rank_reduce(list train_tt, double eps=1e-18):
+    cdef int dim = len(train_tt)
+    eps /= 2.0
+
+    cdef cnp.ndarray[int, ndim=1] ranks = np.array([1] + tt_ranks(train_tt) + [1], dtype=np.int32)
+    if dim == 1 or np.all(ranks == 1):
+        return train_tt
+
+    eps = eps / np.sqrt(dim - 1)
+    train_tt = tt_rl_orthogonalise(train_tt)
+
+    cdef int rank = 1
+    cdef double sum_eps_sq = 0.0
+    cdef int idx, next_rank, s_len
+    cdef tuple idx_shape, next_idx_shape
+    cdef cnp.ndarray u, s, v_t
+    cdef cnp.ndarray sc
+    cdef double factor
+    cdef cnp.ndarray I
+    cdef cnp.ndarray reshaped_core, reshaped_next
+
+    for idx in range(dim - 1):
+        idx_shape = train_tt[idx].shape
+        next_idx_shape = train_tt[idx + 1].shape
+
+        reshaped_core = train_tt[idx].reshape(
+            rank * int(np.prod(idx_shape[1:-1], dtype=np.int32)), -1
+        )
+
+        u, s, v_t = scp.linalg.svd(
+            reshaped_core,
+            full_matrices=False,
+            check_finite=False,
+            overwrite_a=True,
+            lapack_driver="gesvd"
+        )
+
+        # Squared singular values in descending order
+        sc = np.cumsum(np.abs(s[::-1]) ** 2)[::-1]
+        s_len = s.shape[0]
+
+        next_rank = np.argmax(sc < eps ** 2)
+        next_rank = max(next_rank, 1)
+        if sc[-1] > eps ** 2:
+            next_rank = s_len
+
+        if next_rank < s_len:
+            sum_eps_sq += sc[next_rank]
+
+        train_tt[idx] = u[:, :next_rank].reshape(rank, *idx_shape[1:-1], next_rank)
+
+        reshaped_next = train_tt[idx + 1].reshape(next_idx_shape[0], -1)
+        train_tt[idx + 1] = (
+                s[:next_rank].reshape(-1, 1) * v_t[:next_rank, :] @ reshaped_next
+        ).reshape(next_rank, *next_idx_shape[1:-1], -1)
+
+        rank = next_rank
+
+    factor = pow(sum_eps_sq, 1.0 / (2 * dim))
+    I = factor * np.eye(train_tt[0].shape[1]).reshape(
+        1, *train_tt[0].shape[1:-1], 1
+    )
+
+    return tt_add(train_tt, [I] * dim)
+
+
+@cython.boundscheck(False)
+cpdef list tt_mask_rank_reduce(list train_tt, list mask_tt, double eps=1e-18):
+    cdef int dim = len(train_tt)
+    eps /= 2.0
+
+    cdef cnp.ndarray[int, ndim=1] ranks = np.array([1] + tt_ranks(train_tt) + [1], dtype=np.int32)
+    if dim == 1 or np.all(ranks == 1):
+        return train_tt
+
+    eps = eps / np.sqrt(dim - 1)
+    train_tt = tt_rl_orthogonalise(train_tt)
+
+    cdef int rank = 1
+    cdef double sum_eps_sq = 0.0
+    cdef int idx, next_rank, s_len
+    cdef tuple idx_shape, next_idx_shape
+    cdef cnp.ndarray u, s, v_t
+    cdef cnp.ndarray sc
+    cdef double factor
+    cdef cnp.ndarray reshaped_core, reshaped_next
+
+    for idx in range(dim - 1):
+        idx_shape = train_tt[idx].shape
+        next_idx_shape = train_tt[idx + 1].shape
+
+        reshaped_core = train_tt[idx].reshape(
+            rank * int(np.prod(idx_shape[1:-1], dtype=np.int32)), -1
+        )
+
+        u, s, v_t = scp.linalg.svd(
+            reshaped_core,
+            full_matrices=False,
+            check_finite=False,
+            overwrite_a=True,
+            lapack_driver="gesvd"
+        )
+
+        # Squared singular values in descending order
+        sc = np.cumsum(np.abs(s[::-1]) ** 2)[::-1]
+        s_len = s.shape[0]
+
+        next_rank = np.argmax(sc < eps ** 2)
+        next_rank = max(next_rank, 1)
+        if sc[-1] > eps ** 2:
+            next_rank = s_len
+
+        if next_rank < s_len:
+            sum_eps_sq += sc[next_rank]
+
+        train_tt[idx] = u[:, :next_rank].reshape(rank, *idx_shape[1:-1], next_rank)
+
+        reshaped_next = train_tt[idx + 1].reshape(next_idx_shape[0], -1)
+        train_tt[idx + 1] = (
+                s[:next_rank].reshape(-1, 1) * v_t[:next_rank, :] @ reshaped_next
+        ).reshape(next_rank, *next_idx_shape[1:-1], -1)
+
+        rank = next_rank
+
+    factor = pow(sum_eps_sq, 1.0 / (2 * dim))
+
+    return tt_add(train_tt, [factor*c for c in mask_tt])

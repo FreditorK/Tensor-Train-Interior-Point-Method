@@ -4,7 +4,7 @@ import os
 sys.path.append(os.getcwd() + '/../')
 from src.tt_ops import *
 from src.tt_ops import tt_rank_reduce, tt_matrix_vec_mul
-from src.tt_amen import tt_amen
+from src.tt_als import tt_amen
 
 np.random.seed(4)
 ranks = [2, 9, 15, 26, 7]

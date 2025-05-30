@@ -1,7 +1,8 @@
 import scipy as scp
+from typing import *
 
-from src.ops import *
 from cy_src.tt_ops_cy import *
+from cy_src.lgmres_cy import lgmres
 from functools import reduce
 from functools import lru_cache
 from opt_einsum import contract_expression
@@ -35,7 +36,7 @@ def tt_random_gaussian(target_ranks: List[int], shape=(2,)):
         [np.divide(1, l_n * np.prod(shape) * l_np1) * np.random.randn(l_n, *shape, l_np1) for l_n, l_np1 in
          zip(target_ranks[:-1], target_ranks[1:])])
 
-def tt_rl_orthogonalise(train_tt: List[np.array]):
+def tt_rl_orthogonalise_py(train_tt: List[np.array]):
     dim = len(train_tt)
     if dim == 1:
         return train_tt
@@ -62,11 +63,6 @@ def tt_lr_orthogonalise(train_tt: List[np.array]):
     train_tt = tt_swap_all(train_tt)
     train_tt = tt_rl_orthogonalise(train_tt)
     train_tt = tt_swap_all(train_tt)
-    return train_tt
-
-def tt_bond_at(train_tt, idx):
-    if idx != -1:
-        train_tt = train_tt[:idx] + [core_bond(train_tt[idx], train_tt[idx + 1])] + train_tt[idx + 2:]
     return train_tt
 
 
@@ -123,17 +119,13 @@ def _tt_lr_random_orthogonalise(train_tt, gaussian_tt):
     return train_tt
 
 
-def tt_rank_reduce(train_tt: List[np.array], eps=1e-18, rank_weighted_error=False):
+def tt_rank_reduce_py(train_tt: List[np.array], eps=1e-18):
     """ Might reduce TT-rank """
     dim = len(train_tt)
     ranks = np.array([1] + tt_ranks(train_tt) + [1])
     if dim == 1 or np.all(ranks==1):
         return train_tt
-    if rank_weighted_error:
-        weights = ranks[1:-1] * ranks[:-2] + ranks[1:-1] * ranks[2:]
-        eps = np.sqrt(weights/np.sum(weights))*eps
-    else:
-        eps = np.ones(dim - 1) * (eps / np.sqrt(dim - 1))
+    eps = (eps / np.sqrt(dim - 1))
     train_tt = tt_rl_orthogonalise(train_tt)
     rank = 1
     for idx, tt_core in enumerate(train_tt[:-1]):
@@ -146,7 +138,7 @@ def tt_rank_reduce(train_tt: List[np.array], eps=1e-18, rank_weighted_error=Fals
             overwrite_a=True,
             lapack_driver="gesvd"
         )
-        next_rank = prune_singular_vals(s, eps[idx])
+        next_rank = prune_singular_vals(s, eps)
         train_tt[idx] = u[:, :next_rank].reshape(rank, *idx_shape[1:-1], next_rank)
         train_tt[idx + 1] = (
             s[:next_rank].reshape(-1, 1) * v_t[:next_rank, :] @ train_tt[idx + 1].reshape(v_t.shape[-1], -1)
@@ -154,95 +146,15 @@ def tt_rank_reduce(train_tt: List[np.array], eps=1e-18, rank_weighted_error=Fals
         rank = next_rank
     return train_tt
 
-def tt_psd_rank_reduce(train_tt: List[np.array], eps=1e-18, rank_weighted_error=False):
-    """ Might reduce TT-rank """
-    dim = len(train_tt)
-    eps /= 2
-    ranks = np.array([1] + tt_ranks(train_tt) + [1])
-    if dim == 1 or np.all(ranks==1):
-        return train_tt
-    if rank_weighted_error:
-        weights = ranks[1:-1] * ranks[:-2] + ranks[1:-1] * ranks[2:]
-        eps = np.sqrt(weights/np.sum(weights))*eps
-    else:
-        eps = np.ones(dim - 1) * (eps / np.sqrt(dim - 1))
-    train_tt = tt_rl_orthogonalise(train_tt)
-    rank = 1
-    sum_eps_sq = 0.0
-    for idx, tt_core in enumerate(train_tt[:-1]):
-        idx_shape = tt_core.shape
-        next_idx_shape = train_tt[idx + 1].shape
-        u, s, v_t = scp.linalg.svd(
-            train_tt[idx].reshape(rank * np.prod(idx_shape[1:len(idx_shape) - 1], dtype=int), -1),
-            full_matrices=False,
-            check_finite=False,
-            overwrite_a=True,
-            lapack_driver="gesvd"
-        )
-        sc = np.cumsum(np.abs(s[::-1]) ** 2)[::-1]
-        next_rank = np.argmax(sc < eps[idx] ** 2)
-        next_rank = max(next_rank, 1)
-        next_rank = s.size if sc[-1] > eps[idx] ** 2 else next_rank
-        if next_rank < len(s):
-            sum_eps_sq += sc[next_rank]
-        train_tt[idx] = u[:, :next_rank].reshape(rank, *idx_shape[1:-1], next_rank)
-        train_tt[idx + 1] = (
-            s[:next_rank].reshape(-1, 1) * v_t[:next_rank, :] @ train_tt[idx + 1].reshape(v_t.shape[-1], -1)
-        ).reshape(next_rank, *next_idx_shape[1:-1], -1)
-        rank = next_rank
-    factor = np.pow(sum_eps_sq, 1 / (2 * dim))
-    I = factor * np.eye(train_tt[0].shape[1]).reshape(1, *train_tt[0].shape[1:-1], 1)
-    return tt_add(train_tt, [I] * dim)
-
-
-def tt_mask_rank_reduce(train_tt: List[np.array], mask_tt, eps=1e-18, rank_weighted_error=False):
-    """ Might reduce TT-rank """
-    dim = len(train_tt)
-    eps /= 2
-    ranks = np.array([1] + tt_ranks(train_tt) + [1])
-    if dim == 1 or np.all(ranks==1):
-        return train_tt
-    if rank_weighted_error:
-        weights = ranks[1:-1] * ranks[:-2] + ranks[1:-1] * ranks[2:]
-        eps = np.sqrt(weights/np.sum(weights))*eps
-    else:
-        eps = np.ones(dim - 1) * (eps / np.sqrt(dim - 1))
-    train_tt = tt_rl_orthogonalise(train_tt)
-    rank = 1
-    sum_eps_sq = 0.0
-    for idx, tt_core in enumerate(train_tt[:-1]):
-        idx_shape = tt_core.shape
-        next_idx_shape = train_tt[idx + 1].shape
-        u, s, v_t = scp.linalg.svd(
-            train_tt[idx].reshape(rank * np.prod(idx_shape[1:len(idx_shape) - 1], dtype=int), -1),
-            full_matrices=False,
-            check_finite=False,
-            overwrite_a=True,
-            lapack_driver="gesvd"
-        )
-        sc = np.cumsum(np.abs(s[::-1]) ** 2)[::-1]
-        next_rank = np.argmax(sc < eps[idx] ** 2)
-        next_rank = max(next_rank, 1)
-        next_rank = s.size if sc[-1] > eps[idx] ** 2 else next_rank
-        if next_rank < len(s):
-            sum_eps_sq += sc[next_rank]
-        train_tt[idx] = u[:, :next_rank].reshape(rank, *idx_shape[1:-1], next_rank)
-        train_tt[idx + 1] = (
-            s[:next_rank].reshape(-1, 1) * v_t[:next_rank, :] @ train_tt[idx + 1].reshape(v_t.shape[-1], -1)
-        ).reshape(next_rank, *next_idx_shape[1:-1], -1)
-        rank = next_rank
-    factor = np.pow(sum_eps_sq, 1 / (2 * dim))
-    return tt_add(train_tt, [factor*c for c in mask_tt])
-
 
 def tt_rank_retraction(train_tt: List[np.array], upper_ranks: List[int]):
     """ Might reduce TT-rank """
-    train_tt = tt_rl_orthogonalise(train_tt)
+    train_tt = tt_rl_orthogonalise_py(train_tt)
     rank = 1
     for idx, upper_rank in enumerate(upper_ranks):
         idx_shape = train_tt[idx].shape
         next_idx_shape = train_tt[idx + 1].shape
-        U, S, V_T = scip.linalg.svd(train_tt[idx].reshape(rank * np.prod(idx_shape[1:-1], dtype=int), -1), full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
+        U, S, V_T = scp.linalg.svd(train_tt[idx].reshape(rank * np.prod(idx_shape[1:-1], dtype=int), -1), full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
         abs_S = np.abs(S)
         next_rank = min(upper_rank, len(abs_S > 0))
         non_sing_eig_idxs = np.argpartition(abs_S, -next_rank)[-next_rank:]
@@ -266,7 +178,7 @@ def tt_svd(tensor: np.array, err_bound=1e-18) -> List[np.array]:
     cores = []
     for i in range(len(shape) - 1):
         A = tensor.reshape(rank * shape[i], -1)
-        U, S, V_T = scip.linalg.svd(A, full_matrices=False, check_finite=False, lapack_driver="gesvd")
+        U, S, V_T = scp.linalg.svd(A, full_matrices=False, check_finite=False, lapack_driver="gesvd")
         S = S.flatten()
         _, non_sing_eig_idxs = np.asarray(S >= min(np.max(S), err_bound)).nonzero()
         S = S[non_sing_eig_idxs]
@@ -290,30 +202,6 @@ def tt_entry(train_tt: List[np.array], indices: List[int]) -> np.array:
         np.linalg.multi_dot(
             [core[tuple([slice(None)] + [i] * (len(core.shape) - 2))] for i, core in zip(indices, train_tt)])
     )
-
-
-def _block_diag_tensor(tensor_1: np.array, tensor_2: np.array) -> np.array:
-    """
-    For internal use: Concatenates two tensors to a block diagonal tensor
-    """
-    shape_1 = tensor_1.shape
-    shape_2 = tensor_2.shape
-    result = np.zeros((shape_1[0] + shape_2[0], *shape_1[1:-1], shape_1[-1] + shape_2[-1]))
-    N = tuple([slice(s) for s in shape_1[1:-1]])
-    result[(slice(0, shape_1[0]), *N, slice(0, shape_1[-1]))] =  tensor_1
-    result[(slice(shape_1[0], shape_1[0] + shape_2[0]), *N, slice(shape_1[-1], shape_1[-1] + shape_2[-1]))] = tensor_2
-    return result
-
-
-def tt_add(train_1_tt: List[np.array], train_2_tt: List[np.array]) -> List[np.array]:
-    """
-    Adds two tensor trains
-    """
-    if len(train_1_tt) > 1:
-        return [np.concatenate((train_1_tt[0], train_2_tt[0]), axis=-1)] + \
-            [_block_diag_tensor(core_1, core_2) for core_1, core_2 in zip(train_1_tt[1:-1], train_2_tt[1:-1])] + \
-            [np.concatenate((train_1_tt[-1], train_2_tt[-1]), axis=0)]
-    return [train_1_tt[0] + train_2_tt[0]]
 
 
 def tt_sub(train_1_tt: List[np.array], train_2_tt: List[np.array]) -> List[np.array]:
@@ -342,38 +230,14 @@ def tt_normalise(train_tt, radius=1):
     factor = np.divide(radius, np.sqrt(tt_inner_prod(train_tt, train_tt)))
     return tt_scale(factor, train_tt)
 
-
-def prune_singular_vals(s, eps):
-    if np.linalg.norm(s) == 0.0:
-        return 1
-    sc = np.cumsum(np.abs(s[::-1]) ** 2)[::-1]
-    R = np.argmax(sc < eps ** 2)
-    R = max(R, 1)
-    R = s.size if sc[-1] > eps ** 2 else R
-
-    return R
-
-
-def prune_eig_vals(s, eps):
-    if np.linalg.norm(s) == 0.0:
-        return 1
-    s = s[::-1]
-    s = s[s > 0]
-    sc = np.cumsum(np.abs(s[::-1]) ** 2)[::-1]
-    R = np.argmax(sc < eps ** 2)
-    R = max(R, 1)
-    R = s.size if sc[-1] > eps ** 2 else R
-
-    return R
-
 def swap_cores(core_a, core_b, eps):
     if len(core_a.shape) == 3 and len(core_b.shape) == 3:
-        u, s, v = scip.linalg.svd(einsum("rms,snR->rnmR", core_a, core_b, optimize=[(0, 1)]).reshape(core_a.shape[0] * core_b.shape[1], -1), full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
+        u, s, v = scp.linalg.svd(einsum("rms,snR->rnmR", core_a, core_b, optimize=[(0, 1)]).reshape(core_a.shape[0] * core_b.shape[1], -1), full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
         r = prune_singular_vals(s, eps)
         return np.reshape(u[:, :r] * s[:r].reshape(1, -1), (core_a.shape[0], core_b.shape[1], -1)), np.reshape(v[:r, :],(-1, core_a.shape[1], core_b.shape[2]))
     elif len(core_a.shape) == 4 and len(core_b.shape) == 4:
         # TODO: Can we split them up before
-        u, s, v = scip.linalg.svd(einsum("rmas,snbR->rnbmaR", core_a, core_b, optimize=[(0, 1)]).reshape(core_a.shape[0] * core_b.shape[1] * core_b.shape[2], -1), full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
+        u, s, v = scp.linalg.svd(einsum("rmas,snbR->rnbmaR", core_a, core_b, optimize=[(0, 1)]).reshape(core_a.shape[0] * core_b.shape[1] * core_b.shape[2], -1), full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
         r = prune_singular_vals(s, eps)
         return np.reshape(u[:, :r] * s[:r].reshape(1, -1), (core_a.shape[0], core_b.shape[1], core_b.shape[2], -1)), np.reshape(v[:r, :], (-1, core_a.shape[1], core_a.shape[2], core_b.shape[3]))
     else:
@@ -442,7 +306,7 @@ def tt_fast_hadammard(train_tt_1, train_tt_2, eps=1e-18):
 
 
 def tt_kron(matrix_tt_1, matrix_tt_2):
-    # FIXME:  DO SVD right away to not be overbearing to memory
+    # TODO:  DO SVD right away to not be overbearing to memory
     path = [(0, 1)]
     result_tt = [einsum("rmnR, lijL -> rlminjRL", c_1, c_2, optimize=path).reshape(c_1.shape[0]*c_2.shape[0], c_1.shape[1]*c_2.shape[1], c_1.shape[2]*c_2.shape[2], c_1.shape[-1]*c_2.shape[-1]) for c_1, c_2 in zip(matrix_tt_1, matrix_tt_2)]
     return result_tt
@@ -489,8 +353,25 @@ def tt_sketch(shape, target_ranks):
     ]
 
 
+def _break_core_bond(core, err_bound=1e-18):
+    """ Breaks up a bond between two cores """
+    shape = core.shape
+    k = len(shape) // 2
+    A = core.reshape(np.prod(shape[:k]), -1)
+    U, S, V_T = scp.linalg.svd(A, full_matrices=False, check_finite=False, overwrite_a=True)
+    non_sing_eig_idxs = np.asarray(np.abs(S) > err_bound).nonzero()[0]
+    if len(non_sing_eig_idxs) == 0:
+        non_sing_eig_idxs = np.array([0])
+    S = S[non_sing_eig_idxs]
+    next_rank = len(S)
+    U = U[:, non_sing_eig_idxs]
+    V_T = V_T[non_sing_eig_idxs, :]
+    G_i = U.reshape(*shape[:k], next_rank)
+    G_ip1 = (np.diag(S) @ V_T).reshape(next_rank, *shape[k:])
+    return [G_i, G_ip1]
+
 def tt_split_bonds(matrix_tt):
-    return sum([break_core_bond(c) for c in matrix_tt], [])
+    return sum([_break_core_bond(c) for c in matrix_tt], [])
 
 
 def tt_merge_bonds(vec_tt):
@@ -547,7 +428,7 @@ def tt_sum(*args, op_tol=1e-18, rank_reduce=True):
     sum_tt = args[0]
     for arg in args[1:]:
         if rank_reduce:
-            sum_tt =  tt_rank_reduce(tt_add(sum_tt, arg), op_tol, rank_weighted_error=True)
+            sum_tt =  tt_rank_reduce(tt_add(sum_tt, arg), op_tol)
         else:
             sum_tt = tt_add(sum_tt, arg)
     return sum_tt
@@ -616,15 +497,15 @@ def tt_MkronI(matrix_tt):
     return [einsum("rmnR, lijL -> rlminjRL", c, I, optimize=path).reshape(c.shape[0], 4, 4, c.shape[-1]) for c in matrix_tt]
 
 
-def tt_diag_op(matrix_tt, eps=1e-18, rank_weighted_error=False):
+def tt_diag_op(matrix_tt, eps=1e-18):
     identity = np.eye(matrix_tt[0].shape[1]*matrix_tt[0].shape[2])
     path = [(0, 1)]
     basis = [einsum("ij, rjR -> rijR", identity, c.reshape(c.shape[0], c.shape[1]*c.shape[2], c.shape[3]), optimize=path) for c in matrix_tt]
-    return tt_rank_reduce(basis, eps, rank_weighted_error)
+    return tt_rank_reduce(basis, eps)
 
 def tt_tril_one_matrix(dim):
     if dim == 1:
-        return np.array([[1, 0], [1, 1]]).reshape(1, 2, 2, 1)
+        return [np.array([[1, 0], [1, 1]]).reshape(1, 2, 2, 1)]
     all_one = np.ones((1, 2, 2, 1))
     all_zeros = np.zeros((1, 2, 2, 1))
     return ([np.concatenate((E(1, 0), E(0, 0) + E(1, 1)), axis=-1)]
@@ -634,7 +515,7 @@ def tt_tril_one_matrix(dim):
 
 def tt_triu_one_matrix(dim):
     if dim == 1:
-        return np.array([[1, 1], [0, 1]]).reshape(1, 2, 2, 1)
+        return [np.array([[1, 1], [0, 1]]).reshape(1, 2, 2, 1)]
     all_one = np.ones((1, 2, 2, 1))
     all_zeros = np.zeros((1, 2, 2, 1))
     return ([np.concatenate((E(0, 1), E(0, 0) + E(1, 1)), axis=-1)]

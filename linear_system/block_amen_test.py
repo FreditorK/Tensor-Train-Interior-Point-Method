@@ -6,7 +6,7 @@ sys.path.append(os.getcwd() + '/../')
 from src.tt_ops import *
 from src.ops import *
 from src.tt_ops import tt_rank_reduce
-from src.tt_amen import tt_block_als, TTBlockMatrix, TTBlockVector
+from src.tt_als import tt_block_als, TTBlockMatrix, TTBlockVector
 from src.tt_ipm import _tt_get_block
 
 np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=4, suppress=True)

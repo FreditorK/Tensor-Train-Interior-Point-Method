@@ -176,19 +176,19 @@ class TTBlockMatrixView:
     def all_keys(self):
         return self._data.keys() | self._aliases.values() | self._transposes.values()
 
-def _compute_phi_bck_A(Phi_now, core_left, core_A, core_right):
+def compute_phi_bck_A(Phi_now, core_left, core_A, core_right):
     return cached_einsum('LSR,lML,sMNS,rNR->lsr', Phi_now, core_left, core_A, core_right)
 
 
-def _compute_phi_fwd_A(Phi_now, core_left, core_A, core_right):
+def compute_phi_fwd_A(Phi_now, core_left, core_A, core_right):
     return cached_einsum('lsr,lML,sMNS,rNR->LSR',Phi_now, core_left, core_A, core_right)
 
 
-def _compute_phi_bck_rhs(Phi_now, core_b, core):
+def compute_phi_bck_rhs(Phi_now, core_b, core):
     return cached_einsum('BR,bnB,rnR->br', Phi_now, core_b, core)
 
 
-def _compute_phi_fwd_rhs(Phi_now, core_rhs, core):
+def compute_phi_fwd_rhs(Phi_now, core_rhs, core):
     return cached_einsum('br,bnB,rnR->BR', Phi_now, core_rhs, core)
 
 
@@ -229,13 +229,13 @@ def _bck_sweep(
 
         if k > 0:
             if min(rx[k] * block_size, N[k] * rx[k + 1]) > 2*r_max:
-                u, s, v = scip.sparse.linalg.svds(solution_now, k=r_max, tol=eps, which="LM")
+                u, s, v = scp.sparse.linalg.svds(solution_now, k=r_max, tol=eps, which="LM")
                 idx = np.argsort(s)[::-1]  # descending order
                 s = s[idx]
                 u = u[:, idx]
                 v = v[idx, :]
             else:
-                u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
+                u, s, v = scp.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
             v = s.reshape(-1, 1) * v
 
             r = min(prune_singular_vals(s, max(real_tol, 2*block_res_new)), r_max)
@@ -246,9 +246,9 @@ def _bck_sweep(
             x_cores[k - 1] = einsum('rdc,cbR->rbdR', x_cores[k - 1], v, optimize=[(0, 1)])
             rx[k] = r
 
-            XAX[k] = {(i, j): _compute_phi_bck_A(XAX[k + 1][(i, j)], x_cores[k], block_A_k[(i, j)], x_cores[k]) for (i, j) in block_A_k}
+            XAX[k] = {(i, j): compute_phi_bck_A(XAX[k + 1][(i, j)], x_cores[k], block_A_k[(i, j)], x_cores[k]) for (i, j) in block_A_k}
 
-            Xb[k] = {i: _compute_phi_bck_rhs(Xb[k + 1][i], block_b[k][i], x_cores[k]) for i in block_b[k]}
+            Xb[k] = {i: compute_phi_bck_rhs(Xb[k + 1][i], block_b[k][i], x_cores[k]) for i in block_b[k]}
 
         else:
             x_cores[k] = np.reshape(solution_now.T, (rx[k], block_size, N[k], rx[k + 1]))
@@ -295,13 +295,13 @@ def _fwd_sweep(
 
         if k < d - 1:
             if min(rx[k] * N[k],  block_size * rx[k + 1]) > 2*r_max:
-                u, s, v = scip.sparse.linalg.svds(solution_now, k=r_max, tol=eps, which="LM")
+                u, s, v = scp.sparse.linalg.svds(solution_now, k=r_max, tol=eps, which="LM")
                 idx = np.argsort(s)[::-1]  # descending order
                 s = s[idx]
                 u = u[:, idx]
                 v = v[idx, :]
             else:
-                u, s, v = scip.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
+                u, s, v = scp.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
             v = s.reshape(-1, 1) * v
             u = u.reshape(rx[k], N[k], -1)
             v = v.reshape(-1, block_size, rx[k + 1])
@@ -314,9 +314,9 @@ def _fwd_sweep(
             x_cores[k + 1] = einsum("rbR, Rdk -> rbdk", v, x_cores[k + 1], optimize=[(0, 1)])
             rx[k + 1] = r
 
-            XAX[k + 1] = {(i, j): _compute_phi_fwd_A(XAX[k][(i, j)], x_cores[k], block_A_k[(i, j)], x_cores[k]) for
+            XAX[k + 1] = {(i, j): compute_phi_fwd_A(XAX[k][(i, j)], x_cores[k], block_A_k[(i, j)], x_cores[k]) for
                           (i, j) in block_A_k}
-            Xb[k + 1] = {i: _compute_phi_fwd_rhs(Xb[k][i], block_b[k][i], x_cores[k]) for i in block_b[k]}
+            Xb[k + 1] = {i: compute_phi_fwd_rhs(Xb[k][i], block_b[k][i], x_cores[k]) for i in block_b[k]}
 
         else:
             x_cores[k] = np.reshape(solution_now, (rx[k], N[k], block_size, rx[k + 1])).transpose(0, 2, 1, 3)
@@ -356,10 +356,10 @@ def tt_block_als(block_A, block_b, tol, termination_tol=1e-3, eps=1e-12, nswp=22
     Xb = [{key: np.ones((1, 1)) for key in block_b}] + [{key: None for key in block_b} for _ in range(d-1)] + [{key: np.ones((1, 1)) for key in block_b}]   # size is rk x rbk
 
     real_tol = (tol / np.sqrt(d))
-    r_max_final = block_size*int(np.ceil(np.sqrt(d)*d)) + block_size*int(np.ceil(np.sqrt(block_size)))
+    r_max_final = min(block_size*int(np.ceil(np.sqrt(d)*d)) + block_size*int(np.ceil(np.sqrt(block_size))), 2**d)
     size_limit = (r_max_final)**2*N[0]/(np.sqrt(d)*d) if size_limit is None else size_limit
     r_max_part0 = max(int(np.ceil(r_max_final / np.sqrt(np.sqrt(d)*d))) - 2, 2)
-    steps = np.linspace(r_max_part0+2, max(r_max_final, r_max_part0+nswp), nswp // 2, dtype=int)
+    steps = np.linspace(r_max_part0+2, r_max_final+2, nswp // 2, dtype=int)
     r_max_part = np.concatenate(([r_max_part0]*warm_up,  np.column_stack((steps, steps)).ravel(), [r_max_final]))
     x_cores = tt_rank_retraction(x_cores, [r_max_part0]*(d-1)) if x0 is not None else x_cores
     rx = np.array([1] + tt_ranks(x_cores) + [1])
@@ -453,8 +453,8 @@ def _default_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, prev
             np.transpose(x_vec.reshape(*x_shape), (1, 0, 2, 3))
         ), (1, 0, 2, 3)).reshape(-1, 1)
 
-    linear_op = scip.sparse.linalg.LinearOperator((block_size * m, block_size * m), matvec=mat_vec)
-    solution_now, info = scip.sparse.linalg.gmres(linear_op, np.transpose(
+    linear_op = scp.sparse.linalg.LinearOperator((block_size * m, block_size * m), matvec=mat_vec)
+    solution_now, info = scp.sparse.linalg.gmres(linear_op, np.transpose(
         rhs - block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution), (1, 0, 2, 3)).reshape(-1, 1), rtol=1e-3*block_res_old, maxiter=25)
     solution_now = np.transpose(solution_now.reshape(*x_shape), (1, 0, 2, 3))
 

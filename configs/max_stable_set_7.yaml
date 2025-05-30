@@ -7,6 +7,6 @@ verbose: False
 # TT-IPM
 op_tol: !!float 5e-5
 max_iter: !!int 18
-warm_up: !!int 8
+warm_up: !!int 3
 # Sketchy CGAL
 sketch_cgal_rank: !!int 64

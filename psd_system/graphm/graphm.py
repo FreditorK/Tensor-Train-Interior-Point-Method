@@ -304,8 +304,7 @@ if __name__ == "__main__":
         problem_creation_times.append(t2 - t1)
         runtimes.append(t3 - t2)
         complementary_slackness.append(abs(tt_inner_prod(X_tt, Z_tt)))
-        primal_res = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(L_op_tt, tt_reshape(X_tt, (4,))), eq_bias_tt),
-                                    rank_weighted_error=True, eps=1e-12)
+        primal_res = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(L_op_tt, tt_reshape(X_tt, (4,))), eq_bias_tt), eps=1e-12)
         feasibility_errors.append(tt_inner_prod(primal_res, primal_res))
         num_iters.append(info["num_iters"])
         print(f"Converged after {num_iters[-1]:.1f} iterations", flush=True)
