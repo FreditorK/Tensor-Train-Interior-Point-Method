@@ -1,0 +1,3 @@
+==== maxcut TT-IPM Batch Run Started at Sat May 31 03:31:57 PM BST 2025 ====
+
+▶ Running dim=8 with config=configs/maxcut_8.yaml at Sat May 31 03:31:57 PM BST 2025

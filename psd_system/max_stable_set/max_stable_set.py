@@ -8,7 +8,6 @@ import argparse
 sys.path.append(os.getcwd() + '/../../')
 
 from src.tt_ipm import *
-from src.tt_eigen import tt_approx_mat_mat_mul
 from memory_profiler import memory_usage
 import time
 
@@ -33,7 +32,7 @@ def tt_tr_constraint(dim):
 
 def tt_obj_matrix(dim):
     scale = 2 ** (7 - dim)
-    return tt_normalise(tt_one_matrix(dim, (2, 2)), radius=scale)
+    return tt_normalise(tt_one_matrix(dim), radius=scale)
 
 if __name__ == "__main__":
     np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=4, suppress=True)

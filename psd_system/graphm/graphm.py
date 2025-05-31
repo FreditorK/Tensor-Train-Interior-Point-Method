@@ -111,6 +111,7 @@ def tt_padding_op(dim):
 
 
 def tt_obj_matrix(rank, dim):
+    scale = 2 ** (7 - 2*dim)
     G_A = tt_random_graph(dim, rank)
     # print("Graph A: ")
     # print(np.round(tt_matrix_to_matrix(G_A), decimals=2))
@@ -122,7 +123,7 @@ def tt_obj_matrix(rank, dim):
     # print("Objective matrix: ")
     C_tt = [E(0, 0)] + G_B + G_A
     # print(np.round(tt_matrix_to_matrix(C_tt), decimals=2))
-    return tt_normalise(C_tt, radius=1)
+    return tt_normalise(C_tt, radius=scale)
 
 """
         [Q   P  0 ]
