@@ -111,7 +111,8 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         local_rhs[0] += rhs[:, 0]
         local_rhs[1] += rhs[:, 2]
         local_rhs[1] -= cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[2, 2], block_A_k[2, 2], XAX_k1[2, 2], inv_I*rhs[:, 1])
-        solution_now, info = lgmres(
+
+        solution_now, _ = lgmres(
             linear_op,
             local_rhs.reshape(-1, 1),
             rtol=rtol,
@@ -240,7 +241,7 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
         local_rhs[1] += rhs[:, 2] - cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[2, 2], block_A_k[2, 2],
                                                   XAX_k1[2, 2], inv_I * rhs[:, 1])
         local_rhs[2] += rhs[:, 3]
-        solution_now, info = lgmres(
+        solution_now, _ = lgmres(
             linear_op,
             local_rhs.reshape(-1, 1),
             rtol=rtol,
@@ -805,8 +806,8 @@ def tt_ipm(
 
     while finishing_steps > 0:
         #print()
-        #print(np.linalg.cond(tt_matrix_to_matrix(X_tt)))
-        #print(np.linalg.cond(tt_matrix_to_matrix(Z_tt)))
+        #print(np.linalg.norm(tt_matrix_to_matrix(X_tt)))
+        #print(np.linalg.norm(tt_matrix_to_matrix(Z_tt)))
         #print(list(lhs.all_keys()))
         #print()
         iteration += 1
@@ -901,9 +902,9 @@ def tt_ipm(
             status.kkt_iterations += (finishing_steps == 1)
 
         if (
-                abs(prev_primal_error - status.primal_error) < 0.02*gap_tol
-                and abs(prev_dual_error - status.dual_error) < 0.02*gap_tol
-                and abs(prev_centrality_error - status.centrality_error) < 0.02*gap_tol
+                abs(prev_primal_error - status.primal_error) < 0.05*gap_tol
+                and abs(prev_dual_error - status.dual_error) < 0.05*gap_tol
+                and abs(prev_centrality_error - status.centrality_error) < 0.05*gap_tol
                 and not status.is_last_iter
         ):
             if status.verbose:

@@ -236,7 +236,7 @@ def create_problem(n, max_rank):
         "t": tt_diag_op(lag_map_t)
     }
 
-    return C_tt, L_op_tt, eq_bias_tt, ineq_mask, lag_maps
+    return C_tt, L_op_tt, tt_normalise(eq_bias_tt, radius=1), ineq_mask, lag_maps
 
 if __name__ == "__main__":
     np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=4, suppress=True)

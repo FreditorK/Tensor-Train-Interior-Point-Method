@@ -61,7 +61,7 @@ cpdef lgmres(object A, cnp.ndarray[double, ndim=2] b, double rtol=1e-5, double a
         inner_res_0 = nrm2(v0)
 
         if inner_res_0 == 0:
-            raise RuntimeError(f"Preconditioner returned a zero vector; |v| ~ {r_norm:.1g}, |M v| = 0")
+            raise RuntimeError(f"Returned a zero vector; |v| ~ {r_norm:.1g}, |M v| = 0")
 
         v0 = scal(1.0 / inner_res_0, v0)
         ptol = min(ptol_max_factor, max(atol, rtol * b_norm) / r_norm)
