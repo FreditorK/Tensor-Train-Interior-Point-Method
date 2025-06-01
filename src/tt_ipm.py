@@ -319,9 +319,6 @@ def tt_assess_solution_quality(
     centrality_feas_delta = tt_compute_centrality(Delta_X_tt, Delta_Z_tt, status)
     centrl_change = -(0 if centrality_feas is None else 2 * tt_inner_prod(centrality_feas, centrality_feas_delta)) / tt_inner_prod(centrality_feas_delta, centrality_feas_delta)
     scaling = max(min(primal_change, dual_change, centrl_change), 1)
-    print()
-    print(f"scaling: {scaling}")
-    print()
 
     return scaling > 0, tt_scale(scaling, Delta_X_tt), tt_scale(scaling, Delta_Y_tt), tt_scale(scaling, Delta_Z_tt)
 
