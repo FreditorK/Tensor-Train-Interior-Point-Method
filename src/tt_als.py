@@ -10,6 +10,7 @@ from opt_einsum import contract as einsum
 class TTBlockVector:
     def __init__(self):
         self._data = {}  # maps row index -> list
+        self._rescaled = False
 
     def __setitem__(self, index, value):
         if not isinstance(value, list):
@@ -38,10 +39,12 @@ class TTBlockVector:
 
     @property
     def norm(self):
-        return np.sqrt(sum([tt_inner_prod(v, v) for v in self._data.values()]))
+        return np.sqrt(sum(tt_inner_prod(v, v) for v in self._data.values()))
 
     def scale(self, s):
-        self._data = {key: tt_scale(1/s, value) for (key, value) in self._data.items()}
+        if not self._rescaled:
+            self._rescaled = True
+            self._data = {key: tt_scale(1/s, value) for (key, value) in self._data.items()}
 
 
 class TTBlockVectorView:
@@ -237,9 +240,25 @@ def _bck_sweep(
                 u, s, v = scp.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
             v = s.reshape(-1, 1) * v
 
-            r = min(prune_singular_vals(s, real_tol), r_max)
-            u = np.reshape(u[:, :r].T, (r, N[k], rx[k + 1]))
-            v = v[:r].T.reshape(rx[k], block_size, r)
+            if swp > 0:
+                r_start = min(prune_singular_vals(s, real_tol), r_max)
+                res = block_A_k.block_local_product(XAX[k], XAX[k + 1], np.reshape(solution_now,
+                                                                                   (rx[k], block_size, N[k],
+                                                                                    rx[k + 1]))) - rhs
+                r = r_start
+                for r in range(r_start - 1, 0, -1):
+                    res -= block_A_k.block_local_product(XAX[k], XAX[k + 1],
+                                                         np.reshape((u[:, None, r] @ v[None, r, :]).T,
+                                                                    (rx[k], block_size, N[k], rx[k + 1])))
+                    if np.linalg.norm(res) / norm_rhs > max(real_tol, block_res_new):
+                        break
+                r += 1
+                u = np.reshape(u[:, :r].T, (r, N[k], rx[k + 1]))
+                v = v[:r].T.reshape(rx[k], block_size, r)
+            else:
+                r = min(prune_singular_vals(s, real_tol), r_max)
+                u = np.reshape(u[:, :r].T, (r, N[k], rx[k + 1]))
+                v = v[:r].T.reshape(rx[k], block_size, r)
 
             x_cores[k] = u
             x_cores[k - 1] = einsum('rdc,cbR->rbdR', x_cores[k - 1], v, optimize=[(0, 1)])
@@ -304,9 +323,24 @@ def _fwd_sweep(
             u = u.reshape(rx[k], N[k], -1)
             v = v.reshape(-1, block_size, rx[k + 1])
 
-            r = min(prune_singular_vals(s, real_tol), r_max)
-            u = u[:, :, :r]
-            v = v[:r]
+            if swp > 0:
+                r_start = min(prune_singular_vals(s, real_tol), r_max)
+                res = block_A_k.block_local_product(XAX[k], XAX[k + 1], np.transpose(
+                    np.reshape(solution_now, (rx[k], N[k], block_size, rx[k + 1])), (0, 2, 1, 3))) - rhs
+                r = r_start
+                for r in range(r_start - 1, 0, -1):
+                    res -= block_A_k.block_local_product(XAX[k], XAX[k + 1],
+                                                         einsum("rbR, Rdk -> rdbk", u[:, :, None, r], v[None, r],
+                                                                optimize=[(0, 1)]))
+                    if np.linalg.norm(res) / norm_rhs > max(real_tol, block_res_new):
+                        break
+                r += 1
+                u = u[:, :, :r]
+                v = v[:r]
+            else:
+                r = min(prune_singular_vals(s, real_tol), r_max)
+                u = u[:, :, :r]
+                v = v[:r]
 
             x_cores[k] = u
             x_cores[k + 1] = einsum("rbR, Rdk -> rbdk", v, x_cores[k + 1], optimize=[(0, 1)])
@@ -322,7 +356,7 @@ def _fwd_sweep(
     return x_cores, XAX, Xb, rx, local_res
 
 
-def tt_block_als(block_A, block_b, tol, termination_tol=1e-3, eps=1e-12, nswp=22, warm_up=4, x0=None, size_limit=None, local_solver=None, verbose=False):
+def tt_block_als(block_A, block_b, tol, termination_tol=1e-3, eps=1e-12, nswp=22, warm_up=4, x0=None, size_limit=None, local_solver=None, refinement=False, verbose=False):
     if verbose:
         print("\n\t---Starting Block-ALS---")
     block_size = np.max(list(k[0] for k in block_A.keys())) + 1
@@ -353,12 +387,12 @@ def tt_block_als(block_A, block_b, tol, termination_tol=1e-3, eps=1e-12, nswp=22
     XAX =  [{key: np.ones((1, 1, 1)) for key in block_A}] + [{key: None for key in block_A} for _ in range(d-1)] + [{key: np.ones((1, 1, 1)) for key in block_A}]  # size is rk x Rk x rk
     Xb = [{key: np.ones((1, 1)) for key in block_b}] + [{key: None for key in block_b} for _ in range(d-1)] + [{key: np.ones((1, 1)) for key in block_b}]   # size is rk x rbk
 
-    r_max_final = min(block_size*int(np.ceil(np.sqrt(d)*d)) + block_size*int(np.ceil(np.sqrt(block_size))), 2**d)
+    r_max_final = min(block_size*int(np.ceil(np.sqrt(d)*d)) + block_size*d, 2**d)
     size_limit = (r_max_final)**2*N[0]/(np.sqrt(d)*d) if size_limit is None else size_limit
     r_max_part0 = max(int(np.ceil(r_max_final / np.sqrt(np.sqrt(d)*d))) - 2, 2)
-    steps = np.linspace(r_max_part0+2, r_max_final+2, nswp // 4 + 1, dtype=int)
-    r_max_part = np.concatenate(([r_max_part0]*warm_up,  np.column_stack((steps, steps)).ravel(), [r_max_final]*nswp))
-    x_cores = tt_rank_retraction(x_cores, [r_max_part0]*(d-1)) if x0 is not None else x_cores
+    r_max_part = np.concatenate(([r_max_final if refinement else r_max_part0]*warm_up, [r_max_final]*(nswp+1)))
+    if not refinement:
+        x_cores = tt_rank_retraction(x_cores, [r_max_part0]*(d-1)) if x0 is not None else x_cores
     rx = np.array([1] + tt_ranks(x_cores) + [1])
     nswp += warm_up
     local_res_fwd = np.inf
@@ -404,10 +438,12 @@ def tt_block_als(block_A, block_b, tol, termination_tol=1e-3, eps=1e-12, nswp=22
                 r_max
             )
 
+
+
         if verbose:
             print('\tStarting Sweep: %d' % swp)
             print(f'\tDirection {direction}')
-            print(f'\tResidual {max(local_res_fwd, local_res_bwd)}')
+            print(f'\tResidual {min(local_res_fwd, local_res_bwd)}')
             print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
 
 

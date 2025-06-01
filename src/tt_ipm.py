@@ -75,14 +75,17 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
     rhs[:, 1] = cached_einsum('br,bmB,BR->rmR', Xb_k[1], block_b_k[1], Xb_k1[1]) if 1 in block_b_k else 0
     rhs[:, 2] = cached_einsum('br,bmB,BR->rmR', Xb_k[2], block_b_k[2], Xb_k1[2]) if 2 in block_b_k else 0
     inv_I = np.divide(1, cached_einsum('lsr,smnS,LSR->lmL', XAX_k[1, 2], block_A_k[1, 2], XAX_k1[1, 2]))
-    norm_rhs = max(np.linalg.norm(rhs), 1e-12)
+    norm_rhs = max(np.linalg.norm(rhs), 1e-8)
     block_res_old = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution) - rhs) / norm_rhs
     if block_res_old < rtol:
         return previous_solution, block_res_old, block_res_old, rhs, norm_rhs
 
+    #print(size_limit)
+    #print("Cond", np.linalg.cond(
+    #    cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[2, 1], block_A_k[2, 1], XAX_k1[2, 1]).reshape(m, m)))
     if m <= size_limit:
         try:
-            solution_now = np.zeros(*x_shape)
+            solution_now = np.zeros(x_shape)
             L_L_Z = scp.linalg.cholesky(
                 cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[2, 1], block_A_k[2, 1], XAX_k1[2, 1]).reshape(m, m),
                 check_finite=False, lower=True, overwrite_a=True
@@ -98,10 +101,11 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
                                                                                          XAX_k1[0, 0]).reshape(m, m))
             b = mR_p - mL_eq @ forward_backward_sub(L_L_Z, mR_c - (L_X * inv_I.reshape(1, -1)) @ mR_d,
                                                     overwrite_b=True) - A @ previous_solution[:, 0].reshape(-1, 1)
-            solution_now[:, 0] += scp.linalg.solve(A, b, check_finite=False, overwrite_a=True, overwrite_b=True, assume_a="gen").reshape(x_shape[0], x_shape[2], x_shape[3]).__iadd__(previous_solution[:, 0])
-            solution_now[:, 2] +=  (mR_d - mL_eq.T @ solution_now[:, 0].reshape(-1, 1)).__imul__(inv_I.reshape(-1, 1)).reshape(x_shape[0], x_shape[2], x_shape[3])
+            solution_now[:, 0] += scp.linalg.lstsq(A, b, check_finite=False, overwrite_a=True, overwrite_b=True, cond=rtol)[0].reshape(x_shape[0], x_shape[2], x_shape[3]).__iadd__(previous_solution[:, 0]) #scp.linalg.solve(A, b, check_finite=False, overwrite_a=True, overwrite_b=True).reshape(x_shape[0], x_shape[2], x_shape[3]).__iadd__(previous_solution[:, 0])
+            solution_now[:, 2] += (mR_d - mL_eq.T @ solution_now[:, 0].reshape(-1, 1)).__imul__(inv_I.reshape(-1, 1)).reshape(x_shape[0], x_shape[2], x_shape[3])
             solution_now[:, 1] += forward_backward_sub(L_L_Z, mR_c - L_X @ solution_now[:, 2].reshape(-1, 1), overwrite_b=True).reshape(x_shape[0], x_shape[2], x_shape[3])
-        except:
+        except Exception as e:
+            print(f"Attention: : {e}")
             size_limit = 0
 
     if m > size_limit:
@@ -185,7 +189,7 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
     rhs[:, 2] = cached_einsum('br,bmB,BR->rmR', Xb_k[2], block_b_k[2], Xb_k1[2]) if 2 in block_b_k else 0
     rhs[:, 3] = cached_einsum('br,bmB,BR->rmR', Xb_k[3], block_b_k[3], Xb_k1[3]) if 3 in block_b_k else 0
     inv_I = np.divide(1, cached_einsum('lsr,smnS,LSR->lmL', XAX_k[1, 2], block_A_k[1, 2], XAX_k1[1, 2]))
-    norm_rhs = max(np.linalg.norm(rhs), 1e-12)
+    norm_rhs = max(np.linalg.norm(rhs), 1e-8)
     block_res_old_scalar = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution) - rhs) / norm_rhs
     if block_res_old_scalar < rtol:
         return previous_solution, block_res_old_scalar, block_res_old_scalar, rhs, norm_rhs
@@ -302,32 +306,24 @@ def tt_assess_solution_quality(
         status
 ):
     if local_res < status.local_res_bound:
-        return True
+        return True, Delta_X_tt, Delta_Y_tt, Delta_Z_tt
     primal_feas = rhs.get_row(0)
     primal_feas_delta = tt_compute_primal_feasibility(lin_op_tt, bias_tt, Delta_X_tt, status)
-    primal_change = (
-            0 if primal_feas is None else 2*tt_inner_prod(primal_feas, primal_feas_delta)
-            + tt_inner_prod(primal_feas_delta, primal_feas_delta)
-    )
-    primal_good = status.op_tol > primal_change
+    primal_change = -(0 if primal_feas is None else 2*tt_inner_prod(primal_feas, primal_feas_delta)) / tt_inner_prod(primal_feas_delta, primal_feas_delta)
 
     dual_feas = rhs.get_row(1)
     dual_feas_delta = tt_compute_dual_feasibility(obj_tt, lin_op_tt_adj, Delta_Z_tt, Delta_Y_tt, None, status)
-    dual_change = (
-            0 if dual_feas is None else 2 * tt_inner_prod(dual_feas, dual_feas_delta)
-            + tt_inner_prod(dual_feas_delta, dual_feas_delta)
-    )
-    dual_good = status.op_tol > dual_change
+    dual_change = -(0 if dual_feas is None else 2 * tt_inner_prod(dual_feas, dual_feas_delta))/ tt_inner_prod(dual_feas_delta, dual_feas_delta)
 
     centrality_feas = rhs.get_row(2)
     centrality_feas_delta = tt_compute_centrality(Delta_X_tt, Delta_Z_tt, status)
-    centrl_change = (
-            0 if centrality_feas is None else 2 * tt_inner_prod(centrality_feas, centrality_feas_delta)
-            + tt_inner_prod(centrality_feas_delta, centrality_feas_delta)
-    )
-    centrality_good = status.op_tol > centrl_change
+    centrl_change = -(0 if centrality_feas is None else 2 * tt_inner_prod(centrality_feas, centrality_feas_delta)) / tt_inner_prod(centrality_feas_delta, centrality_feas_delta)
+    scaling = max(min(primal_change, dual_change, centrl_change), 1)
+    print()
+    print(f"scaling: {scaling}")
+    print()
 
-    return primal_good and dual_good and centrality_good
+    return scaling > 0, tt_scale(scaling, Delta_X_tt), tt_scale(scaling, Delta_Y_tt), tt_scale(scaling, Delta_Z_tt)
 
 
 def tt_infeasible_newton_system(
@@ -426,7 +422,7 @@ def _tt_ipm_newton_step(
     if status.verbose:
         print("\n--- Predictor  step ---", flush=True)
     for attempt in range(3):
-        Delta_tt, res = solver(lhs_matrix_tt, rhs_vec_tt, status.mals_delta0, status.kkt_iterations, 0 if status.is_last_iter or attempt > 0 else None)
+        Delta_tt, res = solver(lhs_matrix_tt, rhs_vec_tt, status.mals_delta0, status.kkt_iterations, 0 if status.is_last_iter else None, attempt > 0)
         status.mals_delta0 = Delta_tt
         Delta_X_tt = _tt_symmetrise(tt_reshape(_tt_get_block(1, Delta_tt), (2, 2)), status.eps)
         Delta_Z_tt = _tt_symmetrise(tt_reshape(_tt_get_block(2, Delta_tt), (2, 2)), status.eps)
@@ -437,7 +433,8 @@ def _tt_ipm_newton_step(
         if status.ineq_status is IneqStatus.ACTIVE:
             Delta_T_tt = tt_rank_reduce(_tt_get_block(3, Delta_tt), eps=status.eps)
             Delta_T_tt = tt_fast_hadammard(ineq_mask, tt_reshape(Delta_T_tt, (2, 2)), status.eps)
-        if tt_assess_solution_quality(res, obj_tt, lin_op_tt, lin_op_tt_adj, bias_tt, rhs_vec_tt, Delta_X_tt, Delta_Y_tt, Delta_Z_tt, status):
+        crit, Delta_X_tt, Delta_Y_tt, Delta_Z_tt  = tt_assess_solution_quality(res, obj_tt, lin_op_tt, lin_op_tt_adj, bias_tt, rhs_vec_tt, Delta_X_tt, Delta_Y_tt, Delta_Z_tt, status)
+        if crit:
             x_step_size, z_step_size = _tt_line_search(
                 X_tt,
                 Z_tt,
@@ -521,7 +518,7 @@ def _tt_ipm_newton_step(
             ) if status.sigma > 1e-4 else rhs_vec_tt.get_row(2)
 
         for attempt in range(3):
-            Delta_tt_cc, res = solver(lhs_matrix_tt, rhs_vec_tt, status.mals_delta0, status.kkt_iterations, 0 if status.is_last_iter or attempt > 0 else None)
+            Delta_tt_cc, res = solver(lhs_matrix_tt, rhs_vec_tt, status.mals_delta0, status.kkt_iterations, 0 if status.is_last_iter else None, attempt > 0)
             status.mals_delta0 = Delta_tt_cc
             Delta_X_tt_cc = _tt_symmetrise(tt_reshape(_tt_get_block(1, Delta_tt_cc), (2, 2)), status.eps)
             Delta_Z_tt_cc = _tt_symmetrise(tt_reshape(_tt_get_block(2, Delta_tt_cc), (2, 2)), status.eps)
@@ -535,7 +532,8 @@ def _tt_ipm_newton_step(
                 Delta_T_tt_cc = tt_fast_hadammard(ineq_mask, tt_reshape(Delta_T_tt_cc, (2, 2)), status.eps)
                 Delta_T_tt = tt_rank_reduce(tt_add(Delta_T_tt_cc, Delta_T_tt), eps=status.eps)
 
-            if tt_assess_solution_quality(res, obj_tt, lin_op_tt, lin_op_tt_adj, bias_tt, rhs_vec_tt, Delta_X_tt, Delta_Y_tt, Delta_Z_tt, status):
+            crit, Delta_X_tt, Delta_Y_tt, Delta_Z_tt = tt_assess_solution_quality(res, obj_tt, lin_op_tt, lin_op_tt_adj, bias_tt, rhs_vec_tt, Delta_X_tt, Delta_Y_tt, Delta_Z_tt, status)
+            if crit:
                 x_step_size, z_step_size = _tt_line_search(
                     X_tt,
                     Z_tt,
@@ -744,7 +742,7 @@ def tt_ipm(
         verbose,
         1,
         1,
-        local_res_bound=0.1
+        local_res_bound=0.05
     )
     lag_maps = {key: tt_rank_reduce(value, eps=eps) for key, value in lag_maps.items()}
     obj_tt = tt_rank_reduce(obj_tt, eps=eps)
@@ -759,26 +757,28 @@ def tt_ipm(
 
     lhs_skeleton = TTBlockMatrix()
     lhs_skeleton[1, 2] = tt_reshape(tt_identity(2 * dim), (4, 4))
-    solver_ineq = lambda lhs, rhs, x0, nwsp, size_limit: tt_block_als(
+    solver_ineq = lambda lhs, rhs, x0, nwsp, size_limit, refinement: tt_block_als(
         lhs,
         rhs,
         x0=x0,
         local_solver=_ipm_local_solver_ineq,
-        tol=0.5 * min(feasibility_tol, centrality_tol, op_tol),
-        termination_tol=status.local_res_bound/2.5,
+        tol=0.1 * min(feasibility_tol, centrality_tol, op_tol),
+        termination_tol=4*status.local_res_bound,
         nswp=nwsp,
         size_limit=size_limit,
+        refinement=refinement,
         verbose=verbose
     )
-    solver_eq = lambda lhs, rhs, x0, nwsp, size_limit: tt_block_als(
+    solver_eq = lambda lhs, rhs, x0, nwsp, size_limit, refinement: tt_block_als(
         lhs,
         rhs,
         x0=x0,
         local_solver=_ipm_local_solver,
-        tol=0.5 * min(feasibility_tol, centrality_tol, op_tol),
-        termination_tol=status.local_res_bound/5,
+        tol=0.1 * min(feasibility_tol, centrality_tol, op_tol),
+        termination_tol=3*status.local_res_bound,
         nswp=nwsp,
         size_limit=size_limit,
+        refinement=refinement,
         verbose=verbose
     )
     if status.ineq_status is IneqStatus.ACTIVE:
