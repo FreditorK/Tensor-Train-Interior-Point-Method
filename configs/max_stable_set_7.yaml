@@ -5,7 +5,7 @@ seeds: [5, 8, 7, 84, 9] # Tier 1: 5, 7, 8, 9, 84 Tier 2: Tier 3: 6
 gap_tol: !!float 2e-4
 verbose: False
 # TT-IPM
-op_tol: !!float 5e-5
+op_tol: !!float 5e-4
 max_iter: !!int 18
 warm_up: !!int 3
 # Sketchy CGAL

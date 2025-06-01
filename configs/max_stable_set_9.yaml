@@ -1,11 +1,11 @@
 # Common
 dim: !!int 9
 max_rank: !!int 4
-seeds: [] # Tier 1: 592, Tier 2: Tier 3: 96, 353, 5
+seeds: [53] # Tier 1: 592, Tier 2: Tier 3: 96, 353, 5
 gap_tol: !!float 2e-4
-verbose: False
+verbose: True
 # TT-IPM
-op_tol: !!float 5e-6
+op_tol: !!float 1e-5
 max_iter: !!int 20
 warm_up: !!int 3
 # Sketchy CGAL

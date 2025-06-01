@@ -111,7 +111,6 @@ def tt_padding_op(dim):
 
 
 def tt_obj_matrix(rank, dim):
-    scale = 2 ** (7 - 2*dim)
     G_A = tt_random_graph(dim, rank)
     # print("Graph A: ")
     # print(np.round(tt_matrix_to_matrix(G_A), decimals=2))
@@ -123,7 +122,7 @@ def tt_obj_matrix(rank, dim):
     # print("Objective matrix: ")
     C_tt = [E(0, 0)] + G_B + G_A
     # print(np.round(tt_matrix_to_matrix(C_tt), decimals=2))
-    return tt_normalise(C_tt, radius=scale)
+    return tt_normalise(C_tt, radius=1)
 
 """
         [Q   P  0 ]
@@ -236,7 +235,7 @@ def create_problem(n, max_rank):
         "t": tt_diag_op(lag_map_t)
     }
 
-    return C_tt, L_op_tt, tt_normalise(eq_bias_tt, radius=1), ineq_mask, lag_maps
+    return C_tt, L_op_tt, eq_bias_tt, ineq_mask, lag_maps
 
 if __name__ == "__main__":
     np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=4, suppress=True)

@@ -223,7 +223,6 @@ def _bck_sweep(
 
             solution_now = np.reshape(solution_now, (rx[k] * block_size, N[k] * rx[k + 1])).T
         else:
-            block_res_new = eps
             solution_now = np.reshape(x_cores[k], (rx[k] * block_size, N[k] * rx[k + 1])).T
 
 
@@ -238,7 +237,7 @@ def _bck_sweep(
                 u, s, v = scp.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
             v = s.reshape(-1, 1) * v
 
-            r = min(prune_singular_vals(s, max(real_tol, 2*block_res_new)), r_max)
+            r = min(prune_singular_vals(s, real_tol), r_max)
             u = np.reshape(u[:, :r].T, (r, N[k], rx[k + 1]))
             v = v[:r].T.reshape(rx[k], block_size, r)
 
@@ -290,7 +289,6 @@ def _fwd_sweep(
             solution_now = np.transpose(solution_now, (0, 2, 1, 3))
             solution_now = np.reshape(solution_now, (rx[k] * N[k], block_size * rx[k + 1]))
         else:
-            block_res_new = eps
             solution_now = np.reshape(x_cores[k], (rx[k] * N[k],  block_size * rx[k + 1]))
 
         if k < d - 1:
@@ -306,7 +304,7 @@ def _fwd_sweep(
             u = u.reshape(rx[k], N[k], -1)
             v = v.reshape(-1, block_size, rx[k + 1])
 
-            r = min(prune_singular_vals(s, max(real_tol,  2*block_res_new)), r_max)
+            r = min(prune_singular_vals(s, real_tol), r_max)
             u = u[:, :, :r]
             v = v[:r]
 
@@ -355,12 +353,11 @@ def tt_block_als(block_A, block_b, tol, termination_tol=1e-3, eps=1e-12, nswp=22
     XAX =  [{key: np.ones((1, 1, 1)) for key in block_A}] + [{key: None for key in block_A} for _ in range(d-1)] + [{key: np.ones((1, 1, 1)) for key in block_A}]  # size is rk x Rk x rk
     Xb = [{key: np.ones((1, 1)) for key in block_b}] + [{key: None for key in block_b} for _ in range(d-1)] + [{key: np.ones((1, 1)) for key in block_b}]   # size is rk x rbk
 
-    real_tol = (tol / np.sqrt(d))
     r_max_final = min(block_size*int(np.ceil(np.sqrt(d)*d)) + block_size*int(np.ceil(np.sqrt(block_size))), 2**d)
     size_limit = (r_max_final)**2*N[0]/(np.sqrt(d)*d) if size_limit is None else size_limit
     r_max_part0 = max(int(np.ceil(r_max_final / np.sqrt(np.sqrt(d)*d))) - 2, 2)
-    steps = np.linspace(r_max_part0+2, r_max_final+2, nswp // 2, dtype=int)
-    r_max_part = np.concatenate(([r_max_part0]*warm_up,  np.column_stack((steps, steps)).ravel(), [r_max_final]))
+    steps = np.linspace(r_max_part0+2, r_max_final+2, nswp // 4 + 1, dtype=int)
+    r_max_part = np.concatenate(([r_max_part0]*warm_up,  np.column_stack((steps, steps)).ravel(), [r_max_final]*nswp))
     x_cores = tt_rank_retraction(x_cores, [r_max_part0]*(d-1)) if x0 is not None else x_cores
     rx = np.array([1] + tt_ranks(x_cores) + [1])
     nswp += warm_up
@@ -381,7 +378,7 @@ def tt_block_als(block_A, block_b, tol, termination_tol=1e-3, eps=1e-12, nswp=22
                 rx,
                 N,
                 block_size,
-                real_tol,
+                tol,
                 d,
                 swp,
                 size_limit,
@@ -399,7 +396,7 @@ def tt_block_als(block_A, block_b, tol, termination_tol=1e-3, eps=1e-12, nswp=22
                 rx,
                 N,
                 block_size,
-                real_tol,
+                tol,
                 d,
                 swp,
                 size_limit,

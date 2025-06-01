@@ -1,7 +1,7 @@
 # Common
 dim: !!int 1
 max_rank: !!int 1
-seeds: [5]
+seeds: [7]
 gap_tol: !!float 2e-4
 verbose: True
 # TT-IPM

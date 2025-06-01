@@ -10,6 +10,8 @@ cimport numpy as cnp  # This allows Cython to understand NumPy's C-API
 cimport cython
 import scipy as scp
 
+cnp.import_array() # Initialize NumPy C-API
+
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
