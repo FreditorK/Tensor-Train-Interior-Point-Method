@@ -58,7 +58,7 @@ def _get_eq_mat_vec(XAX_k, block_A_k, XAX_kp1, x_shape, inv_I):
 
     def mat_vec(x_core):
         x_core = x_core.reshape(2, x_shape[0], x_shape[2], x_shape[3])
-        result = np.zeros_like(x_core)
+        result = np.zeros_like(x_core, dtype=np.float64)
         K_y(XAX_k_00, block_A_k_00, XAX_kp1_00, x_core[0], out=result[0])
         L_Z(XAX_k_21, block_A_k_21, XAX_kp1_21, x_core[1], out=result[1])
         result[0] += mL(XAX_k_01, block_A_k_01, XAX_kp1_01, x_core[1])
@@ -167,7 +167,7 @@ def _get_ineq_mat_vec(XAX_k, block_A_k, XAX_kp1, x_shape, inv_I):
 
     def mat_vec(x_core):
         x_core = x_core.reshape(3, x_shape[0], x_shape[2], x_shape[3])
-        result = np.zeros_like(x_core)
+        result = np.zeros_like(x_core, dtype=np.float64)
         K_y(XAX_k_00, block_A_k_00, XAX_kp1_00, x_core[0], out=result[0])
         L_Z(XAX_k_21, block_A_k_21, XAX_kp1_21, x_core[1], out=result[1])
         T_op(XAX_k_31, block_A_k_31, XAX_kp1_31, x_core[1], out=result[2])

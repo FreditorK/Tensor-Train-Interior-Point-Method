@@ -9,12 +9,14 @@ extensions = [
         "cy_src.tt_ops_cy",  # Name of the Cython module
         ["cy_src/tt_ops_cy.pyx"],  # Source file
         include_dirs=[np.get_include()],  # This line ensures that NumPy headers are included
+        extra_compile_args=["-O3", "-march=native"],
         define_macros=[('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')]
     ),
     Extension(
         "cy_src.lgmres_cy",  # Name of the Cython module
         ["cy_src/lgmres_cy.pyx"],  # Source file
         include_dirs=[np.get_include()],  # This line ensures that NumPy headers are included
+        extra_compile_args=["-O3", "-march=native"],
         define_macros=[('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')]
     )
 ]
