@@ -1,7 +1,7 @@
 # Common
 dim: !!int 10
 max_rank: !!int 4
-seeds: [9482, 9254, 3181] # Tier 1: 42, 23, 666, Tier 2: 43 (good  but very slow 12k) Tier 3:
+seeds: [9482, 9254, 3181] # Tier 1: 42, 23, 666, Tier 2: 43 (good but very slow 12k), 9254 (good but slow 13k) Tier 3:
 gap_tol: !!float 2e-4
 verbose: True
 # TT-IPM

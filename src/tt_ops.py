@@ -2,7 +2,7 @@ import scipy as scp
 from typing import *
 
 from cy_src.tt_ops_cy import *
-from cy_src.lgmres_cy import lgmres
+from cy_src.lgmres_cy import lgmres, MatVecWrapper, IneqMatVecWrapper
 from functools import reduce
 from functools import lru_cache
 from opt_einsum import contract_expression

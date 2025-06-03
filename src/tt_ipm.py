@@ -1,6 +1,8 @@
 import sys
 import os
 
+from cy_src.lgmres_cy import MatVecWrapper
+
 sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
@@ -56,16 +58,13 @@ def _get_eq_mat_vec(XAX_k, block_A_k, XAX_kp1, x_shape, inv_I):
         optimize="greedy"
     )
 
-    def mat_vec(x_core):
-        x_core = x_core.reshape(2, x_shape[0], x_shape[2], x_shape[3])
-        result = np.zeros_like(x_core, dtype=np.float64)
-        K_y(XAX_k_00, block_A_k_00, XAX_kp1_00, x_core[0], out=result[0])
-        L_Z(XAX_k_21, block_A_k_21, XAX_kp1_21, x_core[1], out=result[1])
-        result[0] += mL(XAX_k_01, block_A_k_01, XAX_kp1_01, x_core[1])
-        result[1] -= L_XmL_adj( XAX_k_22, block_A_k_22, XAX_kp1_22,XAX_k_01, block_A_k_01, XAX_kp1_01, x_core[0]).__imul__(inv_I)
-        return result.reshape(-1, 1)
-
-    return mat_vec
+    return MatVecWrapper(
+        K_y, mL, L_Z, L_XmL_adj,
+        XAX_k_00, XAX_k_01, XAX_k_21, XAX_k_22,
+        block_A_k_00, block_A_k_01, block_A_k_21, block_A_k_22,
+        XAX_kp1_00, XAX_kp1_01, XAX_kp1_21, XAX_kp1_22,
+        inv_I, x_element_shape[0], x_element_shape[1], x_element_shape[2]
+    )
 
 def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous_solution, size_limit, rtol):
     x_shape = previous_solution.shape
@@ -105,20 +104,19 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
             solution_now[:, 2] += (mR_d - mL_eq.T @ solution_now[:, 0].reshape(-1, 1)).__imul__(inv_I.reshape(-1, 1)).reshape(x_shape[0], x_shape[2], x_shape[3])
             solution_now[:, 1] += forward_backward_sub(L_L_Z, mR_c - L_X @ solution_now[:, 2].reshape(-1, 1), overwrite_b=True).reshape(x_shape[0], x_shape[2], x_shape[3])
         except Exception as e:
-            print(f"Attention: : {e}")
+            print(f"Attention: {e}")
             size_limit = 0
 
     if m > size_limit:
-        mat_vec = _get_eq_mat_vec(XAX_k, block_A_k, XAX_k1, x_shape, inv_I)
+        Op = _get_eq_mat_vec(XAX_k, block_A_k, XAX_k1, x_shape, inv_I)
 
-        linear_op = scp.sparse.linalg.LinearOperator((2 * m, 2 * m), matvec=mat_vec)
-        local_rhs = -linear_op(np.transpose(previous_solution[:, :2], (1, 0, 2, 3)).reshape(-1, 1)).reshape(2, x_shape[0], x_shape[2], x_shape[3])
+        local_rhs = -Op.matvec(np.transpose(previous_solution[:, :2], (1, 0, 2, 3)).ravel()).reshape(2, x_shape[0], x_shape[2], x_shape[3])
         local_rhs[0] += rhs[:, 0]
         local_rhs[1] += rhs[:, 2]
         local_rhs[1] -= cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[2, 2], block_A_k[2, 2], XAX_k1[2, 2], inv_I*rhs[:, 1])
 
         solution_now, _ = lgmres(
-            linear_op,
+            Op,
             local_rhs.reshape(-1, 1),
             rtol=rtol,
             maxiter=25
@@ -165,20 +163,13 @@ def _get_ineq_mat_vec(XAX_k, block_A_k, XAX_kp1, x_shape, inv_I):
     T_op = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k_31.shape, block_A_k_31.shape, XAX_kp1_31.shape, x_element_shape, optimize="greedy")
     K_t = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k_33.shape, block_A_k_33.shape, XAX_kp1_33.shape, x_element_shape, optimize="greedy")
 
-    def mat_vec(x_core):
-        x_core = x_core.reshape(3, x_shape[0], x_shape[2], x_shape[3])
-        result = np.zeros_like(x_core, dtype=np.float64)
-        K_y(XAX_k_00, block_A_k_00, XAX_kp1_00, x_core[0], out=result[0])
-        L_Z(XAX_k_21, block_A_k_21, XAX_kp1_21, x_core[1], out=result[1])
-        T_op(XAX_k_31, block_A_k_31, XAX_kp1_31, x_core[1], out=result[2])
-        result[0] += mL(XAX_k_01, block_A_k_01, XAX_kp1_01, x_core[1])
-        result[1] -= (
-            L_X( XAX_k_22, block_A_k_22, XAX_kp1_22, (mL_adj(XAX_k_01, block_A_k_01, XAX_kp1_01, x_core[0]).__imul__(inv_I)).__iadd__(x_core[2]))
-        )
-        result[2] += K_t(XAX_k_33, block_A_k_33, XAX_kp1_33, x_core[2])
-        return result.reshape(-1, 1)
-
-    return mat_vec
+    return IneqMatVecWrapper(
+        K_y, mL, mL_adj, L_X, L_Z, T_op, K_t,
+        XAX_k_00, XAX_k_01, XAX_k_21, XAX_k_22, XAX_k_31, XAX_k_33,
+        block_A_k_00, block_A_k_01, block_A_k_21, block_A_k_22, block_A_k_31, block_A_k_33,
+        XAX_kp1_00, XAX_kp1_01, XAX_kp1_21, XAX_kp1_22, XAX_kp1_31, XAX_kp1_33,
+        inv_I, x_element_shape[0], x_element_shape[1], x_element_shape[2]
+    )
 
 def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous_solution, size_limit, rtol):
     x_shape = previous_solution.shape
@@ -239,9 +230,8 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
             size_limit = 0
 
     if m > size_limit:
-        mat_vec = _get_ineq_mat_vec(XAX_k, block_A_k, XAX_k1, x_shape, inv_I)
-        linear_op = scp.sparse.linalg.LinearOperator((3 * m, 3 * m), matvec=mat_vec)
-        local_rhs = -linear_op(np.transpose(previous_solution[:, [0, 1, 3]], (1, 0, 2, 3)).reshape(-1, 1)).reshape(3, x_shape[0], x_shape[2], x_shape[3])
+        linear_op = _get_ineq_mat_vec(XAX_k, block_A_k, XAX_k1, x_shape, inv_I)
+        local_rhs = -linear_op.matvec(np.transpose(previous_solution[:, [0, 1, 3]], (1, 0, 2, 3)).ravel()).reshape(3, x_shape[0], x_shape[2], x_shape[3])
         local_rhs[0] += rhs[:, 0]
         local_rhs[1] += rhs[:, 2] - cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[2, 2], block_A_k[2, 2],
                                                   XAX_k1[2, 2], inv_I * rhs[:, 1])

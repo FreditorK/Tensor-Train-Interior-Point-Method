@@ -5,6 +5,6 @@ seeds: [928, 524, 712, 135, 333] # Tier 1: 5, 692, 928 (slow), Tier 2: (87 maybe
 gap_tol: !!float 5e-4
 verbose: True
 # TT-IPM
-op_tol: !!float 5e-6
+op_tol: !!float 1e-5
 max_iter: !!int 30
 warm_up: !!int 0

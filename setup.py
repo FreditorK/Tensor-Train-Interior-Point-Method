@@ -1,21 +1,29 @@
 from setuptools import setup, Extension
 from Cython.Build import cythonize
 import numpy as np
-import scipy as scip
-scipy_include = scip.__path__[0] + '/libs'
+import os
+import scipy
+
+scipy_include = os.path.join(os.path.dirname(scipy.__file__), 'linalg')
 
 extensions = [
     Extension(
         "cy_src.tt_ops_cy",  # Name of the Cython module
         ["cy_src/tt_ops_cy.pyx"],  # Source file
-        include_dirs=[np.get_include()],  # This line ensures that NumPy headers are included
+        include_dirs=[
+            np.get_include(),
+            scipy_include
+        ],  # This line ensures that NumPy headers are included
         extra_compile_args=["-O3", "-march=native"],
         define_macros=[('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')]
     ),
     Extension(
         "cy_src.lgmres_cy",  # Name of the Cython module
         ["cy_src/lgmres_cy.pyx"],  # Source file
-        include_dirs=[np.get_include()],  # This line ensures that NumPy headers are included
+        include_dirs=[
+            np.get_include(),
+            scipy_include
+        ],  # This line ensures that NumPy headers are included
         extra_compile_args=["-O3", "-march=native"],
         define_macros=[('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')]
     )
