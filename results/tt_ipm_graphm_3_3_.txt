@@ -833,3 +833,117 @@ Ranks X_tt: [5, 10, 18, 18, 11, 5], Z_tt: [5, 11, 26, 24, 13, 5],
 	Direction 1
 	Residual 0.02614407246327417
 	TT-sol rank: [12, 29, 68, 64, 16, 4]
+	Starting Sweep: 7
+	Direction -1
+	Residual 0.02614407246327417
+	TT-sol rank: [4, 10, 40, 68, 48, 12]
+
+	---Results---
+	Solution rank is [ 4 10 40 68 48 12]
+	Residual  0.02614407246327417
+	Number of sweeps 8
+	Time:  225.95555806159973
+	Time per sweep:  28.244445115327835
+
+Starting Eigen solve with:
+ 	 0.000525 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 5, 8, 8, 4, 2]
+	Starting Sweep: 0
+	Step size: 0.976780
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 7, 10, 6, 4]
+	Starting Sweep: 1
+	Step size: 0.976720
+	Direction: -1
+	Residual 0
+	TT-sol rank: [4, 5, 6, 8, 4, 2]
+	 -----
+	 Solution rank is [2 3 5 8 4 2]
+	 Step size: 0.976700
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.04048347473144531
+	 Time per sweep:  0.020244240760803223
+
+Starting Eigen solve with:
+ 	 0.000525 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: -1
+	Residual inf
+	TT-sol rank: [4, 5, 8, 8, 4, 2]
+	Starting Sweep: 0
+	Step size: 1.000000
+	Direction: 1
+	Residual 0
+	TT-sol rank: [2, 4, 8, 10, 6, 4]
+	 -----
+	 Solution rank is [2 3 6 7 4 2]
+	 Step size: 1.000000
+	 Residual 0
+	 Number of sweeps 2
+	 Time:  0.017223834991455078
+	 Time per sweep:  0.008614778518676758
+
+Starting Eigen solve with:
+ 	 0.000525 
+ 	 sweeps: 10
+	Starting Sweep: 0
+	Direction: -1
+	Residual inf
+	TT-sol rank: [3, 3, 3, 3, 3, 3]
+	Starting Sweep: 0
+	Direction: 1
+	Residual 0.00024649533035227267
+	TT-sol rank: [3, 3, 3, 3, 3, 3]
+	 -----
+	 Solution rank is [1 1 1 1 1 1]
+	 Residual 5.699174112020149e-18
+	 Number of sweeps 2
+	 Time:  0.009168624877929688
+	 Time per sweep:  0.004585623741149902
+--- Step 5 ---
+Step sizes: 0.9267272514189935, 1.0
+
+Results of iteration 5:
+Finishing up: False
+Inequality active: inactive
+Is central: True, Is primal feasible:  True, Is dual feasible: False
+Using AHO-Direction: True
+Centrality Error: 0.000427956976594519
+Primal-Dual Error: (np.float64(0.000306354178329929), np.float64(0.0026798303203580363))
+Sigma: 0
+Ranks X_tt: [5, 10, 24, 39, 16, 5], Z_tt: [5, 11, 25, 22, 14, 5], 
+      Y_tt: [4, 10, 24, 17, 12, 4], T_tt: [1, 2, 2, 1, 2, 2] 
+
+
+--- Predictor  step ---
+
+	---Starting Block-ALS---
+	Starting Sweep: 0
+	Direction 1
+	Residual inf
+	TT-sol rank: [12, 16, 16, 16, 16, 4]
+	Starting Sweep: 1
+	Direction -1
+	Residual 1.5089350403696986
+	TT-sol rank: [4, 10, 16, 16, 16, 12]
+	Starting Sweep: 2
+	Direction 1
+	Residual 0.47089667107160066
+	TT-sol rank: [11, 16, 16, 16, 16, 4]
+	Starting Sweep: 3
+	Direction -1
+	Residual 0.47089667107160066
+	TT-sol rank: [4, 10, 16, 16, 16, 12]
+	Starting Sweep: 4
+	Direction 1
+	Residual 0.38596265838982075
+	TT-sol rank: [11, 27, 48, 48, 16, 4]
