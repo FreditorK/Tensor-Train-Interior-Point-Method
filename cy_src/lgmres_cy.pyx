@@ -16,6 +16,7 @@ from numpy.linalg import LinAlgError
 from scipy.linalg import qr_insert
 from scipy.linalg.cython_lapack cimport dgelsd
 from libc.stdlib cimport malloc, free
+from cython.parallel import prange
 
 cnp.import_array() # Initialize NumPy C-API
 
@@ -38,7 +39,7 @@ cdef void cy_full_axpy(double[:] dx, double[:] x, double alpha):
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef double cy_dot(double[:] x, double[:] y):
+cdef double cy_dot(double[:] x, double[:] y) nogil:
     cdef int n = len(x)
     return blas.ddot(&n, &x[0], &inc, &y[0], &inc)
 
@@ -50,15 +51,13 @@ cdef void cy_scal(double alpha, double[:] x):
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef double cy_nrm2(double[:] x):
+cdef double cy_nrm2(double[:] x) nogil:
     cdef int n = len(x)
     return blas.dnrm2(&n, &x[0], &inc)
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef tuple cy_dgelsd(cnp.ndarray[double, ndim=2, mode='fortran'] a1,
-                     cnp.ndarray[double, ndim=2, mode='fortran'] b1,
-                     double eps):
+cdef double[:] cy_dgelsd(double[:,  :] a1, double[:] b1, double eps):
 
     cdef int m = a1.shape[0]
     cdef int n = a1.shape[1]
@@ -79,43 +78,45 @@ cdef tuple cy_dgelsd(cnp.ndarray[double, ndim=2, mode='fortran'] a1,
     if iwork == NULL:
         raise MemoryError("Failed to allocate iwork")
 
-    try:
-        # Workspace query
-        dgelsd(&m, &n, &nrhs,
-               &a1[0,0], &lda,
-               &b1[0,0], &ldb,
-               &s[0], &eps,
-               &rank,
-               &wkopt, &lwork,
-               iwork, &info)
+    with nogil:
 
-        if info != 0:
-            raise RuntimeError(f"dgelsd workspace query failed with info={info}")
+        try:
+            # Workspace query
+            dgelsd(&m, &n, &nrhs,
+                   &a1[0,0], &lda,
+                   &b1[0], &ldb,
+                   &s[0], &eps,
+                   &rank,
+                   &wkopt, &lwork,
+                   iwork, &info)
 
-        lwork = <int>wkopt
-        work = <double*>malloc(lwork * sizeof(double))
-        if work == NULL:
-            raise MemoryError("Failed to allocate work array")
+            if info != 0:
+                raise RuntimeError(f"dgelsd workspace query failed with info={info}")
 
-        # Actual dgelsd call
-        dgelsd(&m, &n, &nrhs,
-               &a1[0,0], &lda,
-               &b1[0,0], &ldb,
-               &s[0], &eps,
-               &rank,
-               work, &lwork,
-               iwork, &info)
+            lwork = <int>wkopt
+            work = <double*>malloc(lwork * sizeof(double))
+            if work == NULL:
+                raise MemoryError("Failed to allocate work array")
 
-        if info != 0:
-            raise RuntimeError(f"dgelsd failed with info={info}")
+            # Actual dgelsd call
+            dgelsd(&m, &n, &nrhs,
+                   &a1[0,0], &lda,
+                   &b1[0], &ldb,
+                   &s[0], &eps,
+                   &rank,
+                   work, &lwork,
+                   iwork, &info)
 
-    finally:
-        free(iwork)
-        if work != NULL:
-            free(work)
+            if info != 0:
+                raise RuntimeError(f"dgelsd failed with info={info}")
+
+        finally:
+            free(iwork)
+            if work != NULL:
+                free(work)
 
     # Return the solution matrix (modified b1), rank, singular values s
-    return b1, rank, s
+    return b1
 
 
 cdef class BaseMatVec:
@@ -127,29 +128,14 @@ cdef class MatVecWrapper(BaseMatVec):
     cdef object mL
     cdef object L_Z
     cdef object L_XmL_adj
-    cdef object XAX_k_00, XAX_k_01, XAX_k_21, XAX_k_22
-    cdef object block_A_k_00, block_A_k_01, block_A_k_21, block_A_k_22
-    cdef object XAX_kp1_00, XAX_kp1_01, XAX_kp1_21, XAX_kp1_22
-    cdef object inv_I
-    cdef int x0, x2, x3  # shape dims
+    cdef double[:, :,  :] inv_I
+    cdef int r, n, R  # shape dims
 
     def __init__(self,
                  object K_y,
                  object mL,
                  object L_Z,
                  object L_XmL_adj,
-                 cnp.ndarray[double, ndim=3] XAX_k_00,
-                 cnp.ndarray[double, ndim=3] XAX_k_01,
-                 cnp.ndarray[double, ndim=3] XAX_k_21,
-                 cnp.ndarray[double, ndim=3] XAX_k_22,
-                 cnp.ndarray[double, ndim=4] block_A_k_00,
-                 cnp.ndarray[double, ndim=4] block_A_k_01,
-                 cnp.ndarray[double, ndim=4] block_A_k_21,
-                 cnp.ndarray[double, ndim=4] block_A_k_22,
-                 cnp.ndarray[double, ndim=3] XAX_kp1_00,
-                 cnp.ndarray[double, ndim=3] XAX_kp1_01,
-                 cnp.ndarray[double, ndim=3] XAX_kp1_21,
-                 cnp.ndarray[double, ndim=3] XAX_kp1_22,
                  cnp.ndarray[double, ndim=3] inv_I,
                  int x0,
                  int x2,
@@ -159,90 +145,31 @@ cdef class MatVecWrapper(BaseMatVec):
         self.L_Z = L_Z
         self.L_XmL_adj = L_XmL_adj
 
-        self.XAX_k_00 = XAX_k_00
-        self.XAX_k_00_l = XAX_k_00.shape[0]
-        self.XAX_k_00_s = XAX_k_00.shape[1]
-
-        self.XAX_k_01 = XAX_k_01
-        self.XAX_k_01_l = XAX_k_01.shape[0]
-        self.XAX_k_01_s = XAX_k_01.shape[1]
-
-        self.XAX_k_21 = XAX_k_21
-        self.XAX_k_21_l = XAX_k_21.shape[0]
-        self.XAX_k_21_s = XAX_k_21.shape[1]
-
-        self.XAX_k_22 = XAX_k_22
-        self.XAX_k_22_l = XAX_k_22.shape[0]
-        self.XAX_k_22_s = XAX_k_22.shape[1]
-
-        self.block_A_k_00 = block_A_k_00
-        self.block_A_k_01 = block_A_k_01
-        self.block_A_k_21 = block_A_k_21
-        self.block_A_k_22 = block_A_k_22
-
-        self.XAX_kp1_00 = XAX_kp1_00
-        self.XAX_kp1_00_L = XAX_kp1_00.shape[0]
-        self.XAX_kp1_00_S = XAX_kp1_00.shape[1]
-
-        self.XAX_kp1_01 = XAX_kp1_01
-        self.XAX_kp1_01_L = XAX_kp1_01.shape[0]
-        self.XAX_kp1_01_S = XAX_kp1_01.shape[1]
-
-        self.XAX_kp1_21 = XAX_kp1_21
-        self.XAX_kp1_21_L = XAX_kp1_21.shape[0]
-        self.XAX_kp1_21_S = XAX_kp1_21.shape[1]
-
-        self.XAX_kp1_22 = XAX_kp1_22
-        self.XAX_kp1_22_L = XAX_kp1_22.shape[0]
-        self.XAX_kp1_22_S = XAX_kp1_22.shape[1]
-
         self.inv_I = inv_I
         self.r = x0
         self.n = x2
         self.R = x3
-
-    cdef cnp.ndarray[double, ndim=3] cy_K_y(self, cnp.ndarray[double, ndim=3, mode="fortran"] x_core):
-        XAX = self.XAX_k_00.reshape(self.XAX_k_00_l*self.XAX_k_00_s, self.r)
-        x_core = x_core.reshape(self.r, self.n*self.R)
-        x_core = XAX @ x_core # ls x nR
-        x_core = x_core.reshape(self.XAX_k_00_l*self.XAX_k_00_s*self.n, self.R)
-        XAX1 = self.XAX_kp1_00.reshape(self.XAX_kp1_00_L * self.XAX_kp1_00_S, self.R)
-        x_core = x_core @ XAX1.T # lsn x LS
-        x_core = x_core.reshape(self.XAX_k_00_l, self.XAX_k_00_s*self.n, self.XAX_kp1_00_L, self.XAX_kp1_00_S)
-        x_core = x_core.transpose(axes=(0, 2, 1, 3))
-        x_core = x_core.reshape(self.XAX_k_00_l*self.XAX_kp1_00_L, self.XAX_k_00_s*self.n*self.XAX_kp1_00_S)
-        A = self.block_A_k_00.transpose(axes=(0,2,3,1))
-        A = A.reshape(self.XAX_k_00_s*self.n*self.XAX_kp1_00_S, self.n)
-        x_core = x_core @ A # lL x snS
-        x_core = x_core.reshape(self.XAX_k_00_l, self.XAX_kp1_00_L, self.n)
-        x_core = x_core.transpose(axes=(0, 2, 1))
-        return x_core
 
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
     cpdef cnp.ndarray[double, ndim=1] matvec(self, cnp.ndarray[double, ndim=1] x_core):
         # Expect x_core flattened length = 2 * x0 * x2 * x3
-        cdef cnp.ndarray[double, ndim=4] x_reshaped = x_core.reshape((2, self.x0, self.x2, self.x3))
+        cdef cnp.ndarray[double, ndim=4] x_reshaped = x_core.reshape((2, self.r, self.n, self.R))
         cdef cnp.ndarray[double, ndim=4] result = np.zeros_like(x_reshaped, dtype=np.float64)
 
         # Call the contraction expressions (Python calls)
-        self.K_y(self.XAX_k_00, self.block_A_k_00, self.XAX_kp1_00, x_reshaped[0], out=result[0])
-        self.L_Z(self.XAX_k_21, self.block_A_k_21, self.XAX_kp1_21, x_reshaped[1], out=result[1])
-        result[0] += self.mL(self.XAX_k_01, self.block_A_k_01, self.XAX_kp1_01, x_reshaped[1])
-        result[1] -= self.L_XmL_adj(self.XAX_k_22, self.block_A_k_22, self.XAX_kp1_22,
-                                   self.XAX_k_01, self.block_A_k_01, self.XAX_kp1_01,
-                                   x_reshaped[0]).__imul__(self.inv_I)
+        self.K_y(x_reshaped[0], out=result[0])
+        self.L_Z(x_reshaped[1], out=result[1])
+        result[0] += self.mL(x_reshaped[1])
+        result[1] -= self.L_XmL_adj(x_reshaped[0]).__imul__(self.inv_I)
         return result.ravel()
 
 
 cdef class IneqMatVecWrapper(BaseMatVec):
     cdef object K_y, mL, mL_adj, L_X, L_Z, T_op, K_t
-    cdef object XAX_k_00, XAX_k_01, XAX_k_21, XAX_k_22, XAX_k_31, XAX_k_33
-    cdef object block_A_k_00, block_A_k_01, block_A_k_21, block_A_k_22, block_A_k_31, block_A_k_33
-    cdef object XAX_kp1_00, XAX_kp1_01, XAX_kp1_21, XAX_kp1_22, XAX_kp1_31, XAX_kp1_33
-    cdef object inv_I
-    cdef int x0, x2, x3
+    cdef double[:, :, :] inv_I
+    cdef int r, n, R
 
     def __init__(self,
                  object K_y,
@@ -252,24 +179,6 @@ cdef class IneqMatVecWrapper(BaseMatVec):
                  object L_Z,
                  object T_op,
                  object K_t,
-                 cnp.ndarray[double, ndim=3] XAX_k_00,
-                 cnp.ndarray[double, ndim=3] XAX_k_01,
-                 cnp.ndarray[double, ndim=3] XAX_k_21,
-                 cnp.ndarray[double, ndim=3] XAX_k_22,
-                 cnp.ndarray[double, ndim=3] XAX_k_31,
-                 cnp.ndarray[double, ndim=3] XAX_k_33,
-                 cnp.ndarray[double, ndim=4] block_A_k_00,
-                 cnp.ndarray[double, ndim=4] block_A_k_01,
-                 cnp.ndarray[double, ndim=4] block_A_k_21,
-                 cnp.ndarray[double, ndim=4] block_A_k_22,
-                 cnp.ndarray[double, ndim=4] block_A_k_31,
-                 cnp.ndarray[double, ndim=4] block_A_k_33,
-                 cnp.ndarray[double, ndim=3] XAX_kp1_00,
-                 cnp.ndarray[double, ndim=3] XAX_kp1_01,
-                 cnp.ndarray[double, ndim=3] XAX_kp1_21,
-                 cnp.ndarray[double, ndim=3] XAX_kp1_22,
-                 cnp.ndarray[double, ndim=3] XAX_kp1_31,
-                 cnp.ndarray[double, ndim=3] XAX_kp1_33,
                  cnp.ndarray[double, ndim=3] inv_I,
                  int x0,
                  int x2,
@@ -282,50 +191,27 @@ cdef class IneqMatVecWrapper(BaseMatVec):
         self.T_op = T_op
         self.K_t = K_t
 
-        self.XAX_k_00 = XAX_k_00
-        self.XAX_k_01 = XAX_k_01
-        self.XAX_k_21 = XAX_k_21
-        self.XAX_k_22 = XAX_k_22
-        self.XAX_k_31 = XAX_k_31
-        self.XAX_k_33 = XAX_k_33
-
-        self.block_A_k_00 = block_A_k_00
-        self.block_A_k_01 = block_A_k_01
-        self.block_A_k_21 = block_A_k_21
-        self.block_A_k_22 = block_A_k_22
-        self.block_A_k_31 = block_A_k_31
-        self.block_A_k_33 = block_A_k_33
-
-        self.XAX_kp1_00 = XAX_kp1_00
-        self.XAX_kp1_01 = XAX_kp1_01
-        self.XAX_kp1_21 = XAX_kp1_21
-        self.XAX_kp1_22 = XAX_kp1_22
-        self.XAX_kp1_31 = XAX_kp1_31
-        self.XAX_kp1_33 = XAX_kp1_33
-
         self.inv_I = inv_I
-        self.x0 = x0
-        self.x2 = x2
-        self.x3 = x3
+        self.r = x0
+        self.n = x2
+        self.R = x3
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
     cpdef cnp.ndarray[double, ndim=1] matvec(self, cnp.ndarray[double, ndim=1] x_core):
-        cdef cnp.ndarray[double, ndim=4] x = x_core.reshape((3, self.x0, self.x2, self.x3))
+        cdef cnp.ndarray[double, ndim=4] x = x_core.reshape((3, self.r, self.n, self.R))
         cdef cnp.ndarray[double, ndim=4] result = np.zeros_like(x, dtype=np.float64)
 
-        self.K_y(self.XAX_k_00, self.block_A_k_00, self.XAX_kp1_00, x[0], out=result[0])
-        self.L_Z(self.XAX_k_21, self.block_A_k_21, self.XAX_kp1_21, x[1], out=result[1])
-        self.T_op(self.XAX_k_31, self.block_A_k_31, self.XAX_kp1_31, x[1], out=result[2])
+        self.K_y(x[0], out=result[0])
+        self.L_Z(x[1], out=result[1])
+        self.T_op(x[1], out=result[2])
 
-        result[0] += self.mL(self.XAX_k_01, self.block_A_k_01, self.XAX_kp1_01, x[1])
-
-        tmp = self.mL_adj(self.XAX_k_01, self.block_A_k_01, self.XAX_kp1_01, x[0])
+        result[0] += self.mL(x[1])
+        tmp = self.mL_adj(x[0])
         tmp *= self.inv_I
         tmp += x[2]
-        result[1] -= self.L_X(self.XAX_k_22, self.block_A_k_22, self.XAX_kp1_22, tmp)
-
-        result[2] += self.K_t(self.XAX_k_33, self.block_A_k_33, self.XAX_kp1_33, x[2])
+        result[1] -= self.L_X(tmp)
+        result[2] += self.K_t(x[2])
 
         return result.ravel()
 
@@ -341,10 +227,10 @@ cdef tuple _fgmres(BaseMatVec linear_op, cnp.ndarray[double, ndim=1] v0, int m, 
         double res = np.nan
         double eps = np.finfo(v0.dtype).eps
         double alpha = 0.0
-        cnp.ndarray[double, ndim = 1] hcur, z, w
-        cnp.ndarray[double, ndim = 2] Q, R, y, zs, vs
-        cnp.ndarray[double, ndim = 2, mode='fortran'] a1, b1
-        cnp.ndarray[double, ndim = 2] Q2, R2
+        cnp.ndarray[double, ndim = 1] hcur, z, w, y
+        cnp.ndarray[double, ndim = 2] Q, R, zs, vs
+        cnp.ndarray[double, ndim = 1, mode='fortran'] b1
+        cnp.ndarray[double, ndim = 2, mode='fortran'] Q2, R2, a1
 
     m = m + outer_len
     vs = np.zeros((v0.shape[0], m + 1), dtype=v0.dtype, order='F')
@@ -400,10 +286,10 @@ cdef tuple _fgmres(BaseMatVec linear_op, cnp.ndarray[double, ndim=1] v0, int m, 
         raise LinAlgError()
 
     a1 = np.asfortranarray(R[:j+1,:j+1])
-    b1 = np.asfortranarray(Q[0,:j+1].T.reshape(-1, 1))
-    y, _,  _ = cy_dgelsd(a1, b1, eps)
+    b1 = np.asfortranarray(Q[0,:j+1].ravel())
+    y = np.asarray(cy_dgelsd(a1, b1, eps))
 
-    return zs, y.ravel(), res
+    return zs, y, res
 
 @cython.boundscheck(False)
 @cython.wraparound(False)

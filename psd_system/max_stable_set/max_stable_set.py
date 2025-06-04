@@ -31,8 +31,7 @@ def tt_tr_constraint(dim):
     return tt_rank_reduce(op), [E(0, 0) for _ in range(config["dim"])]
 
 def tt_obj_matrix(dim):
-    scale = 2 ** (7 - dim)
-    return tt_normalise(tt_one_matrix(dim), radius=scale)
+    return tt_scale(1/2 ** dim, tt_one_matrix(dim)) # TODO: What scaling is the best?
 
 if __name__ == "__main__":
     np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=4, suppress=True)

@@ -46,23 +46,19 @@ def _get_eq_mat_vec(XAX_k, block_A_k, XAX_kp1, x_shape, inv_I):
     block_A_k_21 = block_A_k[2, 1]
     block_A_k_22 = block_A_k[2, 2]
 
-    K_y = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k_00.shape, block_A_k_00.shape,  XAX_kp1_00.shape, x_element_shape, optimize="greedy")
-    mL = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k_01.shape, block_A_k_01.shape,  XAX_kp1_01.shape, x_element_shape, optimize="greedy")
-    L_Z = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k_21.shape, block_A_k_21.shape, XAX_kp1_21.shape, x_element_shape, optimize="greedy")
+    K_y = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k_00, block_A_k_00,  XAX_kp1_00, x_element_shape, optimize="greedy", constants=[0, 1, 2])
+    mL = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k_01, block_A_k_01,  XAX_kp1_01, x_element_shape, optimize="greedy", constants=[0, 1, 2])
+    L_Z = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k_21, block_A_k_21, XAX_kp1_21, x_element_shape, optimize="greedy", constants=[0, 1, 2])
     # lsr,smnS,LSR,rnR  == abr, bdnf, gfR, rnR -> adg
     L_XmL_adj = contract_expression(
-        'abr, bdnf, gfR, lsr,smnS,LSR,lmL -> adg',
-        XAX_k_22.shape, block_A_k_22.shape, XAX_kp1_22.shape,
-        XAX_k_01.shape, block_A_k_01.shape, XAX_kp1_01.shape,
-        x_element_shape,
-        optimize="greedy"
+        'abr, bdnf, gfR, lsr, smnS, LSR, lmL -> adg',
+        XAX_k_22, block_A_k_22, XAX_kp1_22, XAX_k_01, block_A_k_01, XAX_kp1_01, x_element_shape,
+        optimize="greedy",
+        constants=[0, 1, 2, 3, 4, 5]
     )
 
     return MatVecWrapper(
         K_y, mL, L_Z, L_XmL_adj,
-        XAX_k_00, XAX_k_01, XAX_k_21, XAX_k_22,
-        block_A_k_00, block_A_k_01, block_A_k_21, block_A_k_22,
-        XAX_kp1_00, XAX_kp1_01, XAX_kp1_21, XAX_kp1_22,
         inv_I, x_element_shape[0], x_element_shape[1], x_element_shape[2]
     )
 
@@ -79,9 +75,6 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
     if block_res_old < rtol:
         return previous_solution, block_res_old, block_res_old, rhs, norm_rhs
 
-    #print(size_limit)
-    #print("Cond", np.linalg.cond(
-    #    cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[2, 1], block_A_k[2, 1], XAX_k1[2, 1]).reshape(m, m)))
     if m <= size_limit:
         try:
             solution_now = np.zeros(x_shape)
@@ -119,6 +112,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
             Op,
             local_rhs.reshape(-1, 1),
             rtol=rtol,
+            outer_k=3,
             maxiter=25
         )
 
@@ -155,19 +149,16 @@ def _get_ineq_mat_vec(XAX_k, block_A_k, XAX_kp1, x_shape, inv_I):
     block_A_k_22 = block_A_k[2, 2]
     block_A_k_31 = block_A_k[3, 1]
     block_A_k_33 = block_A_k[3, 3]
-    K_y = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k_00.shape, block_A_k_00.shape,  XAX_kp1_00.shape, x_element_shape, optimize="greedy")
-    mL = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k_01.shape, block_A_k_01.shape,  XAX_kp1_01.shape, x_element_shape, optimize="greedy")
-    mL_adj = contract_expression('lsr,smnS,LSR,lmL->rnR', XAX_k_01.shape, block_A_k_01.shape, XAX_kp1_01.shape, x_element_shape, optimize="greedy")
-    L_X = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k_22.shape, block_A_k_22.shape, XAX_kp1_22.shape, x_element_shape, optimize="greedy")
-    L_Z = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k_21.shape, block_A_k_21.shape, XAX_kp1_21.shape, x_element_shape, optimize="greedy")
-    T_op = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k_31.shape, block_A_k_31.shape, XAX_kp1_31.shape, x_element_shape, optimize="greedy")
-    K_t = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k_33.shape, block_A_k_33.shape, XAX_kp1_33.shape, x_element_shape, optimize="greedy")
+    K_y = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k_00, block_A_k_00,  XAX_kp1_00, x_element_shape, optimize="greedy", constants=[0, 1, 2])
+    mL = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k_01, block_A_k_01,  XAX_kp1_01, x_element_shape, optimize="greedy", constants=[0, 1, 2])
+    mL_adj = contract_expression('lsr,smnS,LSR,lmL->rnR', XAX_k_01, block_A_k_01, XAX_kp1_01, x_element_shape, optimize="greedy", constants=[0, 1, 2])
+    L_X = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k_22, block_A_k_22, XAX_kp1_22, x_element_shape, optimize="greedy", constants=[0, 1, 2])
+    L_Z = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k_21, block_A_k_21, XAX_kp1_21, x_element_shape, optimize="greedy", constants=[0, 1, 2])
+    T_op = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k_31, block_A_k_31, XAX_kp1_31, x_element_shape, optimize="greedy", constants=[0, 1, 2])
+    K_t = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k_33, block_A_k_33, XAX_kp1_33, x_element_shape, optimize="greedy", constants=[0, 1, 2])
 
     return IneqMatVecWrapper(
         K_y, mL, mL_adj, L_X, L_Z, T_op, K_t,
-        XAX_k_00, XAX_k_01, XAX_k_21, XAX_k_22, XAX_k_31, XAX_k_33,
-        block_A_k_00, block_A_k_01, block_A_k_21, block_A_k_22, block_A_k_31, block_A_k_33,
-        XAX_kp1_00, XAX_kp1_01, XAX_kp1_21, XAX_kp1_22, XAX_kp1_31, XAX_kp1_33,
         inv_I, x_element_shape[0], x_element_shape[1], x_element_shape[2]
     )
 
@@ -240,6 +231,7 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
             linear_op,
             local_rhs.reshape(-1, 1),
             rtol=rtol,
+            outer_k=3,
             maxiter=25
         )
         solution_now = np.transpose(solution_now.reshape(3, x_shape[0], x_shape[2], x_shape[3]),
@@ -627,7 +619,7 @@ def _tt_line_search_ineq(x_step_size, z_step_size, X_tt, T_tt, Delta_X_tt, Delta
 
 
 def _update(x_step_size, z_step_size, X_tt, Z_tt, Delta_X_tt, Delta_Z_tt, status):
-    if 0 < x_step_size < 1e-4 and 0 < z_step_size < 1e-4:
+    if 0 < x_step_size < 1e-5 and 0 < z_step_size < 1e-5:
         status.is_last_iter = True
     elif Delta_X_tt is not None and Delta_Z_tt is not None:
         if status.is_last_iter:
@@ -751,6 +743,7 @@ def tt_ipm(
         local_solver=_ipm_local_solver_ineq,
         tol=0.1 * min(feasibility_tol, centrality_tol, op_tol),
         termination_tol=4*status.local_res_bound,
+        warm_up=4,
         nswp=nwsp,
         size_limit=size_limit,
         refinement=refinement,
@@ -763,6 +756,7 @@ def tt_ipm(
         local_solver=_ipm_local_solver,
         tol=0.1 * min(feasibility_tol, centrality_tol, op_tol),
         termination_tol=3*status.local_res_bound,
+        warm_up=4,
         nswp=nwsp,
         size_limit=size_limit,
         refinement=refinement,
@@ -863,11 +857,11 @@ def tt_ipm(
         X_tt, Z_tt = _update(x_step_size, z_step_size, X_tt, Z_tt, Delta_X_tt, Delta_Z_tt, status)
 
         # TODO: transpose without reshape
-        if z_step_size > 1e-4:
+        if z_step_size > 1e-5:
             Y_tt = tt_reshape(_tt_symmetrise(tt_reshape(tt_add(Y_tt, tt_scale(z_step_size, Delta_Y_tt)), (2, 2)), op_tol), (4, ))
 
         if status.ineq_status is IneqStatus.ACTIVE:
-            if z_step_size > 1e-4:
+            if z_step_size > 1e-5:
                 if status.is_last_iter:
                     T_tt = _tt_symmetrise(tt_add(T_tt, tt_scale(z_step_size, Delta_T_tt)), op_tol)
                 else:
