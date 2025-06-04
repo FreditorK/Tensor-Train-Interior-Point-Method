@@ -112,7 +112,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
             Op,
             local_rhs.reshape(-1, 1),
             rtol=rtol,
-            outer_k=3,
+            outer_k=5,
             maxiter=25
         )
 
@@ -231,7 +231,7 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
             linear_op,
             local_rhs.reshape(-1, 1),
             rtol=rtol,
-            outer_k=3,
+            outer_k=5,
             maxiter=25
         )
         solution_now = np.transpose(solution_now.reshape(3, x_shape[0], x_shape[2], x_shape[3]),
