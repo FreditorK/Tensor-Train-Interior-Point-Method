@@ -46,23 +46,10 @@ def _get_eq_mat_vec(XAX_k, block_A_k, XAX_kp1, x_shape, inv_I):
     block_A_k_21 = block_A_k[2, 1]
     block_A_k_22 = block_A_k[2, 2]
 
-    K_y = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k_00, block_A_k_00,  XAX_kp1_00, x_element_shape, optimize="greedy", constants=[0, 1, 2])
-    mL = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k_01, block_A_k_01,  XAX_kp1_01, x_element_shape, optimize="greedy", constants=[0, 1, 2])
-    L_Z = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k_21, block_A_k_21, XAX_kp1_21, x_element_shape, optimize="greedy", constants=[0, 1, 2])
-    # lsr,smnS,LSR,rnR  == abr, bdnf, gfR, rnR -> adg
-    L_XmL_adj = contract_expression(
-        'abr, bdnf, gfR, lsr, smnS, LSR, lmL -> adg',
-        XAX_k_22, block_A_k_22, XAX_kp1_22, XAX_k_01, block_A_k_01, XAX_kp1_01, x_element_shape,
-        optimize="greedy",
-        constants=[0, 1, 2, 3, 4, 5]
-    )
-    print(K_y)
-    print(mL)
-    print(L_Z)
-    print(L_XmL_adj)
-
     return MatVecWrapper(
-        K_y, mL, L_Z, L_XmL_adj,
+        XAX_k_00, XAX_k_01, XAX_k_21, XAX_k_22,
+        block_A_k_00, block_A_k_01, block_A_k_21, block_A_k_22,
+        XAX_kp1_00, XAX_kp1_01, XAX_kp1_21, XAX_kp1_22,
         inv_I, x_element_shape[0], x_element_shape[1], x_element_shape[2]
     )
 
@@ -153,16 +140,11 @@ def _get_ineq_mat_vec(XAX_k, block_A_k, XAX_kp1, x_shape, inv_I):
     block_A_k_22 = block_A_k[2, 2]
     block_A_k_31 = block_A_k[3, 1]
     block_A_k_33 = block_A_k[3, 3]
-    K_y = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k_00, block_A_k_00,  XAX_kp1_00, x_element_shape, optimize="greedy", constants=[0, 1, 2])
-    mL = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k_01, block_A_k_01,  XAX_kp1_01, x_element_shape, optimize="greedy", constants=[0, 1, 2])
-    mL_adj = contract_expression('lsr,smnS,LSR,lmL->rnR', XAX_k_01, block_A_k_01, XAX_kp1_01, x_element_shape, optimize="greedy", constants=[0, 1, 2])
-    L_X = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k_22, block_A_k_22, XAX_kp1_22, x_element_shape, optimize="greedy", constants=[0, 1, 2])
-    L_Z = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k_21, block_A_k_21, XAX_kp1_21, x_element_shape, optimize="greedy", constants=[0, 1, 2])
-    T_op = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k_31, block_A_k_31, XAX_kp1_31, x_element_shape, optimize="greedy", constants=[0, 1, 2])
-    K_t = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k_33, block_A_k_33, XAX_kp1_33, x_element_shape, optimize="greedy", constants=[0, 1, 2])
 
     return IneqMatVecWrapper(
-        K_y, mL, mL_adj, L_X, L_Z, T_op, K_t,
+        XAX_k_00, XAX_k_01, XAX_k_21, XAX_k_22, XAX_k_31, XAX_k_33,
+        block_A_k_00, block_A_k_01, block_A_k_21, block_A_k_22, block_A_k_31,block_A_k_33,
+        XAX_kp1_00, XAX_kp1_01, XAX_kp1_21, XAX_kp1_22, XAX_kp1_31, XAX_kp1_33,
         inv_I, x_element_shape[0], x_element_shape[1], x_element_shape[2]
     )
 
