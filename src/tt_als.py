@@ -354,7 +354,7 @@ def tt_block_als(block_A, block_b, tol, termination_tol=1e-3, eps=1e-12, nswp=22
     Xb = [{key: np.ones((1, 1)) for key in block_b}] + [{key: None for key in block_b} for _ in range(d-1)] + [{key: np.ones((1, 1)) for key in block_b}]   # size is rk x rbk
 
     r_max_final = min(block_size*int(np.ceil(np.sqrt(d)*d)) + block_size*int(np.ceil(np.sqrt(d))) + 2, 2**d)
-    size_limit = (r_max_final)**2*N[0]/np.floor(np.sqrt(d)*d) if size_limit is None else size_limit
+    size_limit = max((r_max_final)**2*N[0]/np.floor(np.sqrt(d)*d), 100) if size_limit is None else size_limit
     r_max_part0 = max(int(np.ceil(r_max_final / np.sqrt(np.sqrt(d)*d))), 2)
     r_max_part = np.concatenate(([r_max_part0] * warm_up, [r_max_final]*nswp))
     if not refinement:

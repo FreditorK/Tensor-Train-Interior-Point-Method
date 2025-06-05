@@ -206,7 +206,6 @@ def create_problem(n, max_rank):
     # Inequality Operator
     # X
     ineq_mask = tt_rank_reduce([E(0, 0)] + tt_sub(tt_one_matrix(n), tt_identity(n)) + tt_sub(tt_one_matrix(n), tt_identity(n)))
-
     # ---
 
     # ---
@@ -323,3 +322,4 @@ if __name__ == "__main__":
     print(f"Complementary Slackness avg: {np.mean(complementary_slackness)}", flush=True)
     print(f"Total feasibility error avg: {np.mean(feasibility_errors)}", flush=True)
     print(tt_matrix_to_matrix(X_tt))
+    print(tt_matrix_to_matrix(Z_tt))

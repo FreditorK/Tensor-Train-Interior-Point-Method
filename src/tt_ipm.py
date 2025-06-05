@@ -300,7 +300,7 @@ def tt_assess_solution_quality(
     centrality_feas = rhs.get_row(2)
     centrality_feas_delta = tt_compute_centrality(Delta_X_tt, Delta_Z_tt, status)
     centrl_change = -(0 if centrality_feas is None else 2 * tt_inner_prod(centrality_feas, centrality_feas_delta)) / tt_inner_prod(centrality_feas_delta, centrality_feas_delta)
-    scaling = max(min(primal_change, dual_change, centrl_change), 1)
+    scaling = min(primal_change, dual_change, centrl_change, 1)
 
     return scaling > 0, tt_scale(scaling, Delta_X_tt), tt_scale(scaling, Delta_Y_tt), tt_scale(scaling, Delta_Z_tt)
 
@@ -401,7 +401,7 @@ def _tt_ipm_newton_step(
     if status.verbose:
         print("\n--- Predictor  step ---", flush=True)
     for attempt in range(3):
-        Delta_tt, res = solver(lhs_matrix_tt, rhs_vec_tt, status.mals_delta0, status.kkt_iterations, 0 if status.is_last_iter else None, attempt > 0)
+        Delta_tt, res = solver(lhs_matrix_tt, rhs_vec_tt, status.mals_delta0, status.kkt_iterations + attempt, 0 if status.is_last_iter else None, attempt > 0)
         status.mals_delta0 = Delta_tt
         Delta_X_tt = _tt_symmetrise(tt_reshape(_tt_get_block(1, Delta_tt), (2, 2)), status.eps)
         Delta_Z_tt = _tt_symmetrise(tt_reshape(_tt_get_block(2, Delta_tt), (2, 2)), status.eps)
@@ -497,7 +497,7 @@ def _tt_ipm_newton_step(
             ) if status.sigma > 1e-4 else rhs_vec_tt.get_row(2)
 
         for attempt in range(3):
-            Delta_tt_cc, res = solver(lhs_matrix_tt, rhs_vec_tt, status.mals_delta0, status.kkt_iterations, 0 if status.is_last_iter else None, attempt > 0)
+            Delta_tt_cc, res = solver(lhs_matrix_tt, rhs_vec_tt, status.mals_delta0, status.kkt_iterations+attempt, 0 if status.is_last_iter else None, attempt > 0)
             status.mals_delta0 = Delta_tt_cc
             Delta_X_tt_cc = _tt_symmetrise(tt_reshape(_tt_get_block(1, Delta_tt_cc), (2, 2)), status.eps)
             Delta_Z_tt_cc = _tt_symmetrise(tt_reshape(_tt_get_block(2, Delta_tt_cc), (2, 2)), status.eps)
@@ -527,7 +527,7 @@ def _tt_ipm_newton_step(
             else:
                 if status.verbose:
                     print("==================================\n Inaccurate results!\n==================================")
-                status.kkt_iterations = min(status.kkt_iterations + 1, 20)
+                status.kkt_iterations = min(status.kkt_iterations + 1, 16)
                 Delta_X_tt_cc = None
                 Delta_Z_tt_cc = None
                 Delta_Y_tt_cc = None
@@ -742,7 +742,7 @@ def tt_ipm(
         x0=x0,
         local_solver=_ipm_local_solver_ineq,
         tol=0.1 * min(feasibility_tol, centrality_tol, op_tol),
-        termination_tol=4*status.local_res_bound,
+        termination_tol=0.9*status.local_res_bound,
         warm_up=4,
         nswp=nwsp,
         size_limit=size_limit,
@@ -755,7 +755,7 @@ def tt_ipm(
         x0=x0,
         local_solver=_ipm_local_solver,
         tol=0.1 * min(feasibility_tol, centrality_tol, op_tol),
-        termination_tol=3*status.local_res_bound,
+        termination_tol=0.9*status.local_res_bound,
         warm_up=4,
         nswp=nwsp,
         size_limit=size_limit,
