@@ -56,6 +56,10 @@ def _get_eq_mat_vec(XAX_k, block_A_k, XAX_kp1, x_shape, inv_I):
         optimize="greedy",
         constants=[0, 1, 2, 3, 4, 5]
     )
+    print(K_y)
+    print(mL)
+    print(L_Z)
+    print(L_XmL_adj)
 
     return MatVecWrapper(
         K_y, mL, L_Z, L_XmL_adj,
@@ -291,16 +295,20 @@ def tt_assess_solution_quality(
         return True, Delta_X_tt, Delta_Y_tt, Delta_Z_tt
     primal_feas = rhs.get_row(0)
     primal_feas_delta = tt_compute_primal_feasibility(lin_op_tt, bias_tt, Delta_X_tt, status)
-    primal_change = -(0 if primal_feas is None else 2*tt_inner_prod(primal_feas, primal_feas_delta)) / tt_inner_prod(primal_feas_delta, primal_feas_delta)
+    primal_change = -(0 if primal_feas is None else 2*tt_inner_prod(primal_feas, primal_feas_delta)) / tt_inner_prod(primal_feas_delta, primal_feas_delta)  + status.eps
 
     dual_feas = rhs.get_row(1)
     dual_feas_delta = tt_compute_dual_feasibility(obj_tt, lin_op_tt_adj, Delta_Z_tt, Delta_Y_tt, None, status)
-    dual_change = -(0 if dual_feas is None else 2 * tt_inner_prod(dual_feas, dual_feas_delta))/ tt_inner_prod(dual_feas_delta, dual_feas_delta)
+    dual_change = -(0 if dual_feas is None else 2 * tt_inner_prod(dual_feas, dual_feas_delta))/ tt_inner_prod(dual_feas_delta, dual_feas_delta) + status.eps
 
     centrality_feas = rhs.get_row(2)
     centrality_feas_delta = tt_compute_centrality(Delta_X_tt, Delta_Z_tt, status)
-    centrl_change = -(0 if centrality_feas is None else 2 * tt_inner_prod(centrality_feas, centrality_feas_delta)) / tt_inner_prod(centrality_feas_delta, centrality_feas_delta)
+    centrl_change = -(0 if centrality_feas is None else 2 * tt_inner_prod(centrality_feas, centrality_feas_delta)) / tt_inner_prod(centrality_feas_delta, centrality_feas_delta)  + status.eps
     scaling = min(primal_change, dual_change, centrl_change, 1)
+
+    if status.verbose:
+        if scaling > 0:
+            print(f"\nScaled Direction with {scaling}\n")
 
     return scaling > 0, tt_scale(scaling, Delta_X_tt), tt_scale(scaling, Delta_Y_tt), tt_scale(scaling, Delta_Z_tt)
 
@@ -388,7 +396,6 @@ def _tt_ipm_newton_step(
         rhs_vec_tt,
         ineq_mask,
         X_tt,
-        Y_tt,
         Z_tt,
         T_tt,
         ZX,
@@ -527,7 +534,7 @@ def _tt_ipm_newton_step(
             else:
                 if status.verbose:
                     print("==================================\n Inaccurate results!\n==================================")
-                status.kkt_iterations = min(status.kkt_iterations + 1, 16)
+                status.kkt_iterations = min(status.kkt_iterations + 1, 20)
                 Delta_X_tt_cc = None
                 Delta_Z_tt_cc = None
                 Delta_Y_tt_cc = None
@@ -619,7 +626,7 @@ def _tt_line_search_ineq(x_step_size, z_step_size, X_tt, T_tt, Delta_X_tt, Delta
 
 
 def _update(x_step_size, z_step_size, X_tt, Z_tt, Delta_X_tt, Delta_Z_tt, status):
-    if 0 < x_step_size < 1e-5 and 0 < z_step_size < 1e-5:
+    if 0 < x_step_size < 1e-5 and 0 < z_step_size < 1e-5 or  (tt_norm(Delta_X_tt) + tt_norm(Delta_Z_tt) < status.eps):
         status.is_last_iter = True
     elif Delta_X_tt is not None and Delta_Z_tt is not None:
         if status.is_last_iter:
@@ -635,14 +642,13 @@ def _update(x_step_size, z_step_size, X_tt, Z_tt, Delta_X_tt, Delta_Z_tt, status
 
 
 def _initialise(ineq_mask, status, dim):
-    scale = 2**(dim/2)
-    X_tt = tt_scale(scale, tt_identity(dim))
-    Z_tt = tt_scale(scale, tt_identity(dim))
+    X_tt = tt_identity(dim)
+    Z_tt = tt_identity(dim)
     Y_tt = tt_reshape(tt_zero_matrix(dim), (4, ))
     T_tt = None
 
     if status.ineq_status is IneqStatus.ACTIVE:
-        T_tt = tt_scale(0.1*status.feasibility_tol, ineq_mask)
+        T_tt = tt_scale(status.eps, ineq_mask)
 
     return X_tt, Y_tt, Z_tt, T_tt
 
@@ -789,11 +795,6 @@ def tt_ipm(
     lhs = lhs_skeleton
 
     while finishing_steps > 0:
-        #print()
-        #print(tt_norm(X_tt))
-        #print(tt_norm(Z_tt))
-        #print(list(lhs.all_keys()))
-        #print()
         iteration += 1
         status.aho_direction = (iteration > warm_up)
         status.is_last_iter = status.is_last_iter or (max_iter - max_refinement < iteration)
@@ -841,7 +842,6 @@ def tt_ipm(
             rhs_vec_tt,
             ineq_mask,
             X_tt,
-            Y_tt,
             Z_tt,
             T_tt,
             ZX,
@@ -899,6 +899,12 @@ def tt_ipm(
         prev_primal_error = status.primal_error
         prev_dual_error = status.dual_error
         prev_centrality_error = status.centrality_error
+
+        #print()
+        #print(tt_norm(X_tt), tt_norm(Delta_X_tt))
+        #print(tt_norm(Y_tt), tt_norm(Delta_Y_tt))
+        #print(tt_norm(Z_tt), tt_norm(Delta_Z_tt))
+        #print()
 
     print(f"---Terminated---")
     print(f"Converged in {iteration} iterations.")

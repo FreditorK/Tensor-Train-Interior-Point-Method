@@ -330,7 +330,7 @@ def tt_block_als(block_A, block_b, tol, termination_tol=1e-3, eps=1e-12, nswp=22
     x_shape = model_entry[0].shape[1:-1]
 
     # scale residuals
-    rescale = max(block_b.norm, 1e-6)
+    rescale = max(block_b.norm, 1e-8)
     block_b.scale(rescale)
 
     if local_solver is None:
@@ -353,20 +353,22 @@ def tt_block_als(block_A, block_b, tol, termination_tol=1e-3, eps=1e-12, nswp=22
     XAX =  [{key: np.ones((1, 1, 1)) for key in block_A}] + [{key: None for key in block_A} for _ in range(d-1)] + [{key: np.ones((1, 1, 1)) for key in block_A}]  # size is rk x Rk x rk
     Xb = [{key: np.ones((1, 1)) for key in block_b}] + [{key: None for key in block_b} for _ in range(d-1)] + [{key: np.ones((1, 1)) for key in block_b}]   # size is rk x rbk
 
-    r_max_final = min(block_size*int(np.ceil(np.sqrt(d)*d)) + block_size*int(np.ceil(np.sqrt(d))) + 2, 2**d)
+    r_max_final = min(block_size*int(np.ceil(np.sqrt(d)*d)), 2**d)
     size_limit = max((r_max_final)**2*N[0]/np.floor(np.sqrt(d)*d), 100) if size_limit is None else size_limit
-    r_max_part0 = max(int(np.ceil(r_max_final / np.sqrt(np.sqrt(d)*d))), 2)
-    r_max_part = np.concatenate(([r_max_part0] * warm_up, [r_max_final]*nswp))
     if not refinement:
-        x_cores = tt_rank_retraction(x_cores, [r_max_part0]*(d-1)) if x0 is not None else x_cores
+        r_max = max(int(np.ceil(r_max_final / np.sqrt(np.sqrt(d) * d)))-2, 2)
+        x_cores = tt_rank_retraction(x_cores, [r_max]*(d-1)) if x0 is not None else x_cores
+    else:
+        r_max = np.max(tt_ranks(x_cores))
     rx = np.array([1] + tt_ranks(x_cores) + [1])
     nswp += warm_up
     local_res_fwd = np.inf
     local_res_bwd = np.inf
     last = False
+    prev_local_res = np.inf
 
     for swp in range(nswp):
-        r_max = r_max_part[swp]
+
         if direction > 0:
             x_cores, XAX, Xb, rx, local_res_fwd = _bck_sweep(
                 local_solver,
@@ -404,8 +406,6 @@ def tt_block_als(block_A, block_b, tol, termination_tol=1e-3, eps=1e-12, nswp=22
                 r_max
             )
 
-
-
         if verbose:
             print('\tStarting Sweep: %d' % swp)
             print(f'\tDirection {direction}')
@@ -423,6 +423,10 @@ def tt_block_als(block_A, block_b, tol, termination_tol=1e-3, eps=1e-12, nswp=22
                 last = True
 
         direction *= -1
+
+        if prev_local_res < 2*min(local_res_fwd, local_res_bwd):
+            r_max = min(r_max + 4, r_max_final)
+        prev_local_res = min(local_res_fwd, local_res_bwd)
 
 
     if verbose:

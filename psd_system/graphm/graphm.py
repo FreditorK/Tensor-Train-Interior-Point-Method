@@ -234,7 +234,7 @@ def create_problem(n, max_rank):
         "t": tt_diag_op(lag_map_t)
     }
 
-    return C_tt, L_op_tt, eq_bias_tt, ineq_mask, lag_maps
+    return C_tt, L_op_tt, tt_scale(4, eq_bias_tt), ineq_mask, lag_maps
 
 if __name__ == "__main__":
     np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=4, suppress=True)
@@ -321,5 +321,3 @@ if __name__ == "__main__":
         print(f"Peak memory avg {np.mean(memory):.3f} MB", flush=True)
     print(f"Complementary Slackness avg: {np.mean(complementary_slackness)}", flush=True)
     print(f"Total feasibility error avg: {np.mean(feasibility_errors)}", flush=True)
-    print(tt_matrix_to_matrix(X_tt))
-    print(tt_matrix_to_matrix(Z_tt))
