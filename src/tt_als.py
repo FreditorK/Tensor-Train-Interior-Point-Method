@@ -332,7 +332,7 @@ def tt_block_als(block_A, block_b, tol, termination_tol=1e-3, eps=1e-12, nswp=22
     x_shape = model_entry[0].shape[1:-1]
 
     # scale residuals
-    rescale = max(block_b.norm, 1e-8)
+    rescale = max(block_b.norm, 1e-5)
     block_b.scale(rescale)
 
     if local_solver is None:
