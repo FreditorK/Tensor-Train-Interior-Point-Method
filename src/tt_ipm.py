@@ -209,7 +209,7 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
         local_rhs[1] += rhs[:, 2] - cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[2, 2], block_A_k[2, 2],
                                                   XAX_k1[2, 2], inv_I * rhs[:, 1])
         local_rhs[2] += rhs[:, 3]
-        max_iter = min(max(int(np.ceil(block_res_old / rtol)), 2), 100)
+        max_iter = min(max(int(np.ceil(block_res_old_scalar / rtol)), 2), 100)
         solution_now, _ = lgmres(
             linear_op,
             local_rhs.ravel(),
@@ -879,11 +879,11 @@ def tt_ipm(
         prev_dual_error = status.dual_error
         prev_centrality_error = status.centrality_error
 
-        #print()
-        #print(tt_norm(X_tt), tt_norm(Delta_X_tt))
-        #print(tt_norm(Y_tt), tt_norm(Delta_Y_tt))
-        #print(tt_norm(Z_tt), tt_norm(Delta_Z_tt))
-        #print()
+        print()
+        print(tt_norm(X_tt), tt_norm(Delta_X_tt))
+        print(tt_norm(Y_tt), tt_norm(Delta_Y_tt))
+        print(tt_norm(Z_tt), tt_norm(Delta_Z_tt))
+        print()
 
     print(f"---Terminated---")
     print(f"Converged in {iteration} iterations.")
