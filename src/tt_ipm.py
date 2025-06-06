@@ -63,9 +63,6 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
     inv_I = np.divide(1, cached_einsum('lsr,smnS,LSR->lmL', XAX_k[1, 2], block_A_k[1, 2], XAX_k1[1, 2]))
     norm_rhs = max(np.linalg.norm(rhs), 1e-8)
     block_res_old = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution) - rhs) / norm_rhs
-    if block_res_old < rtol:
-        return previous_solution, block_res_old, block_res_old, rhs, norm_rhs
-
     if m <= size_limit:
         try:
             solution_now = np.zeros(x_shape)
@@ -84,7 +81,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
                                                                                          XAX_k1[0, 0]).reshape(m, m))
             b = mR_p - mL_eq @ forward_backward_sub(L_L_Z, mR_c - (L_X * inv_I.reshape(1, -1)) @ mR_d,
                                                     overwrite_b=True) - A @ previous_solution[:, 0].reshape(-1, 1)
-            solution_now[:, 0] += scp.linalg.lstsq(A, b, check_finite=False, overwrite_a=True, overwrite_b=True, cond=rtol)[0].reshape(x_shape[0], x_shape[2], x_shape[3]).__iadd__(previous_solution[:, 0]) #scp.linalg.solve(A, b, check_finite=False, overwrite_a=True, overwrite_b=True).reshape(x_shape[0], x_shape[2], x_shape[3]).__iadd__(previous_solution[:, 0])
+            solution_now[:, 0] += scp.linalg.lstsq(A, b, check_finite=False, overwrite_a=True, overwrite_b=True, cond=1e-10)[0].reshape(x_shape[0], x_shape[2], x_shape[3]).__iadd__(previous_solution[:, 0]) #scp.linalg.solve(A, b, check_finite=False, overwrite_a=True, overwrite_b=True).reshape(x_shape[0], x_shape[2], x_shape[3]).__iadd__(previous_solution[:, 0])
             solution_now[:, 2] += (mR_d - mL_eq.T @ solution_now[:, 0].reshape(-1, 1)).__imul__(inv_I.reshape(-1, 1)).reshape(x_shape[0], x_shape[2], x_shape[3])
             solution_now[:, 1] += forward_backward_sub(L_L_Z, mR_c - L_X @ solution_now[:, 2].reshape(-1, 1), overwrite_b=True).reshape(x_shape[0], x_shape[2], x_shape[3])
         except Exception as e:
@@ -99,12 +96,13 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         local_rhs[1] += rhs[:, 2]
         local_rhs[1] -= cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[2, 2], block_A_k[2, 2], XAX_k1[2, 2], inv_I*rhs[:, 1])
 
+        max_iter = min(max(int(np.ceil(block_res_old / rtol)), 2), 100)
         solution_now, _ = lgmres(
             Op,
-            local_rhs.reshape(-1, 1),
-            rtol=rtol,
+            local_rhs.ravel(),
+            rtol=1e-10,
             outer_k=5,
-            maxiter=25
+            maxiter=max_iter
         )
 
         solution_now = np.transpose(solution_now.reshape(2, x_shape[0], x_shape[2], x_shape[3]), (1, 0, 2, 3)).__iadd__(previous_solution[:, :2])
@@ -159,8 +157,6 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
     inv_I = np.divide(1, cached_einsum('lsr,smnS,LSR->lmL', XAX_k[1, 2], block_A_k[1, 2], XAX_k1[1, 2]))
     norm_rhs = max(np.linalg.norm(rhs), 1e-8)
     block_res_old_scalar = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution) - rhs) / norm_rhs
-    if block_res_old_scalar < rtol:
-        return previous_solution, block_res_old_scalar, block_res_old_scalar, rhs, norm_rhs
     if m <= size_limit:
         try:
             L_L_Z = scp.linalg.cholesky(
@@ -213,12 +209,13 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
         local_rhs[1] += rhs[:, 2] - cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[2, 2], block_A_k[2, 2],
                                                   XAX_k1[2, 2], inv_I * rhs[:, 1])
         local_rhs[2] += rhs[:, 3]
+        max_iter = min(max(int(np.ceil(block_res_old / rtol)), 2), 100)
         solution_now, _ = lgmres(
             linear_op,
-            local_rhs.reshape(-1, 1),
-            rtol=rtol,
+            local_rhs.ravel(),
+            rtol=1e-10,
             outer_k=5,
-            maxiter=25
+            maxiter=max_iter
         )
         solution_now = np.transpose(solution_now.reshape(3, x_shape[0], x_shape[2], x_shape[3]),
                                     (1, 0, 2, 3)) + previous_solution[:, [0, 1, 3]]
@@ -417,7 +414,7 @@ def _tt_ipm_newton_step(
         else:
             if status.verbose:
                 print("==================================\n Inaccurate results!\n==================================")
-            status.kkt_iterations = min(status.kkt_iterations + 1, 20)
+            status.kkt_iterations = min(status.kkt_iterations + 1, 22)
             Delta_X_tt = None
             Delta_Z_tt = None
             Delta_Y_tt = None
@@ -516,7 +513,7 @@ def _tt_ipm_newton_step(
             else:
                 if status.verbose:
                     print("==================================\n Inaccurate results!\n==================================")
-                status.kkt_iterations = min(status.kkt_iterations + 1, 20)
+                status.kkt_iterations = min(status.kkt_iterations + 1, 22)
                 Delta_X_tt_cc = None
                 Delta_Z_tt_cc = None
                 Delta_Y_tt_cc = None
@@ -669,7 +666,7 @@ class IPMStatus:
     eigen_z0 = None
     eigen_xt0 = None
     eigen_zt0 = None
-    kkt_iterations = 6
+    kkt_iterations = 14
 
 
 def tt_ipm(

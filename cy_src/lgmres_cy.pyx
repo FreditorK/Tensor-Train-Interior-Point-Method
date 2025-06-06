@@ -351,7 +351,7 @@ cdef tuple _fgmres(BaseMatVec linear_op, cnp.ndarray[double, ndim=1] v0, int m, 
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef lgmres(BaseMatVec linear_op, cnp.ndarray[double, ndim=2] b, double rtol=1e-5, double atol=0., int maxiter=1000, int inner_m=30, int outer_k=3):
+cpdef lgmres(BaseMatVec linear_op, cnp.ndarray[double, ndim=1] b, double rtol=1e-5, double atol=0., int maxiter=1000, int inner_m=30, int outer_k=3):
 
     cdef:
         double b_norm, r_norm, inner_res_0, ptol, ptol_max_factor = 1.0
@@ -366,14 +366,14 @@ cpdef lgmres(BaseMatVec linear_op, cnp.ndarray[double, ndim=2] b, double rtol=1e
         raise ValueError("RHS must contain only finite numbers")
 
     x = np.zeros(b.shape[0])
-    b_norm = cy_nrm2(b.ravel())
+    b_norm = cy_nrm2(b)
     atol, rtol = _get_atol_rtol('lgmres', b_norm, atol, rtol)
 
     if b_norm == 0:
         return b, 0
 
     for k_outer in range(maxiter):
-        r_outer = linear_op.matvec(x) - b.ravel()
+        r_outer = linear_op.matvec(x) - b
 
         r_norm = cy_nrm2(r_outer)
         if r_norm <= max(atol, rtol * b_norm):

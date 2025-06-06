@@ -207,7 +207,8 @@ def _bck_sweep(
         swp,
         size_limit,
         eps,
-        r_max
+        r_max,
+        termination_tol
 ):
     local_res = np.inf if swp == 0 else 0
     for k in range(d - 1, -1, -1):
@@ -217,7 +218,7 @@ def _bck_sweep(
             solution_now, block_res_old, block_res_new, rhs, norm_rhs = local_solver(XAX[k], block_A_k, XAX[k + 1],
                                                                                      Xb[k], block_b[k], Xb[k + 1],
                                                                                      previous_solution,
-                                                                                     size_limit, eps)
+                                                                                     size_limit, termination_tol)
 
             local_res = max(local_res, block_res_old)
 
@@ -270,7 +271,8 @@ def _fwd_sweep(
         swp,
         size_limit,
         eps,
-        r_max
+        r_max,
+        termination_tol
 ):
     local_res = np.inf if swp == 0 else 0
     for k in range(d):
@@ -281,7 +283,7 @@ def _fwd_sweep(
                 XAX[k], block_A_k, XAX[k + 1], Xb[k],
                 block_b[k], Xb[k + 1],
                 previous_solution, size_limit,
-                eps
+                termination_tol
             )
 
             local_res = max(local_res, block_res_old)
@@ -385,7 +387,8 @@ def tt_block_als(block_A, block_b, tol, termination_tol=1e-3, eps=1e-12, nswp=22
                 swp,
                 size_limit,
                 eps,
-                r_max
+                r_max,
+                termination_tol
             )
         else:
             x_cores, XAX, Xb, rx, local_res_bwd = _fwd_sweep(
@@ -403,7 +406,8 @@ def tt_block_als(block_A, block_b, tol, termination_tol=1e-3, eps=1e-12, nswp=22
                 swp,
                 size_limit,
                 eps,
-                r_max
+                r_max,
+                termination_tol
             )
 
         if verbose:
