@@ -118,7 +118,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         local_rhs[1] += rhs[:, 2]
         local_rhs[1] -= cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[2, 2], block_A_k[2, 2], XAX_k1[2, 2], inv_I*rhs[:, 1])
 
-        max_iter = min(max(5*int(np.ceil(block_res_old / rtol)), 2), 500)
+        max_iter = min(max(2*int(np.ceil(block_res_old / rtol)), 2), 100)
         solution_now, info = lgmres(
             Op,
             local_rhs.ravel(),
@@ -232,7 +232,7 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
         local_rhs[1] += rhs[:, 2] - cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[2, 2], block_A_k[2, 2],
                                                   XAX_k1[2, 2], inv_I * rhs[:, 1])
         local_rhs[2] += rhs[:, 3]
-        max_iter = min(max(5*int(np.ceil(block_res_old_scalar / rtol)), 2), 500)
+        max_iter = min(max(2*int(np.ceil(block_res_old_scalar / rtol)), 2), 100)
         solution_now, _ = lgmres(
             linear_op,
             local_rhs.ravel(),

@@ -13,7 +13,7 @@ cimport cython
 cimport scipy.linalg.cython_blas as blas
 from scipy.sparse.linalg._isolve.iterative import _get_atol_rtol
 from numpy.linalg import LinAlgError
-from scipy.linalg import qr_insert
+from scipy.linalg import qr_insert, qr
 from scipy.linalg.cython_lapack cimport dgelsd
 from libc.stdlib cimport malloc, free
 from cython.parallel import prange
@@ -367,7 +367,7 @@ cpdef lgmres(BaseMatVec linear_op, cnp.ndarray[double, ndim=1] b, double rtol=1e
 
     x = np.zeros(b.shape[0])
     b_norm = cy_nrm2(b)
-    atol, rtol = _get_atol_rtol('lgmres', b_norm, atol, rtol)
+    atol = max(atol, rtol * b_norm)
 
     if b_norm == 0:
         return b, 0

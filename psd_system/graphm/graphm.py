@@ -164,10 +164,10 @@ def create_problem(n, max_rank):
     # Equality Operator
     # IV
     partial_tr_op = tt_partial_trace_op(n, 2 * n)
-    partial_tr_op_bias = tt_zero_matrix(2 * n + 1)
+    #partial_tr_op_bias = tt_zero_matrix(2 * n + 1)
 
     L_op_tt = partial_tr_op
-    eq_bias_tt = partial_tr_op_bias
+    #eq_bias_tt = partial_tr_op_bias
     # ---
     # V
     partial_tr_J_op = tt_partial_J_trace_op(n, 2 * n)
@@ -176,7 +176,7 @@ def create_problem(n, max_rank):
     partial_tr_J_op_bias = tt_rank_reduce(tt_add(partial_tr_J_op_bias, [E(0, 0)] + tt_sub(tt_identity(n), [E(0, 0) for _ in range(n)]) + [E(1, 1) for _ in range(n)]))
 
     L_op_tt = tt_rank_reduce(tt_add(L_op_tt, partial_tr_J_op))
-    eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, partial_tr_J_op_bias))
+    eq_bias_tt = partial_tr_J_op_bias # tt_rank_reduce(tt_add(eq_bias_tt, partial_tr_J_op_bias))
 
     # ---
     # VI
@@ -189,10 +189,10 @@ def create_problem(n, max_rank):
     # ---
     # VII
     Q_m_P_op = tt_Q_m_P_op(2 * n)
-    Q_m_P_op_bias = tt_zero_matrix(2 * n + 1)
+    #Q_m_P_op_bias = tt_zero_matrix(2 * n + 1)
 
     L_op_tt = tt_rank_reduce(tt_add(L_op_tt, Q_m_P_op))
-    eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, Q_m_P_op_bias))
+    #eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, Q_m_P_op_bias))
 
     # ---
     # IX

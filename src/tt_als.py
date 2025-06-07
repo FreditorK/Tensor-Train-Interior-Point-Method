@@ -356,7 +356,7 @@ def tt_block_als(block_A, block_b, tol, termination_tol=1e-3, eps=1e-12, nswp=22
     Xb = [{key: np.ones((1, 1)) for key in block_b}] + [{key: None for key in block_b} for _ in range(d-1)] + [{key: np.ones((1, 1)) for key in block_b}]   # size is rk x rbk
 
     r_max_final = min(block_size*int(np.ceil(np.sqrt(d)*d)), 2**d)
-    size_limit = max((r_max_final)**2*N[0]/(0.5*np.floor(np.sqrt(d)*d)), 100) if size_limit is None else size_limit
+    size_limit = max((r_max_final)**2*N[0]/(0.8*np.floor(np.sqrt(d)*d)), 100) if size_limit is None else size_limit
     if not refinement:
         r_max = max(int(np.ceil(r_max_final / np.sqrt(np.sqrt(d) * d)))-2, 2)
         x_cores = tt_rank_retraction(x_cores, [r_max]*(d-1)) if x0 is not None else x_cores
@@ -428,8 +428,10 @@ def tt_block_als(block_A, block_b, tol, termination_tol=1e-3, eps=1e-12, nswp=22
 
         direction *= -1
 
-        if prev_local_res < 2*min(local_res_fwd, local_res_bwd):
-            r_max = min(r_max + 4, r_max_final)
+        if prev_local_res < 2*min(local_res_fwd, local_res_bwd) and direction > 0:
+            r_max = min(r_max + 2, r_max_final)
+            if prev_local_res < min(local_res_fwd, local_res_bwd):
+                r_max = min(r_max + 2, r_max_final)
         prev_local_res = min(local_res_fwd, local_res_bwd)
 
 
