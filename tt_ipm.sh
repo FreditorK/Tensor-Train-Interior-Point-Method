@@ -4,9 +4,9 @@ echo "Running: $1"
 # ---------------------------
 # Parameters
 # ---------------------------
-BASE_TIMEOUT=3200  # 1h
+BASE_TIMEOUT=6400  # 2h
 if [ "$1" == "graphm" ]; then
-  BASE_TIMEOUT = 6400
+  BASE_TIMEOUT = 12800
 fi
 START_DIM=$2
 END_DIM=$3
