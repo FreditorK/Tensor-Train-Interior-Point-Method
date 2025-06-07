@@ -628,9 +628,10 @@ def _tt_line_search_ineq(x_step_size, z_step_size, X_tt, T_tt, Delta_X_tt, Delta
 
 
 def _update(x_step_size, z_step_size, X_tt, Z_tt, Delta_X_tt, Delta_Z_tt, status):
-    if 0 < x_step_size < 1e-5 and 0 < z_step_size < 1e-5 or  (tt_norm(Delta_X_tt) + tt_norm(Delta_Z_tt) < status.eps):
+    if 0 < x_step_size < 1e-5 and 0 < z_step_size < 1e-5:
         status.is_last_iter = True
     elif Delta_X_tt is not None and Delta_Z_tt is not None:
+        status.is_last_iter = status.is_last_iter or (tt_norm(Delta_X_tt) + tt_norm(Delta_Z_tt) < status.eps)
         if status.is_last_iter:
             X_tt = _tt_symmetrise(tt_add(X_tt, tt_scale(x_step_size, Delta_X_tt)), status.op_tol)
         else:
