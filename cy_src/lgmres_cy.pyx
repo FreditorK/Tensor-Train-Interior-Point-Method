@@ -197,9 +197,9 @@ cdef class MatVecWrapper(BaseMatVec):
         return result.ravel()
 
 cdef class IneqMatVecWrapper(BaseMatVec):
-    cdef double[:,  :,  :] XAX_k_00, XAX_k_01, XAX_k_01T, XAX_k_21, XAX_k_22
-    cdef double[:,  :,  :, :] block_A_k_00, block_A_k_01, block_A_k_01T, block_A_k_21, block_A_k_22
-    cdef double[:,  :,  :] XAX_kp1_00, XAX_kp1_01, XAX_kp1_01T, XAX_kp1_21, XAX_kp1_22
+    cdef double[:,  :,  :] XAX_k_00, XAX_k_01, XAX_k_01T, XAX_k_21, XAX_k_22, XAX_k_31,XAX_k_33
+    cdef double[:,  :,  :, :] block_A_k_00, block_A_k_01, block_A_k_01T, block_A_k_21, block_A_k_22, block_A_k_31, block_A_k_33
+    cdef double[:,  :,  :] XAX_kp1_00, XAX_kp1_01, XAX_kp1_01T, XAX_kp1_21, XAX_kp1_22, XAX_kp1_31, XAX_kp1_33
     cdef double[:, :, :] inv_I
     cdef int r, n, R
 

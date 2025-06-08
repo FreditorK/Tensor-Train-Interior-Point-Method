@@ -283,34 +283,68 @@ def tt_compute_centrality(X_tt, Z_tt, status):
 
 def tt_assess_solution_quality(
         local_res,
-        obj_tt,
         lin_op_tt,
         lin_op_tt_adj,
-        bias_tt,
         rhs,
+        X_tt,
+        Z_tt,
         Delta_X_tt,
         Delta_Y_tt,
         Delta_Z_tt,
         status
 ):
-    if local_res < status.local_res_bound:
-        return True, Delta_X_tt, Delta_Y_tt, Delta_Z_tt
+    if (local_res < status.local_res_bound):
+        if status.regularisation == 0:
+            return True, Delta_X_tt, Delta_Y_tt, Delta_Z_tt
+    status.regularisation += status.op_tol
     primal_feas = rhs.get_row(0)
-    primal_feas_delta = tt_compute_primal_feasibility(lin_op_tt, bias_tt, Delta_X_tt, status)
-    primal_change = -(0 if primal_feas is None else 2*tt_inner_prod(primal_feas, primal_feas_delta)) / tt_inner_prod(primal_feas_delta, primal_feas_delta)  + status.eps
+    if primal_feas is not None:
+        primal_feas_delta = tt_fast_matrix_vec_mul(lin_op_tt, tt_reshape(Delta_X_tt, (4,)), status.eps)
+        pdd = tt_inner_prod(primal_feas_delta, primal_feas_delta)
+        pdd2 = 2*tt_inner_prod(primal_feas, primal_feas_delta)
+        primal_change = max(0, min(1, -pdd2 / pdd))
+    else:
+        pdd = 0
+        pdd2 = 0
+        primal_change = 0
 
     dual_feas = rhs.get_row(1)
-    dual_feas_delta = tt_compute_dual_feasibility(obj_tt, lin_op_tt_adj, Delta_Z_tt, Delta_Y_tt, None, status)
-    dual_change = -(0 if dual_feas is None else 2 * tt_inner_prod(dual_feas, dual_feas_delta))/ tt_inner_prod(dual_feas_delta, dual_feas_delta) + status.eps
+    if dual_feas is not None:
+        dual_feas_delta = tt_sub(tt_fast_matrix_vec_mul(lin_op_tt_adj, Delta_Y_tt, status.eps), tt_reshape(Delta_Z_tt, (4,)))
+        ddd = tt_inner_prod(dual_feas_delta, dual_feas_delta)
+        ddd2 = 2*tt_inner_prod(dual_feas, dual_feas_delta)
+        dual_change = max(0, min(-ddd2/ ddd, 1))
+    else:
+        ddd = 0
+        ddd2 = 0
+        dual_change = 0
 
     centrality_feas = rhs.get_row(2)
-    centrality_feas_delta = tt_compute_centrality(Delta_X_tt, Delta_Z_tt, status)
-    centrl_change = -(0 if centrality_feas is None else 2 * tt_inner_prod(centrality_feas, centrality_feas_delta)) / tt_inner_prod(centrality_feas_delta, centrality_feas_delta)  + status.eps
-    scaling = min(primal_change, dual_change, centrl_change, 1)
+    if centrality_feas is not None:
+        cdd =  tt_inner_prod(Delta_X_tt, Delta_Z_tt)
+        cdd2 = tt_inner_prod(X_tt, Delta_Z_tt) + tt_inner_prod(Delta_X_tt, Z_tt)
+        centrl_change = max(0, min(-cdd2 / cdd, 1))
+    else:
+        cdd = 0
+        cdd2 = 0
+        centrl_change = 0
 
+    scaling_idx_func = lambda a: np.mean([
+        (a**2*pdd + a*pdd2)/status.primal_error_normalisation,
+        (a**2*ddd + a*ddd2)/status.dual_error_normalisation,
+        ((a**2*cdd + a*cdd2)/(2 ** status.dim + (status.ineq_status is IneqStatus.ACTIVE)*status.num_ineq_constraints)) / status.centrl_error_normalisation
+    ])
+    scaling_space = np.linspace(min(primal_change, dual_change, centrl_change), max(primal_change, dual_change, centrl_change), 10)
+    scaling_idx = np.argmin([scaling_idx_func(a) for a in scaling_space])
+    scaling = scaling_space[scaling_idx]
     if status.verbose:
         if scaling > status.eps:
             print(f"\nScaled Direction with {scaling}\n")
+            print((scaling ** 2 * pdd + scaling * pdd2), (scaling ** 2 * ddd + scaling * ddd2), (scaling ** 2 * cdd + scaling * cdd2))
+
+    if scaling <= 0.1:
+        status.kkt_iterations = min(status.kkt_iterations + 1, 22)
+        status.regularisation = min(status.regularisation + status.op_tol, 3 * status.op_tol)
 
     return scaling > status.eps, tt_scale(scaling, Delta_X_tt), tt_scale(scaling, Delta_Y_tt), tt_scale(scaling, Delta_Z_tt)
 
@@ -356,6 +390,10 @@ def tt_infeasible_newton_system(
         else:
             lhs[2, 1] = tt_psd_rank_reduce(tt_MkronI(Z_tt), eps=status.op_tol)
             lhs[2, 2] = tt_psd_rank_reduce(tt_IkronM(X_tt), eps=status.op_tol)
+
+    if status.regularisation > 0:
+        lhs[2, 2] = tt_add(lhs[2, 2], tt_scale(status.regularisation, [np.eye(4).reshape(1, 4, 4, 1) for _ in range(status.dim)]))
+        lhs[2, 1] = tt_add(lhs[2, 1], tt_scale(status.regularisation, [np.eye(4).reshape(1, 4, 4, 1) for _ in range(status.dim)]))
 
     if not status.is_primal_feasible or status.is_last_iter:
         rhs[0] = primal_feas
@@ -421,7 +459,18 @@ def _tt_ipm_newton_step(
         if status.ineq_status is IneqStatus.ACTIVE:
             Delta_T_tt = tt_rank_reduce(_tt_get_block(3, Delta_tt), eps=status.eps)
             Delta_T_tt = tt_fast_hadammard(ineq_mask, tt_reshape(Delta_T_tt, (2, 2)), status.eps)
-        crit, Delta_X_tt, Delta_Y_tt, Delta_Z_tt  = tt_assess_solution_quality(res, obj_tt, lin_op_tt, lin_op_tt_adj, bias_tt, rhs_vec_tt, Delta_X_tt, Delta_Y_tt, Delta_Z_tt, status)
+        crit, Delta_X_tt, Delta_Y_tt, Delta_Z_tt  = tt_assess_solution_quality(
+            res,
+            lin_op_tt,
+            lin_op_tt_adj,
+            rhs_vec_tt,
+            X_tt,
+            Z_tt,
+            Delta_X_tt,
+            Delta_Y_tt,
+            Delta_Z_tt,
+            status
+        )
         if crit:
             x_step_size, z_step_size = _tt_line_search(
                 X_tt,
@@ -437,7 +486,6 @@ def _tt_ipm_newton_step(
         else:
             if status.verbose:
                 print("==================================\n Inaccurate results!\n==================================")
-            status.kkt_iterations = min(status.kkt_iterations + 1, 22)
             Delta_X_tt = None
             Delta_Z_tt = None
             Delta_Y_tt = None
@@ -520,7 +568,18 @@ def _tt_ipm_newton_step(
                 Delta_T_tt_cc = tt_fast_hadammard(ineq_mask, tt_reshape(Delta_T_tt_cc, (2, 2)), status.eps)
                 Delta_T_tt = tt_rank_reduce(tt_add(Delta_T_tt_cc, Delta_T_tt), eps=status.eps)
 
-            crit, Delta_X_tt, Delta_Y_tt, Delta_Z_tt = tt_assess_solution_quality(res, obj_tt, lin_op_tt, lin_op_tt_adj, bias_tt, rhs_vec_tt, Delta_X_tt, Delta_Y_tt, Delta_Z_tt, status)
+            crit, Delta_X_tt, Delta_Y_tt, Delta_Z_tt = tt_assess_solution_quality(
+                res,
+                lin_op_tt,
+                lin_op_tt_adj,
+                rhs_vec_tt,
+                X_tt,
+                Z_tt,
+                Delta_X_tt,
+                Delta_Y_tt,
+                Delta_Z_tt,
+                status
+            )
             if crit:
                 x_step_size, z_step_size = _tt_line_search(
                     X_tt,
@@ -536,7 +595,6 @@ def _tt_ipm_newton_step(
             else:
                 if status.verbose:
                     print("==================================\n Inaccurate results!\n==================================")
-                status.kkt_iterations = min(status.kkt_iterations + 1, 22)
                 Delta_X_tt_cc = None
                 Delta_Z_tt_cc = None
                 Delta_Y_tt_cc = None
@@ -657,6 +715,7 @@ def _initialise(ineq_mask, status, dim):
 
 @dataclass
 class IPMStatus:
+    dim: int
     feasibility_tol: float
     centrality_tol: float
     op_tol: float
@@ -690,7 +749,9 @@ class IPMStatus:
     eigen_z0 = None
     eigen_xt0 = None
     eigen_zt0 = None
-    kkt_iterations = 14
+    kkt_iterations = 10
+    regularisation = 0.0
+    centrl_error_normalisation: float = 1.0
 
 
 def tt_ipm(
@@ -713,6 +774,7 @@ def tt_ipm(
     feasibility_tol = 2*gap_tol
     dim = len(obj_tt)
     status = IPMStatus(
+        len(obj_tt),
         feasibility_tol,
         centrality_tol,
         op_tol,
@@ -803,8 +865,9 @@ def tt_ipm(
         status.is_last_iter = status.is_last_iter or (max_iter - max_refinement < iteration)
         ZX = tt_inner_prod(Z_tt, X_tt)
         TX = tt_inner_prod(X_tt, T_tt) + status.boundary_val*tt_entrywise_sum(T_tt) if status.ineq_status is IneqStatus.ACTIVE else 0
-        status.mu = np.divide(abs(ZX) + abs(TX), (2 ** dim + status.num_ineq_constraints))
-        status.centrality_error = status.mu / (1 + abs(tt_inner_prod(obj_tt, tt_reshape(X_tt, (4, )))))
+        status.mu = np.divide(abs(ZX) + abs(TX), (2 ** dim + (status.ineq_status is IneqStatus.ACTIVE)*status.num_ineq_constraints))
+        status.centrl_error_normalisation = 1 + abs(tt_inner_prod(obj_tt, tt_reshape(X_tt, (4, ))))
+        status.centrality_error = status.mu / status.centrl_error_normalisation
         status.is_central = np.less(status.centrality_error, (1 + (status.ineq_status is IneqStatus.ACTIVE))*centrality_tol)
 
         lhs_matrix_tt, rhs_vec_tt, status = tt_infeasible_newton_system(
