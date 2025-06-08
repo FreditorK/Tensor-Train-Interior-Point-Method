@@ -192,6 +192,14 @@ def compute_phi_fwd_rhs(Phi_now, core_rhs, core):
     return cached_einsum('br,bnB,rnR->BR', Phi_now, core_rhs, core)
 
 
+def _add_kick_rank(u, v, r_add=2):
+    old_r = u.shape[-1]
+    uk = np.random.randn(u.shape[0], r_add)  # rx_k x N_k x rz_k+1
+    u, Rmat = scp.linalg.qr(np.concatenate((u, uk), 1), check_finite=False, mode="economic", overwrite_a=True)
+    v = Rmat[:, :old_r] @ v
+    return u, v, u.shape[-1]
+
+
 def _bck_sweep(
         local_solver,
         x_cores,
@@ -220,7 +228,6 @@ def _bck_sweep(
                                                                                      Xb[k], block_b[k], Xb[k + 1],
                                                                                      previous_solution,
                                                                                      size_limit, termination_tol)
-
             local_res = max(local_res, block_res_old)
 
             solution_now = np.reshape(solution_now, (rx[k] * block_size, N[k] * rx[k + 1])).T
@@ -278,7 +285,7 @@ def _fwd_sweep(
     local_res = np.inf if swp == 0 else 0
     for k in range(d):
         block_A_k = block_A[k]
-        if swp > 0 and False:
+        if swp > 0:
             previous_solution = x_cores[k]
             solution_now, block_res_old, block_res_new, rhs = local_solver(
                 XAX[k], block_A_k, XAX[k + 1], Xb[k],
@@ -286,7 +293,6 @@ def _fwd_sweep(
                 previous_solution, size_limit,
                 termination_tol
             )
-
             local_res = max(local_res, block_res_old)
 
             solution_now = np.transpose(solution_now, (0, 2, 1, 3))
@@ -303,13 +309,12 @@ def _fwd_sweep(
                 v = v[idx, :]
             else:
                 u, s, v = scp.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
-            v = s.reshape(-1, 1) * v
-            u = u.reshape(rx[k], N[k], -1)
-            v = v.reshape(-1, block_size, rx[k + 1])
 
             r = min(prune_singular_vals(s, real_tol), r_max)
-            u = u[:, :, :r]
-            v = v[:r]
+            v = s.reshape(-1, 1) * v
+
+            u = u[:, :r].reshape(rx[k], N[k], r)
+            v = v[:r].reshape(r, block_size, rx[k + 1])
 
             x_cores[k] = u
             x_cores[k + 1] = einsum("rbR, Rdk -> rbdk", v, x_cores[k + 1], optimize=[(0, 1)])
@@ -368,12 +373,12 @@ def tt_block_als(block_A, block_b, tol, termination_tol=1e-3, eps=1e-12, nswp=22
     local_res_fwd = np.inf
     local_res_bwd = np.inf
     last = False
-    prev_local_res = np.inf
 
     for swp in range(nswp):
 
         if direction > 0:
-            x_cores, XAX, Xb, rx, local_res_fwd = _bck_sweep(
+            prev_local_res = local_res_bwd
+            x_cores, XAX, Xb, rx, local_res_bwd = _bck_sweep(
                 local_solver,
                 x_cores,
                 XAX,
@@ -391,47 +396,60 @@ def tt_block_als(block_A, block_b, tol, termination_tol=1e-3, eps=1e-12, nswp=22
                 r_max,
                 termination_tol
             )
-        else:
-            x_cores, XAX, Xb, rx, local_res_bwd = _fwd_sweep(
-                local_solver,
-                x_cores,
-                XAX,
-                block_A,
-                Xb,
-                block_b,
-                rx,
-                N,
-                block_size,
-                tol,
-                d,
-                swp,
-                size_limit,
-                eps,
-                r_max,
-                termination_tol
-            )
-            local_res_bwd = local_res_fwd
+            if local_res_bwd < termination_tol or swp == nswp + warm_up:
+                if local_res_bwd < local_res_fwd:
+                    break
+                else:
+                    last = True
+            if prev_local_res <= 2 * local_res_bwd and not last:
+                r_max = min(r_max + 2, r_max_final)
+                if prev_local_res <= local_res_bwd:
+                    r_max = min(r_max + 2, r_max_final)
 
-        if verbose:
-            print('\tStarting Sweep: %d' % swp)
-            print(f'\tDirection {direction}')
-            print(f'\tResidual {min(local_res_fwd, local_res_bwd)}')
-            print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
+            if verbose:
+                print('\tStarting Sweep: %d' % swp)
+                print(f'\tDirection {direction}')
+                print(f'\tResidual {local_res_bwd}')
+                print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
+        else:
+            prev_local_res = local_res_fwd
+            x_cores, XAX, Xb, rx, local_res_fwd = _fwd_sweep(
+                local_solver,
+                x_cores,
+                XAX,
+                block_A,
+                Xb,
+                block_b,
+                rx,
+                N,
+                block_size,
+                tol,
+                d,
+                swp,
+                size_limit,
+                eps,
+                r_max,
+                termination_tol
+            )
+            if local_res_fwd < termination_tol or swp == nswp + warm_up:
+                if local_res_fwd < local_res_bwd:
+                    break
+                else:
+                    last = True
+            if prev_local_res <= 2 * local_res_fwd and not last:
+                r_max = min(r_max + 2, r_max_final)
+                if prev_local_res <= local_res_fwd:
+                    r_max = min(r_max + 2, r_max_final)
+
+            if verbose:
+                print('\tStarting Sweep: %d' % swp)
+                print(f'\tDirection {direction}')
+                print(f'\tResidual {local_res_fwd}')
+                print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
 
         if last:
             break
 
-        if min(local_res_bwd, local_res_fwd) < termination_tol or swp == nswp + warm_up:
-            if (local_res_bwd < local_res_fwd and direction > 0) or (local_res_bwd > local_res_fwd and direction < 0):
-                break
-            else:
-                last = True
-
-        if prev_local_res <= 2*local_res_fwd and direction < 0 and not last:
-            r_max = min(r_max + 2, r_max_final)
-            if prev_local_res <= local_res_fwd:
-                r_max = min(r_max + 2, r_max_final)
-        prev_local_res = local_res_fwd
         direction *= -1
 
 
@@ -447,7 +465,7 @@ def tt_block_als(block_A, block_b, tol, termination_tol=1e-3, eps=1e-12, nswp=22
 
     return tt_scale(rescale, x_cores), min(local_res_fwd, local_res_bwd)
 
-def _default_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous_solution, _, rtol):
+def _default_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous_solution, _, termination_tol):
     x_shape = previous_solution.shape
     block_size = x_shape[1]
     m = x_shape[0]*x_shape[2]*x_shape[3]
@@ -464,8 +482,9 @@ def _default_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, prev
         ), (1, 0, 2, 3)).reshape(-1, 1)
 
     linear_op = scp.sparse.linalg.LinearOperator((block_size * m, block_size * m), matvec=mat_vec)
+    max_iter = min(max(2 * int(np.ceil(block_res_old / termination_tol)), 2), 100)
     solution_now, info = scp.sparse.linalg.lgmres(linear_op, np.transpose(
-        rhs - block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution), (1, 0, 2, 3)).reshape(-1, 1), rtol=1e-3*block_res_old, maxiter=25)
+        rhs - block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution), (1, 0, 2, 3)).reshape(-1, 1), rtol=1e-3*block_res_old, maxiter=max_iter)
     solution_now = np.transpose(solution_now.reshape(*x_shape), (1, 0, 2, 3))
 
     solution_now += previous_solution

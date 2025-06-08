@@ -957,6 +957,7 @@ def tt_ipm(
         prev_dual_error = status.dual_error
         prev_centrality_error = status.centrality_error
 
+        """
         print()
         print(tt_norm(X_tt), tt_norm(Delta_X_tt))
         print(tt_norm(Y_tt), tt_norm(Delta_Y_tt))
@@ -968,6 +969,7 @@ def tt_ipm(
             for j in range(4):
                 print(f"{(i, j)}")
                 print(Y[i*m:(i+1)*m, j*m:(j+1)*m])
+        """
 
     print(f"---Terminated---")
     print(f"Converged in {iteration} iterations.")
