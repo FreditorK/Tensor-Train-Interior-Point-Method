@@ -153,7 +153,7 @@ class TTBlockMatrixView:
         return iter(self._data)
 
     def block_local_product(self, XAX_k, XAX_kp1, x_core):
-        result = np.zeros_like(x_core)
+        result = np.zeros_like(x_core, dtype=np.float64)
         for (i, j) in self._data.keys():
             result[:, i] += cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[i, j], self._data[i, j][self._idx], XAX_kp1[i, j], x_core[:, j])
             if (i, j) in self._transposes:
@@ -213,9 +213,10 @@ def _bck_sweep(
     local_res = np.inf if swp == 0 else 0
     for k in range(d - 1, -1, -1):
         block_A_k = block_A[k]
+        # TODO: This is wrong, shiieet
         if swp > 0:
             previous_solution = x_cores[k]
-            solution_now, block_res_old, block_res_new, rhs, norm_rhs = local_solver(XAX[k], block_A_k, XAX[k + 1],
+            solution_now, block_res_old, block_res_new, rhs = local_solver(XAX[k], block_A_k, XAX[k + 1],
                                                                                      Xb[k], block_b[k], Xb[k + 1],
                                                                                      previous_solution,
                                                                                      size_limit, termination_tol)
@@ -277,9 +278,9 @@ def _fwd_sweep(
     local_res = np.inf if swp == 0 else 0
     for k in range(d):
         block_A_k = block_A[k]
-        if swp > 0:
+        if swp > 0 and False:
             previous_solution = x_cores[k]
-            solution_now, block_res_old, block_res_new, rhs, norm_rhs = local_solver(
+            solution_now, block_res_old, block_res_new, rhs = local_solver(
                 XAX[k], block_A_k, XAX[k + 1], Xb[k],
                 block_b[k], Xb[k + 1],
                 previous_solution, size_limit,
@@ -409,6 +410,7 @@ def tt_block_als(block_A, block_b, tol, termination_tol=1e-3, eps=1e-12, nswp=22
                 r_max,
                 termination_tol
             )
+            local_res_bwd = local_res_fwd
 
         if verbose:
             print('\tStarting Sweep: %d' % swp)
@@ -425,13 +427,12 @@ def tt_block_als(block_A, block_b, tol, termination_tol=1e-3, eps=1e-12, nswp=22
             else:
                 last = True
 
-        direction *= -1
-
         if prev_local_res <= 2*local_res_fwd and direction < 0 and not last:
             r_max = min(r_max + 2, r_max_final)
             if prev_local_res <= local_res_fwd:
                 r_max = min(r_max + 2, r_max_final)
         prev_local_res = local_res_fwd
+        direction *= -1
 
 
     if verbose:
@@ -454,9 +455,8 @@ def _default_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, prev
     x_shape = (x_shape[1], x_shape[0], x_shape[2], x_shape[3])
     for i in block_b_k:
         rhs[:, i] = cached_einsum('br,bmB,BR->rmR', Xb_k[i], block_b_k[i], Xb_k1[i])
-    norm_rhs = np.linalg.norm(rhs)
     block_res_old = np.linalg.norm(
-        block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution) - rhs) / norm_rhs
+        block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution) - rhs)
     def mat_vec(x_vec):
         return np.transpose(block_A_k.block_local_product(
             XAX_k, XAX_k1,
@@ -464,18 +464,18 @@ def _default_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, prev
         ), (1, 0, 2, 3)).reshape(-1, 1)
 
     linear_op = scp.sparse.linalg.LinearOperator((block_size * m, block_size * m), matvec=mat_vec)
-    solution_now, info = scp.sparse.linalg.gmres(linear_op, np.transpose(
+    solution_now, info = scp.sparse.linalg.lgmres(linear_op, np.transpose(
         rhs - block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution), (1, 0, 2, 3)).reshape(-1, 1), rtol=1e-3*block_res_old, maxiter=25)
     solution_now = np.transpose(solution_now.reshape(*x_shape), (1, 0, 2, 3))
 
     solution_now += previous_solution
     block_res_new = np.linalg.norm(
-        block_A_k.block_local_product(XAX_k, XAX_k1, solution_now) - rhs) / norm_rhs
+        block_A_k.block_local_product(XAX_k, XAX_k1, solution_now) - rhs)
 
     if block_res_old < block_res_new:
         solution_now = previous_solution
 
-    return solution_now, block_res_old, min(block_res_old, block_res_new), rhs, norm_rhs
+    return solution_now, block_res_old, min(block_res_old, block_res_new), rhs
 
 
 
