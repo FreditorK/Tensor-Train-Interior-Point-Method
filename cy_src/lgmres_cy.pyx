@@ -11,12 +11,10 @@ import numpy as np
 cimport numpy as cnp
 cimport cython
 cimport scipy.linalg.cython_blas as blas
-from scipy.sparse.linalg._isolve.iterative import _get_atol_rtol
 from numpy.linalg import LinAlgError
-from scipy.linalg import qr_insert, qr
+from scipy.linalg import qr_insert
 from scipy.linalg.cython_lapack cimport dgelsd
 from libc.stdlib cimport malloc, free
-from cython.parallel import prange
 
 cnp.import_array() # Initialize NumPy C-API
 
@@ -79,7 +77,6 @@ cdef double[:] cy_dgelsd(double[:,  :] a1, double[:] b1, double eps):
         raise MemoryError("Failed to allocate iwork")
 
     with nogil:
-
         try:
             # Workspace query
             dgelsd(&m, &n, &nrhs,
@@ -125,9 +122,9 @@ cdef class BaseMatVec:
     @cython.wraparound(False)
     cdef cnp.ndarray[double, ndim=3] einsum(self, double[:, :, :] XAX, double[:, :, :, :] block_A, double[:, :, :] XAX1, double[:, :, :] x_core):
         # lsr,smnS,LSR,rnR->lmL
-        cdef cnp.ndarray[double, ndim=4] intermediate_1 = np.tensordot(np.asarray(x_core), np.asarray(XAX1), axes=([2], [2]))
-        cdef cnp.ndarray[double, ndim=4] intermediate_2 = np.tensordot(intermediate_1, np.asarray(block_A), axes=([1, 3], [2, 3]))
-        cdef cnp.ndarray[double, ndim=3] result = np.tensordot(intermediate_2, np.asarray(XAX), axes=([0, 2], [2, 1]))
+        cdef double[:, :, :, :] intermediate_1 = np.tensordot(x_core, XAX1, axes=([2], [2]))
+        cdef double[:, :, :, :] intermediate_2 = np.tensordot(intermediate_1, block_A, axes=([1, 3], [2, 3]))
+        cdef double[:, :, :] result = np.tensordot(intermediate_2, XAX, axes=([0, 2], [2, 1]))
         return np.transpose(result, axes=(2, 1, 0))
 
     @cython.boundscheck(False)
@@ -185,8 +182,8 @@ cdef class MatVecWrapper(BaseMatVec):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     cpdef cnp.ndarray[double, ndim=1] matvec(self, cnp.ndarray[double, ndim=1] x_core):
-        cdef cnp.ndarray[double, ndim=4] x_reshaped = x_core.reshape((2, self.r, self.n, self.R))
-        cdef cnp.ndarray[double, ndim=4] result = np.zeros_like(x_reshaped, dtype=np.float64)
+        cdef double[:, :,  :, :] x_reshaped = x_core.view().reshape(2, self.r, self.n, self.R)
+        cdef cnp.ndarray[double, ndim=4] result = np.empty_like(x_reshaped, dtype=np.float64)
 
         result[0] = self.einsum(self.XAX_k_00, self.block_A_k_00, self.XAX_kp1_00, x_reshaped[0])
         result[1] = self.einsum(self.XAX_k_21, self.block_A_k_21, self.XAX_kp1_21, x_reshaped[1])
@@ -299,6 +296,7 @@ cdef tuple _fgmres(BaseMatVec linear_op, cnp.ndarray[double, ndim=1] v0, int m, 
     R = np.zeros((1, 0), dtype=v0.dtype)
     Q2 = np.zeros((m+2, m+2), dtype=Q.dtype, order='F')
     R2 = np.zeros((m + 2, m), dtype=R.dtype, order='F')
+    hcur = np.zeros(m+2, dtype=Q.dtype)
 
     for j in range(m):
         if j >= m - outer_len:
@@ -309,7 +307,6 @@ cdef tuple _fgmres(BaseMatVec linear_op, cnp.ndarray[double, ndim=1] v0, int m, 
         w = linear_op.matvec(z)
         w_norm = cy_nrm2(w)
 
-        hcur = np.zeros(j+2, dtype=Q.dtype)
         for i in range(j+1):
             alpha = cy_dot(vs[:, i], w)
             hcur[i] = alpha
@@ -333,7 +330,7 @@ cdef tuple _fgmres(BaseMatVec linear_op, cnp.ndarray[double, ndim=1] v0, int m, 
 
         R2[:j+1,:j] = R
 
-        Q, R = qr_insert(Q2[:j+2, :j+2], R2[:j+2,  :j], hcur, j, which='col', overwrite_qru=True, check_finite=False)
+        Q, R = qr_insert(Q2[:j+2, :j+2], R2[:j+2,  :j], hcur[:j+2], j, which='col', overwrite_qru=True, check_finite=False) # this is a cython call
 
         res = abs(Q[0, Q.shape[1] - 1])
 
@@ -361,9 +358,6 @@ cpdef lgmres(BaseMatVec linear_op, cnp.ndarray[double, ndim=1] b, double rtol=1e
         cnp.ndarray[double, ndim=1] x, dx, r_outer, v0, y
         cnp.ndarray[double, ndim = 2] zs  # List of NumPy arrays representing basis vectors
         cnp.ndarray[double, ndim = 2] outer_v = np.zeros((b.shape[0], outer_k), dtype=np.float64)
-
-    if not np.isfinite(b).all():
-        raise ValueError("RHS must contain only finite numbers")
 
     x = np.zeros(b.shape[0])
     b_norm = cy_nrm2(b)

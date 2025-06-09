@@ -85,31 +85,6 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
             solution_now[:, 1] += forward_backward_sub(L_L_Z, mR_c - L_X @ solution_now[:, 2].reshape(-1, 1), overwrite_b=True).reshape(x_shape[0], x_shape[2], x_shape[3])
         except Exception as e:
             print(f"\tAttention: {e}")
-            """
-            solution_now = np.zeros(x_shape)
-            L_Z_inv = scp.linalg.pinv(
-                cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[2, 1], block_A_k[2, 1], XAX_k1[2, 1]).reshape(m, m),
-                rtol=1e-10, check_finite=False)
-            mR_p = rhs[:, 0].reshape(m, 1)
-            mR_d = rhs[:, 1].reshape(m, 1)
-            mR_c = rhs[:, 2].reshape(m, 1)
-            L_X = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[2, 2], block_A_k[2, 2], XAX_k1[2, 2]).reshape(m, m)
-            mL_eq = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[0, 1], block_A_k[0, 1], XAX_k1[0, 1]).reshape(m, m)
-            A = (mL_eq @ L_Z_inv @ (L_X * inv_I.reshape(1, -1)) @ mL_eq.T).__iadd__(
-                cached_einsum('lsr,smnS,LSR->lmLrnR',
-                              XAX_k[0, 0], block_A_k[0, 0],
-                              XAX_k1[0, 0]).reshape(m, m))
-            b = mR_p - mL_eq @ L_Z_inv @ (mR_c - (L_X * inv_I.reshape(1, -1)) @ mR_d) - A @ previous_solution[:,
-                                                                                            0].reshape(-1, 1)
-            solution_now[:, 0] += \
-            scp.linalg.lstsq(A, b, check_finite=False, overwrite_a=True, overwrite_b=True, cond=1e-10)[0].reshape(
-                x_shape[0], x_shape[2], x_shape[3]).__iadd__(previous_solution[:, 0])
-            solution_now[:, 2] += (mR_d - mL_eq.T @ solution_now[:, 0].reshape(-1, 1)).__imul__(
-                inv_I.reshape(-1, 1)).reshape(x_shape[0], x_shape[2], x_shape[3])
-            solution_now[:, 1] += (L_Z_inv @ (mR_c - L_X @ solution_now[:, 2].reshape(-1, 1))).reshape(x_shape[0],
-                                                                                                       x_shape[2],
-                                                                                                       x_shape[3])
-            """
             size_limit = 0
 
     if m > size_limit:
@@ -120,12 +95,13 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         local_rhs[1] += rhs[:, 2]
         local_rhs[1] -= cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[2, 2], block_A_k[2, 2], XAX_k1[2, 2], inv_I*rhs[:, 1])
 
-        max_iter = min(max(2 * int(np.ceil(block_res_old / termination_tol)), 2), 100)
+        max_iter = min(max(2 * int(np.ceil(block_res_old / termination_tol)), 2), 50)
         solution_now, info = lgmres(
             Op,
             local_rhs.ravel(),
             rtol=1e-10,
-            outer_k=int(np.floor(np.sqrt(m))),
+            outer_k=5,
+            inner_m=20,
             maxiter=max_iter
         )
         solution_now = np.transpose(solution_now.reshape(2, x_shape[0], x_shape[2], x_shape[3]), (1, 0, 2, 3)).__iadd__(previous_solution[:, :2])
@@ -231,12 +207,13 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
         local_rhs[1] += rhs[:, 2] - cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[2, 2], block_A_k[2, 2],
                                                   XAX_k1[2, 2], inv_I * rhs[:, 1])
         local_rhs[2] += rhs[:, 3]
-        max_iter = min(max(2 * int(np.ceil(block_res_old_scalar / termination_tol)), 2), 100)
+        max_iter = min(max(2 * int(np.ceil(block_res_old_scalar / termination_tol)), 2), 50)
         solution_now, _ = lgmres(
             linear_op,
             local_rhs.ravel(),
             rtol=1e-10,
-            outer_k=min(10, m),
+            outer_k=5,
+            inner_m=20,
             maxiter=max_iter
         )
         solution_now = np.transpose(solution_now.reshape(3, x_shape[0], x_shape[2], x_shape[3]),
@@ -957,19 +934,11 @@ def tt_ipm(
         prev_dual_error = status.dual_error
         prev_centrality_error = status.centrality_error
 
-        """
         print()
         print(tt_norm(X_tt), tt_norm(Delta_X_tt))
         print(tt_norm(Y_tt), tt_norm(Delta_Y_tt))
         print(tt_norm(Z_tt), tt_norm(Delta_Z_tt))
         print()
-        Y = tt_matrix_to_matrix(Y_tt)
-        m = len(Y)
-        for i in range(4):
-            for j in range(4):
-                print(f"{(i, j)}")
-                print(Y[i*m:(i+1)*m, j*m:(j+1)*m])
-        """
 
     print(f"---Terminated---")
     print(f"Converged in {iteration} iterations.")

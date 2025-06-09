@@ -160,7 +160,7 @@ def tt_max_generalised_eigen(A, Delta, x0=None, kick_rank=None, nswp=10, tol=1e-
             print('\tStarting Sweep: %d' % swp)
             print('\tStep size: %f' % step_size)
             print(f"\tDirection: {-1}")
-            print(f'\tResidual {max_res}')
+            print(f'\tResidual {np.max(local_res[0])}')
             print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
         max_res = 0
         for k in range(d):
@@ -203,14 +203,14 @@ def tt_max_generalised_eigen(A, Delta, x0=None, kick_rank=None, nswp=10, tol=1e-
             print('\tStarting Sweep: %d' % swp)
             print('\tStep size: %f' % step_size)
             print(f"\tDirection: {1}")
-            print(f'\tResidual {max_res}')
+            print(f'\tResidual {np.max(local_res[1])}')
             print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
 
     if verbose:
         print("\t -----")
         print(f"\t Solution rank is {rx[1:-1]}")
         print('\t Step size: %f' % step_size)
-        print(f"\t Residual {max_res}")
+        print(f"\t Residual {max(np.max(local_res[0]), np.max(local_res[1]))}")
         print('\t Number of sweeps', swp + 1)
         print('\t Time: ', time.time() - t0)
         print('\t Time per sweep: ', (time.time() - t0) / (swp + 1), flush=True)
@@ -366,17 +366,19 @@ def symmetric_powers_of_two(length):
         return np.array(first_half + [2**(half + 1)] + first_half[::-1])
 
 
-def tt_approx_mat_mat_mul(A, D, x0=None, kick_rank=None, nswp=20, tol=1e-6, verbose=False):
+def tt_approx_mat_mat_mul(A, D, x0=None, kick_rank=None, nswp=50, tol=1e-6, verbose=False):
     if verbose:
         print(f"\nStarting MM solve with:\n \t {tol} \n \t sweeps: {nswp}")
         t0 = time.time()
     if x0 is None:
-        x_cores = tt_random_gaussian([2]*(len(A)-1), A[0].shape[1:-1])
+        max_ranks = np.maximum((np.array(tt_ranks(A)) + np.array(tt_ranks(D))) / 2, 2).astype(int)
+        x_cores = tt_random_gaussian(list(max_ranks), A[0].shape[1:-1])
     else:
         x_cores = x0
+        max_ranks = np.array(tt_ranks(x0))
 
     if kick_rank is None:
-        kick_rank = np.maximum((symmetric_powers_of_two(len(A))/(nswp -1)), 2).astype(int)
+        kick_rank = np.maximum(((symmetric_powers_of_two(len(A)-1) - max_ranks) / (nswp / 2)), 2).astype(int)
 
     d = len(x_cores)
     rx = np.array([1] + tt_ranks(x_cores) + [1])
@@ -388,6 +390,7 @@ def tt_approx_mat_mat_mul(A, D, x0=None, kick_rank=None, nswp=20, tol=1e-6, verb
     normAD = np.ones(d - 1)  # norm of each row in the block matrix
     nrmsc = 1.0
     normx = np.ones((d - 1))
+    tol = tol / np.sqrt(d)
 
     max_res = 0
     last = False
@@ -398,7 +401,7 @@ def tt_approx_mat_mat_mul(A, D, x0=None, kick_rank=None, nswp=20, tol=1e-6, verb
                 previous_solution = x_cores[k]
                 solution_now = cached_einsum('rab,amkA,bknB,RAB->rmnR',XADX[k], A[k], D[k], XADX[k+1])
                 solution_now *= nrmsc
-                local_res = np.linalg.norm(solution_now - previous_solution) / np.linalg.norm(solution_now)
+                local_res = np.linalg.norm(solution_now - previous_solution) / max(np.linalg.norm(solution_now), 1e-8)
                 max_res = max(max_res, local_res)
                 solution_now = np.reshape(solution_now, (rx[k], N[k] * M[k] * rx[k + 1])).T
             else:
@@ -407,9 +410,9 @@ def tt_approx_mat_mat_mul(A, D, x0=None, kick_rank=None, nswp=20, tol=1e-6, verb
             if k > 0:
                 u, s, v = scp.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
                 v = s.reshape(-1, 1) * v
-                r = prune_singular_vals(s, 0.5*tol)
+                r = prune_singular_vals(s, tol)
                 if not last:
-                    kick = kick_rank[k]
+                    kick = kick_rank[k-1]
                     u, v, r = _add_kick_rank(u[:, :r], v[:r], kick)
                 else:
                     u = u[:, :r]
@@ -445,14 +448,14 @@ def tt_approx_mat_mat_mul(A, D, x0=None, kick_rank=None, nswp=20, tol=1e-6, verb
             previous_solution = x_cores[k]
             solution_now = cached_einsum('rab,amkA,bknB,RAB->rmnR', XADX[k], A[k], D[k], XADX[k + 1])
             solution_now *= nrmsc
-            local_res = np.linalg.norm(solution_now - previous_solution) / np.linalg.norm(solution_now)
+            local_res = np.linalg.norm(solution_now - previous_solution) / max(np.linalg.norm(solution_now), 1e-8)
             max_res = max(max_res, local_res)
             solution_now = np.reshape(solution_now, (rx[k] * N[k] * M[k], rx[k + 1]))
             if k < d - 1:
                 nrmsc *= normx[k] / normAD[k]
                 u, s, v = scp.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
                 v = s.reshape(-1, 1) * v
-                r = prune_singular_vals(s, 0.5*tol)
+                r = prune_singular_vals(s, tol)
                 if not last:
                     kick = kick_rank[k]
                     u, v, r = _add_kick_rank(u[:, :r], v[:r, :], kick)
@@ -499,6 +502,6 @@ def tt_approx_mat_mat_mul(A, D, x0=None, kick_rank=None, nswp=20, tol=1e-6, verb
 
 
 def tt_mat_mat_mul(mat1, mat2, op_tol, eps, verbose=False):
-    if np.max(np.array(tt_ranks(mat1))*np.array(tt_ranks(mat2))) <= 2**(len(mat1)-1):
+    if np.max(np.array(tt_ranks(mat1))*np.array(tt_ranks(mat2))) <= 2**len(mat1):
         return tt_rank_reduce(tt_fast_mat_mat_mul(mat1, mat2, eps), eps=op_tol)
     return tt_approx_mat_mat_mul(mat1, mat2, tol=op_tol, verbose=verbose)
