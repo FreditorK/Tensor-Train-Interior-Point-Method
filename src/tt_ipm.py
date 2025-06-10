@@ -1,13 +1,10 @@
 import sys
 import os
 
-from cy_src.lgmres_cy import MatVecWrapper
-
 sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
-from src.tt_als import cached_einsum, TTBlockMatrix, TTBlockVector, tt_restarted_block_als
-from src.tt_eigen import tt_max_generalised_eigen, tt_min_eig, tt_mat_mat_mul
+from src.tt_als import cached_einsum, TTBlockMatrix, TTBlockVector, tt_restarted_block_als, tt_max_generalised_eigen, tt_min_eig, tt_mat_mat_mul
 from dataclasses import dataclass
 from enum import Enum
 from src.tt_ops import lgmres
@@ -656,7 +653,7 @@ def tt_ipm(
         rank_restriction=min(2**dim, 30),
         x0=x0,
         local_solver=_ipm_local_solver_ineq,
-        tol=op_tol,
+        op_tol=op_tol,
         termination_tol=termination_tol,
         num_restarts=3,
         inner_m=nwsp,
@@ -669,7 +666,7 @@ def tt_ipm(
         rank_restriction=min(2 ** dim, 30),
         x0=x0,
         local_solver=_ipm_local_solver,
-        tol=op_tol,
+        op_tol=op_tol,
         termination_tol=termination_tol,
         num_restarts=3,
         inner_m=nwsp,
