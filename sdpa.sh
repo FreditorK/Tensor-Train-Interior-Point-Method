@@ -4,7 +4,7 @@ echo "Running: $1_sdpa"
 # ---------------------------
 # Parameters
 # ---------------------------
-BASE_TIMEOUT=1800  # 30 minutes
+BASE_TIMEOUT=6400  # 2h
 START_DIM=$2
 END_DIM=$3
 

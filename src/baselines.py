@@ -1,7 +1,6 @@
 # https://epubs.siam.org/doi/epdf/10.1137/19M1305045
 import scipy as scp
-from src.ops import *
-
+import numpy as np
 
 def cgal(obj_matrix, constraint_matrices, bias, trace_params, duality_tol=1e-2, feasability_tol=1e-5, num_iter=100, verbose=False):
     X = np.zeros_like(obj_matrix)

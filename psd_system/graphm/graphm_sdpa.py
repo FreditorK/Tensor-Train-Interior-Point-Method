@@ -10,7 +10,6 @@ import sdpap
 sys.path.append(os.getcwd() + '/../../')
 import time
 from src.tt_ops import *
-from src.baselines import *
 import cvxpy as cp
 from memory_profiler import memory_usage
 
