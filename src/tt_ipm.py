@@ -61,7 +61,6 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
     block_res_old = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution).__isub__(rhs))
     if m <= size_limit:
         try:
-            solution_now = np.zeros(x_shape)
             L_L_Z = scp.linalg.cholesky(
                 cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[2, 1], block_A_k[2, 1], XAX_k1[2, 1]).reshape(m, m),
                 check_finite=False, lower=True, overwrite_a=True
@@ -71,15 +70,12 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
             mR_c = rhs[:, 2].reshape(m, 1)
             L_X = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[2, 2], block_A_k[2, 2], XAX_k1[2, 2]).reshape(m, m)
             mL_eq = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[0, 1], block_A_k[0, 1], XAX_k1[0, 1]).reshape(m, m)
-            A = (mL_eq @ forward_backward_sub(L_L_Z, L_X * inv_I.reshape(1, -1),
-                                             overwrite_b=True) @ mL_eq.T).__iadd__(cached_einsum('lsr,smnS,LSR->lmLrnR',
-                                                                                         XAX_k[0, 0], block_A_k[0, 0],
-                                                                                         XAX_k1[0, 0]).reshape(m, m))
-            b = mR_p - mL_eq @ forward_backward_sub(L_L_Z, mR_c - (L_X * inv_I.reshape(1, -1)) @ mR_d,
-                                                    overwrite_b=True) - A @ previous_solution[:, 0].reshape(-1, 1)
-            solution_now[:, 0] += scp.linalg.lstsq(A, b, check_finite=False, overwrite_a=True, overwrite_b=True, cond=1e-10)[0].reshape(x_shape[0], x_shape[2], x_shape[3]).__iadd__(previous_solution[:, 0]) #scp.linalg.solve(A, b, check_finite=False, overwrite_a=True, overwrite_b=True).reshape(x_shape[0], x_shape[2], x_shape[3]).__iadd__(previous_solution[:, 0])
-            solution_now[:, 2] += (mR_d - mL_eq.T @ solution_now[:, 0].reshape(-1, 1)).__imul__(inv_I.reshape(-1, 1)).reshape(x_shape[0], x_shape[2], x_shape[3])
-            solution_now[:, 1] += forward_backward_sub(L_L_Z, mR_c - L_X @ solution_now[:, 2].reshape(-1, 1), overwrite_b=True).reshape(x_shape[0], x_shape[2], x_shape[3])
+            A = (mL_eq @ forward_backward_sub(L_L_Z, L_X * inv_I.reshape(1, -1), overwrite_b=True) @ mL_eq.T).__iadd__(cached_einsum('lsr,smnS,LSR->lmLrnR',XAX_k[0, 0], block_A_k[0, 0], XAX_k1[0, 0]).reshape(m, m))
+            b = mR_p - mL_eq @ forward_backward_sub(L_L_Z, mR_c - (L_X * inv_I.reshape(1, -1)) @ mR_d, overwrite_b=True) - A @ previous_solution[:, 0].reshape(-1, 1)
+            solution_now = np.empty(x_shape)
+            solution_now[:, 0] = scp.linalg.solve(A, b, check_finite=False, overwrite_a=True, overwrite_b=True).reshape(x_shape[0], x_shape[2], x_shape[3]).__iadd__(previous_solution[:, 0])
+            solution_now[:, 2] = (mR_d - mL_eq.T @ solution_now[:, 0].reshape(-1, 1)).__imul__(inv_I.reshape(-1, 1)).reshape(x_shape[0], x_shape[2], x_shape[3])
+            solution_now[:, 1] = forward_backward_sub(L_L_Z, mR_c - L_X @ solution_now[:, 2].reshape(-1, 1), overwrite_b=True).reshape(x_shape[0], x_shape[2], x_shape[3])
         except Exception as e:
             print(f"\tAttention: {e}")
             size_limit = 0
@@ -803,11 +799,11 @@ def tt_ipm(
         prev_dual_error = status.dual_error
         prev_centrality_error = status.centrality_error
 
-        print()
-        print(tt_norm(X_tt), tt_norm(Delta_X_tt))
-        print(tt_norm(Y_tt), tt_norm(Delta_Y_tt))
-        print(tt_norm(Z_tt), tt_norm(Delta_Z_tt))
-        print()
+        #print()
+        #print(tt_norm(X_tt), tt_norm(Delta_X_tt))
+        #print(tt_norm(Y_tt), tt_norm(Delta_Y_tt))
+        #print(tt_norm(Z_tt), tt_norm(Delta_Z_tt))
+        #print()
 
     print(f"---Terminated---")
     print(f"Converged in {iteration} iterations.")

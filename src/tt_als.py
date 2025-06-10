@@ -405,11 +405,11 @@ def _tt_block_als(
     XAX =  [{key: np.ones((1, 1, 1)) for key in block_A}] + [{key: None for key in block_A} for _ in range(d-1)] + [{key: np.ones((1, 1, 1)) for key in block_A}]  # size is rk x Rk x rk
     Xb = [{key: np.ones((1, 1)) for key in block_b}] + [{key: None for key in block_b} for _ in range(d-1)] + [{key: np.ones((1, 1)) for key in block_b}]   # size is rk x rbk
 
-    r_max_warm_up = min(24, r_max_final)
+    r_max_warm_up = min(20, r_max_final)
     size_limit = 0
     if not refinement:
         x_cores = tt_rank_retraction(x_cores, [r_max_warm_up // 2 + 2]*(d-1)) if x0 is not None else x_cores
-        size_limit = (r_max_warm_up+1)**2*N[0]/(0.5*np.floor(np.sqrt(d)*d))
+        size_limit = (r_max_warm_up+5)**2*N[0]/(0.5*np.floor(np.sqrt(d)*d))
 
     rx = np.array([1] + tt_ranks(x_cores) + [1])
     local_res_fwd = np.inf
@@ -715,7 +715,6 @@ def tt_max_generalised_eigen(A, Delta, x0=None, kick_rank=None, nswp=10, tol=1e-
     size_limit = N[0] * (int(np.sqrt(d) * d))**2 / (d/2)
     local_res = np.inf*np.ones((2, d-1))
     for swp in range(nswp):
-        prev_step_size = step_size
         for k in range(d - 1, -1, -1):
             if swp > 0:
                 previous_solution = x_cores[k]
@@ -799,7 +798,7 @@ def tt_max_generalised_eigen(A, Delta, x0=None, kick_rank=None, nswp=10, tol=1e-
         x_cores = tt_normalise(x_cores)
         if last:
             break
-        if np.max(local_res[1]) < tol or abs(prev_step_size - step_size) < tol:
+        if np.max(local_res[1]) < tol:
             last = True
         if verbose:
             print('\tStarting Sweep: %d' % swp)
