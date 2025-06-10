@@ -586,7 +586,7 @@ class IPMStatus:
     eigen_z0 = None
     eigen_xt0 = None
     eigen_zt0 = None
-    kkt_iterations = 8
+    kkt_iterations = 6
     centrl_error_normalisation: float = 1.0
     eta = 1e-3
 
@@ -646,7 +646,7 @@ def tt_ipm(
     solver_ineq = lambda lhs, rhs, x0, nwsp, refinement, termination_tol: tt_restarted_block_als(
         lhs,
         rhs,
-        rank_restriction=min(2**dim, 30),
+        rank_restriction=min(4*dim + dim, 25),
         x0=x0,
         local_solver=_ipm_local_solver_ineq,
         op_tol=op_tol,
@@ -659,7 +659,7 @@ def tt_ipm(
     solver_eq = lambda lhs, rhs, x0, nwsp, refinement, termination_tol: tt_restarted_block_als(
         lhs,
         rhs,
-        rank_restriction=min(2 ** dim, 30),
+        rank_restriction=max(3*dim + dim, 25),
         x0=x0,
         local_solver=_ipm_local_solver,
         op_tol=op_tol,

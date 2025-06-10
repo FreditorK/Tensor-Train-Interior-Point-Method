@@ -2,6 +2,8 @@ import sys
 import os
 import time
 
+import numpy as np
+
 sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
@@ -405,20 +407,20 @@ def _tt_block_als(
     XAX =  [{key: np.ones((1, 1, 1)) for key in block_A}] + [{key: None for key in block_A} for _ in range(d-1)] + [{key: np.ones((1, 1, 1)) for key in block_A}]  # size is rk x Rk x rk
     Xb = [{key: np.ones((1, 1)) for key in block_b}] + [{key: None for key in block_b} for _ in range(d-1)] + [{key: np.ones((1, 1)) for key in block_b}]   # size is rk x rbk
 
-    r_max_warm_up = min(20, r_max_final)
+    r_max_warm_up = min(10, r_max_final)
     size_limit = 0
     if not refinement:
-        x_cores = tt_rank_retraction(x_cores, [r_max_warm_up // 2 + 2]*(d-1)) if x0 is not None else x_cores
-        size_limit = (r_max_warm_up+5)**2*N[0]/(0.5*np.floor(np.sqrt(d)*d))
+        x_cores = tt_rank_retraction(x_cores, [r_max_warm_up]*(d-1)) if x0 is not None else x_cores
+        size_limit = (r_max_warm_up+10)**2*N[0]
 
     rx = np.array([1] + tt_ranks(x_cores) + [1])
     local_res_fwd = np.inf
     local_res_bwd = np.inf
     trunc_tol = tol/np.sqrt(d)
     refinement = refinement or size_limit == 0
+    r_maxes = [r_max_final]*nswp if refinement else np.concatenate(([r_max_warm_up], np.linspace(r_max_warm_up, r_max_final, nswp-2), [r_max_final])).astype(int)
 
-    for swp in range(nswp):
-        r_max = r_max_final if swp > 2 or refinement else r_max_warm_up
+    for swp, r_max in enumerate(r_maxes):
         x_cores, XAX, Xb, rx, local_res_bwd, rmax_record = _bck_sweep(
             local_solver,
             x_cores,
