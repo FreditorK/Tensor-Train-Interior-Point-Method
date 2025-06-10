@@ -112,7 +112,6 @@ def tt_max_generalised_eigen(A, Delta, x0=None, kick_rank=None, nswp=10, tol=1e-
     local_res = np.inf*np.ones((2, d-1))
     for swp in range(nswp):
         prev_step_size = step_size
-        max_res = np.inf if swp == 0 else 0
         for k in range(d - 1, -1, -1):
             if swp > 0:
                 previous_solution = x_cores[k]
@@ -162,7 +161,6 @@ def tt_max_generalised_eigen(A, Delta, x0=None, kick_rank=None, nswp=10, tol=1e-
             print(f"\tDirection: {-1}")
             print(f'\tResidual {np.max(local_res[0])}')
             print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
-        max_res = 0
         for k in range(d):
             previous_solution = x_cores[k]
             solution_now, step_size, res = _step_size_local_solve(previous_solution, XDX[k], Delta[k], XDX[k+1], XAX[k], A[k], XAX[k+1], rx[k] * N[k] * rx[k + 1], step_size, size_limit, tol)
@@ -206,11 +204,12 @@ def tt_max_generalised_eigen(A, Delta, x0=None, kick_rank=None, nswp=10, tol=1e-
             print(f'\tResidual {np.max(local_res[1])}')
             print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
 
+    max_res  = max(np.max(local_res[0]), np.max(local_res[1]))
     if verbose:
         print("\t -----")
         print(f"\t Solution rank is {rx[1:-1]}")
         print('\t Step size: %f' % step_size)
-        print(f"\t Residual {max(np.max(local_res[0]), np.max(local_res[1]))}")
+        print(f"\t Residual {max_res}")
         print('\t Number of sweeps', swp + 1)
         print('\t Time: ', time.time() - t0)
         print('\t Time per sweep: ', (time.time() - t0) / (swp + 1), flush=True)

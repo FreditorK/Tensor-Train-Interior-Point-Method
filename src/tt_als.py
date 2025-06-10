@@ -133,23 +133,25 @@ class TTBlockMatrix:
         result = TTBlockVector()
         for (i, j) in self._data.keys():
             if i in result.keys():
-                result[i] = tt_rank_reduce(tt_add(result[i], tt_fast_matrix_vec_mul(self._data[i, j], _tt_get_block(i, x_cores), eps)), eps)
+                result[i] = tt_rank_reduce(tt_add(result.get_row(i), tt_fast_matrix_vec_mul(self._data[i, j], _tt_get_block(j, x_cores), eps)), eps)
             else:
-                result[i] = tt_fast_matrix_vec_mul(self._data[i, j], _tt_get_block(i, x_cores), eps)
+                result[i] = tt_fast_matrix_vec_mul(self._data[i, j], _tt_get_block(j, x_cores), eps)
             if (i, j) in self._transposes:
-                if i in result.keys():
-                    result[i] = tt_rank_reduce(
-                        tt_add(result[i], tt_fast_matrix_vec_mul(tt_transpose(self._data[i, j]), _tt_get_block(i, x_cores), eps)),
+                k, t = self._transposes[i, j]
+                if k in result.keys():
+                    result[k] = tt_rank_reduce(
+                        tt_add(result.get_row(k), tt_fast_matrix_vec_mul(tt_transpose(self._data[i, j]), _tt_get_block(t, x_cores), eps)),
                         eps)
                 else:
-                    result[i] = tt_fast_matrix_vec_mul(self._data[i, j], _tt_get_block(i, x_cores), eps)
+                    result[i] = tt_fast_matrix_vec_mul(self._data[i, j], _tt_get_block(j, x_cores), eps)
             if (i, j) in self._aliases:
-                if i in result.keys():
-                    result[i] = tt_rank_reduce(
-                        tt_add(result[i], tt_fast_matrix_vec_mul(self._data[i, j], _tt_get_block(i, x_cores), eps)),
+                k, t = self._aliases[i, j]
+                if k in result.keys():
+                    result[k] = tt_rank_reduce(
+                        tt_add(result.get_row(k), tt_fast_matrix_vec_mul(self._data[i, j], _tt_get_block(t, x_cores), eps)),
                         eps)
                 else:
-                    result[i] = tt_fast_matrix_vec_mul(self._data[i, j], _tt_get_block(i, x_cores), eps)
+                    result[i] = tt_fast_matrix_vec_mul(self._data[i, j], _tt_get_block(j, x_cores), eps)
         return result
 
 
@@ -368,7 +370,19 @@ def _fwd_sweep(
     return x_cores, XAX, Xb, rx, local_res, r_max_record
 
 
-def tt_block_als(block_A, block_b, r_max_final, tol, termination_tol=1e-3, eps=1e-12, nswp=22, warm_up=4, x0=None, size_limit=None, local_solver=None, refinement=False, verbose=False):
+def _tt_block_als(
+        block_A,
+        block_b,
+        tol,
+        termination_tol=1e-3,
+        eps=1e-12,
+        nswp=22,
+        r_max_final=100,
+        x0=None,
+        local_solver=None,
+        refinement=False,
+        verbose=False
+):
     if verbose:
         print("\n\t---Starting Block-ALS---")
     block_size = np.max(list(k[0] for k in block_A.keys())) + 1
@@ -376,7 +390,7 @@ def tt_block_als(block_A, block_b, r_max_final, tol, termination_tol=1e-3, eps=1
     x_shape = model_entry[0].shape[1:-1]
 
     # scale residuals
-    rescale = max(block_b.norm, 1e-5)
+    rescale = max(block_b.norm, 1e-6)
     block_b.scale(rescale)
 
     if local_solver is None:
@@ -399,99 +413,64 @@ def tt_block_als(block_A, block_b, r_max_final, tol, termination_tol=1e-3, eps=1
     XAX =  [{key: np.ones((1, 1, 1)) for key in block_A}] + [{key: None for key in block_A} for _ in range(d-1)] + [{key: np.ones((1, 1, 1)) for key in block_A}]  # size is rk x Rk x rk
     Xb = [{key: np.ones((1, 1)) for key in block_b}] + [{key: None for key in block_b} for _ in range(d-1)] + [{key: np.ones((1, 1)) for key in block_b}]   # size is rk x rbk
 
-    size_limit = max((r_max_final)**2*N[0]/(0.5*np.floor(np.sqrt(d)*d)), 100) if size_limit is None else size_limit
-    r_max_warm_up = max(int(np.floor(r_max_final / (0.6*np.sqrt(np.sqrt(d) * d)))), 2)
+    r_max_warm_up = min(24, r_max_final)
+    size_limit = 0
     if not refinement:
-        x_cores = tt_rank_retraction(x_cores, [r_max_warm_up]*(d-1)) if x0 is not None else x_cores
+        x_cores = tt_rank_retraction(x_cores, [r_max_warm_up // 2 + 2]*(d-1)) if x0 is not None else x_cores
+        size_limit = (r_max_warm_up+1)**2*N[0]/(0.5*np.floor(np.sqrt(d)*d))
 
     rx = np.array([1] + tt_ranks(x_cores) + [1])
-    nswp += warm_up
     local_res_fwd = np.inf
     local_res_bwd = np.inf
-    last = False
     trunc_tol = tol/np.sqrt(d)
     refinement = refinement or size_limit == 0
-    r_max = r_max_final if refinement else r_max_warm_up
 
     for swp in range(nswp):
-        if direction > 0:
-            prev_local_res_bwd = local_res_bwd
-            x_cores, XAX, Xb, rx, local_res_bwd, rmax_record = _bck_sweep(
-                local_solver,
-                x_cores,
-                XAX,
-                block_A,
-                Xb,
-                block_b,
-                rx,
-                N,
-                block_size,
-                trunc_tol,
-                d,
-                swp,
-                size_limit,
-                eps,
-                r_max,
-                termination_tol
-            )
-            if local_res_bwd < termination_tol or swp == nswp + warm_up:
-                if local_res_bwd < local_res_fwd:
-                    break
-                else:
-                    last = True
-
-            if prev_local_res_bwd < local_res_bwd:
-                trunc_tol = max(trunc_tol*0.5, tol/np.sqrt(d))
-
-            if verbose:
-                print('\tStarting Sweep: %d' % swp)
-                print("\tTrunc loss: ", rmax_record)
-                print(f'\tDirection {direction}')
-                print(f'\tResidual {local_res_bwd}')
-                print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
-        else:
-            prev_local_res_fwd = local_res_fwd
-            x_cores, XAX, Xb, rx, local_res_fwd, rmax_record = _fwd_sweep(
-                local_solver,
-                x_cores,
-                XAX,
-                block_A,
-                Xb,
-                block_b,
-                rx,
-                N,
-                block_size,
-                trunc_tol,
-                d,
-                swp,
-                size_limit,
-                eps,
-                r_max,
-                termination_tol
-            )
-            if local_res_fwd < termination_tol or swp == nswp + warm_up:
-                if local_res_fwd < local_res_bwd:
-                    break
-                else:
-                    last = True
-            if prev_local_res_fwd < local_res_fwd:
-                trunc_tol = max(trunc_tol*0.5, tol/np.sqrt(d))
-
-            if verbose:
-                print('\tStarting Sweep: %d' % swp)
-                print("\tTrunc loss: ", rmax_record)
-                print(f'\tDirection {direction}')
-                print(f'\tResidual {local_res_fwd}')
-                print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
-
-        if last:
+        r_max = r_max_final if swp > 2 or refinement else r_max_warm_up
+        x_cores, XAX, Xb, rx, local_res_bwd, rmax_record = _bck_sweep(
+            local_solver,
+            x_cores,
+            XAX,
+            block_A,
+            Xb,
+            block_b,
+            rx,
+            N,
+            block_size,
+            trunc_tol,
+            d,
+            swp,
+            size_limit,
+            eps,
+            r_max,
+            termination_tol
+        )
+        x_cores, XAX, Xb, rx, local_res_fwd, rmax_record = _fwd_sweep(
+            local_solver,
+            x_cores,
+            XAX,
+            block_A,
+            Xb,
+            block_b,
+            rx,
+            N,
+            block_size,
+            trunc_tol,
+            d,
+            swp,
+            size_limit,
+            eps,
+            r_max,
+            termination_tol
+        )
+        if min(local_res_fwd, local_res_bwd) < termination_tol:
             break
 
-        direction *= -1
-
-        if swp == warm_up and not refinement:
-            r_max = r_max_final
-            trunc_tol = rmax_record
+        if verbose:
+            print('\tStarting Sweep: %d' % swp)
+            print(f"\tTrunc loss: {rmax_record}")
+            print(f'\tResidual {local_res_fwd}')
+            print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
 
 
     if verbose:
@@ -538,39 +517,104 @@ def _default_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, prev
     return solution_now, block_res_old, min(block_res_old, block_res_new), rhs
 
 
-def tt_restarted_block_als(block_A, block_b, tol, termination_tol=1e-3, eps=1e-12, num_restarts=2, nswp=22, warm_up=4, x0=None, size_limit=None, local_solver=None, refinement=False, verbose=False):
+def tt_rl_orthogonalise_py(train_tt: List[np.array]):
+    dim = len(train_tt)
+    if dim == 1:
+        return train_tt
+    for idx in range(dim - 1, 0, -1):
+        shape_p1 = train_tt[idx].shape
+        shape = train_tt[idx - 1].shape
+        Q_T, R = np.linalg.qr(train_tt[idx].reshape(shape_p1[0], -1).T)
+        train_tt[idx] = Q_T.T.reshape(-1, *shape_p1[1:-1], shape_p1[-1])
+        train_tt[idx - 1] = (train_tt[idx - 1].reshape(-1, R.shape[-1]) @ R.T).reshape(-1, *shape[1:-1],
+                                                                                       train_tt[idx].shape[0])
+    return train_tt
+
+def tt_rank_reduce_py(train_tt: List[np.array], eps=1e-18):
+    """ Might reduce TT-rank """
+    dim = len(train_tt)
+    ranks = np.array([1] + tt_ranks(train_tt) + [1])
+    if dim == 1 or np.all(ranks==1):
+        return train_tt
+    eps = eps / np.sqrt(dim - 1)
+    train_tt = tt_rl_orthogonalise_py(train_tt)
+    rank = 1
+    for idx, tt_core in enumerate(train_tt[:-1]):
+        idx_shape = tt_core.shape
+        next_idx_shape = train_tt[idx + 1].shape
+        k = len(idx_shape) - 1
+        u, s, v_t = scp.linalg.svd(train_tt[idx].reshape(rank * np.prod(idx_shape[1:k], dtype=int), -1), full_matrices=False, check_finite=False, overwrite_a=True)
+        next_rank = prune_singular_vals(s, eps)
+        s = s[:next_rank]
+        u = u[:, :next_rank]
+        v_t = v_t[:next_rank, :]
+        train_tt[idx] = u.reshape(rank, *idx_shape[1:-1], next_rank)
+        train_tt[idx + 1] = (
+            s.reshape(-1, 1) * v_t @ train_tt[idx + 1].reshape(v_t.shape[-1], -1)
+        ).reshape(next_rank, *next_idx_shape[1:-1], -1)
+        rank = next_rank
+    return train_tt
+
+
+
+def tt_restarted_block_als(
+        block_A,
+        block_b,
+        rank_restriction,
+        tol,
+        termination_tol=1e-3,
+        eps=1e-12,
+        num_restarts=3,
+        inner_m=10,
+        x0=None,
+        local_solver=None,
+        refinement=False,
+        verbose=False
+):
     rhs = block_b
-    x_cores = None
-    for i in range(num_restarts):
+    x_cores, res = _tt_block_als(block_A, rhs, tol, termination_tol, eps, inner_m, rank_restriction, x0, local_solver, refinement, verbose)
+    if res < termination_tol:
         if verbose:
-            print(f"\n\t---Restart {i}---")
-        new_x_cores, res = tt_block_als(block_A, rhs, tol, termination_tol, eps, nswp, warm_up, x0, size_limit, local_solver, refinement, verbose)
+            print(f"\n\tTerminated on local criterion,  Error<{termination_tol}")
+        return x_cores, res
+    Ax = block_A.matvec(x_cores)
+    rhs = rhs - Ax
+    rhs_norm = rhs.norm
+    if rhs_norm < termination_tol:
+        if verbose:
+            print(f"\n\tTerminated on global criterion,  Error={rhs_norm}")
+        return x_cores, res
+    prev_rhs_norm = rhs_norm
+    if verbose:
+        print(f"\n\tGlobal Error={rhs_norm}")
+    for i in range(1, num_restarts):
+        if verbose:
+            print(f"\n\t---Restart {i}")
+        new_x_cores, res = _tt_block_als(block_A, rhs, tol, termination_tol, eps, inner_m, rank_restriction, None, local_solver, refinement, verbose)
         if res < termination_tol:
             if verbose:
                 print(f"\n\tTerminated on local criterion,  Error<{termination_tol}")
-            if x_cores is None:
-                x_cores = new_x_cores
-            else:
-                x_cores = tt_rank_reduce(tt_add(x_cores, new_x_cores), eps=eps)
+            x_cores = tt_rank_reduce_py(tt_add(x_cores, new_x_cores), eps=eps)
             break
         Ax = block_A.matvec(new_x_cores)
         rhs = rhs - Ax
-        rhs_norm = rhs.norm()
-        if rhs_norm < termination_tol:
+        rhs_norm = rhs.norm
+        if rhs_norm > prev_rhs_norm:
             if verbose:
-                print(f"\n\tTerminated on local criterion,  Error={rhs_norm}")
-            if x_cores is None:
-                x_cores = new_x_cores
-            else:
-                x_cores = tt_rank_reduce(tt_add(x_cores, new_x_cores), eps=eps)
+                print(f"\n\tTerminated on instability ({rhs_norm} > {prev_rhs_norm})!")
             break
+        elif rhs_norm < termination_tol:
+            if verbose:
+                print(f"\n\tTerminated on global criterion,  Error={rhs_norm}")
+            x_cores = tt_rank_reduce_py(tt_add(x_cores, new_x_cores), eps=eps)
+            break
+        if verbose:
+            print(f"\n\tGlobal Error={rhs_norm}")
+        prev_rhs_norm = rhs_norm
+        x_cores = tt_rank_reduce_py(tt_add(x_cores, new_x_cores), eps=eps)
     else:
         if verbose:
             print(f"\n\tNumber of restarts exhausted,  Error={rhs_norm}")
-        if x_cores is None:
-            x_cores = new_x_cores
-        else:
-            x_cores = tt_rank_reduce(tt_add(x_cores, new_x_cores), eps=eps)
 
     return x_cores, res
 
