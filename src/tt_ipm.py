@@ -61,7 +61,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         Op = MatVecWrapper(
             XAX_k[0, 0], XAX_k[0, 1], XAX_k[2, 1], XAX_k[2, 2],
             block_A_k[0, 0], block_A_k[0, 1], block_A_k[2, 1], block_A_k[2, 2],
-            XAX_kp1[0, 0], XAX_kp1[0, 1], XAX_kp1[2, 1], XAX_kp1[2, 2],
+            XAX_k1[0, 0], XAX_k1[0, 1], XAX_k1[2, 1], XAX_k1[2, 2],
             inv_I, x_shape[0], x_shape[2], x_shape[3]
         )
 
@@ -150,7 +150,7 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
         linear_op = IneqMatVecWrapper(
             XAX_k[0, 0], XAX_k[0, 1], XAX_k[2, 1], XAX_k[2, 2], XAX_k[3, 1], XAX_k[3, 3],
             block_A_k[0, 0], block_A_k[0, 1], block_A_k[2, 1], block_A_k[2, 2], block_A_k[3, 1], block_A_k[3, 3],
-            XAX_kp1[0, 0], XAX_kp1[0, 1], XAX_kp1[2, 1], XAX_kp1[2, 2], XAX_kp1[3, 1], XAX_kp1[3, 3],
+            XAX_k1[0, 0], XAX_k1[0, 1], XAX_k1[2, 1], XAX_k1[2, 2], XAX_k1[3, 1], XAX_k1[3, 3],
             inv_I, x_shape[0], x_shape[2], x_shape[3]
         )
         local_rhs = -linear_op.matvec(np.transpose(previous_solution[:, [0, 1, 3]], (1, 0, 2, 3)).ravel()).reshape(3, x_shape[0], x_shape[2], x_shape[3])
