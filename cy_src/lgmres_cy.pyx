@@ -13,7 +13,7 @@ cimport cython
 cimport scipy.linalg.cython_blas as blas
 from numpy.linalg import LinAlgError
 from scipy.linalg import qr_insert
-from scipy.linalg.cython_lapack cimport dgelsd
+from scipy.linalg.cython_lapack cimport dgelsd, dtrtrs
 from libc.stdlib cimport malloc, free
 
 cnp.import_array() # Initialize NumPy C-API
@@ -55,65 +55,41 @@ cdef double cy_nrm2(double[:] x) nogil:
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef double[:] cy_dgelsd(double[:,  :] a1, double[:] b1, double eps):
-
-    cdef int m = a1.shape[0]
-    cdef int n = a1.shape[1]
+cdef double[:] cy_solve_upper_triangular(double[:, :] a, double[:] b):
+    # --- C-level variable declarations ---
+    cdef int n = a.shape[0]
     cdef int nrhs = 1
-    cdef int lda = max(1, m)
-    cdef int ldb = max(1, max(m, n))
-    cdef int rank = 0
+    cdef int lda = max(1, n)
+    cdef int ldb = max(1, n)
     cdef int info = 0
 
-    cdef double[::1] s = np.zeros(min(m, n), dtype=np.float64)
-    cdef int lwork = -1
-    cdef int iwork_size = 3 * min(m, n) * 7
-    cdef int* iwork = <int*>malloc(iwork_size * sizeof(int))
+    # --- Hard-coded LAPACK parameters ---
+    cdef char uplo = b'U'
+    cdef char trans = b'N'
+    cdef char diag = b'N'
 
-    cdef double wkopt = 0
-    cdef double* work = NULL
-
-    if iwork == NULL:
-        raise MemoryError("Failed to allocate iwork")
+    # --- Input validation ---
+    if a.shape[0] != a.shape[1]:
+        raise ValueError("Matrix 'a' must be square.")
+    if a.shape[0] != b.shape[0]:
+        raise ValueError("Matrices 'a' and 'b' must have the same number of rows.")
 
     with nogil:
-        try:
-            # Workspace query
-            dgelsd(&m, &n, &nrhs,
-                   &a1[0,0], &lda,
-                   &b1[0], &ldb,
-                   &s[0], &eps,
-                   &rank,
-                   &wkopt, &lwork,
-                   iwork, &info)
+        dtrtrs(&uplo, &trans, &diag,
+               &n, &nrhs,
+               &a[0, 0], &lda,
+               &b[0], &ldb,
+               &info)
 
-            if info != 0:
-                raise RuntimeError(f"dgelsd workspace query failed with info={info}")
+    # --- Error handling ---
+    if info < 0:
+        raise ValueError(f"dtrtrs: illegal value in internal argument {-info}")
+    if info > 0:
+        raise np.linalg.LinAlgError(
+            f"dtrtrs: the {info}-th diagonal element of A is zero, matrix is singular"
+        )
 
-            lwork = <int>wkopt
-            work = <double*>malloc(lwork * sizeof(double))
-            if work == NULL:
-                raise MemoryError("Failed to allocate work array")
-
-            # Actual dgelsd call
-            dgelsd(&m, &n, &nrhs,
-                   &a1[0,0], &lda,
-                   &b1[0], &ldb,
-                   &s[0], &eps,
-                   &rank,
-                   work, &lwork,
-                   iwork, &info)
-
-            if info != 0:
-                raise RuntimeError(f"dgelsd failed with info={info}")
-
-        finally:
-            free(iwork)
-            if work != NULL:
-                free(work)
-
-    # Return the solution matrix (modified b1), rank, singular values s
-    return b1
+    return b
 
 
 cdef class BaseMatVec:
@@ -342,13 +318,13 @@ cdef tuple _fgmres(BaseMatVec linear_op, cnp.ndarray[double, ndim=1] v0, int m, 
 
     a1 = np.asfortranarray(R[:j+1,:j+1])
     b1 = np.asfortranarray(Q[0,:j+1].ravel())
-    y = np.asarray(cy_dgelsd(a1, b1, eps))
+    y = np.asarray(cy_solve_upper_triangular(a1, b1))
 
     return zs, y, res
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef lgmres(BaseMatVec linear_op, cnp.ndarray[double, ndim=1] b, double rtol=1e-5, double atol=0., int maxiter=1000, int inner_m=30, int outer_k=3):
+cpdef tuple lgmres(BaseMatVec linear_op, cnp.ndarray[double, ndim=1] b, double rtol=1e-5, double atol=0., int maxiter=1000, int inner_m=30, int outer_k=3):
 
     cdef:
         double b_norm, r_norm, inner_res_0, ptol, ptol_max_factor = 1.0
