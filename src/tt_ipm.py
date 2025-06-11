@@ -27,29 +27,6 @@ def forward_backward_sub(L, b, overwrite_b=False):
     x = scp.linalg.solve_triangular(L.T, y, lower=False, check_finite=False, overwrite_b=True)
     return x
 
-
-def _get_eq_mat_vec(XAX_k, block_A_k, XAX_kp1, x_shape, inv_I):
-    x_element_shape = (x_shape[0], x_shape[2], x_shape[3])
-    XAX_k_00 = XAX_k[0, 0]
-    XAX_k_01 = XAX_k[0, 1]
-    XAX_k_21 = XAX_k[2, 1]
-    XAX_k_22 = XAX_k[2, 2]
-    XAX_kp1_00 = XAX_kp1[0, 0]
-    XAX_kp1_01 = XAX_kp1[0, 1]
-    XAX_kp1_21 = XAX_kp1[2, 1]
-    XAX_kp1_22 = XAX_kp1[2, 2]
-    block_A_k_00 = block_A_k[0, 0]
-    block_A_k_01 = block_A_k[0, 1]
-    block_A_k_21 = block_A_k[2, 1]
-    block_A_k_22 = block_A_k[2, 2]
-
-    return MatVecWrapper(
-        XAX_k_00, XAX_k_01, XAX_k_21, XAX_k_22,
-        block_A_k_00, block_A_k_01, block_A_k_21, block_A_k_22,
-        XAX_kp1_00, XAX_kp1_01, XAX_kp1_21, XAX_kp1_22,
-        inv_I, x_element_shape[0], x_element_shape[1], x_element_shape[2]
-    )
-
 def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous_solution, size_limit, termination_tol):
     x_shape = previous_solution.shape
     m = x_shape[0] * x_shape[2] * x_shape[3]
@@ -81,7 +58,12 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
             size_limit = 0
 
     if m > size_limit:
-        Op = _get_eq_mat_vec(XAX_k, block_A_k, XAX_k1, x_shape, inv_I)
+        Op = MatVecWrapper(
+            XAX_k[0, 0], XAX_k[0, 1], XAX_k[2, 1], XAX_k[2, 2],
+            block_A_k[0, 0], block_A_k[0, 1], block_A_k[2, 1], block_A_k[2, 2],
+            XAX_kp1[0, 0], XAX_kp1[0, 1], XAX_kp1[2, 1], XAX_kp1[2, 2],
+            inv_I, x_shape[0], x_shape[2], x_shape[3]
+        )
 
         local_rhs = -Op.matvec(np.transpose(previous_solution[:, :2], (1, 0, 2, 3)).ravel()).reshape(2, x_shape[0], x_shape[2], x_shape[3])
         local_rhs[0] += rhs[:, 0]
@@ -108,35 +90,6 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         solution_now = previous_solution
 
     return solution_now, block_res_old, min(block_res_new, block_res_old), rhs
-
-
-def _get_ineq_mat_vec(XAX_k, block_A_k, XAX_kp1, x_shape, inv_I):
-    x_element_shape = (x_shape[0], x_shape[2], x_shape[3])
-    XAX_k_00 = XAX_k[0, 0]
-    XAX_k_01 = XAX_k[0, 1]
-    XAX_k_21 = XAX_k[2, 1]
-    XAX_k_22 = XAX_k[2, 2]
-    XAX_k_31 = XAX_k[3, 1]
-    XAX_k_33 = XAX_k[3, 3]
-    XAX_kp1_00 = XAX_kp1[0, 0]
-    XAX_kp1_01 = XAX_kp1[0, 1]
-    XAX_kp1_21 = XAX_kp1[2, 1]
-    XAX_kp1_22 = XAX_kp1[2, 2]
-    XAX_kp1_31 = XAX_kp1[3, 1]
-    XAX_kp1_33 = XAX_kp1[3, 3]
-    block_A_k_00 = block_A_k[0, 0]
-    block_A_k_01 = block_A_k[0, 1]
-    block_A_k_21 = block_A_k[2, 1]
-    block_A_k_22 = block_A_k[2, 2]
-    block_A_k_31 = block_A_k[3, 1]
-    block_A_k_33 = block_A_k[3, 3]
-
-    return IneqMatVecWrapper(
-        XAX_k_00, XAX_k_01, XAX_k_21, XAX_k_22, XAX_k_31, XAX_k_33,
-        block_A_k_00, block_A_k_01, block_A_k_21, block_A_k_22, block_A_k_31,block_A_k_33,
-        XAX_kp1_00, XAX_kp1_01, XAX_kp1_21, XAX_kp1_22, XAX_kp1_31, XAX_kp1_33,
-        inv_I, x_element_shape[0], x_element_shape[1], x_element_shape[2]
-    )
 
 def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous_solution, size_limit, termination_tol):
     x_shape = previous_solution.shape
@@ -194,7 +147,12 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
             size_limit = 0
 
     if m > size_limit:
-        linear_op = _get_ineq_mat_vec(XAX_k, block_A_k, XAX_k1, x_shape, inv_I)
+        linear_op = IneqMatVecWrapper(
+            XAX_k[0, 0], XAX_k[0, 1], XAX_k[2, 1], XAX_k[2, 2], XAX_k[3, 1], XAX_k[3, 3],
+            block_A_k[0, 0], block_A_k[0, 1], block_A_k[2, 1], block_A_k[2, 2], block_A_k[3, 1], block_A_k[3, 3],
+            XAX_kp1[0, 0], XAX_kp1[0, 1], XAX_kp1[2, 1], XAX_kp1[2, 2], XAX_kp1[3, 1], XAX_kp1[3, 3],
+            inv_I, x_shape[0], x_shape[2], x_shape[3]
+        )
         local_rhs = -linear_op.matvec(np.transpose(previous_solution[:, [0, 1, 3]], (1, 0, 2, 3)).ravel()).reshape(3, x_shape[0], x_shape[2], x_shape[3])
         local_rhs[0] += rhs[:, 0]
         local_rhs[1] += rhs[:, 2] - cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[2, 2], block_A_k[2, 2],
@@ -646,7 +604,7 @@ def tt_ipm(
     solver_ineq = lambda lhs, rhs, x0, nwsp, refinement, termination_tol: tt_restarted_block_als(
         lhs,
         rhs,
-        rank_restriction=min(4*dim + dim, 25),
+        rank_restriction=min(4*dim + 2*dim, 25),
         x0=x0,
         local_solver=_ipm_local_solver_ineq,
         op_tol=op_tol,
@@ -659,7 +617,7 @@ def tt_ipm(
     solver_eq = lambda lhs, rhs, x0, nwsp, refinement, termination_tol: tt_restarted_block_als(
         lhs,
         rhs,
-        rank_restriction=max(3*dim + dim, 25),
+        rank_restriction=max(3*dim + 2*dim, 25),
         x0=x0,
         local_solver=_ipm_local_solver,
         op_tol=op_tol,
