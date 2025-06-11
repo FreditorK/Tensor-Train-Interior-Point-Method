@@ -2,10 +2,32 @@
 # cython: language_level=3
 # cython: cdivision=True
 # cython: optimize.use_switch=True
+# distutils: language = c++
 
 cdef extern from "numpy/arrayobject.h":
     # Define NPY_NO_DEPRECATED_API for compatibility with numpy
     ctypedef void npy_no_deprecated_api
+
+
+cdef extern from "cblas.h" nogil:
+    # --- Enums for Layout and Transpose ---
+    ctypedef enum CBLAS_LAYOUT:
+        CblasRowMajor=101
+        CblasColMajor=102
+
+    ctypedef enum CBLAS_TRANSPOSE:
+        CblasNoTrans=111
+        CblasTrans=112
+        CblasConjTrans=113
+
+    # --- The dgemm function signature ---
+    # We can also add 'nogil' to the function itself, but adding it
+    # to the block is cleaner if all functions within are nogil.
+    void cblas_dgemm(const CBLAS_LAYOUT Layout, const CBLAS_TRANSPOSE TransA,
+                     const CBLAS_TRANSPOSE TransB, const int M, const int N,
+                     const int K, const double alpha, const double A[],
+                     const int lda, const double B[], const int ldb,
+                     const double beta, double C[], const int ldc)
 
 import numpy as np
 cimport numpy as cnp
@@ -18,20 +40,20 @@ from libc.stdlib cimport malloc, free
 
 cnp.import_array() # Initialize NumPy C-API
 
-
 cdef:
     int inc = 1  # typical unit stride
     double global_alpha = 1.0
 
+
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef void cy_axpy(double[:] dx, double[:] x):
+cdef void cy_axpy(double[:] dx, double[:] x) noexcept nogil:
     cdef int n = len(x)
     blas.daxpy(&n, &global_alpha, &dx[0], &inc, &x[0], &inc)
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef void cy_full_axpy(double[:] dx, double[:] x, double alpha):
+cdef void cy_full_axpy(double[:] dx, double[:] x, double alpha) noexcept nogil:
     cdef int n = len(x)
     blas.daxpy(&n, &alpha, &dx[0], &inc, &x[0], &inc)
 
@@ -43,7 +65,7 @@ cdef double cy_dot(double[:] x, double[:] y) nogil:
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef void cy_scal(double alpha, double[:] x):
+cdef void cy_scal(double alpha, double[:] x) noexcept nogil:
     cdef int n = len(x)
     blas.dscal(&n, &alpha, &x[0], &inc)
 
@@ -55,24 +77,38 @@ cdef double cy_nrm2(double[:] x) nogil:
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef double[:] cy_solve_upper_triangular(double[:, :] a, double[:] b):
-    # --- C-level variable declarations ---
+cdef void cy_dgemm(
+        double[:, :] A,
+        double[:, :] B,
+        double[:, :] C,
+        double alpha=1.0,
+        double beta=0.0
+) nogil:
+    cdef int M, N, K
+    M = A.shape[0];
+    K = A.shape[1]
+
+    N = B.shape[1]
+
+    cdef int lda = A.shape[1] if A.shape[1] > 0 else 1
+    cdef int ldb = B.shape[1] if B.shape[1] > 0 else 1
+    cdef int ldc = C.shape[1] if C.shape[1] > 0 else 1
+    cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, M, N, K,
+                alpha, &A[0, 0], lda, &B[0, 0], ldb,
+                beta, &C[0, 0], ldc)
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cdef double[:] cy_solve_upper_triangular(double[:, :] a, double[:] b) nogil:
     cdef int n = a.shape[0]
     cdef int nrhs = 1
     cdef int lda = max(1, n)
     cdef int ldb = max(1, n)
     cdef int info = 0
 
-    # --- Hard-coded LAPACK parameters ---
     cdef char uplo = b'U'
     cdef char trans = b'N'
     cdef char diag = b'N'
-
-    # --- Input validation ---
-    if a.shape[0] != a.shape[1]:
-        raise ValueError("Matrix 'a' must be square.")
-    if a.shape[0] != b.shape[0]:
-        raise ValueError("Matrices 'a' and 'b' must have the same number of rows.")
 
     with nogil:
         dtrtrs(&uplo, &trans, &diag,
@@ -81,27 +117,86 @@ cdef double[:] cy_solve_upper_triangular(double[:, :] a, double[:] b):
                &b[0], &ldb,
                &info)
 
-    # --- Error handling ---
-    if info < 0:
-        raise ValueError(f"dtrtrs: illegal value in internal argument {-info}")
-    if info > 0:
-        raise np.linalg.LinAlgError(
-            f"dtrtrs: the {info}-th diagonal element of A is zero, matrix is singular"
-        )
-
     return b
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cdef cnp.ndarray[double, ndim=4] tensordot1(cnp.ndarray[double, ndim=3] x_core, cnp.ndarray[double, ndim=3] XAX1):
+    """
+    Computes `tensordot(x_core, XAX1, axes=([2], [2]))` using BLAS dgemm.
+    """
+    cdef:
+        int n0 = x_core.shape[0], n1 = x_core.shape[1], k_sum = x_core.shape[2]
+        int m0 = XAX1.shape[0], m1 = XAX1.shape[1]
+
+        cnp.ndarray[double, ndim=2] mat_a = np.ascontiguousarray(x_core.reshape(n0 * n1, k_sum))
+        cnp.ndarray[double, ndim=2] mat_b = np.ascontiguousarray(XAX1.reshape(m0 * m1, k_sum).T)
+        cnp.ndarray[double, ndim = 2] result_mat = np.zeros((n0 * n1, m0 * m1))
+    cy_dgemm(mat_a, mat_b, result_mat)
+    return result_mat.reshape(n0, n1, m0, m1)
+
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cdef cnp.ndarray[double, ndim=4] tensordot2(cnp.ndarray[double, ndim=4] intermediate_1,
+                                            cnp.ndarray[double, ndim=4] block_A):
+    """
+    Computes `tensordot(intermediate_1, block_A, axes=([1, 3], [2, 3]))` using BLAS dgemm.
+    """
+    cdef:
+        int n0 = intermediate_1.shape[0], n1 = intermediate_1.shape[1]
+        int m0 = intermediate_1.shape[2], m1 = intermediate_1.shape[3]
+        int p0 = block_A.shape[0], p1 = block_A.shape[1]
+
+        cnp.ndarray[double, ndim=2] mat_a = np.ascontiguousarray(intermediate_1.transpose(0, 2, 1, 3).reshape(n0 * m0, n1 * m1))
+        cnp.ndarray[double, ndim=2] mat_b = np.ascontiguousarray(block_A.transpose(0, 1, 2, 3).reshape(p0 * p1, n1 * m1).T)
+        cnp.ndarray[double, ndim=2] result_mat = np.zeros((n0 * m0, p0 * p1))
+    cy_dgemm(mat_a, mat_b, result_mat)
+    return result_mat.reshape(n0, m0, p0, p1)
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cdef cnp.ndarray[double, ndim=3] tensordot3(cnp.ndarray[double, ndim=4] intermediate_2, cnp.ndarray[double, ndim=3] XAX):
+    """
+    Computes `tensordot(intermediate_2, XAX, axes=([0, 2], [2, 1]))` using BLAS dgemm.
+    """
+    cdef:
+        int n0 = intermediate_2.shape[0], m0 = intermediate_2.shape[1]
+        int p0 = intermediate_2.shape[2], p1 = intermediate_2.shape[3]
+        int s0 = XAX.shape[0]
+
+        cnp.ndarray[double, ndim=2] mat_a = np.ascontiguousarray(intermediate_2.transpose(1, 3, 0, 2).reshape(m0 * p1, n0 * p0))
+        cnp.ndarray[double, ndim=2] mat_b = np.ascontiguousarray(XAX.transpose(0, 2, 1).reshape(s0, n0 * p0).T)
+        cnp.ndarray[double, ndim = 2] result_mat = np.zeros((m0 * p1, s0))
+    cy_dgemm(mat_a, mat_b, result_mat)
+    return result_mat.reshape(m0, p1, s0)
+
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cdef  cnp.ndarray[double, ndim=3] einsum(double[:, :, :] XAX, double[:, :, :, :] block_A, double[:, :, :] XAX1, double[:, :, :] x_core):
+    # lsr,smnS,LSR,rnR->lmL
+    cdef cnp.ndarray[double, ndim=4] intermediate_1 = tensordot1(np.asarray(x_core), np.asarray(XAX1))
+    cdef cnp.ndarray[double, ndim=4] intermediate_2 = tensordot2(intermediate_1, np.asarray(block_A))
+    return np.transpose(tensordot3(intermediate_2, np.asarray(XAX)), axes=(2, 1, 0))
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cdef void einsum_add(double[:, :, :] XAX, double[:, :, :, :] block_A, double[:, :, :] XAX1, double[:, :, :] x_core, cnp.ndarray[double, ndim=3] out):
+    out[:] += einsum(XAX, block_A, XAX1, x_core)
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cdef void einsum_sub(double[:, :, :] XAX, double[:, :, :, :] block_A, double[:, :, :] XAX1, double[:, :, :] x_core, cnp.ndarray[double, ndim=3] out):
+    out[:] -= einsum(XAX, block_A, XAX1, x_core)
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cdef void einsum_out(double[:, :, :] XAX, double[:, :, :, :] block_A, double[:, :, :] XAX1, double[:, :, :] x_core, cnp.ndarray[double, ndim=3] out):
+    out[:] = einsum(XAX, block_A, XAX1, x_core)
 
 
 cdef class BaseMatVec:
-
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    cdef cnp.ndarray[double, ndim=3] einsum(self, double[:, :, :] XAX, double[:, :, :, :] block_A, double[:, :, :] XAX1, double[:, :, :] x_core):
-        # lsr,smnS,LSR,rnR->lmL
-        cdef double[:, :, :, :] intermediate_1 = np.tensordot(x_core, XAX1, axes=([2], [2]))
-        cdef double[:, :, :, :] intermediate_2 = np.tensordot(intermediate_1, block_A, axes=([1, 3], [2, 3]))
-        cdef double[:, :, :] result = np.tensordot(intermediate_2, XAX, axes=([0, 2], [2, 1]))
-        return np.transpose(result, axes=(2, 1, 0))
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -160,13 +255,14 @@ cdef class MatVecWrapper(BaseMatVec):
     cpdef cnp.ndarray[double, ndim=1] matvec(self, cnp.ndarray[double, ndim=1] x_core):
         cdef double[:, :,  :, :] x_reshaped = x_core.view().reshape(2, self.r, self.n, self.R)
         cdef cnp.ndarray[double, ndim=4] result = np.empty_like(x_reshaped, dtype=np.float64)
+        cdef cnp.ndarray[double, ndim=3] temp = np.empty((self.r, self.n, self.R), dtype=np.float64)
 
-        result[0] = self.einsum(self.XAX_k_00, self.block_A_k_00, self.XAX_kp1_00, x_reshaped[0])
-        result[1] = self.einsum(self.XAX_k_21, self.block_A_k_21, self.XAX_kp1_21, x_reshaped[1])
-        result[0] += self.einsum(self.XAX_k_01, self.block_A_k_01, self.XAX_kp1_01, x_reshaped[1])
-        cdef cnp.ndarray[double, ndim=3] temp = self.einsum(self.XAX_k_01T, self.block_A_k_01T, self.XAX_kp1_01T, x_reshaped[0])
+        einsum_out(self.XAX_k_00, self.block_A_k_00, self.XAX_kp1_00, x_reshaped[0], result[0])
+        einsum_out(self.XAX_k_21, self.block_A_k_21, self.XAX_kp1_21, x_reshaped[1], result[1])
+        einsum_add(self.XAX_k_01, self.block_A_k_01, self.XAX_kp1_01, x_reshaped[1], result[0])
+        einsum_out(self.XAX_k_01T, self.block_A_k_01T, self.XAX_kp1_01T, x_reshaped[0], temp)
         temp *= self.inv_I
-        result[1] -= self.einsum(self.XAX_k_22, self.block_A_k_22, self.XAX_kp1_22, temp)
+        einsum_sub(self.XAX_k_22, self.block_A_k_22, self.XAX_kp1_22, temp, result[1])
         return result.ravel()
 
 cdef class IneqMatVecWrapper(BaseMatVec):
@@ -233,17 +329,17 @@ cdef class IneqMatVecWrapper(BaseMatVec):
     cpdef cnp.ndarray[double, ndim=1] matvec(self, cnp.ndarray[double, ndim=1] x_core):
         cdef cnp.ndarray[double, ndim=4] x = x_core.reshape((3, self.r, self.n, self.R))
         cdef cnp.ndarray[double, ndim=4] result = np.zeros_like(x, dtype=np.float64)
+        cdef cnp.ndarray[double, ndim=3] temp = np.empty((self.r, self.n, self.R), dtype=np.float64)
 
-        result[0] = self.einsum(self.XAX_k_00, self.block_A_k_00, self.XAX_kp1_00, x[0])
-        result[1] = self.einsum(self.XAX_k_21, self.block_A_k_21, self.XAX_kp1_21, x[1])
-        result[2] = self.einsum(self.XAX_k_31, self.block_A_k_31, self.XAX_kp1_31, x[1])
-        result[0] += self.einsum(self.XAX_k_01, self.block_A_k_01, self.XAX_kp1_01, x[1])
-        cdef cnp.ndarray[double, ndim=3] temp = self.einsum(self.XAX_k_01T, self.block_A_k_01T, self.XAX_kp1_01T, x[0])
+        einsum_out(self.XAX_k_00, self.block_A_k_00, self.XAX_kp1_00, x[0], result[0])
+        einsum_out(self.XAX_k_21, self.block_A_k_21, self.XAX_kp1_21, x[1], result[1])
+        einsum_out(self.XAX_k_31, self.block_A_k_31, self.XAX_kp1_31, x[1], result[2])
+        einsum_add(self.XAX_k_01, self.block_A_k_01, self.XAX_kp1_01, x[1], result[0])
+        einsum_out(self.XAX_k_01T, self.block_A_k_01T, self.XAX_kp1_01T, x[0], temp)
         temp *= self.inv_I
         temp += x[2]
-        result[1] -= self.einsum(self.XAX_k_22, self.block_A_k_22, self.XAX_kp1_22, temp)
-        result[2] += self.einsum(self.XAX_k_33, self.block_A_k_33, self.XAX_kp1_33, x[2])
-
+        einsum_sub(self.XAX_k_22, self.block_A_k_22, self.XAX_kp1_22, temp, result[1])
+        einsum_add(self.XAX_k_33, self.block_A_k_33, self.XAX_kp1_33, x[2], result[2])
         return result.ravel()
 
 

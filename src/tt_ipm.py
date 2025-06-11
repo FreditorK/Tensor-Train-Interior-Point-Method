@@ -36,6 +36,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
     rhs[:, 2] = cached_einsum('br,bmB,BR->rmR', Xb_k[2], block_b_k[2], Xb_k1[2]) if 2 in block_b_k else 0
     inv_I = np.divide(1, cached_einsum('lsr,smnS,LSR->lmL', XAX_k[1, 2], block_A_k[1, 2], XAX_k1[1, 2]))
     block_res_old = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution).__isub__(rhs))
+    size_limit = 0
     if m <= size_limit:
         try:
             L_L_Z = scp.linalg.cholesky(

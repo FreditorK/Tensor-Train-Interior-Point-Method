@@ -5,6 +5,7 @@ import os
 import scipy
 
 scipy_include = os.path.join(os.path.dirname(scipy.__file__), 'linalg')
+libraries_to_link = ['cblas', 'blas']
 
 extensions = [
     Extension(
@@ -24,6 +25,7 @@ extensions = [
             np.get_include(),
             scipy_include
         ],  # This line ensures that NumPy headers are included
+        libraries=libraries_to_link,
         extra_compile_args=["-O3", "-march=native"],
         define_macros=[('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')]
     )
