@@ -121,64 +121,51 @@ cdef double[:] cy_solve_upper_triangular(double[:, :] a, double[:] b) nogil:
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef cnp.ndarray[double, ndim=4] tensordot1(cnp.ndarray[double, ndim=3] x_core, cnp.ndarray[double, ndim=3] XAX1):
-    """
-    Computes `tensordot(x_core, XAX1, axes=([2], [2]))` using BLAS dgemm.
-    """
+cdef cnp.ndarray[double, ndim=3] einsum(
+        double[:, :, :] XAX,
+        double[:, :, :, :] block_A,
+        double[:, :, :] XAX1,
+        double[:, :, :] x_core):
     cdef:
-        int n0 = x_core.shape[0], n1 = x_core.shape[1], k_sum = x_core.shape[2]
-        int m0 = XAX1.shape[0], m1 = XAX1.shape[1]
+        int r = x_core.shape[0]
+        int n = x_core.shape[1]
+        int R = x_core.shape[2]
+        int L = XAX1.shape[0]
+        int S = XAX1.shape[1]
+        int s = block_A.shape[0]
+        int m = block_A.shape[1]
+        int l = XAX.shape[0]
 
-        cnp.ndarray[double, ndim=2] mat_a = np.ascontiguousarray(x_core.reshape(n0 * n1, k_sum))
-        cnp.ndarray[double, ndim=2] mat_b = np.ascontiguousarray(XAX1.reshape(m0 * m1, k_sum).T)
-        cnp.ndarray[double, ndim = 2] result_mat = np.zeros((n0 * n1, m0 * m1))
+        cnp.ndarray[double, ndim=2] mat_a, mat_b
+
+    # === Step 1: tensordot(x_core, XAX1, axes=([2], [2])) ===
+    # einsum: rnR,LSR -> rnLS
+    mat_a = np.asarray(x_core).reshape(r * n, R)
+    mat_b = np.ascontiguousarray(np.asarray(XAX1).reshape(L * S, R).T)
+    cdef cnp.ndarray[double, ndim=2] intermediate_mat1 = np.empty((r * n, L * S))
+    cy_dgemm(mat_a, mat_b, intermediate_mat1)
+    cdef cnp.ndarray[double, ndim=4] intermediate_1 = intermediate_mat1.reshape(r, n, L, S)
+
+    # === Step 2: tensordot(intermediate_1, block_A, axes=([1, 3], [2, 3])) ===
+    # einsum: rnLS,smnS -> rLsm
+    mat_a = np.ascontiguousarray(intermediate_1.transpose(0, 2, 1, 3).reshape(r * L, n * S))
+    mat_b = np.ascontiguousarray(np.asarray(block_A).reshape(s * m, n * S).T)
+    cdef cnp.ndarray[double, ndim=2] intermediate_mat2 = np.empty((r * L, s * m))
+    cy_dgemm(mat_a, mat_b, intermediate_mat2)
+    cdef cnp.ndarray[double, ndim=4] intermediate_2 = intermediate_mat2.reshape(r, L, s, m)
+
+    # === Step 3: tensordot(intermediate_2, XAX, axes=([0, 2], [2, 1])) ===
+    # einsum: rLsm,lsr -> Lml
+    mat_a = np.ascontiguousarray(intermediate_2.transpose(1, 3, 0, 2).reshape(L * m, r * s))
+    mat_b = np.ascontiguousarray(np.asarray(XAX).transpose(0, 2, 1).reshape(l, r * s).T)
+    cdef cnp.ndarray[double, ndim=2] result_mat = np.empty((L * m, l))
     cy_dgemm(mat_a, mat_b, result_mat)
-    return result_mat.reshape(n0, n1, m0, m1)
+    cdef cnp.ndarray[double, ndim=3] intermediate_3 = result_mat.reshape(L, m, l)
 
+    # === Final Step: Transpose to match einsum output 'lmL' ===
+    # Lml -> lmL
+    return np.transpose(intermediate_3, axes=(2, 1, 0))
 
-@cython.boundscheck(False)
-@cython.wraparound(False)
-cdef cnp.ndarray[double, ndim=4] tensordot2(cnp.ndarray[double, ndim=4] intermediate_1,
-                                            cnp.ndarray[double, ndim=4] block_A):
-    """
-    Computes `tensordot(intermediate_1, block_A, axes=([1, 3], [2, 3]))` using BLAS dgemm.
-    """
-    cdef:
-        int n0 = intermediate_1.shape[0], n1 = intermediate_1.shape[1]
-        int m0 = intermediate_1.shape[2], m1 = intermediate_1.shape[3]
-        int p0 = block_A.shape[0], p1 = block_A.shape[1]
-
-        cnp.ndarray[double, ndim=2] mat_a = np.ascontiguousarray(intermediate_1.transpose(0, 2, 1, 3).reshape(n0 * m0, n1 * m1))
-        cnp.ndarray[double, ndim=2] mat_b = np.ascontiguousarray(block_A.transpose(0, 1, 2, 3).reshape(p0 * p1, n1 * m1).T)
-        cnp.ndarray[double, ndim=2] result_mat = np.zeros((n0 * m0, p0 * p1))
-    cy_dgemm(mat_a, mat_b, result_mat)
-    return result_mat.reshape(n0, m0, p0, p1)
-
-@cython.boundscheck(False)
-@cython.wraparound(False)
-cdef cnp.ndarray[double, ndim=3] tensordot3(cnp.ndarray[double, ndim=4] intermediate_2, cnp.ndarray[double, ndim=3] XAX):
-    """
-    Computes `tensordot(intermediate_2, XAX, axes=([0, 2], [2, 1]))` using BLAS dgemm.
-    """
-    cdef:
-        int n0 = intermediate_2.shape[0], m0 = intermediate_2.shape[1]
-        int p0 = intermediate_2.shape[2], p1 = intermediate_2.shape[3]
-        int s0 = XAX.shape[0]
-
-        cnp.ndarray[double, ndim=2] mat_a = np.ascontiguousarray(intermediate_2.transpose(1, 3, 0, 2).reshape(m0 * p1, n0 * p0))
-        cnp.ndarray[double, ndim=2] mat_b = np.ascontiguousarray(XAX.transpose(0, 2, 1).reshape(s0, n0 * p0).T)
-        cnp.ndarray[double, ndim = 2] result_mat = np.zeros((m0 * p1, s0))
-    cy_dgemm(mat_a, mat_b, result_mat)
-    return result_mat.reshape(m0, p1, s0)
-
-
-@cython.boundscheck(False)
-@cython.wraparound(False)
-cdef  cnp.ndarray[double, ndim=3] einsum(double[:, :, :] XAX, double[:, :, :, :] block_A, double[:, :, :] XAX1, double[:, :, :] x_core):
-    # lsr,smnS,LSR,rnR->lmL
-    cdef cnp.ndarray[double, ndim=4] intermediate_1 = tensordot1(np.asarray(x_core), np.asarray(XAX1))
-    cdef cnp.ndarray[double, ndim=4] intermediate_2 = tensordot2(intermediate_1, np.asarray(block_A))
-    return np.transpose(tensordot3(intermediate_2, np.asarray(XAX)), axes=(2, 1, 0))
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
