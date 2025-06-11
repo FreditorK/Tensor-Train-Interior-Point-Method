@@ -421,8 +421,8 @@ def _tt_line_search(
         X_tt = tt_add(X_tt, tt_scale(status.boundary_val, tt_identity(len(X_tt))))
         Z_tt = tt_add(Z_tt, tt_scale(status.boundary_val, tt_identity(len(Z_tt))))
 
-    x_step_size, status.eigen_x0 = tt_max_generalised_eigen(X_tt, Delta_X_tt, x0=status.eigen_x0, tol=0.5*status.feasibility_tol, verbose=status.verbose)
-    z_step_size, status.eigen_z0 = tt_max_generalised_eigen(Z_tt, Delta_Z_tt, x0=status.eigen_z0, tol=0.5*status.feasibility_tol, verbose=status.verbose)
+    x_step_size, status.eigen_x0 = tt_max_generalised_eigen(X_tt, Delta_X_tt, x0=status.eigen_x0, tol=status.eps, verbose=status.verbose)
+    z_step_size, status.eigen_z0 = tt_max_generalised_eigen(Z_tt, Delta_Z_tt, x0=status.eigen_z0, tol=status.eps, verbose=status.verbose)
     if status.ineq_status is not IneqStatus.NOT_IN_USE:
         if status.is_last_iter:
             X_tt = tt_add(X_tt, tt_scale(status.boundary_val, ineq_mask))
@@ -438,7 +438,7 @@ def _ineq_step_size(A_tt, Delta_tt, e_tt, status):
     if status.compl_ineq_mask:
         sum_tt = tt_add(sum_tt, tt_scale(tt_entrywise_sum(sum_tt)/status.num_ineq_constraints, status.compl_ineq_mask))
     sum_tt = tt_rank_reduce(sum_tt, status.eps)
-    e_tt, min_eval = tt_min_eig(tt_diag_op(sum_tt, status.eps), x0=e_tt, tol=0.5*status.feasibility_tol, verbose=status.verbose)
+    e_tt, min_eval = tt_min_eig(tt_diag_op(sum_tt, status.eps), x0=e_tt, tol=status.eps, verbose=status.verbose)
     e_tt_sq = tt_reshape(tt_normalise(tt_fast_hadammard(e_tt, e_tt, status.eps)), (2, 2))
     min_A_val = tt_inner_prod(A_tt, e_tt_sq)
     min_Delta_val = tt_inner_prod(Delta_tt, e_tt_sq)
@@ -654,7 +654,7 @@ def tt_ipm(
     lhs = lhs_skeleton
 
     while finishing_steps > 0:
-        status.eta = max(0.1*status.eta, 0.5*feasibility_tol)
+        status.eta = max(0.5*status.eta, 0.5*feasibility_tol)
         iteration += 1
         status.aho_direction = (iteration > warm_up)
         status.is_last_iter = status.is_last_iter or (max_iter - max_refinement < iteration)

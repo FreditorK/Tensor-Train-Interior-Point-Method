@@ -463,14 +463,14 @@ def _tt_block_als(
         if verbose:
             print('\tStarting Sweep: %d' % swp)
             print(f"\tTrunc loss: {rmax_record}")
-            print(f'\tResidual {local_res_fwd}')
+            print(f'\tRel. Residual {local_res_fwd}')
             print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
 
 
     if verbose:
         print("\n\t---Results---")
         print('\tSolution rank is', rx[1:-1])
-        print('\tResidual ', min(local_res_fwd, local_res_bwd))
+        print('\tRel. Residual ', min(local_res_fwd, local_res_bwd))
         print('\tNumber of sweeps', swp+1)
         print('\tTime: ', time.time() - t0)
         print('\tTime per sweep: ', (time.time() - t0) / (swp+1), flush=True)
@@ -623,14 +623,16 @@ def _step_size_local_solve(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k, A_k
         A = cached_einsum("lsr,smnS,LSR->lmLrnR", XAX_k, A_k, XAX_k1).reshape(m, m)
         try:
             eig_val, solution_now = scp.sparse.linalg.eigsh((1/step_size)*A + D, tol=eps, k=1, which="SA", v0=previous_solution)
-        except:
+        except Exception as e:
+            print(f"\tAttention: {e}")
             eig_val = previous_solution.T @ ((1/step_size)*A + D)  @ previous_solution
             solution_now = previous_solution
         if eig_val < 0:
             try:
                 eig_val, solution_now = scp.sparse.linalg.eigsh(-D, M=A, tol=eps, k=1, which="LA", v0=previous_solution)
                 step_size = max(0, min(step_size, 1/ eig_val[0]))
-            except:
+            except Exception as e:
+                print(f"\tAttention: {e}")
                 solution_now = previous_solution
 
         eig_val = previous_solution.T @ ((1/step_size)*A + D) @ previous_solution
@@ -649,14 +651,16 @@ def _step_size_local_solve(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k, A_k
 
         try:
             eig_val, solution_now = scp.sparse.linalg.eigsh(AD_op, tol=eps, k=1, which="SA", v0=previous_solution)
-        except:
+        except Exception as e:
+            print(f"\tAttention: {e}")
             eig_val = previous_solution.T @ AD_op(previous_solution)
             solution_now = previous_solution
         if eig_val < 0:
             try:
                 eig_val, solution_now = scp.sparse.linalg.eigsh(D_op, M=A_op, tol=eps, k=1, which="LA", v0=previous_solution)
                 step_size = max(0, min(step_size, 1 / eig_val[0]))
-            except:
+            except Exception as e:
+                print(f"\tAttention: {e}")
                 solution_now = previous_solution
 
         eig_val = previous_solution.T @ AD_op(previous_solution)
