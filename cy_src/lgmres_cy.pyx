@@ -20,9 +20,6 @@ cdef extern from "cblas.h" nogil:
         CblasTrans=112
         CblasConjTrans=113
 
-    # --- The dgemm function signature ---
-    # We can also add 'nogil' to the function itself, but adding it
-    # to the block is cleaner if all functions within are nogil.
     void cblas_dgemm(const CBLAS_LAYOUT Layout, const CBLAS_TRANSPOSE TransA,
                      const CBLAS_TRANSPOSE TransB, const int M, const int N,
                      const int K, const double alpha, const double A[],
@@ -83,7 +80,7 @@ cdef void cy_dgemm(
         double[:, :] C,
         double alpha=1.0,
         double beta=0.0
-) nogil:
+) noexcept nogil:
     cdef int M, N, K
     M = A.shape[0];
     K = A.shape[1]
@@ -99,7 +96,7 @@ cdef void cy_dgemm(
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef double[:] cy_solve_upper_triangular(double[:, :] a, double[:] b) nogil:
+cdef double[:] cy_solve_upper_triangular(double[:, :] a, double[:] b) noexcept nogil:
     cdef int n = a.shape[0]
     cdef int nrhs = 1
     cdef int lda = max(1, n)
