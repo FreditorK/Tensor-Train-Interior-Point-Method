@@ -82,14 +82,15 @@ cdef void cy_dgemm(
         double beta=0.0
 ) noexcept nogil:
     cdef int M, N, K
-    M = A.shape[0];
+
+    M = A.shape[0]
     K = A.shape[1]
 
     N = B.shape[1]
 
-    cdef int lda = A.shape[1] if A.shape[1] > 0 else 1
-    cdef int ldb = B.shape[1] if B.shape[1] > 0 else 1
-    cdef int ldc = C.shape[1] if C.shape[1] > 0 else 1
+    cdef int lda = A.shape[1]
+    cdef int ldb = B.shape[1]
+    cdef int ldc = C.shape[1]
     cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, M, N, K,
                 alpha, &A[0, 0], lda, &B[0, 0], ldb,
                 beta, &C[0, 0], ldc)
@@ -227,11 +228,13 @@ cdef class MatVecWrapper(BaseMatVec):
         cdef cnp.ndarray[double, ndim=2] temp = np.empty((self.R*self.n, self.r), dtype=np.float64)
 
         einsum(self.XAX_k_00, self.block_A_k_00, self.XAX_kp1_00, x_reshaped[0], result0, 1.0, 0.0)
-        einsum(self.XAX_k_21, self.block_A_k_21, self.XAX_kp1_21, x_reshaped[1], result1, 1.0, 0.0)
         einsum(self.XAX_k_01, self.block_A_k_01, self.XAX_kp1_01, x_reshaped[1], result0, 1.0, 1.0)
+
+        einsum(self.XAX_k_21, self.block_A_k_21, self.XAX_kp1_21, x_reshaped[1], result1, 1.0, 0.0)
         einsum(self.XAX_k_01T, self.block_A_k_01T, self.XAX_kp1_01T, x_reshaped[0], temp,  1.0,  0.0)
         cdef cnp.ndarray[double, ndim=3] temp_reshaped = temp.reshape(self.R, self.n, self.r).transpose(2, 1, 0).__imul__(self.inv_I)
         einsum(self.XAX_k_22, self.block_A_k_22, self.XAX_kp1_22, temp_reshaped, result1, -1.0,  1.0)
+        
         result[0] = result0.reshape(self.R, self.n, self.r).transpose(2, 1, 0)
         result[1] = result1.reshape(self.R, self.n, self.r).transpose(2, 1, 0)
         return result.ravel()
