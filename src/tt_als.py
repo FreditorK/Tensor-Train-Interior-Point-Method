@@ -621,14 +621,14 @@ def _step_size_local_solve(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k, A_k
         ).reshape(m, m)
         A = cached_einsum("lsr,smnS,LSR->lmLrnR", XAX_k, A_k, XAX_k1).reshape(m, m)
         try:
-            eig_val, solution_now = scp.sparse.linalg.eigsh((1/step_size)*A + D, tol=eps, k=1, which="SA", v0=previous_solution)
+            eig_val, solution_now = scp.sparse.linalg.eigsh((1/step_size)*A + D, tol=eps, k=1, ncv=min(m, 25), maxiter=12*m, which="SA", v0=previous_solution)
         except Exception as e:
             print(f"\tAttention: {e}")
             eig_val = previous_solution.T @ ((1/step_size)*A + D)  @ previous_solution
             solution_now = previous_solution
         if eig_val < 0:
             try:
-                eig_val, solution_now = scp.sparse.linalg.eigsh(-D, M=A, tol=eps, k=1, which="LA", v0=previous_solution)
+                eig_val, solution_now = scp.sparse.linalg.eigsh(-D, M=A, tol=eps, k=1, ncv=min(m, 25), which="LA", maxiter=12*m, v0=previous_solution)
                 step_size = max(0, min(step_size, 1/ eig_val[0]))
             except Exception as e:
                 print(f"\tAttention: {e}")
@@ -649,14 +649,14 @@ def _step_size_local_solve(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k, A_k
         AD_op = scp.sparse.linalg.LinearOperator((m, m), matvec=lambda x_vec: (mat_vec_A(x_vec) / step_size).__isub__(mat_vec_D(x_vec)))
 
         try:
-            eig_val, solution_now = scp.sparse.linalg.eigsh(AD_op, tol=eps, k=1, which="SA", v0=previous_solution)
+            eig_val, solution_now = scp.sparse.linalg.eigsh(AD_op, tol=eps, k=1, ncv=min(m, 25), which="SA", maxiter=12*m, v0=previous_solution)
         except Exception as e:
             print(f"\tAttention: {e}")
             eig_val = previous_solution.T @ AD_op(previous_solution)
             solution_now = previous_solution
         if eig_val < 0:
             try:
-                eig_val, solution_now = scp.sparse.linalg.eigsh(D_op, M=A_op, tol=eps, k=1, which="LA", v0=previous_solution)
+                eig_val, solution_now = scp.sparse.linalg.eigsh(D_op, M=A_op, tol=eps, k=1, ncv=min(m, 25), which="LA", maxiter=12*m, v0=previous_solution)
                 step_size = max(0, min(step_size, 1 / eig_val[0]))
             except Exception as e:
                 print(f"\tAttention: {e}")
@@ -1114,8 +1114,20 @@ def tt_mat_mat_mul(mat1, mat2, op_tol, eps, verbose=False):
     return tt_approx_mat_mat_mul(mat1, mat2, tol=op_tol, verbose=verbose)
 
 
+def tt_approx_mat_vec_mul(A, d_vec, x0=None, kick_rank=None, nswp=50, tol=1e-6, verbose=False):
+    if verbose:
+        print(f"\nStarting MM solve with:\n \t {tol} \n \t sweeps: {nswp}")
+        t0 = time.time()
+    if x0 is None:
+        max_ranks = np.maximum((np.array(tt_ranks(A)) + np.array(tt_ranks(d_vec))) / 2, 2).astype(int)
+        x_cores = tt_random_gaussian(list(max_ranks), (A[0].shape[2], ))
+    else:
+        x_cores = x0
+        max_ranks = np.array(tt_ranks(x0))
 
-def cy_tt_approx_mat_vec_mul(A, d_vec, x0, kick_rank, nswp, tol, verbose):
+    if kick_rank is None:
+        kick_rank = np.maximum(((symmetric_powers_of_two(len(A)-1) - max_ranks) / (nswp / 2)), 2).astype(int)
+
     d = len(x_cores)
     rx = np.array([1] + tt_ranks(x_cores) + [1])
     N = np.array([c.shape[1] for c in x_cores])
@@ -1234,25 +1246,6 @@ def cy_tt_approx_mat_vec_mul(A, d_vec, x0, kick_rank, nswp, tol, verbose):
     normx = np.exp(np.sum(np.log(normx)) / d)
 
     return [normx * core for core in x_cores]
-
-
-def tt_approx_mat_vec_mul(A, d_vec, x0=None, kick_rank=None, nswp=50, tol=1e-6, verbose=False):
-    if verbose:
-        print(f"\nStarting MM solve with:\n \t {tol} \n \t sweeps: {nswp}")
-        t0 = time.time()
-    if x0 is None:
-        max_ranks = np.maximum((np.array(tt_ranks(A)) + np.array(tt_ranks(d_vec))) / 2, 2).astype(int)
-        x_cores = tt_random_gaussian(list(max_ranks), (A[0].shape[2], ))
-    else:
-        x_cores = x0
-        max_ranks = np.array(tt_ranks(x0))
-
-    if kick_rank is None:
-        kick_rank = np.maximum(((symmetric_powers_of_two(len(A)-1) - max_ranks) / (nswp / 2)), 2).astype(int)
-
-    return cy_tt_approx_mat_vec_mul(A, d_vec, x_cores, kick_rank, nswp, tol, verbose)
-
-    
 
 
 def tt_mat_vec_mul(mat, vec, op_tol, eps, verbose=False):
