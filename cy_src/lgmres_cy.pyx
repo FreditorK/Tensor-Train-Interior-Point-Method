@@ -32,7 +32,7 @@ cimport cython
 cimport scipy.linalg.cython_blas as blas
 from numpy.linalg import LinAlgError
 from scipy.linalg import qr_insert
-from scipy.linalg.cython_lapack cimport dgelsd, dtrtrs
+from scipy.linalg.cython_lapack cimport dtrtrs
 from libc.stdlib cimport malloc, free
 
 cnp.import_array() # Initialize NumPy C-API
@@ -138,29 +138,26 @@ cdef void einsum(
         int S = int(block_A.shape[0] / n)
         int s = int(block_A.shape[1] / m)
 
-        cnp.ndarray[double, ndim=2] mat_a, mat_b
+        cnp.ndarray[double, ndim=2] mat_a
 
     # === Step 1: tensordot(x_core, XAX1, axes=([2], [2])) ===
     # einsum: rnR,LSR -> rnLS
     mat_a = np.asarray(x_core).reshape(r * n, R)
-    mat_b = np.ascontiguousarray(XAX1)
     cdef cnp.ndarray[double, ndim=2] intermediate_mat1 = np.empty((r * n, L * S))
-    cy_dgemm(mat_a, mat_b, intermediate_mat1)
+    cy_dgemm(mat_a, XAX1, intermediate_mat1)
     cdef cnp.ndarray[double, ndim=4] intermediate_1 = intermediate_mat1.reshape(r, n, L, S)
 
     # === Step 2: tensordot(intermediate_1, block_A, axes=([1, 3], [2, 3])) ===
     # einsum: rnLS,smnS -> rLsm
     mat_a = np.ascontiguousarray(intermediate_1.transpose(0, 2, 1, 3).reshape(r * L, n * S))
-    mat_b = np.ascontiguousarray(block_A)
     cdef cnp.ndarray[double, ndim=2] intermediate_mat2 = np.empty((r * L, s * m))
-    cy_dgemm(mat_a, mat_b, intermediate_mat2)
+    cy_dgemm(mat_a, block_A, intermediate_mat2)
     cdef cnp.ndarray[double, ndim=4] intermediate_2 = intermediate_mat2.reshape(r, L, s, m)
 
     # === Step 3: tensordot(intermediate_2, XAX, axes=([0, 2], [2, 1])) ===
     # einsum: rLsm,lsr -> Lml
     mat_a = np.ascontiguousarray(intermediate_2.transpose(1, 3, 0, 2).reshape(L * m, r * s))
-    mat_b = np.ascontiguousarray(XAX)
-    cy_dgemm(mat_a, mat_b, out, alpha, beta)
+    cy_dgemm(mat_a, XAX, out, alpha, beta)
 
 
 cdef class BaseMatVec:
@@ -194,23 +191,23 @@ cdef class MatVecWrapper(BaseMatVec):
                  int r,
                  int n,
                  int R):
-        self.XAX_k_00 = XAX_k_00.transpose(0, 2, 1).reshape(XAX_k_00.shape[0], -1).T
-        self.XAX_k_01 = XAX_k_01.transpose(0, 2, 1).reshape(XAX_k_01.shape[0], -1).T
-        self.XAX_k_01T = np.transpose(XAX_k_01,  axes=(2, 1, 0)).transpose(0, 2, 1).reshape(XAX_k_01.shape[2], -1).T
-        self.XAX_k_21 = XAX_k_21.transpose(0, 2, 1).reshape(XAX_k_21.shape[0], -1).T
-        self.XAX_k_22 = XAX_k_22.transpose(0, 2, 1).reshape(XAX_k_22.shape[0], -1).T
+        self.XAX_k_00 = np.ascontiguousarray(XAX_k_00.transpose(0, 2, 1).reshape(XAX_k_00.shape[0], -1).T)
+        self.XAX_k_01 = np.ascontiguousarray(XAX_k_01.transpose(0, 2, 1).reshape(XAX_k_01.shape[0], -1).T)
+        self.XAX_k_01T = np.ascontiguousarray(np.transpose(XAX_k_01,  axes=(2, 1, 0)).transpose(0, 2, 1).reshape(XAX_k_01.shape[2], -1).T)
+        self.XAX_k_21 = np.ascontiguousarray(XAX_k_21.transpose(0, 2, 1).reshape(XAX_k_21.shape[0], -1).T)
+        self.XAX_k_22 = np.ascontiguousarray(XAX_k_22.transpose(0, 2, 1).reshape(XAX_k_22.shape[0], -1).T)
 
-        self.block_A_k_00 = block_A_k_00.reshape(block_A_k_00.shape[0] * block_A_k_00.shape[1], block_A_k_00.shape[2] * block_A_k_00.shape[3]).T
-        self.block_A_k_01 = block_A_k_01.reshape(block_A_k_01.shape[0] * block_A_k_01.shape[1], block_A_k_01.shape[2] * block_A_k_01.shape[3]).T
-        self.block_A_k_01T = np.transpose(block_A_k_01, axes=(0, 2, 1, 3)).reshape(block_A_k_01.shape[0] * block_A_k_01.shape[2], block_A_k_01.shape[1] * block_A_k_01.shape[3]).T
-        self.block_A_k_21 = block_A_k_21.reshape(block_A_k_21.shape[0] * block_A_k_21.shape[1], block_A_k_21.shape[2] * block_A_k_21.shape[3]).T
-        self.block_A_k_22 = block_A_k_22.reshape(block_A_k_22.shape[0] * block_A_k_22.shape[1], block_A_k_22.shape[2] * block_A_k_22.shape[3]).T
+        self.block_A_k_00 = np.ascontiguousarray(block_A_k_00.reshape(block_A_k_00.shape[0] * block_A_k_00.shape[1], block_A_k_00.shape[2] * block_A_k_00.shape[3]).T)
+        self.block_A_k_01 = np.ascontiguousarray(block_A_k_01.reshape(block_A_k_01.shape[0] * block_A_k_01.shape[1], block_A_k_01.shape[2] * block_A_k_01.shape[3]).T)
+        self.block_A_k_01T = np.ascontiguousarray(np.transpose(block_A_k_01, axes=(0, 2, 1, 3)).reshape(block_A_k_01.shape[0] * block_A_k_01.shape[2], block_A_k_01.shape[1] * block_A_k_01.shape[3]).T)
+        self.block_A_k_21 = np.ascontiguousarray(block_A_k_21.reshape(block_A_k_21.shape[0] * block_A_k_21.shape[1], block_A_k_21.shape[2] * block_A_k_21.shape[3]).T)
+        self.block_A_k_22 = np.ascontiguousarray(block_A_k_22.reshape(block_A_k_22.shape[0] * block_A_k_22.shape[1], block_A_k_22.shape[2] * block_A_k_22.shape[3]).T)
 
-        self.XAX_kp1_00 = XAX_kp1_00.reshape(-1, R).T
-        self.XAX_kp1_01 = XAX_kp1_01.reshape(-1, R).T
-        self.XAX_kp1_01T = np.transpose(XAX_kp1_01,  axes=(2, 1, 0)).reshape(-1, R).T
-        self.XAX_kp1_21 = XAX_kp1_21.reshape(-1, R).T
-        self.XAX_kp1_22 = XAX_kp1_22.reshape(-1, R).T
+        self.XAX_kp1_00 = np.ascontiguousarray(XAX_kp1_00.reshape(-1, R).T)
+        self.XAX_kp1_01 = np.ascontiguousarray(XAX_kp1_01.reshape(-1, R).T)
+        self.XAX_kp1_01T = np.ascontiguousarray(np.transpose(XAX_kp1_01,  axes=(2, 1, 0)).reshape(-1, R).T)
+        self.XAX_kp1_21 = np.ascontiguousarray(XAX_kp1_21.reshape(-1, R).T)
+        self.XAX_kp1_22 = np.ascontiguousarray(XAX_kp1_22.reshape(-1, R).T)
 
         self.r = r
         self.n = n
@@ -232,7 +229,8 @@ cdef class MatVecWrapper(BaseMatVec):
 
         einsum(self.XAX_k_21, self.block_A_k_21, self.XAX_kp1_21, x_reshaped[1], result1, 1.0, 0.0)
         einsum(self.XAX_k_01T, self.block_A_k_01T, self.XAX_kp1_01T, x_reshaped[0], temp,  1.0,  0.0)
-        cdef cnp.ndarray[double, ndim=3] temp_reshaped = temp.reshape(self.R, self.n, self.r).transpose(2, 1, 0).__imul__(self.inv_I)
+        cdef cnp.ndarray[double, ndim=3] temp_reshaped = temp.reshape(self.R, self.n, self.r).transpose(2, 1, 0)
+        temp_reshaped *= self.inv_I
         einsum(self.XAX_k_22, self.block_A_k_22, self.XAX_kp1_22, temp_reshaped, result1, -1.0,  1.0)
         
         result[0] = result0.reshape(self.R, self.n, self.r).transpose(2, 1, 0)
@@ -270,29 +268,29 @@ cdef class IneqMatVecWrapper(BaseMatVec):
                  int n,
                  int R):
 
-        self.XAX_k_00 = XAX_k_00.transpose(0, 2, 1).reshape(XAX_k_00.shape[0], -1).T
-        self.XAX_k_01 = XAX_k_01.transpose(0, 2, 1).reshape(XAX_k_01.shape[0], -1).T
-        self.XAX_k_01T = np.transpose(XAX_k_01,  axes=(2, 1, 0)).transpose(0, 2, 1).reshape(XAX_k_01.shape[2], -1).T
-        self.XAX_k_21 = XAX_k_21.transpose(0, 2, 1).reshape(XAX_k_21.shape[0], -1).T
-        self.XAX_k_22 = XAX_k_22.transpose(0, 2, 1).reshape(XAX_k_22.shape[0], -1).T
-        self.XAX_k_31 = XAX_k_31.transpose(0, 2, 1).reshape(XAX_k_31.shape[0], -1).T
-        self.XAX_k_33 = XAX_k_33.transpose(0, 2, 1).reshape(XAX_k_33.shape[0], -1).T
+        self.XAX_k_00 = np.ascontiguousarray(XAX_k_00.transpose(0, 2, 1).reshape(XAX_k_00.shape[0], -1).T)
+        self.XAX_k_01 = np.ascontiguousarray(XAX_k_01.transpose(0, 2, 1).reshape(XAX_k_01.shape[0], -1).T)
+        self.XAX_k_01T = np.ascontiguousarray(np.transpose(XAX_k_01,  axes=(2, 1, 0)).transpose(0, 2, 1).reshape(XAX_k_01.shape[2], -1).T)
+        self.XAX_k_21 = np.ascontiguousarray(XAX_k_21.transpose(0, 2, 1).reshape(XAX_k_21.shape[0], -1).T)
+        self.XAX_k_22 = np.ascontiguousarray(XAX_k_22.transpose(0, 2, 1).reshape(XAX_k_22.shape[0], -1).T)
+        self.XAX_k_31 = np.ascontiguousarray(XAX_k_31.transpose(0, 2, 1).reshape(XAX_k_31.shape[0], -1).T)
+        self.XAX_k_33 = np.ascontiguousarray(XAX_k_33.transpose(0, 2, 1).reshape(XAX_k_33.shape[0], -1).T)
 
-        self.block_A_k_00 = block_A_k_00.reshape(block_A_k_00.shape[0] * block_A_k_00.shape[1], block_A_k_00.shape[2] * block_A_k_00.shape[3]).T
-        self.block_A_k_01 = block_A_k_01.reshape(block_A_k_01.shape[0] * block_A_k_01.shape[1], block_A_k_01.shape[2] * block_A_k_01.shape[3]).T
-        self.block_A_k_01T = np.transpose(block_A_k_01, axes=(0, 2, 1, 3)).reshape(block_A_k_01.shape[0] * block_A_k_01.shape[2], block_A_k_01.shape[1] * block_A_k_01.shape[3]).T
-        self.block_A_k_21 = block_A_k_21.reshape(block_A_k_21.shape[0] * block_A_k_21.shape[1], block_A_k_21.shape[2] * block_A_k_21.shape[3]).T
-        self.block_A_k_22 = block_A_k_22.reshape(block_A_k_22.shape[0] * block_A_k_22.shape[1], block_A_k_22.shape[2] * block_A_k_22.shape[3]).T
-        self.block_A_k_31 = block_A_k_31.reshape(block_A_k_31.shape[0] * block_A_k_31.shape[1], block_A_k_31.shape[2] * block_A_k_31.shape[3]).T
-        self.block_A_k_33 = block_A_k_33.reshape(block_A_k_33.shape[0] * block_A_k_33.shape[1], block_A_k_33.shape[2] * block_A_k_33.shape[3]).T
+        self.block_A_k_00 = np.ascontiguousarray(block_A_k_00.reshape(block_A_k_00.shape[0] * block_A_k_00.shape[1], block_A_k_00.shape[2] * block_A_k_00.shape[3]).T)
+        self.block_A_k_01 = np.ascontiguousarray(block_A_k_01.reshape(block_A_k_01.shape[0] * block_A_k_01.shape[1], block_A_k_01.shape[2] * block_A_k_01.shape[3]).T)
+        self.block_A_k_01T = np.ascontiguousarray(np.transpose(block_A_k_01, axes=(0, 2, 1, 3)).reshape(block_A_k_01.shape[0] * block_A_k_01.shape[2], block_A_k_01.shape[1] * block_A_k_01.shape[3]).T)
+        self.block_A_k_21 = np.ascontiguousarray(block_A_k_21.reshape(block_A_k_21.shape[0] * block_A_k_21.shape[1], block_A_k_21.shape[2] * block_A_k_21.shape[3]).T)
+        self.block_A_k_22 = np.ascontiguousarray(block_A_k_22.reshape(block_A_k_22.shape[0] * block_A_k_22.shape[1], block_A_k_22.shape[2] * block_A_k_22.shape[3]).T)
+        self.block_A_k_31 = np.ascontiguousarray(block_A_k_31.reshape(block_A_k_31.shape[0] * block_A_k_31.shape[1], block_A_k_31.shape[2] * block_A_k_31.shape[3]).T)
+        self.block_A_k_33 = np.ascontiguousarray(block_A_k_33.reshape(block_A_k_33.shape[0] * block_A_k_33.shape[1], block_A_k_33.shape[2] * block_A_k_33.shape[3]).T)
 
-        self.XAX_kp1_00 = XAX_kp1_00.reshape(-1, R).T
-        self.XAX_kp1_01 = XAX_kp1_01.reshape(-1, R).T
-        self.XAX_kp1_01T = np.transpose(XAX_kp1_01,  axes=(2, 1, 0)).reshape(-1, R).T
-        self.XAX_kp1_21 = XAX_kp1_21.reshape(-1, R).T
-        self.XAX_kp1_22 = XAX_kp1_22.reshape(-1, R).T
-        self.XAX_kp1_31 = XAX_kp1_31.reshape(-1, R).T
-        self.XAX_kp1_33 = XAX_kp1_33.reshape(-1, R).T
+        self.XAX_kp1_00 = np.ascontiguousarray(XAX_kp1_00.reshape(-1, R).T)
+        self.XAX_kp1_01 = np.ascontiguousarray(XAX_kp1_01.reshape(-1, R).T)
+        self.XAX_kp1_01T = np.ascontiguousarray(np.transpose(XAX_kp1_01,  axes=(2, 1, 0)).reshape(-1, R).T)
+        self.XAX_kp1_21 = np.ascontiguousarray(XAX_kp1_21.reshape(-1, R).T)
+        self.XAX_kp1_22 = np.ascontiguousarray(XAX_kp1_22.reshape(-1, R).T)
+        self.XAX_kp1_31 = np.ascontiguousarray(XAX_kp1_31.reshape(-1, R).T)
+        self.XAX_kp1_33 = np.ascontiguousarray(XAX_kp1_33.reshape(-1, R).T)
 
         self.inv_I = inv_I
         self.r = r

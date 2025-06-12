@@ -409,8 +409,8 @@ def _tt_block_als(
 
     r_max_warm_up = min(10, r_max_final)
     size_limit = 0
+    x_cores = tt_rank_retraction(x_cores, [r_max_warm_up]*(d-1)) if x0 is not None else x_cores
     if not refinement:
-        x_cores = tt_rank_retraction(x_cores, [r_max_warm_up]*(d-1)) if x0 is not None else x_cores
         size_limit = (r_max_warm_up+10)**2*N[0]
 
     rx = np.array([1] + tt_ranks(x_cores) + [1])
@@ -418,7 +418,7 @@ def _tt_block_als(
     local_res_bwd = np.inf
     trunc_tol = tol/np.sqrt(d)
     refinement = refinement or size_limit == 0
-    r_maxes = [r_max_final]*nswp if refinement else np.concatenate(([r_max_warm_up], np.linspace(r_max_warm_up, r_max_final, nswp-2), [r_max_final])).astype(int)
+    r_maxes = np.concatenate(([r_max_warm_up], np.linspace(r_max_warm_up, r_max_final, nswp-2), [r_max_final])).astype(int)
 
     for swp, r_max in enumerate(r_maxes):
         x_cores, XAX, Xb, rx, local_res_bwd, rmax_record = _bck_sweep(
@@ -594,9 +594,7 @@ def tt_restarted_block_als(
         rhs = rhs - Ax
         rhs_norm = rhs.norm
         if rhs_norm > prev_rhs_norm:
-            if verbose:
-                print(f"\n\tTerminated on instability ({rhs_norm} > {prev_rhs_norm})!")
-            break
+            raise RuntimeError(f"Terminated on instability: ||rhs|| = {rhs_norm} > previous = {prev_rhs_norm}")
         elif rhs_norm < termination_tol:
             if verbose:
                 print(f"\n\tTerminated on global criterion,  Error={rhs_norm}")
@@ -605,6 +603,7 @@ def tt_restarted_block_als(
         if verbose:
             print(f"\n\tGlobal Error={rhs_norm}")
         prev_rhs_norm = rhs_norm
+        rank_restriction += 2*(2*rhs_norm > prev_rhs_norm)
         x_cores = tt_rank_reduce_py(tt_add(x_cores, new_x_cores), eps=eps)
     else:
         if verbose:
@@ -1115,20 +1114,8 @@ def tt_mat_mat_mul(mat1, mat2, op_tol, eps, verbose=False):
     return tt_approx_mat_mat_mul(mat1, mat2, tol=op_tol, verbose=verbose)
 
 
-def tt_approx_mat_vec_mul(A, d_vec, x0=None, kick_rank=None, nswp=50, tol=1e-6, verbose=False):
-    if verbose:
-        print(f"\nStarting MM solve with:\n \t {tol} \n \t sweeps: {nswp}")
-        t0 = time.time()
-    if x0 is None:
-        max_ranks = np.maximum((np.array(tt_ranks(A)) + np.array(tt_ranks(d_vec))) / 2, 2).astype(int)
-        x_cores = tt_random_gaussian(list(max_ranks), (A[0].shape[2], ))
-    else:
-        x_cores = x0
-        max_ranks = np.array(tt_ranks(x0))
 
-    if kick_rank is None:
-        kick_rank = np.maximum(((symmetric_powers_of_two(len(A)-1) - max_ranks) / (nswp / 2)), 2).astype(int)
-
+def cy_tt_approx_mat_vec_mul(A, d_vec, x0, kick_rank, nswp, tol, verbose):
     d = len(x_cores)
     rx = np.array([1] + tt_ranks(x_cores) + [1])
     N = np.array([c.shape[1] for c in x_cores])
@@ -1247,6 +1234,25 @@ def tt_approx_mat_vec_mul(A, d_vec, x0=None, kick_rank=None, nswp=50, tol=1e-6, 
     normx = np.exp(np.sum(np.log(normx)) / d)
 
     return [normx * core for core in x_cores]
+
+
+def tt_approx_mat_vec_mul(A, d_vec, x0=None, kick_rank=None, nswp=50, tol=1e-6, verbose=False):
+    if verbose:
+        print(f"\nStarting MM solve with:\n \t {tol} \n \t sweeps: {nswp}")
+        t0 = time.time()
+    if x0 is None:
+        max_ranks = np.maximum((np.array(tt_ranks(A)) + np.array(tt_ranks(d_vec))) / 2, 2).astype(int)
+        x_cores = tt_random_gaussian(list(max_ranks), (A[0].shape[2], ))
+    else:
+        x_cores = x0
+        max_ranks = np.array(tt_ranks(x0))
+
+    if kick_rank is None:
+        kick_rank = np.maximum(((symmetric_powers_of_two(len(A)-1) - max_ranks) / (nswp / 2)), 2).astype(int)
+
+    return cy_tt_approx_mat_vec_mul(A, d_vec, x_cores, kick_rank, nswp, tol, verbose)
+
+    
 
 
 def tt_mat_vec_mul(mat, vec, op_tol, eps, verbose=False):

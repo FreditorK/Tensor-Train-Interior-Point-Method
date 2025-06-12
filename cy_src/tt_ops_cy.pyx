@@ -1,5 +1,8 @@
 # tt_ops_cy.pyx
 # cython: language_level=3
+# cython: cdivision=True
+# cython: optimize.use_switch=True
+# distutils: language = c++
 
 cdef extern from "numpy/arrayobject.h":
     # Define NPY_NO_DEPRECATED_API for compatibility with numpy
@@ -17,7 +20,7 @@ cnp.import_array() # Initialize NumPy C-API
 @cython.wraparound(False)
 cpdef list tt_identity(int dim):
     cdef list result = [None] * dim  # Preallocate the list
-    cdef cnp.ndarray[cnp.float64_t, ndim=4] I = np.eye(2, dtype=np.float64).reshape(1, 2, 2, 1)
+    cdef cnp.ndarray[double, ndim=4] I = np.eye(2).reshape(1, 2, 2, 1)
     cdef int i
 
     for i in range(dim):
@@ -29,7 +32,7 @@ cpdef list tt_identity(int dim):
 @cython.wraparound(False)
 cpdef list tt_zero_matrix(int dim):
     cdef list result = [None] * dim  # Preallocate the list
-    cdef cnp.ndarray[cnp.float64_t, ndim=4] zeros_array = np.zeros((1, 2, 2, 1))
+    cdef cnp.ndarray[double, ndim=4] zeros_array = np.zeros((1, 2, 2, 1))
     cdef int i
 
     for i in range(dim):
@@ -41,7 +44,7 @@ cpdef list tt_zero_matrix(int dim):
 @cython.wraparound(False)
 cpdef list tt_one_matrix(int dim):
     cdef list result = [None] * dim
-    cdef cnp.ndarray[cnp.float64_t, ndim=4] ones_array = np.ones((1, 2, 2, 1))
+    cdef cnp.ndarray[double, ndim=4] ones_array = np.ones((1, 2, 2, 1))
     cdef int i
 
     for i in range(dim):
@@ -55,8 +58,8 @@ cpdef list tt_transpose(list matrix_tt):
     cdef Py_ssize_t split_idx = 0
     cdef Py_ssize_t iters = len(matrix_tt)
     cdef Py_ssize_t i
-    cdef cnp.ndarray[cnp.float64_t, ndim=4] core
-    cdef cnp.ndarray[cnp.float64_t, ndim=4] swapped_core
+    cdef cnp.ndarray[double, ndim=4] core
+    cdef cnp.ndarray[double, ndim=4] swapped_core
     cdef list transposed_cores = [None] * iters
 
     # Determine split index based on the maximum shape length
@@ -77,8 +80,8 @@ cpdef list tt_transpose(list matrix_tt):
 @cython.boundscheck(False)
 @cython.wraparound(False)
 cpdef list tt_ranks(list train_tt):
-    cdef Py_ssize_t n = len(train_tt)
-    cdef Py_ssize_t i
+    cdef int n = len(train_tt)
+    cdef int i
     cdef cnp.ndarray core
     cdef list ranks = [0] * (n - 1)  # Preallocate result list
 
@@ -91,8 +94,8 @@ cpdef list tt_ranks(list train_tt):
 @cython.boundscheck(False)
 @cython.wraparound(False)
 cpdef list tt_scale(float alpha, list train_tt):
-    cdef Py_ssize_t n = len(train_tt)
-    cdef Py_ssize_t i, idx = np.random.randint(0, n)
+    cdef int n = len(train_tt)
+    cdef int i, idx = np.random.randint(0, n)
     cdef list scaled_tt = [None] * n
     cdef cnp.ndarray core
 
@@ -113,9 +116,9 @@ cpdef list tt_scale(float alpha, list train_tt):
 @cython.boundscheck(False)
 @cython.wraparound(False)
 cpdef list tt_swap_all(list tt_train):
-    cdef Py_ssize_t n = len(tt_train)
+    cdef int n = len(tt_train)
     cdef list swapped_tt = [None] * n  # preallocate list
-    cdef Py_ssize_t i
+    cdef int i
     cdef cnp.ndarray core
 
     for i in range(n):
@@ -125,6 +128,7 @@ cpdef list tt_swap_all(list tt_train):
     return swapped_tt
 
 @cython.boundscheck(False)
+@cython.wraparound(False)
 cpdef tt_rl_orthogonalise(list train_tt):
     cdef int dim = len(train_tt)
     cdef int i
@@ -134,7 +138,7 @@ cpdef tt_rl_orthogonalise(list train_tt):
     cdef cnp.ndarray q_T, r
     if dim == 1:
         return train_tt
-    for i in range(dim - 1, -1, -1):
+    for i in range(dim - 1, 0, -1):
         shape_i = train_tt[i].shape
         shape_im1 = train_tt[i - 1].shape
         shape_length = len(shape_i)
@@ -149,7 +153,7 @@ cpdef tt_rl_orthogonalise(list train_tt):
 
         train_tt[i] = q_T.T.reshape(new_rank, *shape_i[1:])
         train_tt[i - 1] = (
-                train_tt[i - 1].reshape(-1, shape_i[0]) @ r.T
+                train_tt[i - 1].reshape(np.prod(shape_im1[:shape_length-1]), shape_i[0]) @ r.T
         ).reshape(*shape_im1[:shape_length-1], new_rank)
 
     return train_tt
@@ -221,6 +225,7 @@ cpdef list tt_rank_reduce(list train_tt, double eps=1e-18):
 
     return train_tt
 
+@cython.boundscheck(False)
 cpdef cnp.ndarray _block_diag_tensor(object tensor_1, object tensor_2):
     """
     For internal use: Concatenates two tensors to a block diagonal tensor.
@@ -235,6 +240,7 @@ cpdef cnp.ndarray _block_diag_tensor(object tensor_1, object tensor_2):
     result[(slice(shape_1[0], shape_1[0] + shape_2[0]), *N, slice(shape_1[-1], shape_1[-1] + shape_2[-1]))] = tensor_2
     return result
 
+@cython.boundscheck(False)
 cpdef tt_add(list train_1_tt, list train_2_tt):
     """
     Adds two tensor trains
@@ -250,7 +256,6 @@ cpdef tt_add(list train_1_tt, list train_2_tt):
         ]
     else:
         return [train_1_tt[0] + train_2_tt[0]]
-
 
 
 @cython.boundscheck(False)
@@ -381,3 +386,117 @@ cpdef list tt_mask_rank_reduce(list train_tt, list mask_tt, double eps=1e-18):
     factor = pow(sum_eps_sq, 1.0 / (2 * dim))
 
     return tt_add(train_tt, [factor*c for c in mask_tt])
+
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cdef tuple swap_cores(cnp.ndarray core_a, cnp.ndarray core_b, double eps):
+    cdef cnp.ndarray tensor_contraction, transposed_contraction, reshaped_matrix
+    cdef cnp.ndarray u, s, v, core_a_new, core_b_new
+    cdef int r_pruned
+
+    if core_a.ndim == 3:
+        tensor_contraction = np.tensordot(core_a, core_b, axes=([2], [0]))
+        transposed_contraction = tensor_contraction.transpose((0, 2, 1, 3))
+        reshaped_matrix = transposed_contraction.reshape(
+            core_a.shape[0] * core_b.shape[1], -1)
+
+        u, s, v = scp.linalg.svd(reshaped_matrix, full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
+        r_pruned = prune_singular_vals(s, eps)
+
+        core_a_new = np.reshape(u[:, :r_pruned] * s[:r_pruned].reshape(1, -1),
+                                (core_a.shape[0], core_b.shape[1], -1))
+        core_b_new = np.reshape(v[:r_pruned, :],
+                                (-1, core_a.shape[1], core_b.shape[2]))
+
+        return core_a_new, core_b_new
+    tensor_contraction = np.tensordot(core_a, core_b, axes=([3], [0]))
+    transposed_contraction = tensor_contraction.transpose((0, 3, 4, 1, 2, 5))
+    reshaped_matrix = transposed_contraction.reshape(
+        core_a.shape[0] * core_b.shape[1] * core_b.shape[2], -1)
+
+    u, s, v = scp.linalg.svd(reshaped_matrix, full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
+    r_pruned = prune_singular_vals(s, eps)
+
+    core_a_new = np.reshape(u[:, :r_pruned] * s[:r_pruned].reshape(1, -1),
+                            (core_a.shape[0], core_b.shape[1], core_b.shape[2], -1))
+    core_b_new = np.reshape(v[:r_pruned, :],
+                            (-1, core_a.shape[1], core_a.shape[2], core_b.shape[3]))
+
+    return core_a_new, core_b_new
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cpdef list tt_fast_matrix_vec_mul(list matrix_tt, list vec_tt, double eps=1e-18):
+    """
+    Cython implementation of fast matrix-vector multiplication for Tensor Trains.
+    Based on the algorithm described in https://arxiv.org/pdf/2410.19747
+    """
+    cdef int dim = len(matrix_tt)
+    cdef double loop_eps = eps / np.sqrt(dim - 1) if dim > 1 else eps
+    cdef list cores = [np.transpose(c, (2, 1, 0)) for c in reversed(vec_tt)]
+
+    cdef int i, j
+    for i in range(dim):
+        cores[0] = np.tensordot(matrix_tt[dim - i - 1], cores[0], axes=([3, 2], [0, 1]))
+
+        if i != dim - 1:
+            for j in range(i, -1, -1):
+                cores[j], cores[j + 1] = swap_cores(cores[j], cores[j + 1], loop_eps)
+
+    return cores
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cpdef list tt_fast_mat_mat_mul(list matrix_tt_1, list matrix_tt_2, double eps=1e-18):
+    cdef int dim = len(matrix_tt_1)
+    cdef double loop_eps = eps / np.sqrt(dim - 1) if dim > 1 else eps
+    cdef list cores = [np.transpose(c, (3, 1, 2, 0)) for c in reversed(matrix_tt_2)]
+
+    cdef int i, j
+    for i in range(dim):
+        cores[0] = np.tensordot(matrix_tt_1[dim - i - 1], cores[0], axes=([3, 2], [0, 1]))
+
+        if i != dim - 1:
+            for j in range(i, -1, -1):
+                cores[j], cores[j + 1] = swap_cores(cores[j], cores[j + 1], loop_eps)
+
+    return cores
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cpdef list tt_fast_hadamard(list train_tt_1, list train_tt_2, double eps=1e-18):
+    cdef int dim = len(train_tt_1)
+    cdef double loop_eps = eps / np.sqrt(dim - 1) if dim > 1 else eps
+    cdef list cores
+    cdef int i, j
+    cdef cnp.ndarray current_core_1, current_core_2, tensor_contraction, diag_contraction
+    if len(train_tt_1[0].shape) == 4 and len(train_tt_2[0].shape) == 4:
+        cores = [np.transpose(c, (3, 1, 2, 0)) for c in reversed(train_tt_2)]
+        for i in range(dim):
+            current_core_1 = train_tt_1[dim - i - 1]
+            current_core_2 = cores[0]
+            tensor_contraction = np.tensordot(current_core_1, current_core_2, axes=([3], [0]))
+            diag_contraction = np.diagonal(tensor_contraction, axis1=1, axis2=3)
+            diag_contraction = np.diagonal(diag_contraction, axis1=1, axis2=2)
+            cores[0] = diag_contraction.transpose(0, 2, 3, 1)
+
+            if i != dim - 1:
+                for j in range(i, -1, -1):
+                    cores[j], cores[j + 1] = swap_cores(cores[j], cores[j + 1], loop_eps)
+
+        return cores
+    else:
+        cores = [np.transpose(c, (2, 1, 0)) for c in reversed(train_tt_2)]
+        for i in range(dim):
+            current_core_1 = train_tt_1[dim - i - 1]
+            current_core_2 = cores[0]
+            tensor_contraction = np.tensordot(current_core_1, current_core_2, axes=([2],[0]))
+            diag_contraction = np.diagonal(tensor_contraction, axis1=1, axis2=2)
+            cores[0] = diag_contraction.transpose(0, 2, 1)
+
+            if i != dim - 1:
+                for j in range(i, -1, -1):
+                    cores[j], cores[j + 1] = swap_cores(cores[j], cores[j + 1], loop_eps)
+
+        return cores

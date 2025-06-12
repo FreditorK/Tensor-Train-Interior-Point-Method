@@ -230,80 +230,6 @@ def tt_normalise(train_tt, radius=1):
     factor = np.divide(radius, np.sqrt(tt_inner_prod(train_tt, train_tt)))
     return tt_scale(factor, train_tt)
 
-def swap_cores(core_a, core_b, eps):
-    if len(core_a.shape) == 3 and len(core_b.shape) == 3:
-        u, s, v = scp.linalg.svd(einsum("rms,snR->rnmR", core_a, core_b, optimize=[(0, 1)]).reshape(core_a.shape[0] * core_b.shape[1], -1), full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
-        r = prune_singular_vals(s, eps)
-        return np.reshape(u[:, :r] * s[:r].reshape(1, -1), (core_a.shape[0], core_b.shape[1], -1)), np.reshape(v[:r, :],(-1, core_a.shape[1], core_b.shape[2]))
-    elif len(core_a.shape) == 4 and len(core_b.shape) == 4:
-        # TODO: Can we split them up before
-        u, s, v = scp.linalg.svd(einsum("rmas,snbR->rnbmaR", core_a, core_b, optimize=[(0, 1)]).reshape(core_a.shape[0] * core_b.shape[1] * core_b.shape[2], -1), full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
-        r = prune_singular_vals(s, eps)
-        return np.reshape(u[:, :r] * s[:r].reshape(1, -1), (core_a.shape[0], core_b.shape[1], core_b.shape[2], -1)), np.reshape(v[:r, :], (-1, core_a.shape[1], core_a.shape[2], core_b.shape[3]))
-    else:
-        raise Exception("The cores must be wither 3d or 4d tensors.")
-
-
-def tt_fast_matrix_vec_mul(matrix_tt: List[np.array], vec_tt: List[np.array], eps=1e-18) -> List[np.array]:
-    """ https://arxiv.org/pdf/2410.19747 """
-    dim = len(matrix_tt)
-    eps = eps / np.sqrt(dim-1)
-
-    cores = [np.transpose(c, (2, 1, 0)) for c in reversed(vec_tt)]
-    for i in range(dim):
-        cores[0] = einsum("mabk,kbn->man", matrix_tt[dim - i - 1], cores[0], optimize=[(0, 1)])
-
-        if i != dim - 1:
-            for j in range(i, -1, -1):
-                cores[j], cores[j + 1] = swap_cores(cores[j], cores[j + 1], eps)
-
-    return cores
-
-def tt_fast_mat_mat_mul(matrix_tt_1, matrix_tt_2, eps=1e-18):
-    dim= len(matrix_tt_1)
-    eps = eps / np.sqrt(dim-1)
-
-    cores = [np.transpose(c, (3, 1, 2, 0)) for c in reversed(matrix_tt_2)]
-    for i in range(dim):
-        cores[0] = einsum("mabk,kbcn->macn", matrix_tt_1[dim - i - 1], cores[0], optimize=[(0, 1)])
-
-        if i != dim - 1:
-            for j in range(i, -1, -1):
-                cores[j], cores[j + 1] = swap_cores(cores[j], cores[j + 1], eps)
-
-    return cores
-
-
-def tt_fast_hadammard(train_tt_1, train_tt_2, eps=1e-18):
-    dim = len(train_tt_1)
-    eps = eps / np.sqrt(dim-1)
-
-    if len(train_tt_1[0].shape) == 4 and len(train_tt_2[0].shape) == 4:
-
-        cores = [np.transpose(c, (3, 1, 2, 0)) for c in reversed(train_tt_2)]
-        for i in range(dim):
-            cores[0] = cached_einsum("maAk,kbBn,AB,ab->maAn", train_tt_1[dim - i - 1], cores[0],
-                                   np.eye(train_tt_1[dim - i - 1].shape[1], dtype=cores[0].dtype),
-                                   np.eye(train_tt_1[dim - i - 1].shape[1], dtype=cores[0].dtype))
-
-            if i != dim - 1:
-                for j in range(i, -1, -1):
-                    cores[j], cores[j + 1] = swap_cores(cores[j], cores[j + 1], eps)
-
-        return cores
-    else:
-
-        cores = [np.transpose(c, (2, 1, 0)) for c in reversed(train_tt_2)]
-        for i in range(dim):
-            cores[0] = cached_einsum("mak,kbn,ab->man", train_tt_1[dim - i - 1], cores[0],
-                                   np.eye(train_tt_1[dim - i - 1].shape[1], dtype=cores[0].dtype))
-
-            if i != dim - 1:
-                for j in range(i, -1, -1):
-                    cores[j], cores[j + 1] = swap_cores(cores[j], cores[j + 1], eps)
-
-        return cores
-
 
 def tt_kron(matrix_tt_1, matrix_tt_2):
     # TODO:  DO SVD right away to not be overbearing to memory
@@ -462,7 +388,7 @@ def tt_random_graph(dim, max_rank, eps=1e-9):
     rank = 0
     while rank < max_rank - 1 or tt_inner_prod(graph, graph) < eps:
         new_graph = tt_random_rank_one(dim)
-        masked_new_graph = tt_fast_hadammard(tt_sub(mask_matrix, graph), new_graph, eps)
+        masked_new_graph = tt_fast_hadamard(tt_sub(mask_matrix, graph), new_graph, eps)
         graph = tt_rank_reduce(tt_add(graph, masked_new_graph), eps)
         rank = np.max(tt_ranks(graph)) - (tt_inner_prod(graph,  graph) < eps)
     return graph
