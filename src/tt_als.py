@@ -594,6 +594,8 @@ def tt_restarted_block_als(
         rhs = rhs - Ax
         rhs_norm = rhs.norm
         if rhs_norm > prev_rhs_norm:
+            if prev_rhs_norm < block_b.norm:
+                return x_cores, prev_rhs_norm 
             raise RuntimeError(f"Terminated on instability: ||rhs|| = {rhs_norm} > previous = {prev_rhs_norm}")
         elif rhs_norm < termination_tol:
             if verbose:
