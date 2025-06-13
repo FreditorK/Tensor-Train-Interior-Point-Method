@@ -654,7 +654,7 @@ def tt_ipm(
     lhs = lhs_skeleton
 
     while finishing_steps > 0:
-        status.eta = max(0.5*status.eta, 0.5*feasibility_tol)
+        status.eta = 1e-3
         iteration += 1
         status.aho_direction = (iteration > warm_up)
         status.is_last_iter = status.is_last_iter or (max_iter - max_refinement < iteration)

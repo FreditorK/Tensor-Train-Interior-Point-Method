@@ -45,10 +45,10 @@ class TTBlockVector:
     def scale(self, s):
         self._data = {key: tt_scale(1/s, value) for (key, value) in self._data.items()}
 
-    def __sub__(self, other):
+    def sub(self, other, op_tol):
         block_vec = TTBlockVector()
         for i in self._data.keys():
-            block_vec[i] = tt_rank_reduce(tt_sub(self.get_row(i), other.get_row(i)), 1e-12)
+            block_vec[i] = tt_rank_reduce(tt_sub(self.get_row(i), other.get_row(i)), op_tol)
         return block_vec
 
 
@@ -497,7 +497,7 @@ def _default_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, prev
 
     linear_op = scp.sparse.linalg.LinearOperator((block_size * m, block_size * m), matvec=mat_vec)
     max_iter = min(max(2 * int(np.ceil(block_res_old / termination_tol)), 2), 100)
-    solution_now, info = scp.sparse.linalg.lgmres(linear_op, np.transpose(
+    solution_now, _ = scp.sparse.linalg.lgmres(linear_op, np.transpose(
         rhs - block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution), (1, 0, 2, 3)).reshape(-1, 1), rtol=1e-3*block_res_old, maxiter=max_iter)
     solution_now = np.transpose(solution_now.reshape(*x_shape), (1, 0, 2, 3))
 
@@ -572,7 +572,7 @@ def tt_restarted_block_als(
             print(f"\n\tTerminated on local criterion,  Error<{termination_tol}")
         return x_cores, res
     Ax = block_A.matvec(x_cores, op_tol)
-    rhs = rhs - Ax
+    rhs = rhs.sub(Ax, 0.1*op_tol)
     rhs_norm = rhs.norm
     if rhs_norm < termination_tol:
         if verbose:
@@ -591,7 +591,7 @@ def tt_restarted_block_als(
             x_cores = tt_rank_reduce_py(tt_add(x_cores, new_x_cores), eps=eps)
             break
         Ax = block_A.matvec(new_x_cores, op_tol)
-        rhs = rhs - Ax
+        rhs = rhs.sub(Ax, 0.1*op_tol)
         rhs_norm = rhs.norm
         if rhs_norm > prev_rhs_norm:
             if prev_rhs_norm < block_b.norm:
@@ -1111,7 +1111,7 @@ def tt_approx_mat_mat_mul(A, D, x0=None, kick_rank=None, nswp=50, tol=1e-6, verb
 
 
 def tt_mat_mat_mul(mat1, mat2, op_tol, eps, verbose=False):
-    if np.max(np.array(tt_ranks(mat1))*np.array(tt_ranks(mat2))) <= 2**len(mat1):
+    if np.max((np.array(tt_ranks(mat1)) + np.array(tt_ranks(mat2)))/2) <= 30:
         return tt_rank_reduce(tt_fast_mat_mat_mul(mat1, mat2, eps), eps=op_tol)
     return tt_approx_mat_mat_mul(mat1, mat2, tol=op_tol, verbose=verbose)
 
@@ -1251,7 +1251,7 @@ def tt_approx_mat_vec_mul(A, d_vec, x0=None, kick_rank=None, nswp=50, tol=1e-6, 
 
 
 def tt_mat_vec_mul(mat, vec, op_tol, eps, verbose=False):
-    if np.max(np.array(tt_ranks(mat))*np.array(tt_ranks(vec))) <= 2**len(mat):
+    if np.max((np.array(tt_ranks(mat)) + np.array(tt_ranks(vec)))/2) <= 30:
         return tt_rank_reduce(tt_fast_matrix_vec_mul(mat, vec, eps), op_tol)
     return tt_approx_mat_vec_mul(mat, vec, tol=op_tol, verbose=verbose)
 

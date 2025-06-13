@@ -9,9 +9,9 @@ cdef extern from "numpy/arrayobject.h":
     ctypedef void npy_no_deprecated_api
 
 cdef extern from "lapacke.h":
-    void getrf_(int *m, int *n, double *a, int *lda, int *ipiv, int *info)
-    void getrs_(char *trans, int *n, int *nrhs, double *a, int *lda,
-                int *ipiv, double *b, int *ldb, int *info)
+    void dgetrf_(int *m, int *n, double *a, int *lda, int *ipiv, int *info) nogil
+    void dgetrs_(char *trans, int *n, int *nrhs, double *a, int *lda,
+                int *ipiv, double *b, int *ldb, int *info, int trans_len) nogil
 
 import numpy as np
 cimport numpy as cnp  # This allows Cython to understand NumPy's C-API
@@ -22,6 +22,48 @@ cnp.import_array() # Initialize NumPy C-API
 
 
 from scipy.linalg.cython_lapack cimport dtrtrs
+
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cdef cnp.ndarray[double, ndim=2] lu_solve(cnp.ndarray[double, ndim=2] A, cnp.ndarray[double, ndim=2] b):
+    cdef cnp.ndarray[double, ndim=2] A_fact
+    if A.flags.c_contiguous:
+        A_fact = A
+    else:
+        A_fact = np.ascontiguousarray(A)
+
+    cdef cnp.ndarray[double, ndim=2] x
+    if b.flags.f_contiguous:
+        x = b
+    else:
+        x = np.asfortranarray(b)
+
+    cdef int m = A_fact.shape[0]
+    cdef int n = A_fact.shape[1]
+
+    cdef int nrhs = 1
+    cdef int lda = n
+    cdef int ldb = m
+    cdef int info = 0
+    cdef cnp.ndarray[int, ndim=1] ipiv = np.empty(m, dtype=np.int32)
+
+    with nogil:
+        dgetrf_(&m, &n, &A_fact[0, 0], &lda, &ipiv[0], &info)
+
+    if info < 0:
+        raise ValueError('dgetrf: illegal value in argument %d' % -info)
+    elif info > 0:
+        raise ValueError('dgetrf: U(%d, %d) is exactly zero, matrix is singular' % (info, info))
+
+    with nogil:
+        dgetrs_(b'T', &n, &nrhs, &A_fact[0, 0], &lda, &ipiv[0], &x[0, 0], &ldb, &info, 1)
+
+    if info != 0:
+        # dgetrs does not return positive info values.
+        raise ValueError('dgetrs: illegal value in argument %d' % -info)
+        
+    return x
 
 
 @cython.boundscheck(False)
@@ -198,7 +240,7 @@ cdef class SchurSolver:
         b = self.mR_p - mL_eq @ b_temp_solve - A @ previous_solution[:, 0].reshape(-1, 1)
         
         # Solve for the first part of the solution
-        sol_0 = scp.linalg.solve(A, b, check_finite=False, overwrite_a=True, overwrite_b=True).reshape(self.r, self.n, self.R)
+        sol_0 = lu_solve(A, b).reshape(self.r, self.n, self.R)
         solution_now[:, 0] = sol_0 + previous_solution[:, 0]
         
         # Calculate the second part of the solution
