@@ -365,6 +365,7 @@ def _fwd_sweep(
 
 
 def _tt_block_als(
+        scale_rhs,
         block_A,
         block_b,
         tol,
@@ -384,8 +385,7 @@ def _tt_block_als(
     x_shape = model_entry[0].shape[1:-1]
 
     # scale residuals
-    rescale = max(block_b.norm, 1e-6)
-    block_b.scale(rescale)
+    block_b.scale(scale_rhs)
 
     if local_solver is None:
         local_solver = _default_local_solver
@@ -475,9 +475,9 @@ def _tt_block_als(
         print('\tTime: ', time.time() - t0)
         print('\tTime per sweep: ', (time.time() - t0) / (swp+1), flush=True)
 
-    block_b.scale(1/rescale)
+    block_b.scale(1/scale_rhs)
 
-    return tt_scale(rescale, x_cores), min(local_res_fwd, local_res_bwd)
+    return tt_scale(scale_rhs, x_cores), min(local_res_fwd, local_res_bwd)
 
 def _default_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous_solution, _, termination_tol):
     x_shape = previous_solution.shape
@@ -566,7 +566,8 @@ def tt_restarted_block_als(
         verbose=False
 ):
     rhs = block_b
-    x_cores, res = _tt_block_als(block_A, rhs, op_tol, termination_tol, eps, inner_m, rank_restriction, x0, local_solver, refinement, verbose)
+    orig_rhs_norm = rhs.norm
+    x_cores, res = _tt_block_als(orig_rhs_norm, block_A, rhs, op_tol, termination_tol, eps, inner_m, rank_restriction, x0, local_solver, refinement, verbose)
     if res < termination_tol:
         if verbose:
             print(f"\n\tTerminated on local criterion,  Error<{termination_tol}")
@@ -574,17 +575,16 @@ def tt_restarted_block_als(
     Ax = block_A.matvec(x_cores, op_tol)
     rhs = rhs.sub(Ax, 0.1*op_tol)
     rhs_norm = rhs.norm
-    if rhs_norm < termination_tol:
+    if rhs_norm < termination_tol*orig_rhs_norm:
         if verbose:
             print(f"\n\tTerminated on global criterion,  Error={rhs_norm}")
         return x_cores, res
-    prev_rhs_norm = rhs_norm
     if verbose:
         print(f"\n\tGlobal Error={rhs_norm}")
     for i in range(1, num_restarts):
         if verbose:
             print(f"\n\t---Restart {i}")
-        new_x_cores, res = _tt_block_als(block_A, rhs, op_tol, termination_tol, eps, inner_m, rank_restriction, None, local_solver, refinement, verbose)
+        new_x_cores, res = _tt_block_als(rhs_norm, block_A, rhs, op_tol, termination_tol, eps, inner_m, rank_restriction, None, local_solver, refinement, verbose)
         if res < termination_tol:
             if verbose:
                 print(f"\n\tTerminated on local criterion,  Error<{termination_tol}")
@@ -592,20 +592,21 @@ def tt_restarted_block_als(
             break
         Ax = block_A.matvec(new_x_cores, op_tol)
         rhs = rhs.sub(Ax, 0.1*op_tol)
+        prev_rhs_norm = rhs_norm
         rhs_norm = rhs.norm
         if rhs_norm > prev_rhs_norm:
-            if prev_rhs_norm < block_b.norm:
+            if prev_rhs_norm < orig_rhs_norm:
+                if verbose:
+                    print((f"Terminated on instability: ||rhs|| = {rhs_norm} > previous = {prev_rhs_norm}"))
                 return x_cores, prev_rhs_norm 
             raise RuntimeError(f"Terminated on instability: ||rhs|| = {rhs_norm} > previous = {prev_rhs_norm}")
-        elif rhs_norm < termination_tol:
+        elif rhs_norm < termination_tol*prev_rhs_norm:
             if verbose:
                 print(f"\n\tTerminated on global criterion,  Error={rhs_norm}")
             x_cores = tt_rank_reduce_py(tt_add(x_cores, new_x_cores), eps=eps)
             break
         if verbose:
             print(f"\n\tGlobal Error={rhs_norm}")
-        prev_rhs_norm = rhs_norm
-        rank_restriction += 2*(2*rhs_norm > prev_rhs_norm)
         x_cores = tt_rank_reduce_py(tt_add(x_cores, new_x_cores), eps=eps)
     else:
         if verbose:
