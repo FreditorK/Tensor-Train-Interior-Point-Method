@@ -565,6 +565,10 @@ def tt_restarted_block_als(
         refinement=False,
         verbose=False
 ):
+    if verbose:
+        print("Starting Restarted TT-ALS.")
+        for (i, j) in block_A:
+            print(f"{i,  j}: {tt_ranks(block_A[i, j])}")
     rhs = block_b
     orig_rhs_norm = rhs.norm
     if orig_rhs_norm < op_tol:
