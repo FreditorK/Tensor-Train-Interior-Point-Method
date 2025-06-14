@@ -605,11 +605,11 @@ def tt_restarted_block_als(
         rhs = rhs.sub(Ax, 0.1*op_tol)
         prev_rhs_norm = rhs_norm
         rhs_norm = rhs.norm
-        if rhs_norm > prev_rhs_norm:
-            if prev_rhs_norm >  orig_rhs_norm:
-                raise RuntimeError(f"Terminated on instability: ||rhs|| = {rhs_norm} > previous = {prev_rhs_norm}")
+        if rhs_norm >= prev_rhs_norm:
+            if prev_rhs_norm >=  orig_rhs_norm:
+                raise RuntimeError(f"Terminated on instability: ||rhs|| = {prev_rhs_norm} > previous = {orig_rhs_norm}")
             if verbose:
-                print(f"Terminated on instability: ||rhs|| = {rhs_norm} > previous = {prev_rhs_norm}")
+                print(f"\n\t Terminated on instability: ||rhs|| = {rhs_norm} > previous = {prev_rhs_norm}")
             return x_cores, prev_rhs_norm 
         elif rhs_norm < termination_tol*orig_rhs_norm:
             if verbose:

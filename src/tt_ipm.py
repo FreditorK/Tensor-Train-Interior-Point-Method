@@ -711,38 +711,40 @@ def tt_ipm(
             print(f"Step sizes: {x_step_size}, {z_step_size}")
 
         if Delta_X_tt is None and Delta_Z_tt is None:
-            break
-
-        X_tt, Z_tt = _update(x_step_size, z_step_size, X_tt, Z_tt, Delta_X_tt, Delta_Z_tt, status)
-
-        # TODO: transpose without reshape
-        if z_step_size > 1e-5:
-            Y_tt = tt_reshape(_tt_symmetrise(tt_reshape(tt_add(Y_tt, tt_scale(z_step_size, Delta_Y_tt)), (2, 2)), op_tol), (4, ))
-
-        if status.ineq_status is IneqStatus.ACTIVE:
-            if z_step_size > 1e-5:
-                if status.is_last_iter:
-                    T_tt = _tt_symmetrise(tt_add(T_tt, tt_scale(z_step_size, Delta_T_tt)), op_tol)
-                else:
-                    T_tt = _tt_mask_symmetrise(tt_add(T_tt, tt_scale(z_step_size, Delta_T_tt)), ineq_mask, op_tol)
-        elif status.ineq_status is IneqStatus.SETTING_INACTIVE:
-            solver = solver_eq
-            lhs = lhs_skeleton.get_submatrix(2, 2)
-            status.mals_delta0 = None
-            status.ineq_status = IneqStatus.INACTIVE
-            T_tt = tt_scale(status.eps, ineq_mask)
-        elif status.ineq_status is IneqStatus.SETTING_ACTIVE:
-            solver = solver_ineq
-            lhs = lhs_skeleton
-            status.mals_delta0 = None
-            status.ineq_status = IneqStatus.ACTIVE
-
-        if status.is_last_iter:
-            if abs(ZX) + abs(TX) <= abs_tol and status.primal_error < abs_tol and status.dual_error < abs_tol:
-                finishing_steps -= max_refinement
+            if status.is_last_iter:
+                break
             else:
-                finishing_steps -= 1
-            status.kkt_iterations += (finishing_steps == 1)
+                status.is_last_iter = True
+        else:
+            X_tt, Z_tt = _update(x_step_size, z_step_size, X_tt, Z_tt, Delta_X_tt, Delta_Z_tt, status)
+
+            if z_step_size > 1e-5:
+                Y_tt = tt_reshape(_tt_symmetrise(tt_reshape(tt_add(Y_tt, tt_scale(z_step_size, Delta_Y_tt)), (2, 2)), op_tol), (4, ))
+
+            if status.ineq_status is IneqStatus.ACTIVE:
+                if z_step_size > 1e-5:
+                    if status.is_last_iter:
+                        T_tt = _tt_symmetrise(tt_add(T_tt, tt_scale(z_step_size, Delta_T_tt)), op_tol)
+                    else:
+                        T_tt = _tt_mask_symmetrise(tt_add(T_tt, tt_scale(z_step_size, Delta_T_tt)), ineq_mask, op_tol)
+            elif status.ineq_status is IneqStatus.SETTING_INACTIVE:
+                solver = solver_eq
+                lhs = lhs_skeleton.get_submatrix(2, 2)
+                status.mals_delta0 = None
+                status.ineq_status = IneqStatus.INACTIVE
+                T_tt = tt_scale(status.eps, ineq_mask)
+            elif status.ineq_status is IneqStatus.SETTING_ACTIVE:
+                solver = solver_ineq
+                lhs = lhs_skeleton
+                status.mals_delta0 = None
+                status.ineq_status = IneqStatus.ACTIVE
+
+            if status.is_last_iter:
+                if abs(ZX) + abs(TX) <= abs_tol and status.primal_error < abs_tol and status.dual_error < abs_tol:
+                    finishing_steps -= max_refinement
+                else:
+                    finishing_steps -= 1
+                status.kkt_iterations += (finishing_steps == 1)
 
         if (
                 abs(prev_primal_error - status.primal_error) < 0.04*gap_tol
