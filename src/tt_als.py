@@ -586,7 +586,20 @@ def tt_restarted_block_als(
             print(f"\n\tTerminated on global criterion,  Relative Error={rhs_norm / orig_rhs_norm}")
         return x_cores, res
     elif orig_rhs_norm < rhs_norm:
-        raise RuntimeError(f"Terminated on instability: ||rhs|| = {rhs_norm} > previous = {orig_rhs_norm}")
+        return tt_restarted_block_als(
+            block_A,
+            block_b,
+            rank_restriction,
+            op_tol,
+            termination_tol,
+            eps,
+            num_restarts=3,
+            inner_m=inner_m+2,
+            x0=x_cores,
+            local_solver=local_solver,
+            refinement=refinement,
+            verbose=verbose
+        )
     if verbose:
         print(f"\n\tRelative Error={rhs_norm / orig_rhs_norm}")
     for i in range(1, num_restarts):
@@ -603,11 +616,9 @@ def tt_restarted_block_als(
         prev_rhs_norm = rhs_norm
         rhs_norm = rhs.norm
         if rhs_norm > prev_rhs_norm:
-            if prev_rhs_norm < orig_rhs_norm:
-                if verbose:
-                    print((f"Terminated on instability: ||rhs|| = {rhs_norm} > previous = {prev_rhs_norm}"))
-                return x_cores, prev_rhs_norm 
-            raise RuntimeError(f"Terminated on instability: ||rhs|| = {rhs_norm} > previous = {prev_rhs_norm}")
+            if verbose:
+                print((f"Terminated on instability: ||rhs|| = {rhs_norm} > previous = {prev_rhs_norm}"))
+            return x_cores, prev_rhs_norm 
         elif rhs_norm < termination_tol*orig_rhs_norm:
             if verbose:
                 print(f"\n\tTerminated on global criterion,  Relative Error={rhs_norm / orig_rhs_norm}")
