@@ -655,7 +655,7 @@ def tt_ipm(
 
     while finishing_steps > 0:
         iteration += 1
-        status.eta = 1e-2 #max(10*status.op_tol, min(1e-2, 100*status.mu))
+        status.eta = 1e-1 #max(10*status.op_tol, min(1e-2, 100*status.mu))
         status.aho_direction = (iteration > warm_up)
         status.is_last_iter = status.is_last_iter or (max_iter - max_refinement < iteration)
         ZX = tt_inner_prod(Z_tt, X_tt)
