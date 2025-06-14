@@ -37,6 +37,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
     rhs[:, 2] = cached_einsum('br,bmB,BR->rmR', Xb_k[2], block_b_k[2], Xb_k1[2]) if 2 in block_b_k else 0
     inv_I = np.divide(1, cached_einsum('lsr,smnS,LSR->lmL', XAX_k[1, 2], block_A_k[1, 2], XAX_k1[1, 2]))
     block_res_old = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution).__isub__(rhs))
+    size_limit = 0
     if m <= size_limit:
         schur_solver = SchurSolver(
             XAX_k[0, 0], XAX_k[0, 1], XAX_k[2, 1], XAX_k[2, 2],
@@ -67,13 +68,13 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         local_rhs[1] += rhs[:, 2]
         local_rhs[1] -= cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[2, 2], block_A_k[2, 2], XAX_k1[2, 2], inv_I*rhs[:, 1])
 
-        max_iter = min(max(2 * int(np.ceil(block_res_old / termination_tol)), 2), 50)
+        max_iter = min(max(2 * int(np.ceil(block_res_old / termination_tol)), 2), 20)
         solution_now, info = lgmres(
             Op,
             local_rhs.ravel(),
             rtol=1e-10,
             outer_k=5,
-            inner_m=20,
+            inner_m=30,
             maxiter=max_iter
         )
         solution_now = np.transpose(solution_now.reshape(2, x_shape[0], x_shape[2], x_shape[3]), (1, 0, 2, 3)).__iadd__(previous_solution[:, :2])
@@ -155,13 +156,13 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
         local_rhs[1] += rhs[:, 2] - cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[2, 2], block_A_k[2, 2],
                                                   XAX_k1[2, 2], inv_I * rhs[:, 1])
         local_rhs[2] += rhs[:, 3]
-        max_iter = min(max(2 * int(np.ceil(block_res_old_scalar / termination_tol)), 2), 50)
+        max_iter = min(max(2 * int(np.ceil(block_res_old_scalar / termination_tol)), 2), 20)
         solution_now, _ = lgmres(
             linear_op,
             local_rhs.ravel(),
             rtol=1e-10,
             outer_k=5,
-            inner_m=20,
+            inner_m=30,
             maxiter=max_iter
         )
         solution_now = np.transpose(solution_now.reshape(3, x_shape[0], x_shape[2], x_shape[3]),
