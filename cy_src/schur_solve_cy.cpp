@@ -23748,7 +23748,7 @@ static int __pyx_pf_6cy_src_14schur_solve_cy_11SchurSolver___init__(struct __pyx
  *     @cython.boundscheck(False)
  *     @cython.wraparound(False)
  *     cpdef cnp.ndarray[double, ndim=4] solve(self, cnp.ndarray[double, ndim=4] previous_solution):             # <<<<<<<<<<<<<<
- *         cdef cnp.ndarray[double, ndim=2] L_L_Z, L_X, mL_eq, A, b, L_L_Z_input
+ *         cdef cnp.ndarray[double, ndim=2] L_L_Z, L_X, mL_eq, A, b, L_L_Z_input, sol_2_flat
  *         cdef cnp.ndarray[double, ndim=2] mR_p, mR_d, mR_c, temp_solve, b_temp_solve
  */
 
@@ -23766,13 +23766,12 @@ static PyArrayObject *__pyx_f_6cy_src_14schur_solve_cy_11SchurSolver_solve(struc
   PyArrayObject *__pyx_v_A = 0;
   PyArrayObject *__pyx_v_b = 0;
   PyArrayObject *__pyx_v_L_L_Z_input = 0;
+  PyArrayObject *__pyx_v_sol_2_flat = 0;
   PyArrayObject *__pyx_v_temp_solve = 0;
   PyArrayObject *__pyx_v_b_temp_solve = 0;
   PyArrayObject *__pyx_v_solution_now = 0;
   int __pyx_v_m;
   PyObject *__pyx_v_inv_I_np = NULL;
-  PyObject *__pyx_v_sol_0 = NULL;
-  PyObject *__pyx_v_sol_2_flat = NULL;
   PyObject *__pyx_v_sol_1_input = NULL;
   __Pyx_LocalBuf_ND __pyx_pybuffernd_A;
   __Pyx_Buffer __pyx_pybuffer_A;
@@ -23790,6 +23789,8 @@ static PyArrayObject *__pyx_f_6cy_src_14schur_solve_cy_11SchurSolver_solve(struc
   __Pyx_Buffer __pyx_pybuffer_mL_eq;
   __Pyx_LocalBuf_ND __pyx_pybuffernd_previous_solution;
   __Pyx_Buffer __pyx_pybuffer_previous_solution;
+  __Pyx_LocalBuf_ND __pyx_pybuffernd_sol_2_flat;
+  __Pyx_Buffer __pyx_pybuffer_sol_2_flat;
   __Pyx_LocalBuf_ND __pyx_pybuffernd_solution_now;
   __Pyx_Buffer __pyx_pybuffer_solution_now;
   __Pyx_LocalBuf_ND __pyx_pybuffernd_temp_solve;
@@ -23810,6 +23811,7 @@ static PyArrayObject *__pyx_f_6cy_src_14schur_solve_cy_11SchurSolver_solve(struc
   PyObject *__pyx_t_12 = NULL;
   PyArrayObject *__pyx_t_13 = NULL;
   struct __pyx_opt_args_6cy_src_14schur_solve_cy_forward_backward_sub __pyx_t_14;
+  PyObject *__pyx_t_15 = NULL;
   int __pyx_lineno = 0;
   const char *__pyx_filename = NULL;
   int __pyx_clineno = 0;
@@ -23838,6 +23840,10 @@ static PyArrayObject *__pyx_f_6cy_src_14schur_solve_cy_11SchurSolver_solve(struc
   __pyx_pybuffer_L_L_Z_input.refcount = 0;
   __pyx_pybuffernd_L_L_Z_input.data = NULL;
   __pyx_pybuffernd_L_L_Z_input.rcbuffer = &__pyx_pybuffer_L_L_Z_input;
+  __pyx_pybuffer_sol_2_flat.pybuffer.buf = NULL;
+  __pyx_pybuffer_sol_2_flat.refcount = 0;
+  __pyx_pybuffernd_sol_2_flat.data = NULL;
+  __pyx_pybuffernd_sol_2_flat.rcbuffer = &__pyx_pybuffer_sol_2_flat;
   __pyx_pybuffer_temp_solve.pybuffer.buf = NULL;
   __pyx_pybuffer_temp_solve.refcount = 0;
   __pyx_pybuffernd_temp_solve.data = NULL;
@@ -23915,7 +23921,7 @@ static PyArrayObject *__pyx_f_6cy_src_14schur_solve_cy_11SchurSolver_solve(struc
   }
 
   /* "cy_src/schur_solve_cy.pyx":225
- *         cdef cnp.ndarray[double, ndim=2] L_L_Z, L_X, mL_eq, A, b, L_L_Z_input
+ *         cdef cnp.ndarray[double, ndim=2] L_L_Z, L_X, mL_eq, A, b, L_L_Z_input, sol_2_flat
  *         cdef cnp.ndarray[double, ndim=2] mR_p, mR_d, mR_c, temp_solve, b_temp_solve
  *         cdef cnp.ndarray[double, ndim=4] solution_now = np.empty((self.r, 3, self.n, self.R))             # <<<<<<<<<<<<<<
  *         cdef int m = self.r * self.n * self.R
@@ -24411,8 +24417,8 @@ static PyArrayObject *__pyx_f_6cy_src_14schur_solve_cy_11SchurSolver_solve(struc
   /* "cy_src/schur_solve_cy.pyx":243
  * 
  *         # Solve for the first part of the solution
- *         sol_0 = lu_solve(A, b).reshape(self.r, self.n, self.R)             # <<<<<<<<<<<<<<
- *         solution_now[:, 0] = sol_0 + previous_solution[:, 0]
+ *         solution_now[:, 0] = lu_solve(A, b).reshape(self.r, self.n, self.R)             # <<<<<<<<<<<<<<
+ *         solution_now[:, 0] += previous_solution[:, 0]
  * 
  */
   __pyx_t_1 = ((PyObject *)__pyx_f_6cy_src_14schur_solve_cy_lu_solve(((PyArrayObject *)__pyx_v_A), ((PyArrayObject *)__pyx_v_b))); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 243, __pyx_L1_error)
@@ -24451,194 +24457,233 @@ static PyArrayObject *__pyx_f_6cy_src_14schur_solve_cy_11SchurSolver_solve(struc
     __Pyx_GOTREF(__pyx_t_3);
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
   }
-  __pyx_v_sol_0 = __pyx_t_3;
-  __pyx_t_3 = 0;
+  if (unlikely((PyObject_SetItem(((PyObject *)__pyx_v_solution_now), __pyx_tuple__18, __pyx_t_3) < 0))) __PYX_ERR(0, 243, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
 
   /* "cy_src/schur_solve_cy.pyx":244
  *         # Solve for the first part of the solution
- *         sol_0 = lu_solve(A, b).reshape(self.r, self.n, self.R)
- *         solution_now[:, 0] = sol_0 + previous_solution[:, 0]             # <<<<<<<<<<<<<<
+ *         solution_now[:, 0] = lu_solve(A, b).reshape(self.r, self.n, self.R)
+ *         solution_now[:, 0] += previous_solution[:, 0]             # <<<<<<<<<<<<<<
  * 
  *         # Calculate the second part of the solution
  */
-  __pyx_t_3 = __Pyx_PyObject_GetItem(((PyObject *)__pyx_v_previous_solution), __pyx_tuple__18); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 244, __pyx_L1_error)
+  __Pyx_INCREF(__pyx_tuple__18);
+  __pyx_t_15 = __pyx_tuple__18;
+  __pyx_t_3 = __Pyx_PyObject_GetItem(((PyObject *)__pyx_v_solution_now), __pyx_t_15); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 244, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
-  __pyx_t_6 = PyNumber_Add(__pyx_v_sol_0, __pyx_t_3); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 244, __pyx_L1_error)
+  __pyx_t_6 = __Pyx_PyObject_GetItem(((PyObject *)__pyx_v_previous_solution), __pyx_tuple__18); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 244, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_6);
+  __pyx_t_4 = PyNumber_InPlaceAdd(__pyx_t_3, __pyx_t_6); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 244, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_4);
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-  if (unlikely((PyObject_SetItem(((PyObject *)__pyx_v_solution_now), __pyx_tuple__18, __pyx_t_6) < 0))) __PYX_ERR(0, 244, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+  if (unlikely((PyObject_SetItem(((PyObject *)__pyx_v_solution_now), __pyx_t_15, __pyx_t_4) < 0))) __PYX_ERR(0, 244, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+  __Pyx_DECREF(__pyx_t_15); __pyx_t_15 = 0;
 
   /* "cy_src/schur_solve_cy.pyx":247
  * 
  *         # Calculate the second part of the solution
- *         sol_2_flat = (self.mR_d - mL_eq.T @ solution_now[:, 0].reshape(-1, 1)) * inv_I_np.reshape(-1, 1)             # <<<<<<<<<<<<<<
+ *         sol_2_flat = self.mR_d - mL_eq.T @ solution_now[:, 0].reshape(-1, 1)             # <<<<<<<<<<<<<<
  *         solution_now[:, 2] = sol_2_flat.reshape(self.r, self.n, self.R)
- * 
+ *         solution_now[:, 2] *= self.inv_I
  */
   if (unlikely(!__pyx_v_self->mR_d.memview)) {PyErr_SetString(PyExc_AttributeError,"Memoryview is not initialized");__PYX_ERR(0, 247, __pyx_L1_error)}
-  __pyx_t_6 = __pyx_memoryview_fromslice(__pyx_v_self->mR_d, 2, (PyObject *(*)(char *)) __pyx_memview_get_double, (int (*)(char *, PyObject *)) __pyx_memview_set_double, 0);; if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 247, __pyx_L1_error)
+  __pyx_t_4 = __pyx_memoryview_fromslice(__pyx_v_self->mR_d, 2, (PyObject *(*)(char *)) __pyx_memview_get_double, (int (*)(char *, PyObject *)) __pyx_memview_set_double, 0);; if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 247, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_4);
+  __pyx_t_6 = __Pyx_PyObject_GetAttrStr(((PyObject *)__pyx_v_mL_eq), __pyx_n_s_T); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 247, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_6);
-  __pyx_t_3 = __Pyx_PyObject_GetAttrStr(((PyObject *)__pyx_v_mL_eq), __pyx_n_s_T); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 247, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_PyObject_GetItem(((PyObject *)__pyx_v_solution_now), __pyx_tuple__18); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 247, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
-  __pyx_t_4 = __Pyx_PyObject_GetItem(((PyObject *)__pyx_v_solution_now), __pyx_tuple__18); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 247, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_4);
-  __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_n_s_reshape); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 247, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_7);
-  __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-  __pyx_t_4 = __Pyx_PyObject_Call(__pyx_t_7, __pyx_tuple__19, NULL); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 247, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_4);
-  __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-  __pyx_t_7 = __Pyx_PyNumber_MatrixMultiply(__pyx_t_3, __pyx_t_4); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 247, __pyx_L1_error)
+  __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_t_3, __pyx_n_s_reshape); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 247, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_7);
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-  __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-  __pyx_t_4 = PyNumber_Subtract(__pyx_t_6, __pyx_t_7); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 247, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_4);
-  __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+  __pyx_t_3 = __Pyx_PyObject_Call(__pyx_t_7, __pyx_tuple__19, NULL); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 247, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_3);
   __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-  __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_v_inv_I_np, __pyx_n_s_reshape); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 247, __pyx_L1_error)
+  __pyx_t_7 = __Pyx_PyNumber_MatrixMultiply(__pyx_t_6, __pyx_t_3); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 247, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_7);
-  __pyx_t_6 = __Pyx_PyObject_Call(__pyx_t_7, __pyx_tuple__19, NULL); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 247, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_6);
-  __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-  __pyx_t_7 = PyNumber_Multiply(__pyx_t_4, __pyx_t_6); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 247, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_7);
-  __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
   __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-  __pyx_v_sol_2_flat = __pyx_t_7;
-  __pyx_t_7 = 0;
+  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+  __pyx_t_3 = PyNumber_Subtract(__pyx_t_4, __pyx_t_7); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 247, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_3);
+  __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
+  __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
+  if (!(likely(((__pyx_t_3) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_3, __pyx_ptype_5numpy_ndarray))))) __PYX_ERR(0, 247, __pyx_L1_error)
+  __pyx_t_13 = ((PyArrayObject *)__pyx_t_3);
+  {
+    __Pyx_BufFmt_StackElem __pyx_stack[1];
+    __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_sol_2_flat.rcbuffer->pybuffer);
+    __pyx_t_9 = __Pyx_GetBufferAndValidate(&__pyx_pybuffernd_sol_2_flat.rcbuffer->pybuffer, (PyObject*)__pyx_t_13, &__Pyx_TypeInfo_double, PyBUF_FORMAT| PyBUF_STRIDES, 2, 0, __pyx_stack);
+    if (unlikely(__pyx_t_9 < 0)) {
+      PyErr_Fetch(&__pyx_t_12, &__pyx_t_11, &__pyx_t_10);
+      if (unlikely(__Pyx_GetBufferAndValidate(&__pyx_pybuffernd_sol_2_flat.rcbuffer->pybuffer, (PyObject*)__pyx_v_sol_2_flat, &__Pyx_TypeInfo_double, PyBUF_FORMAT| PyBUF_STRIDES, 2, 0, __pyx_stack) == -1)) {
+        Py_XDECREF(__pyx_t_12); Py_XDECREF(__pyx_t_11); Py_XDECREF(__pyx_t_10);
+        __Pyx_RaiseBufferFallbackError();
+      } else {
+        PyErr_Restore(__pyx_t_12, __pyx_t_11, __pyx_t_10);
+      }
+      __pyx_t_12 = __pyx_t_11 = __pyx_t_10 = 0;
+    }
+    __pyx_pybuffernd_sol_2_flat.diminfo[0].strides = __pyx_pybuffernd_sol_2_flat.rcbuffer->pybuffer.strides[0]; __pyx_pybuffernd_sol_2_flat.diminfo[0].shape = __pyx_pybuffernd_sol_2_flat.rcbuffer->pybuffer.shape[0]; __pyx_pybuffernd_sol_2_flat.diminfo[1].strides = __pyx_pybuffernd_sol_2_flat.rcbuffer->pybuffer.strides[1]; __pyx_pybuffernd_sol_2_flat.diminfo[1].shape = __pyx_pybuffernd_sol_2_flat.rcbuffer->pybuffer.shape[1];
+    if (unlikely((__pyx_t_9 < 0))) __PYX_ERR(0, 247, __pyx_L1_error)
+  }
+  __pyx_t_13 = 0;
+  __pyx_v_sol_2_flat = ((PyArrayObject *)__pyx_t_3);
+  __pyx_t_3 = 0;
 
   /* "cy_src/schur_solve_cy.pyx":248
  *         # Calculate the second part of the solution
- *         sol_2_flat = (self.mR_d - mL_eq.T @ solution_now[:, 0].reshape(-1, 1)) * inv_I_np.reshape(-1, 1)
+ *         sol_2_flat = self.mR_d - mL_eq.T @ solution_now[:, 0].reshape(-1, 1)
  *         solution_now[:, 2] = sol_2_flat.reshape(self.r, self.n, self.R)             # <<<<<<<<<<<<<<
+ *         solution_now[:, 2] *= self.inv_I
  * 
- *         # Calculate the third part of the solution
  */
-  __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_v_sol_2_flat, __pyx_n_s_reshape); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 248, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_6);
+  __pyx_t_7 = __Pyx_PyObject_GetAttrStr(((PyObject *)__pyx_v_sol_2_flat), __pyx_n_s_reshape); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 248, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_7);
   __pyx_t_4 = __Pyx_PyInt_From_int(__pyx_v_self->r); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 248, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
-  __pyx_t_3 = __Pyx_PyInt_From_int(__pyx_v_self->n); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 248, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_3);
+  __pyx_t_6 = __Pyx_PyInt_From_int(__pyx_v_self->n); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 248, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_6);
   __pyx_t_1 = __Pyx_PyInt_From_int(__pyx_v_self->R); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 248, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_t_2 = NULL;
   __pyx_t_5 = 0;
   #if CYTHON_UNPACK_METHODS
-  if (likely(PyMethod_Check(__pyx_t_6))) {
-    __pyx_t_2 = PyMethod_GET_SELF(__pyx_t_6);
+  if (likely(PyMethod_Check(__pyx_t_7))) {
+    __pyx_t_2 = PyMethod_GET_SELF(__pyx_t_7);
     if (likely(__pyx_t_2)) {
-      PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_6);
+      PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_7);
       __Pyx_INCREF(__pyx_t_2);
       __Pyx_INCREF(function);
-      __Pyx_DECREF_SET(__pyx_t_6, function);
+      __Pyx_DECREF_SET(__pyx_t_7, function);
       __pyx_t_5 = 1;
     }
   }
   #endif
   {
-    PyObject *__pyx_callargs[4] = {__pyx_t_2, __pyx_t_4, __pyx_t_3, __pyx_t_1};
-    __pyx_t_7 = __Pyx_PyObject_FastCall(__pyx_t_6, __pyx_callargs+1-__pyx_t_5, 3+__pyx_t_5);
+    PyObject *__pyx_callargs[4] = {__pyx_t_2, __pyx_t_4, __pyx_t_6, __pyx_t_1};
+    __pyx_t_3 = __Pyx_PyObject_FastCall(__pyx_t_7, __pyx_callargs+1-__pyx_t_5, 3+__pyx_t_5);
     __Pyx_XDECREF(__pyx_t_2); __pyx_t_2 = 0;
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-    __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-    __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
-    if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 248, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_7);
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
+    __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
+    if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 248, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_3);
+    __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
   }
-  if (unlikely((PyObject_SetItem(((PyObject *)__pyx_v_solution_now), __pyx_tuple__20, __pyx_t_7) < 0))) __PYX_ERR(0, 248, __pyx_L1_error)
-  __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
+  if (unlikely((PyObject_SetItem(((PyObject *)__pyx_v_solution_now), __pyx_tuple__20, __pyx_t_3) < 0))) __PYX_ERR(0, 248, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
 
-  /* "cy_src/schur_solve_cy.pyx":251
+  /* "cy_src/schur_solve_cy.pyx":249
+ *         sol_2_flat = self.mR_d - mL_eq.T @ solution_now[:, 0].reshape(-1, 1)
+ *         solution_now[:, 2] = sol_2_flat.reshape(self.r, self.n, self.R)
+ *         solution_now[:, 2] *= self.inv_I             # <<<<<<<<<<<<<<
+ * 
+ *         # Calculate the third part of the solution
+ */
+  __Pyx_INCREF(__pyx_tuple__20);
+  __pyx_t_15 = __pyx_tuple__20;
+  __pyx_t_3 = __Pyx_PyObject_GetItem(((PyObject *)__pyx_v_solution_now), __pyx_t_15); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 249, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_3);
+  if (unlikely(!__pyx_v_self->inv_I.memview)) {PyErr_SetString(PyExc_AttributeError,"Memoryview is not initialized");__PYX_ERR(0, 249, __pyx_L1_error)}
+  __pyx_t_7 = __pyx_memoryview_fromslice(__pyx_v_self->inv_I, 3, (PyObject *(*)(char *)) __pyx_memview_get_double, (int (*)(char *, PyObject *)) __pyx_memview_set_double, 0);; if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 249, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_7);
+  __pyx_t_1 = PyNumber_InPlaceMultiply(__pyx_t_3, __pyx_t_7); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 249, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_1);
+  __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+  __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
+  if (unlikely((PyObject_SetItem(((PyObject *)__pyx_v_solution_now), __pyx_t_15, __pyx_t_1) < 0))) __PYX_ERR(0, 249, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
+  __Pyx_DECREF(__pyx_t_15); __pyx_t_15 = 0;
+
+  /* "cy_src/schur_solve_cy.pyx":252
  * 
  *         # Calculate the third part of the solution
  *         sol_1_input = self.mR_c             # <<<<<<<<<<<<<<
  *         sol_1_input -= L_X @ solution_now[:, 2].reshape(-1, 1)
  *         solution_now[:, 1] = forward_backward_sub(L_L_Z, sol_1_input, overwrite_b=True).reshape(self.r, self.n, self.R)
  */
-  if (unlikely(!__pyx_v_self->mR_c.memview)) {PyErr_SetString(PyExc_AttributeError,"Memoryview is not initialized");__PYX_ERR(0, 251, __pyx_L1_error)}
-  __pyx_t_7 = __pyx_memoryview_fromslice(__pyx_v_self->mR_c, 2, (PyObject *(*)(char *)) __pyx_memview_get_double, (int (*)(char *, PyObject *)) __pyx_memview_set_double, 0);; if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 251, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_7);
-  __pyx_v_sol_1_input = __pyx_t_7;
-  __pyx_t_7 = 0;
+  if (unlikely(!__pyx_v_self->mR_c.memview)) {PyErr_SetString(PyExc_AttributeError,"Memoryview is not initialized");__PYX_ERR(0, 252, __pyx_L1_error)}
+  __pyx_t_1 = __pyx_memoryview_fromslice(__pyx_v_self->mR_c, 2, (PyObject *(*)(char *)) __pyx_memview_get_double, (int (*)(char *, PyObject *)) __pyx_memview_set_double, 0);; if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 252, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_1);
+  __pyx_v_sol_1_input = __pyx_t_1;
+  __pyx_t_1 = 0;
 
-  /* "cy_src/schur_solve_cy.pyx":252
+  /* "cy_src/schur_solve_cy.pyx":253
  *         # Calculate the third part of the solution
  *         sol_1_input = self.mR_c
  *         sol_1_input -= L_X @ solution_now[:, 2].reshape(-1, 1)             # <<<<<<<<<<<<<<
  *         solution_now[:, 1] = forward_backward_sub(L_L_Z, sol_1_input, overwrite_b=True).reshape(self.r, self.n, self.R)
  * 
  */
-  __pyx_t_7 = __Pyx_PyObject_GetItem(((PyObject *)__pyx_v_solution_now), __pyx_tuple__20); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 252, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyObject_GetItem(((PyObject *)__pyx_v_solution_now), __pyx_tuple__20); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 253, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_1);
+  __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_t_1, __pyx_n_s_reshape); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 253, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_7);
-  __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_t_7, __pyx_n_s_reshape); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 252, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_6);
+  __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
+  __pyx_t_1 = __Pyx_PyObject_Call(__pyx_t_7, __pyx_tuple__19, NULL); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 253, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_1);
   __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-  __pyx_t_7 = __Pyx_PyObject_Call(__pyx_t_6, __pyx_tuple__19, NULL); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 252, __pyx_L1_error)
+  __pyx_t_7 = __Pyx_PyNumber_MatrixMultiply(((PyObject *)__pyx_v_L_X), __pyx_t_1); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 253, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_7);
-  __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-  __pyx_t_6 = __Pyx_PyNumber_MatrixMultiply(((PyObject *)__pyx_v_L_X), __pyx_t_7); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 252, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_6);
+  __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
+  __pyx_t_1 = PyNumber_InPlaceSubtract(__pyx_v_sol_1_input, __pyx_t_7); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 253, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_1);
   __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-  __pyx_t_7 = PyNumber_InPlaceSubtract(__pyx_v_sol_1_input, __pyx_t_6); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 252, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_7);
-  __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-  __Pyx_DECREF_SET(__pyx_v_sol_1_input, __pyx_t_7);
-  __pyx_t_7 = 0;
+  __Pyx_DECREF_SET(__pyx_v_sol_1_input, __pyx_t_1);
+  __pyx_t_1 = 0;
 
-  /* "cy_src/schur_solve_cy.pyx":253
+  /* "cy_src/schur_solve_cy.pyx":254
  *         sol_1_input = self.mR_c
  *         sol_1_input -= L_X @ solution_now[:, 2].reshape(-1, 1)
  *         solution_now[:, 1] = forward_backward_sub(L_L_Z, sol_1_input, overwrite_b=True).reshape(self.r, self.n, self.R)             # <<<<<<<<<<<<<<
  * 
  *         return solution_now
  */
-  if (!(likely(((__pyx_v_sol_1_input) == Py_None) || likely(__Pyx_TypeTest(__pyx_v_sol_1_input, __pyx_ptype_5numpy_ndarray))))) __PYX_ERR(0, 253, __pyx_L1_error)
+  if (!(likely(((__pyx_v_sol_1_input) == Py_None) || likely(__Pyx_TypeTest(__pyx_v_sol_1_input, __pyx_ptype_5numpy_ndarray))))) __PYX_ERR(0, 254, __pyx_L1_error)
   __pyx_t_14.__pyx_n = 1;
   __pyx_t_14.overwrite_b = 1;
-  __pyx_t_6 = ((PyObject *)__pyx_f_6cy_src_14schur_solve_cy_forward_backward_sub(((PyArrayObject *)__pyx_v_L_L_Z), ((PyArrayObject *)__pyx_v_sol_1_input), &__pyx_t_14)); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 253, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_6);
-  __pyx_t_1 = __Pyx_PyObject_GetAttrStr(__pyx_t_6, __pyx_n_s_reshape); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 253, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_1);
-  __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-  __pyx_t_6 = __Pyx_PyInt_From_int(__pyx_v_self->r); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 253, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_6);
-  __pyx_t_3 = __Pyx_PyInt_From_int(__pyx_v_self->n); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 253, __pyx_L1_error)
+  __pyx_t_7 = ((PyObject *)__pyx_f_6cy_src_14schur_solve_cy_forward_backward_sub(((PyArrayObject *)__pyx_v_L_L_Z), ((PyArrayObject *)__pyx_v_sol_1_input), &__pyx_t_14)); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 254, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_7);
+  __pyx_t_3 = __Pyx_PyObject_GetAttrStr(__pyx_t_7, __pyx_n_s_reshape); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 254, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
-  __pyx_t_4 = __Pyx_PyInt_From_int(__pyx_v_self->R); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 253, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
+  __pyx_t_7 = __Pyx_PyInt_From_int(__pyx_v_self->r); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 254, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_7);
+  __pyx_t_6 = __Pyx_PyInt_From_int(__pyx_v_self->n); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 254, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_6);
+  __pyx_t_4 = __Pyx_PyInt_From_int(__pyx_v_self->R); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 254, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
   __pyx_t_2 = NULL;
   __pyx_t_5 = 0;
   #if CYTHON_UNPACK_METHODS
-  if (likely(PyMethod_Check(__pyx_t_1))) {
-    __pyx_t_2 = PyMethod_GET_SELF(__pyx_t_1);
+  if (likely(PyMethod_Check(__pyx_t_3))) {
+    __pyx_t_2 = PyMethod_GET_SELF(__pyx_t_3);
     if (likely(__pyx_t_2)) {
-      PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_1);
+      PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_3);
       __Pyx_INCREF(__pyx_t_2);
       __Pyx_INCREF(function);
-      __Pyx_DECREF_SET(__pyx_t_1, function);
+      __Pyx_DECREF_SET(__pyx_t_3, function);
       __pyx_t_5 = 1;
     }
   }
   #endif
   {
-    PyObject *__pyx_callargs[4] = {__pyx_t_2, __pyx_t_6, __pyx_t_3, __pyx_t_4};
-    __pyx_t_7 = __Pyx_PyObject_FastCall(__pyx_t_1, __pyx_callargs+1-__pyx_t_5, 3+__pyx_t_5);
+    PyObject *__pyx_callargs[4] = {__pyx_t_2, __pyx_t_7, __pyx_t_6, __pyx_t_4};
+    __pyx_t_1 = __Pyx_PyObject_FastCall(__pyx_t_3, __pyx_callargs+1-__pyx_t_5, 3+__pyx_t_5);
     __Pyx_XDECREF(__pyx_t_2); __pyx_t_2 = 0;
+    __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-    __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-    if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 253, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_7);
-    __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
+    if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 254, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_1);
+    __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
   }
-  if (unlikely((PyObject_SetItem(((PyObject *)__pyx_v_solution_now), __pyx_tuple__21, __pyx_t_7) < 0))) __PYX_ERR(0, 253, __pyx_L1_error)
-  __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
+  if (unlikely((PyObject_SetItem(((PyObject *)__pyx_v_solution_now), __pyx_tuple__21, __pyx_t_1) < 0))) __PYX_ERR(0, 254, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
-  /* "cy_src/schur_solve_cy.pyx":255
+  /* "cy_src/schur_solve_cy.pyx":256
  *         solution_now[:, 1] = forward_backward_sub(L_L_Z, sol_1_input, overwrite_b=True).reshape(self.r, self.n, self.R)
  * 
  *         return solution_now             # <<<<<<<<<<<<<<
@@ -24652,7 +24697,7 @@ static PyArrayObject *__pyx_f_6cy_src_14schur_solve_cy_11SchurSolver_solve(struc
  *     @cython.boundscheck(False)
  *     @cython.wraparound(False)
  *     cpdef cnp.ndarray[double, ndim=4] solve(self, cnp.ndarray[double, ndim=4] previous_solution):             # <<<<<<<<<<<<<<
- *         cdef cnp.ndarray[double, ndim=2] L_L_Z, L_X, mL_eq, A, b, L_L_Z_input
+ *         cdef cnp.ndarray[double, ndim=2] L_L_Z, L_X, mL_eq, A, b, L_L_Z_input, sol_2_flat
  *         cdef cnp.ndarray[double, ndim=2] mR_p, mR_d, mR_c, temp_solve, b_temp_solve
  */
 
@@ -24664,6 +24709,7 @@ static PyArrayObject *__pyx_f_6cy_src_14schur_solve_cy_11SchurSolver_solve(struc
   __Pyx_XDECREF(__pyx_t_4);
   __Pyx_XDECREF(__pyx_t_6);
   __Pyx_XDECREF(__pyx_t_7);
+  __Pyx_XDECREF(__pyx_t_15);
   { PyObject *__pyx_type, *__pyx_value, *__pyx_tb;
     __Pyx_PyThreadState_declare
     __Pyx_PyThreadState_assign
@@ -24676,6 +24722,7 @@ static PyArrayObject *__pyx_f_6cy_src_14schur_solve_cy_11SchurSolver_solve(struc
     __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_b_temp_solve.rcbuffer->pybuffer);
     __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_mL_eq.rcbuffer->pybuffer);
     __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_previous_solution.rcbuffer->pybuffer);
+    __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_sol_2_flat.rcbuffer->pybuffer);
     __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_solution_now.rcbuffer->pybuffer);
     __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_temp_solve.rcbuffer->pybuffer);
   __Pyx_ErrRestore(__pyx_type, __pyx_value, __pyx_tb);}
@@ -24691,6 +24738,7 @@ static PyArrayObject *__pyx_f_6cy_src_14schur_solve_cy_11SchurSolver_solve(struc
   __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_b_temp_solve.rcbuffer->pybuffer);
   __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_mL_eq.rcbuffer->pybuffer);
   __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_previous_solution.rcbuffer->pybuffer);
+  __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_sol_2_flat.rcbuffer->pybuffer);
   __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_solution_now.rcbuffer->pybuffer);
   __Pyx_SafeReleaseBuffer(&__pyx_pybuffernd_temp_solve.rcbuffer->pybuffer);
   __pyx_L2:;
@@ -24700,12 +24748,11 @@ static PyArrayObject *__pyx_f_6cy_src_14schur_solve_cy_11SchurSolver_solve(struc
   __Pyx_XDECREF((PyObject *)__pyx_v_A);
   __Pyx_XDECREF((PyObject *)__pyx_v_b);
   __Pyx_XDECREF((PyObject *)__pyx_v_L_L_Z_input);
+  __Pyx_XDECREF((PyObject *)__pyx_v_sol_2_flat);
   __Pyx_XDECREF((PyObject *)__pyx_v_temp_solve);
   __Pyx_XDECREF((PyObject *)__pyx_v_b_temp_solve);
   __Pyx_XDECREF((PyObject *)__pyx_v_solution_now);
   __Pyx_XDECREF(__pyx_v_inv_I_np);
-  __Pyx_XDECREF(__pyx_v_sol_0);
-  __Pyx_XDECREF(__pyx_v_sol_2_flat);
   __Pyx_XDECREF(__pyx_v_sol_1_input);
   __Pyx_XGIVEREF((PyObject *)__pyx_r);
   __Pyx_RefNannyFinishContext();
@@ -27627,23 +27674,23 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
 
   /* "cy_src/schur_solve_cy.pyx":248
  *         # Calculate the second part of the solution
- *         sol_2_flat = (self.mR_d - mL_eq.T @ solution_now[:, 0].reshape(-1, 1)) * inv_I_np.reshape(-1, 1)
+ *         sol_2_flat = self.mR_d - mL_eq.T @ solution_now[:, 0].reshape(-1, 1)
  *         solution_now[:, 2] = sol_2_flat.reshape(self.r, self.n, self.R)             # <<<<<<<<<<<<<<
+ *         solution_now[:, 2] *= self.inv_I
  * 
- *         # Calculate the third part of the solution
  */
   __pyx_tuple__20 = PyTuple_Pack(2, __pyx_slice__5, __pyx_int_2); if (unlikely(!__pyx_tuple__20)) __PYX_ERR(0, 248, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__20);
   __Pyx_GIVEREF(__pyx_tuple__20);
 
-  /* "cy_src/schur_solve_cy.pyx":253
+  /* "cy_src/schur_solve_cy.pyx":254
  *         sol_1_input = self.mR_c
  *         sol_1_input -= L_X @ solution_now[:, 2].reshape(-1, 1)
  *         solution_now[:, 1] = forward_backward_sub(L_L_Z, sol_1_input, overwrite_b=True).reshape(self.r, self.n, self.R)             # <<<<<<<<<<<<<<
  * 
  *         return solution_now
  */
-  __pyx_tuple__21 = PyTuple_Pack(2, __pyx_slice__5, __pyx_int_1); if (unlikely(!__pyx_tuple__21)) __PYX_ERR(0, 253, __pyx_L1_error)
+  __pyx_tuple__21 = PyTuple_Pack(2, __pyx_slice__5, __pyx_int_1); if (unlikely(!__pyx_tuple__21)) __PYX_ERR(0, 254, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_tuple__21);
   __Pyx_GIVEREF(__pyx_tuple__21);
 
@@ -27775,7 +27822,7 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
  *     @cython.boundscheck(False)
  *     @cython.wraparound(False)
  *     cpdef cnp.ndarray[double, ndim=4] solve(self, cnp.ndarray[double, ndim=4] previous_solution):             # <<<<<<<<<<<<<<
- *         cdef cnp.ndarray[double, ndim=2] L_L_Z, L_X, mL_eq, A, b, L_L_Z_input
+ *         cdef cnp.ndarray[double, ndim=2] L_L_Z, L_X, mL_eq, A, b, L_L_Z_input, sol_2_flat
  *         cdef cnp.ndarray[double, ndim=2] mR_p, mR_d, mR_c, temp_solve, b_temp_solve
  */
   __pyx_tuple__36 = PyTuple_Pack(2, __pyx_n_s_self, __pyx_n_s_previous_solution); if (unlikely(!__pyx_tuple__36)) __PYX_ERR(0, 222, __pyx_L1_error)
@@ -28995,7 +29042,7 @@ if (!__Pyx_RefNanny) {
  *     @cython.boundscheck(False)
  *     @cython.wraparound(False)
  *     cpdef cnp.ndarray[double, ndim=4] solve(self, cnp.ndarray[double, ndim=4] previous_solution):             # <<<<<<<<<<<<<<
- *         cdef cnp.ndarray[double, ndim=2] L_L_Z, L_X, mL_eq, A, b, L_L_Z_input
+ *         cdef cnp.ndarray[double, ndim=2] L_L_Z, L_X, mL_eq, A, b, L_L_Z_input, sol_2_flat
  *         cdef cnp.ndarray[double, ndim=2] mR_p, mR_d, mR_c, temp_solve, b_temp_solve
  */
   __pyx_t_7 = __Pyx_CyFunction_New(&__pyx_mdef_6cy_src_14schur_solve_cy_11SchurSolver_3solve, __Pyx_CYFUNCTION_CCLASS, __pyx_n_s_SchurSolver_solve, NULL, __pyx_n_s_cy_src_schur_solve_cy, __pyx_d, ((PyObject *)__pyx_codeobj__37)); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 222, __pyx_L1_error)

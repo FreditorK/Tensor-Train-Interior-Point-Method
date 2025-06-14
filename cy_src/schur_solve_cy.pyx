@@ -220,7 +220,7 @@ cdef class SchurSolver:
     @cython.boundscheck(False)
     @cython.wraparound(False)
     cpdef cnp.ndarray[double, ndim=4] solve(self, cnp.ndarray[double, ndim=4] previous_solution):
-        cdef cnp.ndarray[double, ndim=2] L_L_Z, L_X, mL_eq, A, b, L_L_Z_input
+        cdef cnp.ndarray[double, ndim=2] L_L_Z, L_X, mL_eq, A, b, L_L_Z_input, sol_2_flat
         cdef cnp.ndarray[double, ndim=2] mR_p, mR_d, mR_c, temp_solve, b_temp_solve
         cdef cnp.ndarray[double, ndim=4] solution_now = np.empty((self.r, 3, self.n, self.R))
         cdef int m = self.r * self.n * self.R
@@ -240,12 +240,13 @@ cdef class SchurSolver:
         b = self.mR_p - mL_eq @ b_temp_solve - A @ previous_solution[:, 0].reshape(-1, 1)
         
         # Solve for the first part of the solution
-        sol_0 = lu_solve(A, b).reshape(self.r, self.n, self.R)
-        solution_now[:, 0] = sol_0 + previous_solution[:, 0]
+        solution_now[:, 0] = lu_solve(A, b).reshape(self.r, self.n, self.R)
+        solution_now[:, 0] += previous_solution[:, 0]
         
         # Calculate the second part of the solution
-        sol_2_flat = (self.mR_d - mL_eq.T @ solution_now[:, 0].reshape(-1, 1)) * inv_I_np.reshape(-1, 1)
+        sol_2_flat = self.mR_d - mL_eq.T @ solution_now[:, 0].reshape(-1, 1)
         solution_now[:, 2] = sol_2_flat.reshape(self.r, self.n, self.R)
+        solution_now[:, 2] *= self.inv_I
         
         # Calculate the third part of the solution
         sol_1_input = self.mR_c 
