@@ -124,6 +124,8 @@ cdef void einsum(
         double[:, :] XAX1,
         double[:, :] x_core,
         double[:, :] out,
+        double[:, :] intermediate_mat1,
+        double[:, :] intermediate_mat2,
         int r,
         int n,
         int R,
@@ -142,20 +144,18 @@ cdef void einsum(
     # === Step 1: tensordot(x_core, XAX1, axes=([2], [2])) ===
     # einsum: rnR,LSR -> rnLS
     mat_a = np.asarray(x_core)
-    cdef cnp.ndarray[double, ndim=2] intermediate_mat1 = np.empty((r * n, L * S))
     cy_dgemm(mat_a, XAX1, intermediate_mat1)
-    cdef cnp.ndarray[double, ndim=4] intermediate_1 = intermediate_mat1.reshape(r, n, L, S)
+    cdef cnp.ndarray[double, ndim=4] intermediate = np.asarray(intermediate_mat1).reshape(r, n, L, S)
 
     # === Step 2: tensordot(intermediate_1, block_A, axes=([1, 3], [2, 3])) ===
     # einsum: rnLS,smnS -> rLsm
-    mat_a = np.ascontiguousarray(intermediate_1.transpose(0, 2, 1, 3).reshape(r * L, n * S))
-    cdef cnp.ndarray[double, ndim=2] intermediate_mat2 = np.empty((r * L, s * m))
+    mat_a = np.ascontiguousarray(intermediate.transpose(0, 2, 1, 3).reshape(r * L, n * S))
     cy_dgemm(mat_a, block_A, intermediate_mat2)
-    cdef cnp.ndarray[double, ndim=4] intermediate_2 = intermediate_mat2.reshape(r, L, s, m)
+    intermediate = np.asarray(intermediate_mat2).reshape(r, L, s, m)
 
     # === Step 3: tensordot(intermediate_2, XAX, axes=([0, 2], [2, 1])) ===
     # einsum: rLsm,lsr -> Lml
-    mat_a = np.ascontiguousarray(intermediate_2.transpose(1, 3, 0, 2).reshape(L * m, r * s))
+    mat_a = np.ascontiguousarray(intermediate.transpose(1, 3, 0, 2).reshape(L * m, r * s))
     cy_dgemm(mat_a, XAX, out, alpha, beta)
 
 
@@ -171,6 +171,7 @@ cdef class MatVecWrapper(BaseMatVec):
     cdef double[:,  :] XAX_k_00, XAX_k_01, XAX_k_01T, XAX_k_21, XAX_k_22
     cdef double[:,  :] block_A_k_00, block_A_k_01, block_A_k_01T, block_A_k_21, block_A_k_22
     cdef double[:,  :] XAX_kp1_00, XAX_kp1_01, XAX_kp1_01T, XAX_kp1_21, XAX_kp1_22
+    cdef double[:, :] A_00_workspace1, A_00_workspace2, A_01_workspace1, A_01_workspace2,A_01T_workspace1, A_01T_workspace2, A_21_workspace1, A_21_workspace2, A_22_workspace1, A_22_workspace2
     cdef double[:,  :, :] inv_I
     cdef int r, n, R  # shape dims
 
@@ -203,6 +204,18 @@ cdef class MatVecWrapper(BaseMatVec):
         self.block_A_k_21 = np.ascontiguousarray(block_A_k_21.reshape(block_A_k_21.shape[0] * block_A_k_21.shape[1], block_A_k_21.shape[2] * block_A_k_21.shape[3]).T)
         self.block_A_k_22 = np.ascontiguousarray(block_A_k_22.reshape(block_A_k_22.shape[0] * block_A_k_22.shape[1], block_A_k_22.shape[2] * block_A_k_22.shape[3]).T)
 
+        self.A_00_workspace1 = np.empty((r * n, R * block_A_k_00.shape[3])) # rn x LS
+        self.A_00_workspace2 = np.empty((r * R, block_A_k_00.shape[0] * n)) # rL x sm
+        self.A_01_workspace1 = np.empty((r * n, R * block_A_k_01.shape[3])) # rn x LS
+        self.A_01_workspace2 = np.empty((r * R, block_A_k_01.shape[0] * n)) # rL x sm
+        self.A_01T_workspace1 = np.empty((r * n, R * block_A_k_01.shape[3])) # rn x LS
+        self.A_01T_workspace2 = np.empty((r * R, block_A_k_01.shape[0] * n)) # rL x sm
+        self.A_21_workspace1 = np.empty((r * n, R * block_A_k_21.shape[3])) # rn x LS
+        self.A_21_workspace2 = np.empty((r * R, block_A_k_21.shape[0] * n)) # rL x sm
+        self.A_22_workspace1 = np.empty((r * n, R * block_A_k_22.shape[3])) # rn x LS
+        self.A_22_workspace2 = np.empty((r * R, block_A_k_22.shape[0] * n)) # rL x sm
+
+        
         self.XAX_kp1_00 = np.ascontiguousarray(XAX_kp1_00.reshape(-1, R).T)
         self.XAX_kp1_01 = np.ascontiguousarray(XAX_kp1_01.reshape(-1, R).T)
         self.XAX_kp1_01T = np.ascontiguousarray(np.transpose(XAX_kp1_01,  axes=(2, 1, 0)).reshape(-1, R).T)
@@ -225,14 +238,14 @@ cdef class MatVecWrapper(BaseMatVec):
         cdef double[:, :, :] x_reshaped = x_core.view().reshape(2, self.r*self.n, self.R)
         cdef cnp.ndarray[double, ndim=4] result = np.empty((2, self.r, self.n, self.R), dtype=np.float64)
 
-        einsum(self.XAX_k_00, self.block_A_k_00, self.XAX_kp1_00, x_reshaped[0], self.result0, self.r, self.n, self.R, 1.0, 0.0)
-        einsum(self.XAX_k_01, self.block_A_k_01, self.XAX_kp1_01, x_reshaped[1], self.result0, self.r, self.n, self.R, 1.0, 1.0)
+        einsum(self.XAX_k_00, self.block_A_k_00, self.XAX_kp1_00, x_reshaped[0], self.result0, self.A_00_workspace1, self.A_00_workspace2, self.r, self.n, self.R, 1.0, 0.0)
+        einsum(self.XAX_k_01, self.block_A_k_01, self.XAX_kp1_01, x_reshaped[1], self.result0, self.A_01_workspace1, self.A_01_workspace2, self.r, self.n, self.R, 1.0, 1.0)
 
-        einsum(self.XAX_k_21, self.block_A_k_21, self.XAX_kp1_21, x_reshaped[1], self.result1, self.r, self.n, self.R, 1.0, 0.0)
-        einsum(self.XAX_k_01T, self.block_A_k_01T, self.XAX_kp1_01T, x_reshaped[0], self.temp, self.r, self.n, self.R, 1.0,  0.0)
+        einsum(self.XAX_k_21, self.block_A_k_21, self.XAX_kp1_21, x_reshaped[1], self.result1, self.A_21_workspace1, self.A_21_workspace2, self.r, self.n, self.R, 1.0, 0.0)
+        einsum(self.XAX_k_01T, self.block_A_k_01T, self.XAX_kp1_01T, x_reshaped[0], self.temp, self.A_01T_workspace1, self.A_01T_workspace2, self.r, self.n, self.R, 1.0,  0.0)
         cdef cnp.ndarray[double, ndim=3] temp_reshaped = np.asarray(self.temp).reshape(self.R, self.n, self.r).transpose(2, 1, 0)
         temp_reshaped *= self.inv_I
-        einsum(self.XAX_k_22, self.block_A_k_22, self.XAX_kp1_22, temp_reshaped.reshape(self.r*self.n, self.R), self.result1, self.r, self.n, self.R, -1.0,  1.0)
+        einsum(self.XAX_k_22, self.block_A_k_22, self.XAX_kp1_22, temp_reshaped.reshape(self.r*self.n, self.R), self.result1, self.A_22_workspace1, self.A_22_workspace2, self.r, self.n, self.R, -1.0,  1.0)
         
         result[0] = np.asarray(self.result0).reshape(self.R, self.n, self.r).transpose(2, 1, 0)
         result[1] = np.asarray(self.result1).reshape(self.R, self.n, self.r).transpose(2, 1, 0)
@@ -243,6 +256,7 @@ cdef class IneqMatVecWrapper(BaseMatVec):
     cdef double[:,  :] block_A_k_00, block_A_k_01, block_A_k_01T, block_A_k_21, block_A_k_22, block_A_k_31, block_A_k_33
     cdef double[:,  :] XAX_kp1_00, XAX_kp1_01, XAX_kp1_01T, XAX_kp1_21, XAX_kp1_22, XAX_kp1_31, XAX_kp1_33
     cdef double[:, :, :] inv_I
+    cdef double[:, :] A_00_workspace1, A_00_workspace2, A_01_workspace1, A_01_workspace2,A_01T_workspace1, A_01T_workspace2, A_21_workspace1, A_21_workspace2, A_22_workspace1, A_22_workspace2, A_31_workspace1, A_31_workspace2, A_33_workspace1, A_33_workspace2
     cdef int r, n, R
 
     def __init__(self,
@@ -285,6 +299,23 @@ cdef class IneqMatVecWrapper(BaseMatVec):
         self.block_A_k_31 = np.ascontiguousarray(block_A_k_31.reshape(block_A_k_31.shape[0] * block_A_k_31.shape[1], block_A_k_31.shape[2] * block_A_k_31.shape[3]).T)
         self.block_A_k_33 = np.ascontiguousarray(block_A_k_33.reshape(block_A_k_33.shape[0] * block_A_k_33.shape[1], block_A_k_33.shape[2] * block_A_k_33.shape[3]).T)
 
+        self.A_00_workspace1 = np.empty((r * n, R * block_A_k_00.shape[3])) # rn x LS
+        self.A_00_workspace2 = np.empty((r * R, block_A_k_00.shape[0] * n)) # rL x sm
+        self.A_01_workspace1 = np.empty((r * n, R * block_A_k_01.shape[3])) # rn x LS
+        self.A_01_workspace2 = np.empty((r * R, block_A_k_01.shape[0] * n)) # rL x sm
+        self.A_01T_workspace1 = np.empty((r * n, R * block_A_k_01.shape[3])) # rn x LS
+        self.A_01T_workspace2 = np.empty((r * R, block_A_k_01.shape[0] * n)) # rL x sm
+        self.A_21_workspace1 = np.empty((r * n, R * block_A_k_21.shape[3])) # rn x LS
+        self.A_21_workspace2 = np.empty((r * R, block_A_k_21.shape[0] * n)) # rL x sm
+        self.A_22_workspace1 = np.empty((r * n, R * block_A_k_22.shape[3])) # rn x LS
+        self.A_22_workspace2 = np.empty((r * R, block_A_k_22.shape[0] * n)) # rL x sm
+        self.A_31_workspace1 = np.empty((r * n, R * block_A_k_31.shape[3])) # rn x LS
+        self.A_31_workspace2 = np.empty((r * R, block_A_k_31.shape[0] * n)) # rL x sm
+        self.A_33_workspace1 = np.empty((r * n, R * block_A_k_33.shape[3])) # rn x LS
+        self.A_33_workspace2 = np.empty((r * R, block_A_k_33.shape[0] * n)) # rL x sm
+
+        
+        
         self.XAX_kp1_00 = np.ascontiguousarray(XAX_kp1_00.reshape(-1, R).T)
         self.XAX_kp1_01 = np.ascontiguousarray(XAX_kp1_01.reshape(-1, R).T)
         self.XAX_kp1_01T = np.ascontiguousarray(np.transpose(XAX_kp1_01,  axes=(2, 1, 0)).reshape(-1, R).T)
@@ -308,15 +339,15 @@ cdef class IneqMatVecWrapper(BaseMatVec):
         cdef cnp.ndarray[double, ndim=4] result = np.empty((3, self.r, self.n, self.R), dtype=np.float64)
         cdef cnp.ndarray[double, ndim=2] temp = np.empty((self.R * self.n, self.r), dtype=np.float64)
 
-        einsum(self.XAX_k_00, self.block_A_k_00, self.XAX_kp1_00, x_reshaped[0], result0, self.r, self.n, self.R, 1.0, 0.0)
-        einsum(self.XAX_k_21, self.block_A_k_21, self.XAX_kp1_21, x_reshaped[1], result1, self.r, self.n, self.R, 1.0, 0.0)
-        einsum(self.XAX_k_31, self.block_A_k_31, self.XAX_kp1_31, x_reshaped[1], result2, self.r, self.n, self.R, 1.0, 0.0)
+        einsum(self.XAX_k_00, self.block_A_k_00, self.XAX_kp1_00, x_reshaped[0], result0, self.A_00_workspace1, self.A_00_workspace2, self.r, self.n, self.R, 1.0, 0.0)
+        einsum(self.XAX_k_21, self.block_A_k_21, self.XAX_kp1_21, x_reshaped[1], result1, self.A_21_workspace1, self.A_21_workspace2, self.r, self.n, self.R, 1.0, 0.0)
+        einsum(self.XAX_k_31, self.block_A_k_31, self.XAX_kp1_31, x_reshaped[1], result2, self.A_31_workspace1, self.A_31_workspace2, self.r, self.n, self.R, 1.0, 0.0)
 
-        einsum(self.XAX_k_01, self.block_A_k_01, self.XAX_kp1_01, x_reshaped[1], result0, self.r, self.n, self.R, 1.0, 1.0)
-        einsum(self.XAX_k_01T, self.block_A_k_01T, self.XAX_kp1_01T, x_reshaped[0], temp, self.r, self.n, self.R, 1.0, 0.0)
+        einsum(self.XAX_k_01, self.block_A_k_01, self.XAX_kp1_01, x_reshaped[1], result0, self.A_01_workspace1, self.A_01_workspace2, self.r, self.n, self.R, 1.0, 1.0)
+        einsum(self.XAX_k_01T, self.block_A_k_01T, self.XAX_kp1_01T, x_reshaped[0], temp, self.A_01T_workspace1, self.A_01T_workspace2, self.r, self.n, self.R, 1.0, 0.0)
         cdef cnp.ndarray[double, ndim=3] temp_reshaped = temp.reshape(self.R, self.n, self.r).transpose(2, 1, 0).__imul__(self.inv_I)
-        einsum(self.XAX_k_22, self.block_A_k_22, self.XAX_kp1_22, temp_reshaped.reshape(self.r*self.n, self.R) + x_reshaped[2], result1, self.r, self.n, self.R, -1.0, 1.0)
-        einsum(self.XAX_k_33, self.block_A_k_33, self.XAX_kp1_33, x_reshaped[2], result2, self.r, self.n, self.R, 1.0, 1.0)
+        einsum(self.XAX_k_22, self.block_A_k_22, self.XAX_kp1_22, temp_reshaped.reshape(self.r*self.n, self.R) + x_reshaped[2], result1, self.A_22_workspace1, self.A_22_workspace2, self.r, self.n, self.R, -1.0, 1.0)
+        einsum(self.XAX_k_33, self.block_A_k_33, self.XAX_kp1_33, x_reshaped[2], result2, self.A_33_workspace1, self.A_33_workspace2, self.r, self.n, self.R, 1.0, 1.0)
         result[0] = result0.reshape(self.R, self.n, self.r).transpose(2, 1, 0)
         result[1] = result1.reshape(self.R, self.n, self.r).transpose(2, 1, 0)
         result[2] = result2.reshape(self.R, self.n, self.r).transpose(2, 1, 0)
