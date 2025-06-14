@@ -567,20 +567,24 @@ def tt_restarted_block_als(
 ):
     rhs = block_b
     orig_rhs_norm = rhs.norm
+    if orig_rhs_norm < op_tol:
+        raise RuntimeError(f"\n\t Absolute tolreance already reached: {orig_rhs_norm} < {op_tol}")
     x_cores, res = _tt_block_als(orig_rhs_norm, block_A, rhs, op_tol, termination_tol, eps, inner_m, rank_restriction, x0, local_solver, refinement, verbose)
     if res < termination_tol:
         if verbose:
-            print(f"\n\tTerminated on local criterion,  Error<{termination_tol}")
+            print(f"\n\tTerminated on local criterion,  Relative Error<{termination_tol}")
         return x_cores, res
     Ax = block_A.matvec(x_cores, op_tol)
     rhs = rhs.sub(Ax, 0.1*op_tol)
     rhs_norm = rhs.norm
     if rhs_norm < termination_tol*orig_rhs_norm:
         if verbose:
-            print(f"\n\tTerminated on global criterion,  Error={rhs_norm}")
+            print(f"\n\tTerminated on global criterion,  Relative Error={rhs_norm / orig_rhs_norm}")
         return x_cores, res
+    elif orig_rhs_norm < rhs_norm:
+        raise RuntimeError(f"Terminated on instability: ||rhs|| = {rhs_norm} > previous = {orig_rhs_norm}")
     if verbose:
-        print(f"\n\tGlobal Error={rhs_norm}")
+        print(f"\n\tRelative Error={rhs_norm / orig_rhs_norm}")
     for i in range(1, num_restarts):
         if verbose:
             print(f"\n\t---Restart {i}")
@@ -600,17 +604,17 @@ def tt_restarted_block_als(
                     print((f"Terminated on instability: ||rhs|| = {rhs_norm} > previous = {prev_rhs_norm}"))
                 return x_cores, prev_rhs_norm 
             raise RuntimeError(f"Terminated on instability: ||rhs|| = {rhs_norm} > previous = {prev_rhs_norm}")
-        elif rhs_norm < termination_tol*prev_rhs_norm:
+        elif rhs_norm < termination_tol*orig_rhs_norm:
             if verbose:
-                print(f"\n\tTerminated on global criterion,  Error={rhs_norm}")
+                print(f"\n\tTerminated on global criterion,  Relative Error={rhs_norm / orig_rhs_norm}")
             x_cores = tt_rank_reduce_py(tt_add(x_cores, new_x_cores), eps=eps)
             break
         if verbose:
-            print(f"\n\tGlobal Error={rhs_norm}")
+            print(f"\n\tRelative Error={rhs_norm / orig_rhs_norm}")
         x_cores = tt_rank_reduce_py(tt_add(x_cores, new_x_cores), eps=eps)
     else:
         if verbose:
-            print(f"\n\tNumber of restarts exhausted,  Error={rhs_norm}")
+            print(f"\n\tNumber of restarts exhausted,  Relative Error={rhs_norm / orig_rhs_norm}")
 
     return x_cores, res
 
