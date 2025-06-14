@@ -604,7 +604,7 @@ def tt_ipm(
     solver_ineq = lambda lhs, rhs, x0, nwsp, refinement, termination_tol: tt_restarted_block_als(
         lhs,
         rhs,
-        rank_restriction=max(4*dim + 2*dim + 2, 25),
+        rank_restriction=max(4*dim + dim, 25),
         x0=x0,
         local_solver=_ipm_local_solver_ineq,
         op_tol=op_tol,
@@ -617,7 +617,7 @@ def tt_ipm(
     solver_eq = lambda lhs, rhs, x0, nwsp, refinement, termination_tol: tt_restarted_block_als(
         lhs,
         rhs,
-        rank_restriction=max(3*dim + 2*dim + 2, 25),
+        rank_restriction=max(3*dim + dim, 25),
         x0=x0,
         local_solver=_ipm_local_solver,
         op_tol=op_tol,
@@ -654,8 +654,8 @@ def tt_ipm(
     lhs = lhs_skeleton
 
     while finishing_steps > 0:
-        status.eta = 1e-3
         iteration += 1
+        status.eta = max(status.op_tol, min(1e-2, status.mu))
         status.aho_direction = (iteration > warm_up)
         status.is_last_iter = status.is_last_iter or (max_iter - max_refinement < iteration)
         ZX = tt_inner_prod(Z_tt, X_tt)
