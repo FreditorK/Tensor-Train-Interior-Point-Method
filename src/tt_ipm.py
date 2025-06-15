@@ -291,21 +291,102 @@ def _tt_ipm_newton_step(
         status,
         solver
 ):
-    try:
-        # Predictor
+    # Predictor
+    if status.verbose:
+        print("\n--- Predictor  step ---", flush=True)
+    Delta_tt, _ = solver(lhs_matrix_tt, rhs_vec_tt, status.mals_delta0, status.kkt_iterations, status.is_last_iter, status.eta)
+    status.mals_delta0 = Delta_tt
+    Delta_X_tt = _tt_symmetrise(tt_reshape(_tt_get_block(1, Delta_tt), (2, 2)), status.eps)
+    Delta_Z_tt = _tt_symmetrise(tt_reshape(_tt_get_block(2, Delta_tt), (2, 2)), status.eps)
+    Delta_Y_tt = tt_rank_reduce(_tt_get_block(0, Delta_tt), eps=status.eps)
+    Delta_Y_tt = tt_rank_reduce(tt_sub(Delta_Y_tt, tt_fast_matrix_vec_mul(status.lag_map_y, Delta_Y_tt, status.eps)),
+                                eps=status.eps)
+    Delta_T_tt = None
+    if status.ineq_status is IneqStatus.ACTIVE:
+        Delta_T_tt = tt_rank_reduce(_tt_get_block(3, Delta_tt), eps=status.eps)
+        Delta_T_tt = tt_fast_hadamard(ineq_mask, tt_reshape(Delta_T_tt, (2, 2)), status.eps)
+    x_step_size, z_step_size = _tt_line_search(
+        X_tt,
+        Z_tt,
+        T_tt,
+        Delta_X_tt,
+        Delta_Z_tt,
+        Delta_T_tt,
+        ineq_mask,
+        status
+    )
+
+    if not status.is_central and not status.is_last_iter:
+
+        DXZ = tt_inner_prod(Delta_X_tt, Delta_Z_tt)
+        # Corrector
         if status.verbose:
-            print("\n--- Predictor  step ---", flush=True)
-        Delta_tt, _ = solver(lhs_matrix_tt, rhs_vec_tt, status.mals_delta0, status.kkt_iterations, status.is_last_iter, status.eta)
-        status.mals_delta0 = Delta_tt
-        Delta_X_tt = _tt_symmetrise(tt_reshape(_tt_get_block(1, Delta_tt), (2, 2)), status.eps)
-        Delta_Z_tt = _tt_symmetrise(tt_reshape(_tt_get_block(2, Delta_tt), (2, 2)), status.eps)
-        Delta_Y_tt = tt_rank_reduce(_tt_get_block(0, Delta_tt), eps=status.eps)
-        Delta_Y_tt = tt_rank_reduce(tt_sub(Delta_Y_tt, tt_fast_matrix_vec_mul(status.lag_map_y, Delta_Y_tt, status.eps)),
-                                    eps=status.eps)
-        Delta_T_tt = None
+            print(f"\n--- Centering-Corrector  step ---", flush=True)
+
         if status.ineq_status is IneqStatus.ACTIVE:
-            Delta_T_tt = tt_rank_reduce(_tt_get_block(3, Delta_tt), eps=status.eps)
-            Delta_T_tt = tt_fast_hadamard(ineq_mask, tt_reshape(Delta_T_tt, (2, 2)), status.eps)
+            mu_aff = (
+                ZX + x_step_size * z_step_size * DXZ
+                + z_step_size * tt_inner_prod(X_tt, Delta_Z_tt)
+                + x_step_size * tt_inner_prod(Delta_X_tt, Z_tt)
+                + TX + x_step_size * z_step_size * tt_inner_prod(Delta_T_tt, Delta_X_tt)
+                + z_step_size * (tt_inner_prod(X_tt, Delta_T_tt) + status.boundary_val*tt_entrywise_sum(Delta_T_tt))
+                + x_step_size * tt_inner_prod(Delta_X_tt, T_tt)
+            )
+            e = max(1, 3 * min(x_step_size, z_step_size) ** 2)
+            status.sigma = min(0.99, (mu_aff/(ZX + TX))**e)
+            rhs_3 = tt_add(
+                    tt_scale(status.sigma * status.mu, tt_reshape(ineq_mask, (4,))),
+                    rhs_vec_tt.get_row(3)
+                    ) if status.sigma > 0 else rhs_vec_tt.get_row(3)
+            rhs_vec_tt[3] = tt_rank_reduce(
+                rhs_3,
+                status.op_tol
+        )
+        else:
+            mu_aff = (
+                ZX + x_step_size * z_step_size * DXZ
+                + z_step_size * tt_inner_prod(X_tt,Delta_Z_tt)
+                + x_step_size * tt_inner_prod(Delta_X_tt, Z_tt)
+            )
+            e = max(1, 3*min(x_step_size, z_step_size)**2)
+            status.sigma = min(0.99, (mu_aff/ZX) ** e)
+
+
+        if DXZ > 0.1*status.centrality_tol:
+            Delta_XZ_term = tt_compute_centrality(Delta_X_tt, Delta_Z_tt, status)
+            rhs_vec_tt[2] = tt_rank_reduce(
+                tt_add(
+                    tt_scale(status.sigma * status.mu, tt_reshape(tt_identity(len(X_tt)), (4,))),
+                    tt_add(
+                        rhs_vec_tt.get_row(2),
+                        Delta_XZ_term
+                    )
+                ),
+                min(status.op_tol, 0.1*status.mu)
+            ) if status.sigma > 1e-4 else tt_rank_reduce(tt_add(rhs_vec_tt.get_row(2), Delta_XZ_term), min(status.op_tol, 0.1*status.mu))
+        else:
+            rhs_vec_tt[2] = tt_rank_reduce(
+                tt_add(
+                    tt_scale(status.sigma * status.mu, tt_reshape(tt_identity(len(X_tt)), (4,))),
+                    rhs_vec_tt.get_row(2)
+                ),
+                min(status.op_tol, 0.1*status.mu)
+            ) if status.sigma > 1e-4 else rhs_vec_tt.get_row(2)
+
+        Delta_tt_cc, _ = solver(lhs_matrix_tt, rhs_vec_tt, status.mals_delta0, status.kkt_iterations, status.is_last_iter, status.eta)
+        status.mals_delta0 = Delta_tt_cc
+        Delta_X_tt_cc = _tt_symmetrise(tt_reshape(_tt_get_block(1, Delta_tt_cc), (2, 2)), status.eps)
+        Delta_Z_tt_cc = _tt_symmetrise(tt_reshape(_tt_get_block(2, Delta_tt_cc), (2, 2)), status.eps)
+        Delta_Y_tt_cc = tt_rank_reduce(_tt_get_block(0, Delta_tt_cc), eps=status.eps)
+        Delta_Y_tt_cc = tt_rank_reduce(tt_sub(Delta_Y_tt_cc, tt_fast_matrix_vec_mul(status.lag_map_y, Delta_Y_tt_cc, status.eps)), eps=status.eps)
+        Delta_X_tt = tt_rank_reduce(tt_add(Delta_X_tt_cc, Delta_X_tt), eps=status.eps)
+        Delta_Y_tt = tt_rank_reduce(tt_add(Delta_Y_tt_cc, Delta_Y_tt), eps=status.eps)
+        Delta_Z_tt = tt_rank_reduce(tt_add(Delta_Z_tt_cc, Delta_Z_tt), eps=status.eps)
+        if status.ineq_status is IneqStatus.ACTIVE:
+            Delta_T_tt_cc = tt_rank_reduce(_tt_get_block(3, Delta_tt_cc), eps=status.eps)
+            Delta_T_tt_cc = tt_fast_hadamard(ineq_mask, tt_reshape(Delta_T_tt_cc, (2, 2)), status.eps)
+            Delta_T_tt = tt_rank_reduce(tt_add(Delta_T_tt_cc, Delta_T_tt), eps=status.eps)
+
         x_step_size, z_step_size = _tt_line_search(
             X_tt,
             Z_tt,
@@ -316,93 +397,8 @@ def _tt_ipm_newton_step(
             ineq_mask,
             status
         )
-
-        if not status.is_central and not status.is_last_iter:
-
-            DXZ = tt_inner_prod(Delta_X_tt, Delta_Z_tt)
-            # Corrector
-            if status.verbose:
-                print(f"\n--- Centering-Corrector  step ---", flush=True)
-
-            if status.ineq_status is IneqStatus.ACTIVE:
-                mu_aff = (
-                    ZX + x_step_size * z_step_size * DXZ
-                    + z_step_size * tt_inner_prod(X_tt, Delta_Z_tt)
-                    + x_step_size * tt_inner_prod(Delta_X_tt, Z_tt)
-                    + TX + x_step_size * z_step_size * tt_inner_prod(Delta_T_tt, Delta_X_tt)
-                    + z_step_size * (tt_inner_prod(X_tt, Delta_T_tt) + status.boundary_val*tt_entrywise_sum(Delta_T_tt))
-                    + x_step_size * tt_inner_prod(Delta_X_tt, T_tt)
-                )
-                e = max(1, 3 * min(x_step_size, z_step_size) ** 2)
-                status.sigma = min(0.99, (mu_aff/(ZX + TX))**e)
-                rhs_3 = tt_add(
-                        tt_scale(status.sigma * status.mu, tt_reshape(ineq_mask, (4,))),
-                        rhs_vec_tt.get_row(3)
-                        ) if status.sigma > 0 else rhs_vec_tt.get_row(3)
-                rhs_vec_tt[3] = tt_rank_reduce(
-                    rhs_3,
-                    status.op_tol
-            )
-            else:
-                mu_aff = (
-                    ZX + x_step_size * z_step_size * DXZ
-                    + z_step_size * tt_inner_prod(X_tt,Delta_Z_tt)
-                    + x_step_size * tt_inner_prod(Delta_X_tt, Z_tt)
-                )
-                e = max(1, 3*min(x_step_size, z_step_size)**2)
-                status.sigma = min(0.99, (mu_aff/ZX) ** e)
-
-
-            if DXZ > 0.1*status.centrality_tol:
-                Delta_XZ_term = tt_compute_centrality(Delta_X_tt, Delta_Z_tt, status)
-                rhs_vec_tt[2] = tt_rank_reduce(
-                    tt_add(
-                        tt_scale(status.sigma * status.mu, tt_reshape(tt_identity(len(X_tt)), (4,))),
-                        tt_add(
-                            rhs_vec_tt.get_row(2),
-                            Delta_XZ_term
-                        )
-                    ),
-                    min(status.op_tol, 0.1*status.mu)
-                ) if status.sigma > 1e-4 else tt_rank_reduce(tt_add(rhs_vec_tt.get_row(2), Delta_XZ_term), min(status.op_tol, 0.1*status.mu))
-            else:
-                rhs_vec_tt[2] = tt_rank_reduce(
-                    tt_add(
-                        tt_scale(status.sigma * status.mu, tt_reshape(tt_identity(len(X_tt)), (4,))),
-                        rhs_vec_tt.get_row(2)
-                    ),
-                    min(status.op_tol, 0.1*status.mu)
-                ) if status.sigma > 1e-4 else rhs_vec_tt.get_row(2)
-
-            Delta_tt_cc, _ = solver(lhs_matrix_tt, rhs_vec_tt, status.mals_delta0, status.kkt_iterations, status.is_last_iter, status.eta)
-            status.mals_delta0 = Delta_tt_cc
-            Delta_X_tt_cc = _tt_symmetrise(tt_reshape(_tt_get_block(1, Delta_tt_cc), (2, 2)), status.eps)
-            Delta_Z_tt_cc = _tt_symmetrise(tt_reshape(_tt_get_block(2, Delta_tt_cc), (2, 2)), status.eps)
-            Delta_Y_tt_cc = tt_rank_reduce(_tt_get_block(0, Delta_tt_cc), eps=status.eps)
-            Delta_Y_tt_cc = tt_rank_reduce(tt_sub(Delta_Y_tt_cc, tt_fast_matrix_vec_mul(status.lag_map_y, Delta_Y_tt_cc, status.eps)), eps=status.eps)
-            Delta_X_tt = tt_rank_reduce(tt_add(Delta_X_tt_cc, Delta_X_tt), eps=status.eps)
-            Delta_Y_tt = tt_rank_reduce(tt_add(Delta_Y_tt_cc, Delta_Y_tt), eps=status.eps)
-            Delta_Z_tt = tt_rank_reduce(tt_add(Delta_Z_tt_cc, Delta_Z_tt), eps=status.eps)
-            if status.ineq_status is IneqStatus.ACTIVE:
-                Delta_T_tt_cc = tt_rank_reduce(_tt_get_block(3, Delta_tt_cc), eps=status.eps)
-                Delta_T_tt_cc = tt_fast_hadamard(ineq_mask, tt_reshape(Delta_T_tt_cc, (2, 2)), status.eps)
-                Delta_T_tt = tt_rank_reduce(tt_add(Delta_T_tt_cc, Delta_T_tt), eps=status.eps)
-
-            x_step_size, z_step_size = _tt_line_search(
-                X_tt,
-                Z_tt,
-                T_tt,
-                Delta_X_tt,
-                Delta_Z_tt,
-                Delta_T_tt,
-                ineq_mask,
-                status
-            )
-        else:
-            status.sigma = 0
-    except Exception as e:
-            print(f"\tAttention: TT-solver failed with exception: {e}")
-            return 0, 0, None, None, None, None, status
+    else:
+        status.sigma = 0
 
     return x_step_size, z_step_size, Delta_X_tt, Delta_Y_tt, Delta_Z_tt, Delta_T_tt, status
 
