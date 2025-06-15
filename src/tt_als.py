@@ -978,15 +978,6 @@ def _eigen_local_solve(previous_solution, XAX_k, A_k, XAX_k1, m, size_limit, eps
     return solution_now.reshape(-1, 1), old_res
 
 
-def symmetric_powers_of_two(length):
-    half = length // 2
-    first_half = [2**i for i in range(1, half + 1)]
-    if length % 2 == 0:
-        return np.array(first_half + first_half[::-1])
-    else:
-        return np.array(first_half + [2**(half + 1)] + first_half[::-1])
-
-
 def tt_approx_mat_mat_mul(A, D, x0=None, kick_rank=None, nswp=50, tol=1e-6, verbose=False):
     if verbose:
         print(f"\nStarting MM solve with:\n \t {tol} \n \t sweeps: {nswp}")
@@ -1034,13 +1025,13 @@ def tt_approx_mat_mat_mul(A, D, x0=None, kick_rank=None, nswp=50, tol=1e-6, verb
                 r = prune_singular_vals(s, tol)
                 if not last:
                     kick = kick_rank[k-1]
-                    u, v, r = _add_kick_rank(u[:, :r], v[:r], kick)
+                    u, v, r = add_kick_rank(u[:, :r], v[:r], kick)
                 else:
                     u = u[:, :r]
                     v = v[:r]
                 nrmsc *= normx[k - 1] / normAD[k - 1]
                 x_cores[k] = np.reshape(u.T, (r, N[k], M[k], rx[k + 1]))
-                x_cores[k - 1] = einsum('rdkc,cR->rdkR', x_cores[k - 1], v.T, optimize=[(0, 1)])
+                x_cores[k - 1] = np.tensordot(x_cores[k - 1], v.T, axes=([3], [0])) # 'rdkc,cR->rdkR'
                 norm_now = np.linalg.norm(x_cores[k - 1])
                 normx[k - 1] *= norm_now
                 x_cores[k - 1] /= norm_now
@@ -1059,11 +1050,6 @@ def tt_approx_mat_mat_mul(A, D, x0=None, kick_rank=None, nswp=50, tol=1e-6, verb
             break
         if max_res < tol or swp == nswp - 1:
             last = True
-        if verbose:
-            print('\tStarting Sweep: %d' % swp)
-            print(f"\tDirection: {-1}")
-            print(f'\tResidual {max_res}')
-            print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
         max_res = 0
         for k in range(d):
             previous_solution = x_cores[k]
@@ -1079,12 +1065,12 @@ def tt_approx_mat_mat_mul(A, D, x0=None, kick_rank=None, nswp=50, tol=1e-6, verb
                 r = prune_singular_vals(s, tol)
                 if not last:
                     kick = kick_rank[k]
-                    u, v, r = _add_kick_rank(u[:, :r], v[:r, :], kick)
+                    u, v, r = add_kick_rank(u[:, :r], v[:r, :], kick)
                 else:
                     u = u[:, :r]
                     v = v[:r, :]
                 x_cores[k] = u.reshape(rx[k], N[k], M[k], r)
-                x_cores[k + 1] = einsum('ij,jdkl->idkl', v, x_cores[k + 1], optimize=[(0, 1)]).reshape(r, N[k + 1], M[k+1], rx[k + 2])
+                x_cores[k + 1] = np.tensordot(v, x_cores[k + 1], axes=([1], [0])).reshape(r, N[k + 1], M[k+1], rx[k + 2]) # ij,jdkl->idkl
                 norm_now = np.linalg.norm(x_cores[k + 1])
                 normx[k] *= norm_now
                 x_cores[k + 1] /= norm_now
@@ -1105,7 +1091,6 @@ def tt_approx_mat_mat_mul(A, D, x0=None, kick_rank=None, nswp=50, tol=1e-6, verb
             last = True
         if verbose:
             print('\tStarting Sweep: %d' % swp)
-            print(f"\tDirection: {1}")
             print(f'\tResidual {max_res}')
             print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
 
@@ -1174,13 +1159,13 @@ def tt_approx_mat_vec_mul(A, d_vec, x0=None, kick_rank=None, nswp=50, tol=1e-6, 
                 r = prune_singular_vals(s, tol)
                 if not last:
                     kick = kick_rank[k-1]
-                    u, v, r = _add_kick_rank(u[:, :r], v[:r], kick)
+                    u, v, r = add_kick_rank(u[:, :r], v[:r], kick)
                 else:
                     u = u[:, :r]
                     v = v[:r]
                 nrmsc *= normx[k - 1] / normAd[k - 1]
                 x_cores[k] = np.reshape(u.T, (r, N[k], rx[k + 1]))
-                x_cores[k - 1] = einsum('rdc,cR->rdR', x_cores[k - 1], v.T, optimize=[(0, 1)])
+                x_cores[k - 1] = np.tensordot(x_cores[k - 1], v.T, axes=([2], [0])) # rdc,cR->rdR
                 norm_now = np.linalg.norm(x_cores[k - 1])
                 normx[k - 1] *= norm_now
                 x_cores[k - 1] /= norm_now
@@ -1199,11 +1184,6 @@ def tt_approx_mat_vec_mul(A, d_vec, x0=None, kick_rank=None, nswp=50, tol=1e-6, 
             break
         if max_res < tol or swp == nswp - 1:
             last = True
-        if verbose:
-            print('\tStarting Sweep: %d' % swp)
-            print(f"\tDirection: {-1}")
-            print(f'\tResidual {max_res}')
-            print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
         max_res = 0
         for k in range(d):
             previous_solution = x_cores[k]
@@ -1219,12 +1199,12 @@ def tt_approx_mat_vec_mul(A, d_vec, x0=None, kick_rank=None, nswp=50, tol=1e-6, 
                 r = prune_singular_vals(s, tol)
                 if not last:
                     kick = kick_rank[k]
-                    u, v, r = _add_kick_rank(u[:, :r], v[:r, :], kick)
+                    u, v, r = add_kick_rank(u[:, :r], v[:r, :], kick)
                 else:
                     u = u[:, :r]
                     v = v[:r, :]
                 x_cores[k] = u.reshape(rx[k], N[k], r)
-                x_cores[k + 1] = einsum('ij,jdl->idl', v, x_cores[k + 1], optimize=[(0, 1)]).reshape(r, N[k + 1], rx[k + 2])
+                x_cores[k + 1] = np.tensordot(v, x_cores[k + 1], axes=([1], [0])).reshape(r, N[k + 1], rx[k + 2]) # ij,jdl->idl
                 norm_now = np.linalg.norm(x_cores[k + 1])
                 normx[k] *= norm_now
                 x_cores[k + 1] /= norm_now
@@ -1245,7 +1225,6 @@ def tt_approx_mat_vec_mul(A, d_vec, x0=None, kick_rank=None, nswp=50, tol=1e-6, 
             last = True
         if verbose:
             print('\tStarting Sweep: %d' % swp)
-            print(f"\tDirection: {1}")
             print(f'\tResidual {max_res}')
             print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
 

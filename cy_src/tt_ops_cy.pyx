@@ -12,9 +12,10 @@ import numpy as np
 cimport numpy as cnp  # This allows Cython to understand NumPy's C-API
 cimport cython
 import scipy as scp
+import time
+from opt_einsum import contract as einsum
 
 cnp.import_array() # Initialize NumPy C-API
-
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
@@ -500,3 +501,80 @@ cpdef list tt_fast_hadamard(list train_tt_1, list train_tt_2, double eps=1e-18):
                     cores[j], cores[j + 1] = swap_cores(cores[j], cores[j + 1], loop_eps)
 
         return cores
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cpdef double tt_inner_prod(list train_1_tt, list train_2_tt):
+    cdef cnp.ndarray[double, ndim=2] result
+    cdef cnp.ndarray temp_result
+    cdef cnp.ndarray core1, core2
+    cdef tuple core_pair
+    result = np.array([[1.0]], dtype=np.double)
+    for core_pair in zip(train_1_tt, train_2_tt):
+        core1, core2 = core_pair
+        temp_result = np.tensordot(result, core1, axes=([0], [0]))
+        if core1.ndim == 4:
+            result = np.tensordot(temp_result, core2, axes=([0, 1, 2], [0, 1, 2]))
+        else:
+            result = np.tensordot(temp_result, core2, axes=([0, 1], [0, 1]))
+
+    return result[0, 0]
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cpdef list tt_normalise(list train_tt, int radius=1):
+    cdef double factor = np.divide(radius, np.sqrt(tt_inner_prod(train_tt, train_tt)))
+    return tt_scale(factor, train_tt)
+
+@cython.boundscheck(False)
+cpdef list tt_random_gaussian(list target_ranks, tuple shape=(2,)):
+    cdef list compl_target_ranks = [1] + target_ranks + [1]
+    return tt_normalise(
+        [np.divide(1, l_n * np.prod(shape) * l_np1) * np.random.randn(l_n, *shape, l_np1) for l_n, l_np1 in
+         zip(compl_target_ranks[:-1], compl_target_ranks[1:])])
+
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cpdef cnp.ndarray[cnp.int64_t, ndim=1] symmetric_powers_of_two(int length):
+    if length <= 0:
+        return np.array([], dtype=np.int64)
+
+    cdef int half = length // 2
+    cdef int i
+    cdef cnp.ndarray[cnp.int64_t, ndim=1] result = np.empty(length, dtype=np.int64)
+    for i in range(half):
+        result[i] = 1LL << (i + 1)
+
+    if length % 2 != 0:
+        result[half] = 1LL << (half + 1)
+
+    for i in range(half):
+        result[length - 1 - i] = result[i]
+            
+    return result
+
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+def add_kick_rank(cnp.ndarray[double, ndim=2] u,
+                   cnp.ndarray[double, ndim=2] v,
+                   int r_add=2):
+    cdef int old_r = u.shape[1]
+    cdef int M = u.shape[0]
+    cdef int N = v.shape[1]
+
+    # Add random Gaussian kick
+    cdef cnp.ndarray[double, ndim=2] uk = np.random.randn(M, r_add)
+
+    # Concatenate and QR
+    cdef cnp.ndarray[double, ndim=2] concat = np.ascontiguousarray(np.concatenate((u, uk), axis=1))
+    cdef tuple qr_result = scp.linalg.qr(concat, mode='economic', check_finite=False)
+    cdef cnp.ndarray[double, ndim=2] u_new = qr_result[0]
+    cdef cnp.ndarray[double, ndim=2] Rmat = qr_result[1]
+
+    # Adjust v
+    cdef cnp.ndarray[double, ndim=2] v_new = Rmat[:, :old_r] @ v
+    cdef int new_rank = u_new.shape[1]
+
+    return u_new, v_new, new_rank

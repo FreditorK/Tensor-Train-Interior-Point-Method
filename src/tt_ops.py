@@ -22,20 +22,6 @@ def cached_einsum(equation: str, *operands):
     expr = get_contract_expr_cached(equation, tuple(op.shape for op in operands))
     return expr(*operands)
 
-def tt_random_binary(target_ranks: List[int], shape=(2,)):
-    """
-    Only has non-negative entries
-    """
-    target_ranks = [1] + target_ranks + [1]
-    return tt_normalise([np.random.randint(low=0, high=2, size=(l_n, *shape, l_np1)) for l_n, l_np1 in
-                         zip(target_ranks[:-1], target_ranks[1:])])
-
-def tt_random_gaussian(target_ranks: List[int], shape=(2,)):
-    target_ranks = [1] + target_ranks + [1]
-    return tt_normalise(
-        [np.divide(1, l_n * np.prod(shape) * l_np1) * np.random.randn(l_n, *shape, l_np1) for l_n, l_np1 in
-         zip(target_ranks[:-1], target_ranks[1:])])
-
 def tt_rl_orthogonalise_py(train_tt: List[np.array]):
     dim = len(train_tt)
     if dim == 1:
@@ -50,16 +36,7 @@ def tt_rl_orthogonalise_py(train_tt: List[np.array]):
         ).reshape(-1, *shape_im1[1:-1], train_tt[i].shape[0])
     return train_tt
 
-def tt_orthogonalise_idx(train_tt: List[np.array], idx):
-    if idx == 0:
-        return tt_rl_orthogonalise(train_tt)
-    if idx == len(train_tt) - 1:
-        return tt_lr_orthogonalise(train_tt)
-    tt_train_fidx = tt_lr_orthogonalise(train_tt[:idx + 1])
-    tt_train_uidx = tt_rl_orthogonalise([tt_train_fidx[-1]] + train_tt[idx + 1:])
-    return tt_train_fidx[:-1] + tt_train_uidx
-
-def tt_lr_orthogonalise(train_tt: List[np.array]):
+def tt_lr_orthogonalise_py(train_tt: List[np.array]):
     train_tt = tt_swap_all(train_tt)
     train_tt = tt_rl_orthogonalise(train_tt)
     train_tt = tt_swap_all(train_tt)
@@ -207,28 +184,11 @@ def tt_entry(train_tt: List[np.array], indices: List[int]) -> np.array:
 def tt_sub(train_1_tt: List[np.array], train_2_tt: List[np.array]) -> List[np.array]:
     return tt_add(train_1_tt, tt_scale(-1, train_2_tt))
 
-def tt_inner_prod(train_1_tt: List[np.array], train_2_tt: List[np.array]) -> float:
-    eq = 'ab,aijm,bijn->mn' if train_1_tt[0].ndim == 4 else 'ab,aim,bin->mn'
-
-    result = reduce(
-        lambda res, c: cached_einsum(eq, res, *c),
-        zip(train_1_tt, train_2_tt),
-        np.array([[1.0]])
-    )
-
-    return np.sum(result)
-
-
 def tt_to_tensor(tt_train):
     tensor = tt_train[0]
     for core in tt_train[1:]:
         tensor = np.tensordot(tensor, core, axes=(-1, 0))
     return np.sum(tensor, axis=(0, -1))
-
-
-def tt_normalise(train_tt, radius=1):
-    factor = np.divide(radius, np.sqrt(tt_inner_prod(train_tt, train_tt)))
-    return tt_scale(factor, train_tt)
 
 
 def tt_kron(matrix_tt_1, matrix_tt_2):

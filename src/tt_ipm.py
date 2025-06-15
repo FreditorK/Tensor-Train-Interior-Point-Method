@@ -604,7 +604,7 @@ def tt_ipm(
     solver_ineq = lambda lhs, rhs, x0, nwsp, refinement, termination_tol: tt_restarted_block_als(
         lhs,
         rhs,
-        rank_restriction=max(4*dim + dim + 2, 25),
+        rank_restriction=max(4*dim + dim + 4, 25),
         x0=x0,
         local_solver=_ipm_local_solver_ineq,
         op_tol=op_tol,
@@ -617,7 +617,7 @@ def tt_ipm(
     solver_eq = lambda lhs, rhs, x0, nwsp, refinement, termination_tol: tt_restarted_block_als(
         lhs,
         rhs,
-        rank_restriction=max(3*dim + dim + 2, 25),
+        rank_restriction=max(3*dim + dim + 3, 25),
         x0=x0,
         local_solver=_ipm_local_solver,
         op_tol=op_tol,
