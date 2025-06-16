@@ -563,6 +563,8 @@ def tt_ipm(
     op_tol=1e-5,
     abs_tol=1e-3,
     eps=1e-12,
+    mals_restarts=3,
+    mals_rank_restriction=25,
     verbose=False
 ):
     centrality_tol = gap_tol
@@ -604,12 +606,12 @@ def tt_ipm(
     solver_ineq = lambda lhs, rhs, x0, nwsp, refinement, termination_tol: tt_restarted_block_als(
         lhs,
         rhs,
-        rank_restriction=max(4*dim + dim + 4, 25),
+        rank_restriction=mals_rank_restriction, # max(4*dim + dim + 4, 25)
         x0=x0,
         local_solver=_ipm_local_solver_ineq,
         op_tol=op_tol,
         termination_tol=termination_tol,
-        num_restarts=3,
+        num_restarts=mals_restarts, # 3
         inner_m=nwsp,
         refinement=refinement,
         verbose=verbose
@@ -617,12 +619,12 @@ def tt_ipm(
     solver_eq = lambda lhs, rhs, x0, nwsp, refinement, termination_tol: tt_restarted_block_als(
         lhs,
         rhs,
-        rank_restriction=max(3*dim + dim + 3, 25),
+        rank_restriction=mals_rank_restriction, # max(3*dim + dim + 3, 25)
         x0=x0,
         local_solver=_ipm_local_solver,
         op_tol=op_tol,
         termination_tol=termination_tol,
-        num_restarts=3,
+        num_restarts=mals_restarts, # 3
         inner_m=nwsp,
         refinement=refinement,
         verbose=verbose

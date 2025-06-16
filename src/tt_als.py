@@ -751,7 +751,7 @@ def tt_max_generalised_eigen(A, Delta, x0=None, kick_rank=None, nswp=10, tol=1e-
             if k > 0:
                 u, s, v = scp.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
                 v = s.reshape(-1, 1) * v
-                r = prune_singular_vals(s, 0.5*tol)
+                r = prune_singular_vals(s, 0.1*tol)
                 if not last:
                     kick = kick_rank[k-1]
                     u, v, r = _add_kick_rank(u[:, :r], v[:r], kick)
@@ -795,7 +795,7 @@ def tt_max_generalised_eigen(A, Delta, x0=None, kick_rank=None, nswp=10, tol=1e-
             if k < d - 1:
                 u, s, v = scp.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
                 v = s.reshape(-1, 1) * v
-                r = prune_singular_vals(s, 0.5*tol)
+                r = prune_singular_vals(s, 0.1*tol)
                 if not last:
                     kick = kick_rank[k]
                     u, v, r = _add_kick_rank(u[:, :r], v[:r, :], kick)
@@ -836,7 +836,7 @@ def tt_max_generalised_eigen(A, Delta, x0=None, kick_rank=None, nswp=10, tol=1e-
         print('\t Time: ', time.time() - t0)
         print('\t Time per sweep: ', (time.time() - t0) / (swp + 1), flush=True)
 
-    if max_res > tol:
+    if max_res > 10*tol:
         step_size = 0
     return step_size, x_cores
 

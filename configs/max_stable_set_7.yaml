@@ -1,12 +1,14 @@
 # Common
 dim: !!int 7
 max_rank: !!int 4
-seeds: [5, 7, 8, 9, 84] # Tier 1: 5, 7, 8, 9, 84 Tier 2: Tier 3: 6
-gap_tol: !!float 2e-4
-verbose: False
+seeds: [5] # Tier 1: 5, 7, 8, 9, 84 Tier 2: Tier 3: 6
+gap_tol: !!float 4e-4
+verbose: True
 # TT-IPM
-op_tol: !!float 5e-4
+op_tol: !!float 1e-4
 max_iter: !!int 18
 warm_up: !!int 3
+mals_rank_restriction: !!int 28
+mals_restarts: !!int 3
 # Sketchy CGAL
 sketch_cgal_rank: !!int 64

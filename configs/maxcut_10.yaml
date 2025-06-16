@@ -8,5 +8,7 @@ verbose: True
 op_tol: !!float 5e-6
 max_iter: !!int 38
 warm_up: !!int 3
+mals_rank_restriction: !!int 36
+mals_restarts: !!int 4
 # Sketchy CGAL
 sketch_cgal_rank: !!int 128

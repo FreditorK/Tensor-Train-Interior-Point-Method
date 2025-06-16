@@ -277,7 +277,9 @@ if __name__ == "__main__":
                     gap_tol=config["gap_tol"],
                     op_tol=config["op_tol"],
                     warm_up=config["warm_up"],
-                    aho_direction=False
+                    aho_direction=False,
+                    mals_rank_restriction=config["mals_rank_restriction"],
+                    mals_restarts=config["mals_restarts"]
                 )
                 return X_tt, Y_tt, T_tt, Z_tt, info
 
@@ -296,7 +298,9 @@ if __name__ == "__main__":
                 gap_tol=config["gap_tol"],
                 op_tol=config["op_tol"],
                 warm_up=config["warm_up"],
-                aho_direction=False
+                aho_direction=False,
+                mals_rank_restriction=config["mals_rank_restriction"],
+                mals_restarts=config["mals_restarts"]
             )
 
         t3 = time.time()

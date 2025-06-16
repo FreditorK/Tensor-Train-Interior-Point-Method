@@ -20,7 +20,7 @@ def tt_G_entrywise_mask_op(G):
         core[:, 0, 0] = g_core[:, 0]
         core[:, 1, 1] = g_core[:, 1]
         basis.append(core)
-    return tt_rank_reduce(basis)
+    return tt_rank_reduce(tt_reshape(basis, (4, 4)))
 
 def tt_tr_constraint(dim):
     op =[]
@@ -28,10 +28,22 @@ def tt_tr_constraint(dim):
         core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
         core[:, 0] = c
         op.append(core)
-    return tt_rank_reduce(op), [E(0, 0) for _ in range(config["dim"])]
+    return tt_rank_reduce(tt_reshape(op, (4, 4))), [E(0, 0) for _ in range(config["dim"])]
 
 def tt_obj_matrix(dim):
     return tt_scale(1/2 ** dim, tt_one_matrix(dim)) # TODO: What scaling is the best?
+
+
+def create_problem(dim, rank):
+    print("Creating Problem...")
+    scale = max(2**(dim-6), 1)
+    G = tt_rank_reduce(tt_random_graph(dim, rank))
+    obj_tt = tt_obj_matrix(dim)
+    L_tt, bias_tt = tt_tr_constraint(dim)
+    print([c.shape for c in L_tt])
+    L_tt = tt_rank_reduce(tt_add(L_tt, tt_G_entrywise_mask_op(G)))
+    lag_y = tt_rank_reduce(tt_diag_op(tt_sub(tt_one_matrix(config["dim"]), tt_add(G, bias_tt))))
+    return tt_reshape(tt_normalise(obj_tt, radius=scale), (4,)), L_tt, tt_reshape(tt_normalise(bias_tt, radius=scale), (4,)), lag_y
 
 if __name__ == "__main__":
     np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=4, suppress=True)
@@ -53,21 +65,9 @@ if __name__ == "__main__":
             np.random.seed(seed)
             t0 = time.time()
             rank = config["max_rank"] if args.rank == 0 else args.rank
-            G = tt_rank_reduce(tt_random_graph(config["dim"], rank))
             t1 = time.time()
-            G_entry_tt_op = tt_G_entrywise_mask_op(G)
-            tr_tt_op, tr_bias_tt = tt_tr_constraint(config["dim"])
-            J_tt = tt_obj_matrix(config["dim"])
-            lag_maps = {
-                "y": tt_rank_reduce(tt_diag_op(tt_sub(tt_one_matrix(config["dim"]), tt_add(G, tr_bias_tt))))
-            }
-            L_tt = tt_rank_reduce(tt_add(G_entry_tt_op, tr_tt_op))
-            bias_tt = tr_bias_tt
-
-            J_tt = tt_reshape(J_tt, (4,))
-            L_tt = tt_reshape(L_tt, (4, 4))
-            bias_tt = tt_reshape(bias_tt, (4,))
-
+            obj_tt, L_tt, bias_tt, lag_y = create_problem(config["dim"], config["max_rank"])
+            lag_maps = {"y": lag_y}
             t2 = time.time()
             if args.track_mem:
                 start_mem = memory_usage(max_usage=True)
@@ -75,7 +75,7 @@ if __name__ == "__main__":
                 def wrapper():
                     X_tt, Y_tt, T_tt, Z_tt, info = tt_ipm(
                         lag_maps,
-                        J_tt,
+                        obj_tt,
                         L_tt,
                         bias_tt,
                         max_iter=config["max_iter"],
@@ -83,7 +83,9 @@ if __name__ == "__main__":
                         gap_tol=config["gap_tol"],
                         op_tol=config["op_tol"],
                         warm_up=config["warm_up"],
-                        aho_direction=False
+                        aho_direction=False,
+                        mals_rank_restriction=config["mals_rank_restriction"],
+                        mals_restarts=config["mals_restarts"]
                     )
                     return X_tt, Y_tt, T_tt, Z_tt, info
 
@@ -94,7 +96,7 @@ if __name__ == "__main__":
             else:
                 X_tt, Y_tt, T_tt, Z_tt, info = tt_ipm(
                     lag_maps,
-                    J_tt,
+                    obj_tt,
                     L_tt,
                     bias_tt,
                     max_iter=config["max_iter"],
@@ -102,7 +104,9 @@ if __name__ == "__main__":
                     gap_tol=config["gap_tol"],
                     op_tol=config["op_tol"],
                     warm_up=config["warm_up"],
-                    aho_direction=False
+                    aho_direction=False,
+                    mals_rank_restriction=config["mals_rank_restriction"],
+                    mals_restarts=config["mals_restarts"]
                 )
             t3 = time.time()
             runtimes.append(t3 - t2)

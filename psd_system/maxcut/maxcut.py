@@ -14,12 +14,20 @@ from memory_profiler import memory_usage
 def tt_diag_constraint_op(dim):
     identity = tt_identity(dim)
     basis = tt_diag_op(identity)
-    return basis, tt_reshape(tt_normalise(identity, radius=1), (4,)) # we normalise for better scaling between primal and dual variables
+    return basis, identity
 
 def tt_obj_matrix(rank, dim):
     graph_tt = tt_rank_reduce(tt_random_graph(dim, rank))
     laplacian_tt = tt_sub(tt_diag(tt_fast_matrix_vec_mul(graph_tt, [np.ones((1, 2, 1)) for _ in range(dim)],  1e-12)), graph_tt)
-    return tt_reshape(tt_normalise(laplacian_tt, radius=1), (4,))
+    return laplacian_tt
+
+def create_problem(dim, rank):
+    print("Creating Problem...")
+    scale = max(2**(dim-7), 1)
+    obj_tt = tt_obj_matrix(rank, dim)
+    L_tt, bias_tt = tt_diag_constraint_op(dim)
+    lag_y = tt_diag_op(tt_sub(tt_one_matrix(dim), tt_identity(dim)))
+    return tt_reshape(tt_normalise(obj_tt, radius=scale), (4,)), L_tt, tt_reshape(tt_normalise(bias_tt, radius=scale), (4,)), lag_y
 
 
 if __name__ == "__main__":
@@ -43,18 +51,16 @@ if __name__ == "__main__":
         np.random.seed(seed)
         t0 = time.time()
         rank = config["max_rank"] if args.rank == 0 else args.rank
-        G_tt = tt_obj_matrix(rank, config["dim"])
         t1 = time.time()
-        L_tt, bias_tt = tt_diag_constraint_op(config["dim"])
-        lag_y = tt_sub(tt_one_matrix(config["dim"]), tt_identity(config["dim"]))
-        lag_maps = {"y": tt_diag_op(lag_y)}
+        obj_tt, L_tt, bias_tt, lag_y = create_problem(config["dim"], config["max_rank"])
+        lag_maps = {"y": lag_y}
         t2 = time.time()
         if args.track_mem:
             start_mem = memory_usage(max_usage=True)
             def wrapper():
                 X_tt, Y_tt, T_tt, Z_tt, info = tt_ipm(
                     lag_maps,
-                    G_tt,
+                    obj_tt,
                     L_tt,
                     bias_tt,
                     max_iter=config["max_iter"],
@@ -62,7 +68,9 @@ if __name__ == "__main__":
                     gap_tol=config["gap_tol"],
                     op_tol=config["op_tol"],
                     warm_up=config["warm_up"],
-                    aho_direction=False
+                    aho_direction=False,
+                    mals_rank_restriction=config["mals_rank_restriction"],
+                    mals_restarts=config["mals_restarts"]
                 )
                 return X_tt, Y_tt, T_tt, Z_tt, info
 
@@ -72,7 +80,7 @@ if __name__ == "__main__":
         else:
             X_tt, Y_tt, T_tt, Z_tt, info = tt_ipm(
                 lag_maps,
-                G_tt,
+                obj_tt,
                 L_tt,
                 bias_tt,
                 max_iter=config["max_iter"],
@@ -80,7 +88,9 @@ if __name__ == "__main__":
                 gap_tol=config["gap_tol"],
                 op_tol=config["op_tol"],
                 warm_up=config["warm_up"],
-                aho_direction=False
+                aho_direction=False,
+                mals_rank_restriction=config["mals_rank_restriction"],
+                mals_restarts=config["mals_restarts"]
             )
         t3 = time.time()
         problem_creation_times.append(t2 - t1)
