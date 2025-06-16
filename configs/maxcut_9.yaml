@@ -5,7 +5,7 @@ seeds: [9402] # Tier 1: 9402, 9313, 3333, 33333, 24, Tier 2: 66, 8399, 22, Tier 
 gap_tol: !!float 2e-4
 verbose: True
 # TT-IPM
-op_tol: !!float 1e-5
+op_tol: !!float 1e-4
 max_iter: !!int 35
 warm_up: !!int 0
 mals_rank_restriction: !!int 32
