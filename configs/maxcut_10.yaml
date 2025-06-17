@@ -9,6 +9,6 @@ op_tol: !!float 1e-4
 max_iter: !!int 38
 warm_up: !!int 0
 mals_rank_restriction: !!int 36
-mals_restarts: !!int 4
+mals_restarts: !!int 3
 # Sketchy CGAL
 sketch_cgal_rank: !!int 128
