@@ -40,7 +40,7 @@ if __name__ == "__main__":
         J_n = np.ones((n, n))
 
         if args.track_mem:
-            start_mem = memory_usage(max_usage=True)
+            start_mem = memory_usage(max_usage=True, include_children=True)
         # Variables
         Q = cp.Variable((n ** 2, n ** 2), PSD=True)
         P = cp.Variable((n, n))
@@ -95,7 +95,7 @@ if __name__ == "__main__":
             def wrapper():
                 _ = prob.solve(solver=cp.SDPA, epsilonDash=1e-6 / n, epsilonStar=1e-5 / n, verbose=True, numThreads=1, omegaStar=100, betaStar=0.5, gammaStar=0.9)
 
-            res = memory_usage(proc=wrapper, max_usage=True, retval=True)
+            res = memory_usage(proc=wrapper, max_usage=True, retval=True, include_children=True)
             X = QP_mat.value
             for m in prob.solution.dual_vars.values():
                 if type(m) == np.ndarray:

@@ -29,7 +29,7 @@ if __name__ == "__main__":
         C = tt_matrix_to_matrix(tt_obj_matrix(config["max_rank"], config["dim"]))
         t1 = time.time()
         if args.track_mem:
-            start_mem = memory_usage(max_usage=True)
+            start_mem = memory_usage(max_usage=True, include_children=True)
         X = cp.Variable(C.shape, PSD=True)
         constraints = [X >> 0]
         constraints += [cp.diag(X) == 1]

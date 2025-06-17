@@ -37,7 +37,7 @@ if __name__ == "__main__":
         t1 = time.time()
         J = np.ones_like(adj_matrix)
         if args.track_mem:
-            start_mem = memory_usage(max_usage=True)
+            start_mem = memory_usage(max_usage=True, include_children=True)
         X = cp.Variable(J.shape, symmetric=True)
         constraints = [X >> 0]
         constraints += [cp.diag(cp.vec(adj_matrix, order="F").flatten()) @ cp.vec(X, order="F") == 0] # for A, b in zip(constraint_matrices, bias.flatten())]
@@ -48,7 +48,7 @@ if __name__ == "__main__":
             def wrapper():
                 _ = prob.solve(solver=cp.SDPA, epsilonDash=1e-6 / 2**config["dim"], epsilonStar=1e-5 / 2**config["dim"], verbose=True, numThreads=1, omegaStar=100, betaStar=0.5, gammaStar=0.9)
 
-            res = memory_usage(proc=wrapper, max_usage=True, retval=True)
+            res = memory_usage(proc=wrapper, max_usage=True, retval=True, include_children=True)
             X = X.value
             for m in prob.solution.dual_vars.values():
                     if type(m) == np.ndarray:

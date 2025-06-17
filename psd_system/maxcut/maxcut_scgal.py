@@ -31,7 +31,7 @@ if __name__ == "__main__":
         constraint_matrices = [np.outer(column, column) for column in np.eye(C.shape[0])]
         bias = np.ones((C.shape[0], 1))
         if args.track_mem:
-            start_mem = memory_usage(max_usage=True)
+            start_mem = memory_usage(max_usage=True, include_children=True)
         t2 = time.time()
         if args.track_mem:
             def wrapper():
@@ -41,7 +41,7 @@ if __name__ == "__main__":
                                                      verbose=config["verbose"])
                 return X, duality_gaps, info
 
-            res = memory_usage(proc=wrapper, max_usage=True, retval=True)
+            res = memory_usage(proc=wrapper, max_usage=True, retval=True, include_children=True)
             X, duality_gaps, info = res[1]
             memory.append(res[0] - start_mem)
         else:

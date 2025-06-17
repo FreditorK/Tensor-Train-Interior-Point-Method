@@ -264,7 +264,7 @@ if __name__ == "__main__":
         eq_bias_tt = tt_reshape(eq_bias_tt, (4,))
         t2 = time.time()
         if args.track_mem:
-            start_mem = memory_usage(max_usage=True)
+            start_mem = memory_usage(max_usage=True, include_children=True)
             def wrapper():
                 X_tt, Y_tt, T_tt, Z_tt, info = tt_ipm(
                     lag_maps,
@@ -283,7 +283,7 @@ if __name__ == "__main__":
                 )
                 return X_tt, Y_tt, T_tt, Z_tt, info
 
-            res = memory_usage(proc=wrapper, max_usage=True, retval=True)
+            res = memory_usage(proc=wrapper, max_usage=True, retval=True, include_children=True)
             X_tt, Y_tt, T_tt, Z_tt, info = res[1]
             memory.append(res[0] - start_mem)
         else:
