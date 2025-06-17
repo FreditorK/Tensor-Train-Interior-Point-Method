@@ -8,7 +8,6 @@ from src.tt_als import cached_einsum, TTBlockMatrix, TTBlockVector, tt_restarted
 from dataclasses import dataclass
 from enum import Enum
 from src.tt_ops import lgmres
-from cy_src.schur_solve_cy import SchurSolver
 
 class IneqStatus(Enum):
     """
@@ -38,20 +37,33 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
     inv_I = np.divide(1, cached_einsum('lsr,smnS,LSR->lmL', XAX_k[1, 2], block_A_k[1, 2], XAX_k1[1, 2]))
     block_res_old = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution).__isub__(rhs))
     if m <= size_limit:
-        schur_solver = SchurSolver(
-            XAX_k[0, 0], XAX_k[0, 1], XAX_k[2, 1], XAX_k[2, 2],
-            block_A_k[0, 0], block_A_k[0, 1], block_A_k[2, 1], block_A_k[2, 2],
-            XAX_k1[0, 0], XAX_k1[0, 1], XAX_k1[2, 1], XAX_k1[2, 2],
-            inv_I, 
-            rhs[:, 0].reshape(m, 1),
-            rhs[:, 1].reshape(m, 1),
-            rhs[:, 2].reshape(m, 1),
-            x_shape[0], x_shape[2], x_shape[3],
-        )
         try:
-            solution_now = schur_solver.solve(previous_solution)
+            L_L_Z = scp.linalg.cholesky(
+                cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[2, 1], block_A_k[2, 1], XAX_k1[2, 1]).reshape(m, m),
+                check_finite=False, lower=True, overwrite_a=True
+            )
+            mR_p = rhs[:, 0].reshape(m, 1)
+            mR_d = rhs[:, 1].reshape(m, 1)
+            mR_c = rhs[:, 2].reshape(m, 1)
+            L_X_I_inv = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[2, 2], block_A_k[2, 2], XAX_k1[2, 2]).reshape(m, m).__imul__(inv_I.reshape(1, -1))
+            mL_eq = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[0, 1], block_A_k[0, 1], XAX_k1[0, 1]).reshape(m, m)
+            b = mR_p - mL_eq @ forward_backward_sub(L_L_Z, mR_c - L_X_I_inv @ mR_d, overwrite_b=True)
+            mL_eq @= forward_backward_sub(L_L_Z, L_X_I_inv, overwrite_b=True) @ mL_eq.T
+            A = mL_eq
+            A += cached_einsum('lsr,smnS,LSR->lmLrnR',XAX_k[0, 0], block_A_k[0, 0], XAX_k1[0, 0]).reshape(m, m)
+            b -= A @ previous_solution[:, 0].reshape(-1, 1)
+            solution_now = np.empty(x_shape)
+            solution_now[:, 0] = scp.linalg.solve(A, b, check_finite=False, overwrite_a=True, overwrite_b=True).reshape(x_shape[0], x_shape[2], x_shape[3]).__iadd__(previous_solution[:, 0])
+            solution_now[:, 2] = (
+                mR_d - cached_einsum('lsr,smnS,LSR,lmL->rnR', XAX_k[0, 1], block_A_k[0, 1], XAX_k1[0, 1], solution_now[:, 0]).reshape(-1, 1)
+                ).__imul__(inv_I.reshape(-1, 1)).reshape(x_shape[0], x_shape[2], x_shape[3])
+            solution_now[:, 1] = forward_backward_sub(
+                L_L_Z, 
+                mR_c - cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[2, 2], block_A_k[2, 2], XAX_k1[2, 2], solution_now[:, 2]).reshape(-1, 1), 
+                overwrite_b=True
+                ).reshape(x_shape[0], x_shape[2], x_shape[3])
         except Exception as e:
-            print(f"\tAttention: Solver failed with exception: {e}")
+            print(f"\tAttention: {e}")
             size_limit = 0
 
     if m > size_limit:

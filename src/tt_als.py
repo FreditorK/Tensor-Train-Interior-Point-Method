@@ -407,11 +407,11 @@ def _tt_block_als(
     XAX =  [{key: np.ones((1, 1, 1)) for key in block_A}] + [{key: None for key in block_A} for _ in range(d-1)] + [{key: np.ones((1, 1, 1)) for key in block_A}]  # size is rk x Rk x rk
     Xb = [{key: np.ones((1, 1)) for key in block_b}] + [{key: None for key in block_b} for _ in range(d-1)] + [{key: np.ones((1, 1)) for key in block_b}]   # size is rk x rbk
 
-    r_max_warm_up = min(10, r_max_final)
+    r_max_warm_up = min(d+1, r_max_final)
     size_limit = 0
     x_cores = tt_rank_retraction(x_cores, [r_max_warm_up]*(d-1)) if x0 is not None else x_cores
     if not refinement:
-        size_limit = (r_max_warm_up+15)**2*N[0]
+        size_limit = (r_max_warm_up+np.floor(np.sqrt(d)*5))**2*N[0]
 
     rx = np.array([1] + tt_ranks(x_cores) + [1])
     local_res_fwd = np.inf
