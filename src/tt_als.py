@@ -625,6 +625,37 @@ def tt_restarted_block_als(
 
     return x_cores, res
 
+class CgIterInv(scp.sparse.linalg.LinearOperator):
+
+    def __init__(self, M, tol=1e-12):
+        self.M = M
+        self.shape = M.shape
+        self.tol = tol
+        self.ifunc = lambda b: scp.sparse.linalg.cg(M, b, maxiter=300, rtol=tol, atol=0)
+
+    def _matvec(self, x):
+        b, info = self.ifunc(x)
+        if info < 0:
+            raise ValueError("Error in inverting M: function "
+                             "%s did not converge (info = %i)."
+                             % (self.ifunc.__name__, info))
+        return b
+    
+
+def cholesky_inverse_operator(M):
+    #TODO: By default eigsh uses sparse LU, we should use sparse choleksy
+    """
+    chol = cholesky(M)
+
+    n = M.shape[0]
+
+    def matvec(x):
+        return chol.solve_A(x)
+
+    return LinearOperator((n, n), matvec=matvec, dtype=M.dtype)
+    """
+    pass
+
 
 def _step_size_local_solve(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k, A_k, XAX_k1, m, step_size, size_limit, eps):
     if m <= size_limit:
@@ -635,14 +666,14 @@ def _step_size_local_solve(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k, A_k
         ).reshape(m, m)
         A = cached_einsum("lsr,smnS,LSR->lmLrnR", XAX_k, A_k, XAX_k1).reshape(m, m)
         try:
-            eig_val, solution_now = scp.sparse.linalg.eigsh((1/step_size)*A + D, tol=eps, k=1, ncv=min(m, 25), maxiter=12*m, which="SA", v0=previous_solution)
+            eig_val, solution_now = scp.sparse.linalg.eigsh((1/step_size)*A + D, tol=eps, k=1, ncv=min(m, 25), maxiter=10*m, which="SA", v0=previous_solution)
         except Exception as e:
             print(f"\tAttention: {e}")
             eig_val = previous_solution.T @ ((1/step_size)*A + D)  @ previous_solution
             solution_now = previous_solution
         if eig_val < 0:
             try:
-                eig_val, solution_now = scp.sparse.linalg.eigsh(-D, M=A, tol=eps, k=1, ncv=min(m, 25), which="LA", maxiter=12*m, v0=previous_solution)
+                eig_val, solution_now = scp.sparse.linalg.eigsh(-D, M=A, tol=eps, k=1, ncv=min(m, 25), which="LA", maxiter=10*m, v0=previous_solution)
                 step_size = max(0, min(step_size, 1/ eig_val[0]))
             except Exception as e:
                 print(f"\tAttention: {e}")
@@ -655,22 +686,22 @@ def _step_size_local_solve(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k, A_k
         previous_solution = previous_solution.reshape(-1, 1)
         # 'lsr,smnk,LSR,rnR-> lmkLS' 'ks'
         _mat_vec_A = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k.shape, A_k.shape, XAX_k1.shape, x_shape, optimize="greedy")
-        mat_vec_A = lambda x_vec: _mat_vec_A(XAX_k, A_k, XAX_k1, x_vec.reshape(*x_shape)).reshape(-1, 1)
+        mat_vec_A = lambda x_vec: _mat_vec_A(XAX_k, A_k, XAX_k1, x_vec.reshape(*x_shape)).reshape(-1, 1).__iadd__(1e-12*x_vec.reshape(-1, 1)) # regularisation term for convergence
         A_op = scp.sparse.linalg.LinearOperator((m, m), matvec=mat_vec_A)
         _mat_vec_D = contract_expression('lsr,smnS,LSR,rnR->lmL', XDX_k.shape, Delta_k.shape, XDX_k1.shape, x_shape, optimize="greedy")
-        mat_vec_D = lambda x_vec: -_mat_vec_D(XDX_k, Delta_k, XDX_k1, x_vec.reshape(*x_shape)).reshape(-1, 1)
+        mat_vec_D = lambda x_vec: _mat_vec_D(XDX_k, Delta_k, XDX_k1, x_vec.reshape(*x_shape)).reshape(-1, 1).__imul__(-1)
         D_op = scp.sparse.linalg.LinearOperator((m, m), matvec=mat_vec_D)
         AD_op = scp.sparse.linalg.LinearOperator((m, m), matvec=lambda x_vec: (mat_vec_A(x_vec) / step_size).__isub__(mat_vec_D(x_vec)))
 
         try:
-            eig_val, solution_now = scp.sparse.linalg.eigsh(AD_op, tol=eps, k=1, ncv=min(m, 25), which="SA", maxiter=12*m, v0=previous_solution)
+            eig_val, solution_now = scp.sparse.linalg.eigsh(AD_op, tol=eps, k=1, ncv=min(m, 25), which="SA", maxiter=10*m, v0=previous_solution)
         except Exception as e:
-            print(f"\tAttention: {e}")
             eig_val = previous_solution.T @ AD_op(previous_solution)
             solution_now = previous_solution
         if eig_val < 0:
             try:
-                eig_val, solution_now = scp.sparse.linalg.eigsh(D_op, M=A_op, tol=eps, k=1, ncv=min(m, 25), which="LA", maxiter=12*m, v0=previous_solution)
+                Minv = CgIterInv(A_op, tol=eps)
+                eig_val, solution_now = scp.sparse.linalg.eigsh(D_op, M=A_op, Minv=Minv, tol=eps, k=1, ncv=min(m, 25), which="LA", maxiter=10*m, v0=previous_solution)
                 step_size = max(0, min(step_size, 1 / eig_val[0]))
             except Exception as e:
                 print(f"\tAttention: {e}")
@@ -678,7 +709,6 @@ def _step_size_local_solve(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k, A_k
 
         eig_val = previous_solution.T @ AD_op(previous_solution)
         old_res = np.linalg.norm(AD_op(previous_solution).__isub__(eig_val * previous_solution))
-
     return solution_now.reshape(-1, 1), step_size, old_res
 
 
