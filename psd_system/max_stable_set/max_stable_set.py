@@ -31,12 +31,12 @@ def tt_tr_constraint(dim):
     return tt_rank_reduce(tt_reshape(op, (4, 4))), [E(0, 0) for _ in range(config["dim"])]
 
 def tt_obj_matrix(dim):
-    return tt_scale(1/2 ** dim, tt_one_matrix(dim)) # TODO: What scaling is the best?
+    return tt_one_matrix(dim)
 
 
 def create_problem(dim, rank):
     print("Creating Problem...")
-    scale = max(2**(dim-6), 1)
+    scale = max(2**(dim-7), 1)
     G = tt_rank_reduce(tt_random_graph(dim, rank))
     obj_tt = tt_obj_matrix(dim)
     L_tt, bias_tt = tt_tr_constraint(dim)

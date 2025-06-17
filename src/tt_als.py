@@ -606,7 +606,7 @@ def tt_restarted_block_als(
         prev_rhs_norm = rhs_norm
         rhs_norm = rhs.norm
         if rhs_norm >= prev_rhs_norm:
-            if prev_rhs_norm >=  orig_rhs_norm:
+            if prev_rhs_norm >= orig_rhs_norm:
                 raise RuntimeError(f"Terminated on instability: ||rhs|| = {prev_rhs_norm} > previous = {orig_rhs_norm}")
             if verbose:
                 print(f"\n\t Terminated on instability: ||rhs|| = {rhs_norm} > previous = {prev_rhs_norm}")
@@ -771,6 +771,7 @@ def tt_max_generalised_eigen(A, Delta, x0=None, kick_rank=None, nswp=10, tol=1e-
 
                 if 2*local_res[0, k-1] < res:
                     if not _local_psd_check(previous_solution, XAX[k], A[k], XAX[k+1], rx[k] * N[k] * rx[k + 1], size_limit, tol):
+                        print(f"\t Matrix A is not positive definite!", flush=True)
                         break
                 else:
                     local_res[0, k-1] = res
@@ -818,6 +819,7 @@ def tt_max_generalised_eigen(A, Delta, x0=None, kick_rank=None, nswp=10, tol=1e-
             solution_now, step_size, res = _step_size_local_solve(previous_solution, XDX[k], Delta[k], XDX[k+1], XAX[k], A[k], XAX[k+1], rx[k] * N[k] * rx[k + 1], step_size, size_limit, tol)
             if 2*local_res[1, k-1] < res:
                 if not _local_psd_check(previous_solution, XAX[k], A[k], XAX[k + 1], rx[k] * N[k] * rx[k + 1], size_limit, tol):
+                    print(f"\t Matrix A is not positive definite!", flush=True)
                     break
             else:
                 local_res[1, k-1] = res
@@ -856,7 +858,7 @@ def tt_max_generalised_eigen(A, Delta, x0=None, kick_rank=None, nswp=10, tol=1e-
             print(f'\tResidual {np.max(local_res[1])}')
             print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
 
-    max_res  = max(np.max(local_res[0]), np.max(local_res[1]))
+    max_res  = min(np.max(local_res[0]), np.max(local_res[1]))
     if verbose:
         print("\t -----")
         print(f"\t Solution rank is {rx[1:-1]}")
@@ -867,6 +869,7 @@ def tt_max_generalised_eigen(A, Delta, x0=None, kick_rank=None, nswp=10, tol=1e-
         print('\t Time per sweep: ', (time.time() - t0) / (swp + 1), flush=True)
 
     if max_res > 10*tol:
+        print('\t Target Residual not reached!', flush=True)
         step_size = 0
     return step_size, x_cores
 

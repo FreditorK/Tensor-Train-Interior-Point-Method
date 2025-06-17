@@ -1,14 +1,14 @@
 # Common
 dim: !!int 9
 max_rank: !!int 4
-seeds: [83] # Tier 1: 592, 83, Tier 2: 4928 (good but slow 6k) Tier 3: 96, 353, 5, 3819
+seeds: [61, 42, 911, 592, 83] # Tier 1: 592, 83, Tier 2: 4928 (good but slow 6k) Tier 3: 96, 353, 5, 3819
 gap_tol: !!float 4e-4
 verbose: True
 # TT-IPM
-op_tol: !!float 1e-4
-max_iter: !!int 20
-warm_up: !!int 3
-mals_rank_restriction: !!int 35
-mals_restarts: !!int 4
+op_tol: !!float 5e-5
+max_iter: !!int 22
+warm_up: !!int 9
+mals_rank_restriction: !!int 42
+mals_restarts: !!int 2
 # Sketchy CGAL
 sketch_cgal_rank: !!int 256

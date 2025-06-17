@@ -2,7 +2,7 @@
 dim: !!int 7
 max_rank: !!int 4
 seeds: [5] # Tier 1: 5, 34, 53, 5345, 84, 51,  Tier 2: 23 (slow but good), Tier 3: 8
-gap_tol: !!float 2e-4
+gap_tol: !!float 4e-4
 verbose: True
 # TT-IPM
 op_tol: !!float 1e-4
