@@ -210,7 +210,7 @@ def tt_compute_dual_feasibility(obj_tt, lin_op_tt_adj, Z_tt, Y_tt, T_tt, status)
 
 def tt_compute_centrality(X_tt, Z_tt, status):
     if status.aho_direction:
-        centrality_feas = tt_reshape(tt_scale(-1, _tt_symmetrise(tt_mat_mat_mul(X_tt, Z_tt, min(status.op_tol, 0.1*status.mu), status.eps),
+        centrality_feas = tt_reshape(tt_scale(-1, _tt_symmetrise(tt_mat_mat_mul(X_tt, Z_tt, min(status.op_tol, 0.1*status.mu), status.eps, verbose=True),
                                                         min(status.op_tol, 0.1*status.mu))), (4,))
     else:
         centrality_feas = tt_reshape(tt_scale(-1, tt_mat_mat_mul(Z_tt, X_tt, min(status.op_tol, 0.1*status.mu), status.eps)), (4,))

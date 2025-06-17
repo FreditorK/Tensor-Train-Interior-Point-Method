@@ -980,7 +980,7 @@ def _eigen_local_solve(previous_solution, XAX_k, A_k, XAX_k1, m, size_limit, eps
 
 def tt_approx_mat_mat_mul(A, D, x0=None, kick_rank=None, nswp=50, tol=1e-6, verbose=False):
     if verbose:
-        print(f"\nStarting MM solve with:\n \t {tol} \n \t sweeps: {nswp}")
+        print(f"\nStarting MM solve with:\n \t {tol} \n \t sweeps: {nswp}", flush=True)
         t0 = time.time()
     if x0 is None:
         max_ranks = np.maximum((np.array(tt_ranks(A)) + np.array(tt_ranks(D))) / 2, 2).astype(int)
@@ -1108,7 +1108,7 @@ def tt_approx_mat_mat_mul(A, D, x0=None, kick_rank=None, nswp=50, tol=1e-6, verb
 
 
 def tt_mat_mat_mul(mat1, mat2, op_tol, eps, verbose=False):
-    if np.max((np.array(tt_ranks(mat1)) + np.array(tt_ranks(mat2)))/2) <= 30:
+    if np.max((np.array(tt_ranks(mat1)) + np.array(tt_ranks(mat2)))/2) <= 20:
         return tt_rank_reduce(tt_fast_mat_mat_mul(mat1, mat2, eps), eps=op_tol)
     return tt_approx_mat_mat_mul(mat1, mat2, tol=op_tol, verbose=verbose)
 
@@ -1242,7 +1242,7 @@ def tt_approx_mat_vec_mul(A, d_vec, x0=None, kick_rank=None, nswp=50, tol=1e-6, 
 
 
 def tt_mat_vec_mul(mat, vec, op_tol, eps, verbose=False):
-    if np.max((np.array(tt_ranks(mat)) + np.array(tt_ranks(vec)))/2) <= 30:
+    if np.max((np.array(tt_ranks(mat)) + np.array(tt_ranks(vec)))/2) <= 40:
         return tt_rank_reduce(tt_fast_matrix_vec_mul(mat, vec, eps), op_tol)
     return tt_approx_mat_vec_mul(mat, vec, tol=op_tol, verbose=verbose)
 
