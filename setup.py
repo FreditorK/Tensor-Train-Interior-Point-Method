@@ -28,17 +28,6 @@ extensions = [
         libraries=libraries_to_link,
         extra_compile_args=["-O3", "-march=native"],
         define_macros=[('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')]
-    ),
-    Extension(
-        "cy_src.schur_solve_cy",  # Name of the Cython module
-        ["cy_src/schur_solve_cy.pyx"],  # Source file
-        include_dirs=[
-            np.get_include(),
-            scipy_include
-        ],  # This line ensures that NumPy headers are included
-        libraries=libraries_to_link,
-        extra_compile_args=["-O3", "-march=native"],
-        define_macros=[('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')]
     )
 ]
 

@@ -80,7 +80,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         local_rhs[1] -= cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[2, 2], block_A_k[2, 2], XAX_k1[2, 2], inv_I*rhs[:, 1])
 
         max_iter = min(max(2 * int(np.ceil(block_res_old / termination_tol)), 2), 30)
-        solution_now, info = lgmres(
+        solution_now, _ = lgmres(
             Op,
             local_rhs.ravel(),
             rtol=1e-10,
@@ -98,7 +98,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
     if block_res_old < block_res_new:
         solution_now = previous_solution
 
-    return solution_now, block_res_old, min(block_res_new, block_res_old), rhs
+    return solution_now, block_res_old
 
 def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous_solution, size_limit, termination_tol):
     x_shape = previous_solution.shape
@@ -189,7 +189,7 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
     if block_res_old_scalar < block_res_new_scalar:
         solution_now = previous_solution
 
-    return solution_now, block_res_old_scalar, min(block_res_new_scalar, block_res_old_scalar), rhs
+    return solution_now, block_res_old_scalar
 
 
 def tt_compute_primal_feasibility(lin_op_tt, bias_tt, X_tt, status):

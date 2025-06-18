@@ -257,10 +257,10 @@ def _bck_sweep(
         # TODO: This is wrong, shiieet
         if swp > 0:
             previous_solution = x_cores[k]
-            solution_now, block_res_old, block_res_new, rhs = local_solver(XAX[k], block_A_k, XAX[k + 1],
-                                                                                     Xb[k], block_b[k], Xb[k + 1],
-                                                                                     previous_solution,
-                                                                                     size_limit, termination_tol)
+            solution_now, block_res_old = local_solver(XAX[k], block_A_k, XAX[k + 1],
+                                                       Xb[k], block_b[k], Xb[k + 1],
+                                                       previous_solution,
+                                                       size_limit, termination_tol)
             local_res = max(local_res, block_res_old)
 
             solution_now = np.reshape(solution_now, (rx[k] * block_size, N[k] * rx[k + 1])).T
@@ -322,7 +322,7 @@ def _fwd_sweep(
         block_A_k = block_A[k]
         if swp > 0:
             previous_solution = x_cores[k]
-            solution_now, block_res_old, block_res_new, rhs = local_solver(
+            solution_now, block_res_old = local_solver(
                 XAX[k], block_A_k, XAX[k + 1], Xb[k],
                 block_b[k], Xb[k + 1],
                 previous_solution, size_limit,
@@ -508,7 +508,7 @@ def _default_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, prev
     if block_res_old < block_res_new:
         solution_now = previous_solution
 
-    return solution_now, block_res_old, min(block_res_old, block_res_new), rhs
+    return solution_now, block_res_old
 
 
 def tt_rl_orthogonalise_py(train_tt: List[np.array]):
@@ -586,21 +586,13 @@ def tt_restarted_block_als(
             print(f"\n\tTerminated on global criterion,  Relative Error={rhs_norm / orig_rhs_norm}")
         return x_cores, res
     elif orig_rhs_norm < rhs_norm:
-        rank_restriction += 2
-        inner_m += 1
-        rhs_norm = orig_rhs_norm
-        rhs = block_b
+        raise RuntimeError(f"Terminated on instability: ||rhs|| = {rhs_norm} > previous = {orig_rhs_norm}")
     if verbose:
         print(f"\n\tRelative Error={rhs_norm / orig_rhs_norm}")
     for i in range(1, num_restarts):
         if verbose:
             print(f"\n\t---Restart {i}")
         new_x_cores, res = _tt_block_als(rhs_norm, block_A, rhs, op_tol, termination_tol, eps, inner_m, rank_restriction, None, local_solver, refinement, verbose)
-        if res < termination_tol:
-            if verbose:
-                print(f"\n\tTerminated on local criterion,  Error<{termination_tol}")
-            x_cores = tt_rank_reduce_py(tt_add(x_cores, new_x_cores), eps=eps)
-            break
         Ax = block_A.matvec(new_x_cores, 0.1*op_tol)
         rhs = rhs.sub(Ax, 0.1*op_tol)
         prev_rhs_norm = rhs_norm

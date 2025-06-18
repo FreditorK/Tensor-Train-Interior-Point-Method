@@ -42,7 +42,7 @@ def create_problem(dim, rank):
     L_tt, bias_tt = tt_tr_constraint(dim)
     L_tt = tt_rank_reduce(tt_add(L_tt, tt_G_entrywise_mask_op(G)))
     lag_y = tt_rank_reduce(tt_diag_op(tt_sub(tt_one_matrix(config["dim"]), tt_add(G, bias_tt))))
-    return tt_reshape(tt_normalise(obj_tt, radius=scale), (4,)), L_tt, tt_reshape(tt_normalise(bias_tt, radius=scale), (4,)), lag_y
+    return tt_reshape(tt_normalise(obj_tt, radius=scale), (4,)), L_tt, tt_reshape(tt_normalise(bias_tt, radius=8*scale), (4,)), lag_y
 
 if __name__ == "__main__":
     np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=4, suppress=True)
