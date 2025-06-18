@@ -1,8 +1,8 @@
 # Common
 dim: !!int 9
 max_rank: !!int 4
-seeds: [9402] # Tier 1: 9402, 9313, 3333, 33333, 24, Tier 2: 66, 8399, 22, Tier 3: 33, Tier faulty: 45
-gap_tol: !!float 4e-4
+seeds: [3333] # Tier 1: 9402, 9313, (3333, 33333, 24), Tier 2: 66, 8399, 22, Tier 3: 33, Tier faulty: 45
+gap_tol: !!float 3e-4
 verbose: True
 # TT-IPM
 op_tol: !!float 5e-4

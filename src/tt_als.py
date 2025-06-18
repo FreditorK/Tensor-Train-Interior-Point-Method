@@ -43,7 +43,9 @@ class TTBlockVector:
         return np.sqrt(sum(tt_inner_prod(v, v) for v in self._data.values()))
 
     def scale(self, s):
-        self._data = {key: tt_scale(1/s, value) for (key, value) in self._data.items()}
+        block_vec = TTBlockVector()
+        block_vec._data = {key: tt_rank_reduce(tt_scale(1/s, value), 1e-12) for (key, value) in self._data.items()}
+        return block_vec
 
     def sub(self, other, op_tol):
         block_vec = TTBlockVector()
@@ -385,7 +387,7 @@ def _tt_block_als(
     x_shape = model_entry[0].shape[1:-1]
 
     # scale residuals
-    block_b.scale(scale_rhs)
+    block_b = block_b.scale(scale_rhs)
 
     if local_solver is None:
         local_solver = _default_local_solver
@@ -474,8 +476,6 @@ def _tt_block_als(
         print('\tNumber of sweeps', swp+1)
         print('\tTime: ', time.time() - t0)
         print('\tTime per sweep: ', (time.time() - t0) / (swp+1), flush=True)
-
-    block_b.scale(1/scale_rhs)
 
     return tt_scale(scale_rhs, x_cores), min(local_res_fwd, local_res_bwd)
 
@@ -578,7 +578,7 @@ def tt_restarted_block_als(
         if verbose:
             print(f"\n\tTerminated on local criterion,  Relative Error<{termination_tol}")
         return x_cores, res
-    Ax = block_A.matvec(x_cores, op_tol)
+    Ax = block_A.matvec(x_cores, 0.1*op_tol)
     rhs = rhs.sub(Ax, 0.1*op_tol)
     rhs_norm = rhs.norm
     if rhs_norm < termination_tol*orig_rhs_norm:
@@ -601,7 +601,7 @@ def tt_restarted_block_als(
                 print(f"\n\tTerminated on local criterion,  Error<{termination_tol}")
             x_cores = tt_rank_reduce_py(tt_add(x_cores, new_x_cores), eps=eps)
             break
-        Ax = block_A.matvec(new_x_cores, op_tol)
+        Ax = block_A.matvec(new_x_cores, 0.1*op_tol)
         rhs = rhs.sub(Ax, 0.1*op_tol)
         prev_rhs_norm = rhs_norm
         rhs_norm = rhs.norm
