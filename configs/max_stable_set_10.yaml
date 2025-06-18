@@ -5,7 +5,7 @@ seeds: [400] # Tier 1: 42, 23, 666, Tier 2: 43 (good but very slow 12k), 9254 (g
 gap_tol: !!float 3e-4
 verbose: True
 # TT-IPM
-op_tol: !!float 5e-5
+op_tol: !!float 1e-4
 max_iter: !!int 22
 warm_up: !!int 0
 mals_rank_restriction: !!int 36

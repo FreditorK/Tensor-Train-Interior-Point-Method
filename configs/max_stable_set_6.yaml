@@ -5,7 +5,7 @@ seeds: [8] # Tier 1: 8, (7, 6, 5, 9) Tier 2: Tier 3:
 gap_tol: !!float 3e-4
 verbose: True
 # TT-IPM
-op_tol: !!float 1e-3
+op_tol: !!float 1e-4
 max_iter: !!int 18
 warm_up: !!int 3
 mals_rank_restriction: !!int 20

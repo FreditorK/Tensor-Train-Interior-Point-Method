@@ -565,6 +565,9 @@ def tt_restarted_block_als(
         refinement=False,
         verbose=False
 ):
+    if refinement:
+        rank_restriction = rank_restriction + rank_restriction // 2
+        num_restarts = 1
     if verbose:
         print("\n\tStarting Restarted TT-ALS.")
         for (i, j) in block_A:
@@ -589,6 +592,8 @@ def tt_restarted_block_als(
         raise RuntimeError(f"Terminated on instability: ||rhs|| = {rhs_norm} > previous = {orig_rhs_norm}")
     if verbose:
         print(f"\n\tRelative Error={rhs_norm / orig_rhs_norm}")
+    d = len(x_cores)
+    rank_restriction = d + np.floor(np.sqrt(d)*5) + 1
     for i in range(1, num_restarts):
         if verbose:
             print(f"\n\t---Restart {i}")
@@ -623,7 +628,7 @@ class CgIterInv(scp.sparse.linalg.LinearOperator):
         self.M = M
         self.shape = M.shape
         self.tol = tol
-        self.ifunc = lambda b: scp.sparse.linalg.cg(M, b, maxiter=300, rtol=tol, atol=0)
+        self.ifunc = lambda b: scp.sparse.linalg.cg(M, b, maxiter=1000, rtol=tol, atol=0)
 
     def _matvec(self, x):
         b, info = self.ifunc(x)

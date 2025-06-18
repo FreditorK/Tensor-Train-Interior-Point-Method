@@ -5,10 +5,10 @@ seeds: [8] # Tier 1: 8, (5, 41, 7, 9) Tier 2: 83 (good but slow 2k), 86 (good bu
 gap_tol: !!float 3e-4
 verbose: True
 # TT-IPM
-op_tol: !!float 1e-3
+op_tol: !!float 1e-4
 max_iter: !!int 18
 warm_up: !!int 3
-mals_rank_restriction: !!int 32 # 34
+mals_rank_restriction: !!int 32
 mals_restarts: !!int 2
 # Sketchy CGAL
 sketch_cgal_rank: !!int 128

@@ -9,5 +9,5 @@ op_tol: !!float 5e-4
 max_iter: !!int 38
 warm_up: !!int 0
 mals_rank_restriction: !!int 34
-mals_restarts: !!int 3
+mals_restarts: !!int 2
 # Sketchy CGAL
