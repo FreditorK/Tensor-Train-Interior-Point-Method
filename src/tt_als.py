@@ -567,6 +567,7 @@ def tt_restarted_block_als(
 ):
     if refinement:
         num_restarts = 1
+        inner_m += 1
     if verbose:
         print("\n\tStarting Restarted TT-ALS.")
         for (i, j) in block_A:
@@ -593,6 +594,8 @@ def tt_restarted_block_als(
     if verbose:
         print(f"\n\tRelative Error={rhs_norm / orig_rhs_norm}")
     for i in range(1, num_restarts):
+        if rhs_norm / orig_rhs_norm > 0.1:
+            inner_m += 1
         if verbose:
             print(f"\n\t---Restart {i}")
         new_x_cores, res = _tt_block_als(rhs_norm, block_A, rhs, op_tol, termination_tol, eps, inner_m, rank_restriction, None, local_solver, refinement, verbose)

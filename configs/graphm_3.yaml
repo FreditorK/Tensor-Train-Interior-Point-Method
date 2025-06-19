@@ -3,7 +3,7 @@ dim: !!int 3
 max_rank: !!int 2 # (2)
 seeds: [52]  # !!52, 68, 23, 9175, 212!! 
 gap_tol: !!float 5e-4
-verbose: False
+verbose: True
 # TT-IPM
 op_tol: !!float 1e-4
 max_iter: !!int 25
