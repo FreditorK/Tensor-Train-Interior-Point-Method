@@ -1,4 +1,4 @@
-# tt_ops_cy.pyx
+# lgmres_cy.pyx
 # cython: language_level=3
 # cython: cdivision=True
 # cython: optimize.use_switch=True
