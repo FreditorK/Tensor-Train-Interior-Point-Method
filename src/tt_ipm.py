@@ -775,12 +775,12 @@ def tt_ipm(
         prev_dual_error = status.dual_error
         prev_centrality_error = status.centrality_error
 
-        if Delta_X_tt is not None and Delta_Z_tt is not None:
-            print()
-            print(tt_norm(X_tt), tt_norm(Delta_X_tt))
-            print(tt_norm(Y_tt), tt_norm(Delta_Y_tt))
-            print(tt_norm(Z_tt), tt_norm(Delta_Z_tt))
-            print()
+        #if Delta_X_tt is not None and Delta_Z_tt is not None:
+        #    print()
+        #    print(tt_norm(X_tt), tt_norm(Delta_X_tt))
+        #    print(tt_norm(Y_tt), tt_norm(Delta_Y_tt))
+        #    print(tt_norm(Z_tt), tt_norm(Delta_Z_tt))
+        #    print()
 
     print(f"---Terminated---")
     print(f"Converged in {iteration} iterations.")
