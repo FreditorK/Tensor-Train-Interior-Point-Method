@@ -6,8 +6,9 @@ gap_tol: !!float 3e-4
 verbose: True
 # TT-IPM
 op_tol: !!float 5e-4
-max_iter: !!int 28
+max_iter: !!int 30
 warm_up: !!int 0
 mals_rank_restriction: !!int 40
 mals_restarts: !!int 2
+max_refinement:  !!int 7
 # Sketchy CGAL

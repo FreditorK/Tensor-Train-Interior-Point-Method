@@ -10,5 +10,6 @@ max_iter: !!int 18
 warm_up: !!int 3
 mals_rank_restriction: !!int 32
 mals_restarts: !!int 2
+max_refinement:  !!int 5
 # Sketchy CGAL
 sketch_cgal_rank: !!int 128

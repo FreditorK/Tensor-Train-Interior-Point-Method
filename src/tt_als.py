@@ -566,7 +566,6 @@ def tt_restarted_block_als(
         verbose=False
 ):
     if refinement:
-        rank_restriction = rank_restriction + rank_restriction // 2
         num_restarts = 1
     if verbose:
         print("\n\tStarting Restarted TT-ALS.")
@@ -576,7 +575,8 @@ def tt_restarted_block_als(
     orig_rhs_norm = rhs.norm
     if orig_rhs_norm < op_tol:
         raise RuntimeError(f"\n\t Absolute tolreance already reached: {orig_rhs_norm} < {op_tol}")
-    x_cores, res = _tt_block_als(orig_rhs_norm, block_A, rhs, op_tol, termination_tol, eps, inner_m, rank_restriction, x0, local_solver, refinement, verbose)
+    d = len(next(iter(block_b.values())))
+    x_cores, res = _tt_block_als(orig_rhs_norm, block_A, rhs, op_tol, termination_tol, eps, inner_m, rank_restriction if refinement else d + np.floor(np.sqrt(d)*5) + 1, x0, local_solver, refinement, verbose)
     if res < termination_tol:
         if verbose:
             print(f"\n\tTerminated on local criterion,  Relative Error<{termination_tol}")
@@ -592,8 +592,6 @@ def tt_restarted_block_als(
         raise RuntimeError(f"Terminated on instability: ||rhs|| = {rhs_norm} > previous = {orig_rhs_norm}")
     if verbose:
         print(f"\n\tRelative Error={rhs_norm / orig_rhs_norm}")
-    d = len(x_cores)
-    rank_restriction = d + np.floor(np.sqrt(d)*5) + 1
     for i in range(1, num_restarts):
         if verbose:
             print(f"\n\t---Restart {i}")

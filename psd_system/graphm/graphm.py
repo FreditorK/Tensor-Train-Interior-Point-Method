@@ -279,7 +279,8 @@ if __name__ == "__main__":
                     warm_up=config["warm_up"],
                     aho_direction=False,
                     mals_rank_restriction=config["mals_rank_restriction"],
-                    mals_restarts=config["mals_restarts"]
+                    mals_restarts=config["mals_restarts"],
+                    max_refinement=config["max_refinement"]
                 )
                 return X_tt, Y_tt, T_tt, Z_tt, info
 
@@ -300,7 +301,8 @@ if __name__ == "__main__":
                 warm_up=config["warm_up"],
                 aho_direction=False,
                 mals_rank_restriction=config["mals_rank_restriction"],
-                mals_restarts=config["mals_restarts"]
+                mals_restarts=config["mals_restarts"],
+                max_refinement=config["max_refinement"]
             )
 
         t3 = time.time()
