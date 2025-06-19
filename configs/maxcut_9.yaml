@@ -1,12 +1,12 @@
 # Common
 dim: !!int 9
 max_rank: !!int 4
-seeds: [24] # !!9402, 9313, 3333, 33333, 24!!
+seeds: [9402, 9313, 3333, 33333, 24] # !!9402, 9313, 3333, 33333, 24!!
 gap_tol: !!float 3e-4
-verbose: True
+verbose: False
 # TT-IPM
 op_tol: !!float 5e-4
-max_iter: !!int 35
+max_iter: !!int 20
 warm_up: !!int 0
 mals_rank_restriction: !!int 32
 mals_restarts: !!int 3
