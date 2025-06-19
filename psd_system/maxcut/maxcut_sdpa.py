@@ -33,20 +33,22 @@ if __name__ == "__main__":
         X = cp.Variable(C.shape, PSD=True)
         constraints = [X >> 0]
         constraints += [cp.diag(X) == 1]
-        prob = cp.Problem(cp.Maximize(cp.trace(C.T @ X)), constraints)
         t2 = time.time()
         if args.track_mem:
             def wrapper():
+                prob = cp.Problem(cp.Maximize(cp.trace(C.T @ X)), constraints)
                 _ = prob.solve(solver=cp.SDPA, epsilonDash=1e-6 / 2**config["dim"], epsilonStar=1e-5 / 2**config["dim"], verbose=True, numThreads=1, omegaStar=100, betaStar=0.5, gammaStar=0.9)
+                return prob
 
-            res = memory_usage(proc=wrapper, max_usage=True, retval=True)
+            res, prob = memory_usage(proc=wrapper, max_usage=True, retval=True, include_children=True)
             X = X.value
             for m in prob.solution.dual_vars.values():
                     if type(m) == np.ndarray:
                         if m.shape == (2 ** config["dim"], 2 ** config["dim"]):
                             Z = m
-            memory.append(res[0] - start_mem)
+            memory.append(res - start_mem)
         else:
+            prob = cp.Problem(cp.Maximize(cp.trace(C.T @ X)), constraints)
             _ = prob.solve(solver=cp.SDPA, epsilonDash=1e-6 / 2**config["dim"], epsilonStar=1e-5 / 2**config["dim"], verbose=True, numThreads=1, omegaStar=100, betaStar=0.5, gammaStar=0.9)
             X = X.value
             for m in prob.solution.dual_vars.values():
