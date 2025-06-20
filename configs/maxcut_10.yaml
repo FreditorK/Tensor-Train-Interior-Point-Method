@@ -11,4 +11,3 @@ warm_up: !!int 0
 mals_rank_restriction: !!int 38
 mals_restarts: !!int 2
 max_refinement:  !!int 6
-# Sketchy CGAL

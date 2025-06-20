@@ -26,7 +26,8 @@ if __name__ == "__main__":
         np.random.seed(seed)
         t0 = time.time()
         trace_param = 2**config["dim"]
-        C = trace_param*tt_matrix_to_matrix(tt_obj_matrix(config["max_rank"], config["dim"]))
+        C = tt_matrix_to_matrix(tt_obj_matrix(config["max_rank"], config["dim"]))
+        C *= trace_param/np.linalg.norm(C)
         t1 = time.time()
         constraint_matrices = [np.outer(column, column) for column in np.eye(C.shape[0])]
         bias = np.ones((C.shape[0], 1))
@@ -37,7 +38,8 @@ if __name__ == "__main__":
             def wrapper():
                 X, duality_gaps, info = sketchy_cgal(-C, constraint_matrices, bias, (trace_param, trace_param),
                                                      gap_tol=config["gap_tol"],
-                                                     num_iter=1000 * 2 ** config["dim"], R=config["sketch_cgal_rank"],
+                                                     num_iter=1000 * 2 ** config["dim"], 
+                                                     R=int(np.ceil(np.sqrt(2*(2**config["dim"]+1)))),
                                                      verbose=config["verbose"])
                 return X, duality_gaps, info
 
@@ -47,8 +49,10 @@ if __name__ == "__main__":
         else:
             X, duality_gaps, info = sketchy_cgal(-C, constraint_matrices, bias, (trace_param, trace_param),
                                                  gap_tol=config["gap_tol"],
-                                                 num_iter=1000 * 2 ** config["dim"], R=config["sketch_cgal_rank"],
-                                                 verbose=config["verbose"])
+                                                 num_iter=1000 * 2 ** config["dim"], 
+                                                 R=int(np.ceil(np.sqrt(2*(2**config["dim"]+1)))),
+                                                 verbose=config["verbose"]
+                                                 )
         t3 = time.time()
         problem_creation_times.append(t2 - t1)
         runtimes.append(t3 - t2)
@@ -56,6 +60,14 @@ if __name__ == "__main__":
         feasibility_errors.append(
             np.linalg.norm([np.trace(c.T @ X) - b for c, b in zip(constraint_matrices, bias.flatten())]) ** 2)
         num_iters.append(info["num_iters"])
+        print(f"Converged after {num_iters[-1]:.1f} iterations", flush=True)
+        print(f"Problem created in {problem_creation_times[-1]:.3f}s", flush=True)
+        print(f"Problem solved in {runtimes[-1]:.3f}s", flush=True)
+        if args.track_mem:
+            print(f"Peak memory {memory[-1]:.3f} MB", flush=True)
+        print(f"Complementary Slackness: {aux_duality_gap[-1]}", flush=True)
+        print(f"Total feasibility error: {feasibility_errors[-1]}", flush=True)
+
     print(f"Converged after avg {np.mean(num_iters):.1f} iterations")
     print(f"Problem created in avg {np.mean(problem_creation_times):.3f}s")
     print(f"Problem solved in avg {np.mean(runtimes):.3f}s")

@@ -1,6 +1,6 @@
 # Common
 dim: !!int 6
-max_rank: !!int 4
+max_rank: !!int 8
 seeds: [73, 54, 624, 7, 9] # !! 73, 54, 624, 7, 9 !!
 gap_tol: !!float 3e-4
 verbose: False
@@ -11,5 +11,3 @@ warm_up: !!int 3
 mals_rank_restriction: !!int 20
 mals_restarts: !!int 2
 max_refinement:  !!int 5
-# Sketchy CGAL
-sketch_cgal_rank: !!int 8

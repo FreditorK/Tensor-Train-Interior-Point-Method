@@ -43,8 +43,10 @@ if __name__ == "__main__":
             def wrapper():
                 X, duality_gaps, info = sketchy_cgal(-J, constraint_matrices, bias, (1, 1),
                                                      gap_tol=config["gap_tol"],
-                                                     num_iter=1000 * 2 ** config["dim"], R=config["sketch_cgal_rank"],
-                                                     verbose=config["verbose"])
+                                                     num_iter=1000 * 2 ** config["dim"], 
+                                                     R=int(np.ceil(np.sqrt(2*(np.sum(np.tril(adj_matrix)) +1)))),
+                                                     verbose=config["verbose"]
+                                                     )
                 return X, duality_gaps, info
 
             res = memory_usage(proc=wrapper, max_usage=True, retval=True, include_children=True)
@@ -53,8 +55,10 @@ if __name__ == "__main__":
         else:
             X, duality_gaps, info = sketchy_cgal(-J, constraint_matrices, bias, (1, 1),
                                                  gap_tol=config["gap_tol"],
-                                                 num_iter=1000 * 2 ** config["dim"], R=config["sketch_cgal_rank"],
-                                                 verbose=config["verbose"])
+                                                 num_iter=1000 * 2 ** config["dim"], 
+                                                 R=int(np.ceil(np.sqrt(2*(np.sum(np.tril(adj_matrix)) +1)))),
+                                                 verbose=config["verbose"]
+                                                 )
         t3 = time.time()
         problem_creation_times.append(t2 - t1)
         runtimes.append(t3 - t2)
