@@ -567,7 +567,7 @@ def tt_restarted_block_als(
 ):
     if refinement:
         num_restarts = 1
-        inner_m += 1
+        inner_m += 2
     if verbose:
         print("\n\tStarting Restarted TT-ALS.")
         for (i, j) in block_A:

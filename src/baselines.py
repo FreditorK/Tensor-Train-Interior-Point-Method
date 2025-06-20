@@ -74,7 +74,7 @@ def sketchy_cgal(obj_matrix, constraint_matrices, bias, trace_params, R=1, gap_t
             print(f"---Step {it}---")
             print(f"Est. Duality gap: {duality_gap}")
             print(f"Est. Feasibility error: {np.sum(res.T @ res)}")
-        if duality_gap/(1+abs(p)) < gap_tol and np.sqrt(res.T @ res) / (1+bias_norm) < feasability_tol:
+        if (duality_gap/(1+abs(p)) < gap_tol and np.sqrt(res.T @ res) / (1+bias_norm) < feasability_tol) and duality_gap < 0.1 and np.sqrt(res.T @ res) < 1e-3:
             break
     U, Lambda = nystrom_sketch_reconstruct(S, Omega)
     U = U[:, :R]
