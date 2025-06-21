@@ -36,7 +36,6 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
     rhs[:, 2] = cached_einsum('br,bmB,BR->rmR', Xb_k[2], block_b_k[2], Xb_k1[2]) if 2 in block_b_k else 0
     inv_I = np.divide(1, cached_einsum('lsr,smnS,LSR->lmL', XAX_k[1, 2], block_A_k[1, 2], XAX_k1[1, 2]))
     block_res_old = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution).__isub__(rhs))
-    size_limit = 0
     if m <= size_limit:
         try:
             L_L_Z = scp.linalg.cholesky(
@@ -95,7 +94,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         solution_now = np.concatenate((solution_now, z.reshape(x_shape[0], 1, x_shape[2], x_shape[3])), axis=1)
 
     block_res_new = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, solution_now).__isub__(rhs))
-    print(info, block_res_new, block_res_old)
+    #print(info, block_res_new, block_res_old)
 
     if block_res_old < block_res_new:
         solution_now = previous_solution
@@ -305,7 +304,7 @@ def _tt_ipm_newton_step(
         status,
         solver
 ):
-    if True: #try:
+    try:
         # Predictor
         if status.verbose:
             print("\n--- Predictor  step ---", flush=True)
@@ -414,9 +413,9 @@ def _tt_ipm_newton_step(
             )
         else:
             status.sigma = 0
-    #except Exception as e:
-    #        print(f"\tAttention: TT-solver failed with exception: {e}")
-    #        return 0, 0, None, None, None, None, status
+    except Exception as e:
+            print(f"\tAttention: TT-solver failed with exception: {e}")
+            return 0, 0, None, None, None, None, status
 
     return x_step_size, z_step_size, Delta_X_tt, Delta_Y_tt, Delta_Z_tt, Delta_T_tt, status
 
