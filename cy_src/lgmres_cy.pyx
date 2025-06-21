@@ -239,7 +239,7 @@ cdef class MatVecWrapper(BaseMatVec):
     @cython.wraparound(False)
     @cython.nonecheck(False)
     cpdef cnp.ndarray[double, ndim=1] matvec(self, cnp.ndarray[double, ndim=1] x_core):
-        cdef double[:, :, :] x_reshaped = x_core.view().reshape(2, self.r*self.n, self.R)
+        cdef double[:, :, :] x_reshaped = x_core.reshape(2, self.r*self.n, self.R)
         cdef cnp.ndarray[double, ndim=4] result = np.empty((2, self.r, self.n, self.R), dtype=np.float64)
 
         einsum(self.XAX_k_00, self.block_A_k_00, self.XAX_kp1_00, x_reshaped[0], self.result0, self.A_00_workspace1, self.A_00_workspace2, self.r, self.n, self.R, 1.0, 0.0)
@@ -247,7 +247,7 @@ cdef class MatVecWrapper(BaseMatVec):
 
         einsum(self.XAX_k_21, self.block_A_k_21, self.XAX_kp1_21, x_reshaped[1], self.result1, self.A_21_workspace1, self.A_21_workspace2, self.r, self.n, self.R, 1.0, 0.0)
         einsum(self.XAX_k_01T, self.block_A_k_01T, self.XAX_kp1_01T, x_reshaped[0], self.temp, self.A_01T_workspace1, self.A_01T_workspace2, self.r, self.n, self.R, 1.0, 0.0)
-        cdef cnp.ndarray[double, ndim=3] temp_reshaped = np.asarray(self.temp).reshape(self.R, self.n, self.r).transpose(2, 1, 0)
+        cdef cnp.ndarray[double, ndim=3] temp_reshaped = np.ascontiguousarray(np.asarray(self.temp).reshape(self.R, self.n, self.r).transpose(2, 1, 0))
         temp_reshaped *= self.inv_I
         einsum(self.XAX_k_22, self.block_A_k_22, self.XAX_kp1_22, temp_reshaped.reshape(self.r*self.n, self.R), self.result1, self.A_22_workspace1, self.A_22_workspace2, self.r, self.n, self.R, -1.0,  1.0)
         

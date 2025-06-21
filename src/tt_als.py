@@ -252,10 +252,10 @@ def _bck_sweep(
 ):
     local_res = np.inf if swp == 0 else 0
     r_max_record = 0
-    for k in range(d - 1, -1, -1):
+    for k in range(d - 1, 0, -1):
         block_A_k = block_A[k]
         # TODO: This is wrong, shiieet
-        if swp > 0:
+        if swp > 0 and 0 < k < d - 1 and False:
             previous_solution = x_cores[k]
             solution_now, block_res_old = local_solver(XAX[k], block_A_k, XAX[k + 1],
                                                        Xb[k], block_b[k], Xb[k + 1],
@@ -267,33 +267,27 @@ def _bck_sweep(
         else:
             solution_now = np.reshape(x_cores[k], (rx[k] * block_size, N[k] * rx[k + 1])).T
 
-
-        if k > 0:
-            if min(rx[k] * block_size, N[k] * rx[k + 1]) > 2*r_max:
-                u, s, v = scp.sparse.linalg.svds(solution_now, k=r_max, tol=eps, which="LM")
-                idx = np.argsort(s)[::-1]  # descending order
-                s = s[idx]
-                u = u[:, idx]
-                v = v[idx, :]
-            else:
-                u, s, v = scp.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
-            v = s.reshape(-1, 1) * v
-
-            r = min(prune_singular_vals(s, real_tol), r_max)
-            r_max_record += np.sum(s[r:])
-            u = np.reshape(u[:, :r].T, (r, N[k], rx[k + 1]))
-            v = v[:r].T.reshape(rx[k], block_size, r)
-
-            x_cores[k] = u
-            x_cores[k - 1] = einsum('rdc,cbR->rbdR', x_cores[k - 1], v, optimize=[(0, 1)])
-            rx[k] = r
-
-            XAX[k] = {(i, j): compute_phi_bck_A(XAX[k + 1][(i, j)], x_cores[k], block_A_k[(i, j)], x_cores[k]) for (i, j) in block_A_k}
-
-            Xb[k] = {i: compute_phi_bck_rhs(Xb[k + 1][i], block_b[k][i], x_cores[k]) for i in block_b[k]}
-
+        if min(rx[k] * block_size, N[k] * rx[k + 1]) > 2*r_max:
+            u, s, v = scp.sparse.linalg.svds(solution_now, k=r_max, tol=eps, which="LM")
+            idx = np.argsort(s)[::-1]  # descending order
+            s = s[idx]
+            u = u[:, idx]
+            v = v[idx, :]
         else:
-            x_cores[k] = np.reshape(solution_now.T, (rx[k], block_size, N[k], rx[k + 1]))
+            u, s, v = scp.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
+        v = s.reshape(-1, 1) * v
+
+        r = min(prune_singular_vals(s, real_tol), r_max)
+        r_max_record += np.sum(s[r:])
+        u = np.reshape(u[:, :r].T, (r, N[k], rx[k + 1]))
+        v = v[:r].T.reshape(rx[k], block_size, r)
+
+        x_cores[k] = u
+        x_cores[k - 1] = einsum('rdc,cbR->rbdR', x_cores[k - 1], v, optimize=[(0, 1)])
+        rx[k] = r
+
+        XAX[k] = {(i, j): compute_phi_bck_A(XAX[k + 1][(i, j)], x_cores[k], block_A_k[(i, j)], x_cores[k]) for (i, j) in block_A_k}
+        Xb[k] = {i: compute_phi_bck_rhs(Xb[k + 1][i], block_b[k][i], x_cores[k]) for i in block_b[k]}
 
     return x_cores, XAX, Xb, rx, local_res, r_max_record
 
@@ -459,7 +453,7 @@ def _tt_block_als(
             r_max,
             termination_tol
         )
-        if min(local_res_fwd, local_res_bwd) < termination_tol:
+        if local_res_fwd < termination_tol:
             break
 
         if verbose:
@@ -472,12 +466,12 @@ def _tt_block_als(
     if verbose:
         print("\n\t---Results---")
         print('\tSolution rank is', rx[1:-1])
-        print('\tRel. Residual ', min(local_res_fwd, local_res_bwd))
+        print('\tRel. Residual ', local_res_fwd)
         print('\tNumber of sweeps', swp+1)
         print('\tTime: ', time.time() - t0)
         print('\tTime per sweep: ', (time.time() - t0) / (swp+1), flush=True)
 
-    return tt_scale(scale_rhs, x_cores), min(local_res_fwd, local_res_bwd)
+    return tt_scale(scale_rhs, x_cores), local_res_fwd
 
 def _default_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous_solution, _, termination_tol):
     x_shape = previous_solution.shape
@@ -504,7 +498,7 @@ def _default_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, prev
     solution_now += previous_solution
     block_res_new = np.linalg.norm(
         block_A_k.block_local_product(XAX_k, XAX_k1, solution_now) - rhs)
-
+    
     if block_res_old < block_res_new:
         solution_now = previous_solution
 
@@ -552,74 +546,103 @@ def tt_rank_reduce_py(train_tt: List[np.array], eps=1e-18):
 
 
 def tt_restarted_block_als(
-        block_A,
-        block_b,
-        rank_restriction,
-        op_tol,
-        termination_tol=1e-3,
-        eps=1e-12,
-        num_restarts=3,
-        inner_m=10,
-        x0=None,
-        local_solver=None,
-        refinement=False,
-        verbose=False
+    block_A,
+    block_b,
+    rank_restriction,
+    op_tol,
+    termination_tol=1e-3,
+    eps=1e-12,
+    num_restarts=3,
+    inner_m=10,
+    x0=None,
+    local_solver=None,
+    refinement=False,
+    verbose=False
 ):
+    def solve_als(rhs_norm, rhs, rank, x0):
+        return _tt_block_als(
+            rhs_norm, block_A, rhs, op_tol, termination_tol, eps,
+            inner_m, rank, x0, local_solver, refinement, verbose
+        )
+
+    def update_rhs(rhs, x_cores):
+        Ax = block_A.matvec(x_cores, 0.1 * op_tol)
+        return rhs.sub(Ax, 0.1 * op_tol)
+
+    # === Initialization ===
     if refinement:
         num_restarts = 1
         inner_m += 2
+
     if verbose:
         print("\n\tStarting Restarted TT-ALS.")
         for (i, j) in block_A:
-            print(f"{i,  j}: {tt_ranks(block_A[i, j])}")
+            print(f"{i, j}: {tt_ranks(block_A[i, j])}")
+
     rhs = block_b
     orig_rhs_norm = rhs.norm
     if orig_rhs_norm < op_tol:
-        raise RuntimeError(f"\n\t Absolute tolreance already reached: {orig_rhs_norm} < {op_tol}")
+        raise RuntimeError(f"\n\tAbsolute tolerance already reached: {orig_rhs_norm} < {op_tol}")
+
     d = len(next(iter(block_b.values())))
-    x_cores, res = _tt_block_als(orig_rhs_norm, block_A, rhs, op_tol, termination_tol, eps, inner_m, rank_restriction if refinement else d + np.floor(np.sqrt(d)*5) + 1, x0, local_solver, refinement, verbose)
+    block_size = np.max(list(k[0] for k in block_A.keys())) + 1
+    upper_rank = rank_restriction if refinement else block_size*d
+
+    # === First ALS solve ===
+    x_cores, res = solve_als(orig_rhs_norm, rhs, upper_rank, x0)
+
     if res < termination_tol:
         if verbose:
-            print(f"\n\tTerminated on local criterion,  Relative Error<{termination_tol}")
+            print(f"\n\tTerminated on local criterion, Relative Error < {termination_tol}")
         return x_cores, res
-    Ax = block_A.matvec(x_cores, 0.1*op_tol)
-    rhs = rhs.sub(Ax, 0.1*op_tol)
+
+    # === Update RHS and check for early stopping ===
+    rhs = update_rhs(rhs, x_cores)
     rhs_norm = rhs.norm
-    if rhs_norm < termination_tol*orig_rhs_norm:
+
+    if rhs_norm < termination_tol * orig_rhs_norm:
         if verbose:
-            print(f"\n\tTerminated on global criterion,  Relative Error={rhs_norm / orig_rhs_norm}")
+            print(f"\n\tTerminated on global criterion, Relative Error = {rhs_norm / orig_rhs_norm:.3e}")
         return x_cores, res
-    elif orig_rhs_norm < rhs_norm:
+    if rhs_norm > orig_rhs_norm:
         raise RuntimeError(f"Terminated on instability: ||rhs|| = {rhs_norm} > previous = {orig_rhs_norm}")
+
     if verbose:
-        print(f"\n\tRelative Error={rhs_norm / orig_rhs_norm}")
+        print(f"\n\tRelative Error = {rhs_norm / orig_rhs_norm:.3e}")
+
+    # === Restart loop ===
     for i in range(1, num_restarts):
         if rhs_norm / orig_rhs_norm > 0.1:
             inner_m += 1
+
         if verbose:
-            print(f"\n\t---Restart {i}")
-        new_x_cores, res = _tt_block_als(rhs_norm, block_A, rhs, op_tol, termination_tol, eps, inner_m, rank_restriction, None, local_solver, refinement, verbose)
-        Ax = block_A.matvec(new_x_cores, 0.1*op_tol)
-        rhs = rhs.sub(Ax, 0.1*op_tol)
-        prev_rhs_norm = rhs_norm
-        rhs_norm = rhs.norm
+            print(f"\n\t--- Restart {i}")
+
+        new_x_cores, res = solve_als(rhs_norm, rhs, rank_restriction, None)
+
+        rhs = update_rhs(rhs, new_x_cores)
+        prev_rhs_norm, rhs_norm = rhs_norm, rhs.norm
+
         if rhs_norm >= prev_rhs_norm:
             if prev_rhs_norm >= orig_rhs_norm:
                 raise RuntimeError(f"Terminated on instability: ||rhs|| = {prev_rhs_norm} > previous = {orig_rhs_norm}")
             if verbose:
-                print(f"\n\t Terminated on instability: ||rhs|| = {rhs_norm} > previous = {prev_rhs_norm}")
-            return x_cores, prev_rhs_norm 
-        elif rhs_norm < termination_tol*orig_rhs_norm:
+                print(f"\n\tTerminated on instability: ||rhs|| = {rhs_norm} > previous = {prev_rhs_norm}")
+            return x_cores, prev_rhs_norm
+
+        if rhs_norm < termination_tol * orig_rhs_norm:
             if verbose:
-                print(f"\n\tTerminated on global criterion,  Relative Error={rhs_norm / orig_rhs_norm}")
+                print(f"\n\tTerminated on global criterion, Relative Error = {rhs_norm / orig_rhs_norm:.3e}")
             x_cores = tt_rank_reduce_py(tt_add(x_cores, new_x_cores), eps=eps)
             break
+
         if verbose:
-            print(f"\n\tRelative Error={rhs_norm / orig_rhs_norm}")
+            print(f"\n\tRelative Error = {rhs_norm / orig_rhs_norm:.3e}")
         x_cores = tt_rank_reduce_py(tt_add(x_cores, new_x_cores), eps=eps)
+
     else:
         if verbose:
-            print(f"\n\tNumber of restarts exhausted,  Relative Error={rhs_norm / orig_rhs_norm}")
+            print(f"\n\tNumber of restarts exhausted, Relative Error = {rhs_norm / orig_rhs_norm:.3e}")
 
     return x_cores, res
 
