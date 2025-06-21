@@ -36,6 +36,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
     rhs[:, 2] = cached_einsum('br,bmB,BR->rmR', Xb_k[2], block_b_k[2], Xb_k1[2]) if 2 in block_b_k else 0
     inv_I = np.divide(1, cached_einsum('lsr,smnS,LSR->lmL', XAX_k[1, 2], block_A_k[1, 2], XAX_k1[1, 2]))
     block_res_old = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution).__isub__(rhs))
+    size_limit = 0
     if m <= size_limit:
         try:
             L_L_Z = scp.linalg.cholesky(
@@ -66,6 +67,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
             print(f"\tAttention: {e}")
             size_limit = 0
 
+    info = 0
     if m > size_limit:
         Op = MatVecWrapper(
             XAX_k[0, 0], XAX_k[0, 1], XAX_k[2, 1], XAX_k[2, 2],
@@ -79,13 +81,13 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         local_rhs[1] += rhs[:, 2]
         local_rhs[1] -= cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[2, 2], block_A_k[2, 2], XAX_k1[2, 2], inv_I*rhs[:, 1])
 
-        max_iter = min(max(2 * int(np.ceil(block_res_old / termination_tol)), 2), 30)
+        max_iter = min(max(2 * int(np.ceil(block_res_old / termination_tol)), 2), 25)
         solution_now, _ = lgmres(
             Op,
             local_rhs.ravel(),
             rtol=1e-10,
             outer_k=5,
-            inner_m=20,
+            inner_m=25,
             maxiter=max_iter
         )
         solution_now = np.transpose(solution_now.reshape(2, x_shape[0], x_shape[2], x_shape[3]), (1, 0, 2, 3)).__iadd__(previous_solution[:, :2])
@@ -93,6 +95,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         solution_now = np.concatenate((solution_now, z.reshape(x_shape[0], 1, x_shape[2], x_shape[3])), axis=1)
 
     block_res_new = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, solution_now).__isub__(rhs))
+    print(info, block_res_new, block_res_old)
 
     if block_res_old < block_res_new:
         solution_now = previous_solution
@@ -172,7 +175,7 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
             local_rhs.ravel(),
             rtol=1e-10,
             outer_k=5,
-            inner_m=20,
+            inner_m=25,
             maxiter=max_iter
         )
         solution_now = np.transpose(solution_now.reshape(3, x_shape[0], x_shape[2], x_shape[3]),
@@ -302,7 +305,7 @@ def _tt_ipm_newton_step(
         status,
         solver
 ):
-    try:
+    if True: #try:
         # Predictor
         if status.verbose:
             print("\n--- Predictor  step ---", flush=True)
@@ -411,9 +414,9 @@ def _tt_ipm_newton_step(
             )
         else:
             status.sigma = 0
-    except Exception as e:
-            print(f"\tAttention: TT-solver failed with exception: {e}")
-            return 0, 0, None, None, None, None, status
+    #except Exception as e:
+    #        print(f"\tAttention: TT-solver failed with exception: {e}")
+    #        return 0, 0, None, None, None, None, status
 
     return x_step_size, z_step_size, Delta_X_tt, Delta_Y_tt, Delta_Z_tt, Delta_T_tt, status
 
@@ -544,7 +547,7 @@ class IPMStatus:
     primal_error_normalisation: float
     dual_error_normalisation: float
 
-    boundary_val: float = 0.01
+    boundary_val: float = 1e-10
     sigma: float = 0.5
     num_ineq_constraints: float = 0
     lag_map_t: list = None
@@ -757,6 +760,7 @@ def tt_ipm(
                     finishing_steps -= max_refinement
                 else:
                     finishing_steps -= 1
+                    status.boundary_val = 0.01*(1-(finishing_steps/max_refinement))
                 status.kkt_iterations += (finishing_steps == 1)
 
         if (

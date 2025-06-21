@@ -409,18 +409,17 @@ def _tt_block_als(
     XAX =  [{key: np.ones((1, 1, 1)) for key in block_A}] + [{key: None for key in block_A} for _ in range(d-1)] + [{key: np.ones((1, 1, 1)) for key in block_A}]  # size is rk x Rk x rk
     Xb = [{key: np.ones((1, 1)) for key in block_b}] + [{key: None for key in block_b} for _ in range(d-1)] + [{key: np.ones((1, 1)) for key in block_b}]   # size is rk x rbk
 
-    r_max_warm_up = min(d+1, r_max_final)
+    r_max_warm_up = min(d+2, r_max_final)
     size_limit = 0
     x_cores = tt_rank_retraction(x_cores, [r_max_warm_up]*(d-1)) if x0 is not None else x_cores
     if not refinement:
-        size_limit = (r_max_warm_up+np.floor(np.sqrt(d)*5))**2*N[0]
+        size_limit = (block_size*(d-1) + 2)**2*N[0]
 
     rx = np.array([1] + tt_ranks(x_cores) + [1])
     local_res_fwd = np.inf
-    local_res_bwd = np.inf
     trunc_tol = tol/np.sqrt(d)
     refinement = refinement or size_limit == 0
-    r_maxes = np.concatenate(([r_max_warm_up], np.linspace(r_max_warm_up, r_max_final, nswp-2), [r_max_final])).astype(int)
+    r_maxes = np.concatenate((np.linspace(r_max_warm_up, r_max_final, nswp-1), [r_max_final])).astype(int)
 
     for swp, r_max in enumerate(r_maxes):
         x_cores, XAX, Xb, rx, local_res_bwd, rmax_record = _bck_sweep(
@@ -618,7 +617,7 @@ def tt_restarted_block_als(
 
     # === Restart loop ===
     for i in range(1, num_restarts):
-        if rhs_norm / orig_rhs_norm > 0.1:
+        if rhs_norm / orig_rhs_norm > 0.5:
             inner_m += 1
 
         if verbose:
