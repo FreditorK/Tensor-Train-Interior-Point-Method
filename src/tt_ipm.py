@@ -36,7 +36,6 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
     rhs[:, 2] = cached_einsum('br,bmB,BR->rmR', Xb_k[2], block_b_k[2], Xb_k1[2]) if 2 in block_b_k else 0
     inv_I = np.divide(1, cached_einsum('lsr,smnS,LSR->lmL', XAX_k[1, 2], block_A_k[1, 2], XAX_k1[1, 2]))
     block_res_old = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution).__isub__(rhs))
-    size_limit = 0
     if m <= size_limit:
         try:
             L_L_Z = scp.linalg.cholesky(
@@ -68,11 +67,6 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
             size_limit = 0
 
     if m > size_limit:
-        K_y = cached_einsum('lsr,smnS,LSR->lmLrnR',XAX_k[0, 0], block_A_k[0, 0], XAX_k1[0, 0]).reshape(m, m)
-        L_Z = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[2, 1], block_A_k[2, 1], XAX_k1[2, 1]).reshape(m, m)
-        L_X_I_inv = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[2, 2], block_A_k[2, 2], XAX_k1[2, 2]).reshape(m, m)*inv_I.reshape(1, -1)
-        mL_eq = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[0, 1], block_A_k[0, 1], XAX_k1[0, 1]).reshape(m, m)
-        Op_test = np.block([[K_y, mL_eq], [-L_X_I_inv @ mL_eq.T, L_Z]])
         Op = MatVecWrapper(
             XAX_k[0, 0], XAX_k[0, 1], XAX_k[2, 1], XAX_k[2, 2],
             block_A_k[0, 0], block_A_k[0, 1], block_A_k[2, 1], block_A_k[2, 2],
@@ -80,45 +74,25 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
             inv_I, x_shape[0], x_shape[2], x_shape[3]
         )
 
-        s = np.random.randn(2*m)
-        a = Op.matvec(s)
-        b = (Op_test @ s.reshape(-1, 1)).flatten()
-        c = cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[2, 1], block_A_k[2, 1], XAX_k1[2, 1], s.reshape(2, x_shape[0], x_shape[2], x_shape[3])[1])
-        temp = cached_einsum('lsr,smnS,LSR,lmL->rnR', XAX_k[0, 1], block_A_k[0, 1], XAX_k1[0, 1], s.reshape(2, x_shape[0], x_shape[2], x_shape[3])[0])
-        temp *= inv_I
-        c -= cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[2, 2], block_A_k[2, 2], XAX_k1[2, 2], temp)
-        c = c.flatten()
-        #c = (-L_X_I_inv @ (mL_eq.T @ s.reshape(-1, 1)[:m]) + L_Z @ s.reshape(-1, 1)[m:]).flatten()
-        print("Actual: ", np.linalg.norm(a[:m] - b[:m]), np.linalg.norm(a[m:] - b[m:]), np.linalg.norm(b[m:] - c), np.linalg.norm(a[m:] - c))
-
         local_rhs = -Op.matvec(np.transpose(previous_solution[:, :2], (1, 0, 2, 3)).flatten()).reshape(2, x_shape[0], x_shape[2], x_shape[3])
         local_rhs[0] += rhs[:, 0]
         local_rhs[1] += rhs[:, 2]
         local_rhs[1] -= cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[2, 2], block_A_k[2, 2], XAX_k1[2, 2], inv_I*rhs[:, 1])
 
-        solution_now, info = lgmres(
+        max_iter = min(max(2 * int(np.ceil(block_res_old / termination_tol)), 2), 30)
+        solution_now, _ = lgmres(
             Op,
             local_rhs.ravel(),
-            rtol=1e-3,
+            rtol=1e-10,
             outer_k=5,
             inner_m=20,
-            maxiter=1000
+            maxiter=max_iter
         )
-        #print(np.linalg.norm(local_rhs))
         solution_now = np.transpose(solution_now.reshape(2, x_shape[0], x_shape[2], x_shape[3]), (1, 0, 2, 3)).__iadd__(previous_solution[:, :2])
-        #local_rhs_test = np.transpose(np.copy(rhs[:, :2]), (1, 0, 2, 3))
-        #local_rhs_test[1] -= cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[2, 2], block_A_k[2, 2], XAX_k1[2, 2], inv_I*rhs[:, 1])
-        #sol_test = np.transpose(solution_now, (1, 0, 2, 3))
-        #print("Actual_2.0: ", np.linalg.norm((Op_test @ sol_test.reshape(-1, 1)).flatten() - local_rhs_test.flatten()))
-        #print("Actual_2.1: ", np.linalg.norm(Op.matvec(sol_test.flatten()) - local_rhs_test.flatten()))
-
         z = inv_I * (rhs[:, 1] - cached_einsum('lsr,smnS,LSR,lmL->rnR', XAX_k[0, 1], block_A_k[0, 1], XAX_k1[0, 1], solution_now[:, 0]))
         solution_now = np.concatenate((solution_now, z.reshape(x_shape[0], 1, x_shape[2], x_shape[3])), axis=1)
 
     block_res_new = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, solution_now).__isub__(rhs))
-    #a = block_A_k.block_local_product(XAX_k, XAX_k1, solution_now)
-    #print(f"a {np.linalg.norm(a[:m] - rhs[:m])}, b {np.linalg.norm(a[m:2*m] - rhs[m:2*m])}, c {np.linalg.norm(a[2*m:3*m] - rhs[2*m:3*m])}")
-    print(info, block_res_new, block_res_old)
 
     if block_res_old < block_res_new:
         solution_now = previous_solution
@@ -328,7 +302,7 @@ def _tt_ipm_newton_step(
         status,
         solver
 ):
-    if True: #try:
+    try:
         # Predictor
         if status.verbose:
             print("\n--- Predictor  step ---", flush=True)
@@ -437,9 +411,9 @@ def _tt_ipm_newton_step(
             )
         else:
             status.sigma = 0
-    #except Exception as e:
-    #        print(f"\tAttention: TT-solver failed with exception: {e}")
-    #        return 0, 0, None, None, None, None, status
+    except Exception as e:
+            print(f"\tAttention: TT-solver failed with exception: {e}")
+            return 0, 0, None, None, None, None, status
 
     return x_step_size, z_step_size, Delta_X_tt, Delta_Y_tt, Delta_Z_tt, Delta_T_tt, status
 

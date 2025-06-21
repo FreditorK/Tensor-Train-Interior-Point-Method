@@ -252,10 +252,10 @@ def _bck_sweep(
 ):
     local_res = np.inf if swp == 0 else 0
     r_max_record = 0
-    for k in range(d - 1, 0, -1):
+    for k in range(d - 1, -1, -1):
         block_A_k = block_A[k]
         # TODO: This is wrong, shiieet
-        if swp > 0 and 0 < k < d - 1 and False:
+        if swp > 0:
             previous_solution = x_cores[k]
             solution_now, block_res_old = local_solver(XAX[k], block_A_k, XAX[k + 1],
                                                        Xb[k], block_b[k], Xb[k + 1],
@@ -267,27 +267,33 @@ def _bck_sweep(
         else:
             solution_now = np.reshape(x_cores[k], (rx[k] * block_size, N[k] * rx[k + 1])).T
 
-        if min(rx[k] * block_size, N[k] * rx[k + 1]) > 2*r_max:
-            u, s, v = scp.sparse.linalg.svds(solution_now, k=r_max, tol=eps, which="LM")
-            idx = np.argsort(s)[::-1]  # descending order
-            s = s[idx]
-            u = u[:, idx]
-            v = v[idx, :]
+
+        if k > 0:
+            if min(rx[k] * block_size, N[k] * rx[k + 1]) > 2*r_max:
+                u, s, v = scp.sparse.linalg.svds(solution_now, k=r_max, tol=eps, which="LM")
+                idx = np.argsort(s)[::-1]  # descending order
+                s = s[idx]
+                u = u[:, idx]
+                v = v[idx, :]
+            else:
+                u, s, v = scp.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
+            v = s.reshape(-1, 1) * v
+
+            r = min(prune_singular_vals(s, real_tol), r_max)
+            r_max_record += np.sum(s[r:])
+            u = np.reshape(u[:, :r].T, (r, N[k], rx[k + 1]))
+            v = v[:r].T.reshape(rx[k], block_size, r)
+
+            x_cores[k] = u
+            x_cores[k - 1] = einsum('rdc,cbR->rbdR', x_cores[k - 1], v, optimize=[(0, 1)])
+            rx[k] = r
+
+            XAX[k] = {(i, j): compute_phi_bck_A(XAX[k + 1][(i, j)], x_cores[k], block_A_k[(i, j)], x_cores[k]) for (i, j) in block_A_k}
+
+            Xb[k] = {i: compute_phi_bck_rhs(Xb[k + 1][i], block_b[k][i], x_cores[k]) for i in block_b[k]}
+
         else:
-            u, s, v = scp.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
-        v = s.reshape(-1, 1) * v
-
-        r = min(prune_singular_vals(s, real_tol), r_max)
-        r_max_record += np.sum(s[r:])
-        u = np.reshape(u[:, :r].T, (r, N[k], rx[k + 1]))
-        v = v[:r].T.reshape(rx[k], block_size, r)
-
-        x_cores[k] = u
-        x_cores[k - 1] = einsum('rdc,cbR->rbdR', x_cores[k - 1], v, optimize=[(0, 1)])
-        rx[k] = r
-
-        XAX[k] = {(i, j): compute_phi_bck_A(XAX[k + 1][(i, j)], x_cores[k], block_A_k[(i, j)], x_cores[k]) for (i, j) in block_A_k}
-        Xb[k] = {i: compute_phi_bck_rhs(Xb[k + 1][i], block_b[k][i], x_cores[k]) for i in block_b[k]}
+            x_cores[k] = np.reshape(solution_now.T, (rx[k], block_size, N[k], rx[k + 1]))
 
     return x_cores, XAX, Xb, rx, local_res, r_max_record
 
