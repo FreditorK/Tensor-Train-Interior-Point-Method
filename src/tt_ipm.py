@@ -48,7 +48,9 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
             L_X_I_inv = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[2, 2], block_A_k[2, 2], XAX_k1[2, 2]).reshape(m, m).__imul__(inv_I.reshape(1, -1))
             mL_eq = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[0, 1], block_A_k[0, 1], XAX_k1[0, 1]).reshape(m, m)
             b = mR_p - mL_eq @ forward_backward_sub(L_L_Z, mR_c - L_X_I_inv @ mR_d, overwrite_b=True)
-            mL_eq @= forward_backward_sub(L_L_Z, L_X_I_inv, overwrite_b=True) @ mL_eq.T
+            A = forward_backward_sub(L_L_Z, L_X_I_inv, overwrite_b=True)
+            A @= mL_eq.T
+            mL_eq @= A
             A = mL_eq
             A += cached_einsum('lsr,smnS,LSR->lmLrnR',XAX_k[0, 0], block_A_k[0, 0], XAX_k1[0, 0]).reshape(m, m)
             b -= A @ previous_solution[:, 0].reshape(-1, 1)
@@ -80,8 +82,8 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         local_rhs[1] += rhs[:, 2]
         local_rhs[1] -= cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[2, 2], block_A_k[2, 2], XAX_k1[2, 2], inv_I*rhs[:, 1])
 
-        max_iter = min(max(2 * int(np.ceil(block_res_old / termination_tol)), 2), 25)
-        solution_now, _ = lgmres(
+        max_iter = min(max(2 * int(np.ceil(block_res_old / termination_tol)), 2), 30)
+        solution_now, info = lgmres(
             Op,
             local_rhs.ravel(),
             rtol=1e-10,
@@ -94,7 +96,6 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         solution_now = np.concatenate((solution_now, z.reshape(x_shape[0], 1, x_shape[2], x_shape[3])), axis=1)
 
     block_res_new = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, solution_now).__isub__(rhs))
-    #print(info, block_res_new, block_res_old)
 
     if block_res_old < block_res_new:
         solution_now = previous_solution

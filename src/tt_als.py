@@ -409,17 +409,17 @@ def _tt_block_als(
     XAX =  [{key: np.ones((1, 1, 1)) for key in block_A}] + [{key: None for key in block_A} for _ in range(d-1)] + [{key: np.ones((1, 1, 1)) for key in block_A}]  # size is rk x Rk x rk
     Xb = [{key: np.ones((1, 1)) for key in block_b}] + [{key: None for key in block_b} for _ in range(d-1)] + [{key: np.ones((1, 1)) for key in block_b}]   # size is rk x rbk
 
-    r_max_warm_up = min(d+2, r_max_final)
+    r_max_warm_up = min(d+1, r_max_final)
     size_limit = 0
     x_cores = tt_rank_retraction(x_cores, [r_max_warm_up]*(d-1)) if x0 is not None else x_cores
     if not refinement:
-        size_limit = (block_size*(d-1) + 2)**2*N[0]
+        size_limit = (block_size*d)**2*N[0]
 
     rx = np.array([1] + tt_ranks(x_cores) + [1])
     local_res_fwd = np.inf
     trunc_tol = tol/np.sqrt(d)
     refinement = refinement or size_limit == 0
-    r_maxes = np.concatenate((np.linspace(r_max_warm_up, r_max_final, nswp-1), [r_max_final])).astype(int)
+    r_maxes = np.concatenate(([r_max_warm_up], np.linspace(r_max_warm_up, r_max_final, nswp - 2), [r_max_final])).astype(int)
 
     for swp, r_max in enumerate(r_maxes):
         x_cores, XAX, Xb, rx, local_res_bwd, rmax_record = _bck_sweep(
@@ -589,12 +589,8 @@ def tt_restarted_block_als(
     if orig_rhs_norm < op_tol:
         raise RuntimeError(f"\n\tAbsolute tolerance already reached: {orig_rhs_norm} < {op_tol}")
 
-    d = len(next(iter(block_b.values())))
-    block_size = np.max(list(k[0] for k in block_A.keys())) + 1
-    upper_rank = rank_restriction if refinement else block_size*d
-
     # === First ALS solve ===
-    x_cores, res = solve_als(orig_rhs_norm, rhs, upper_rank, x0)
+    x_cores, res = solve_als(orig_rhs_norm, rhs, rank_restriction, x0)
 
     if res < termination_tol:
         if verbose:

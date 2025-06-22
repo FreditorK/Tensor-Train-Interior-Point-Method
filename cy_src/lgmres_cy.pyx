@@ -34,6 +34,8 @@ from numpy.linalg import LinAlgError
 from scipy.linalg import qr_insert
 from scipy.linalg.cython_lapack cimport dtrtrs
 from cython.parallel cimport prange
+from libc.string cimport memcpy
+from scipy.linalg.cython_blas cimport dcopy
 
 cnp.import_array() # Initialize NumPy C-API
 
@@ -134,34 +136,44 @@ cdef void _transpose_reshape_step2(
     int R, 
     int n, 
     int S
-    ) noexcept nogil:
-    cdef int i, j, k, l
+) noexcept nogil:
+    cdef int i, j, k
+    cdef size_t block_size = S * sizeof(double)
+    
     for i in prange(r, nogil=True):
         for j in range(R):
             for k in range(n):
-                for l in range(S):
-                    dest[i * R + j, k * S + l] = src_2d[i * n + k, j * S + l]
+                memcpy(
+                    &dest[i * R + j, k * S], 
+                    &src_2d[i * n + k, j * S],
+                    block_size
+                )
 
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.nonecheck(False)
 cdef void _transpose_reshape_step3(
-    const double[:, ::1] src_2d, # Input with shape (r*R, s*n)
-    double[:, ::1] dest,         # Output with shape (R*n, r*s)
-    int r,
-    int R,
-    int s,
-    int n
+    const double[:, ::1] src_2d,
+    double[:, ::1] dest,
+    int r, int R, int s, int n
 ) noexcept nogil:
-    # rR x sn -> Rn x rs
-    # src_2d.reshape(r,R,s,n).transpose(1,3,0,2).reshape(R*n, r*s)
-    cdef int i, j, k, l
+    cdef int i, j, l
+    cdef int n_copy = s
+    cdef int incx = n
+    cdef int incy = 1
+
     for i in prange(r, nogil=True):
         for j in range(R):
-            for k in range(s):
-                for l in range(n):
-                    dest[j * n + l, i * s + k] = src_2d[i * R + j, k * n + l]
+            for l in range(n):
+                dcopy(
+                    &n_copy,
+                    <double*>&src_2d[i * R + j, l],
+                    &incx,
+                    &dest[j * n + l, i * s],
+                    &incy
+                )
+
 
 
 @cython.boundscheck(False)
@@ -174,13 +186,28 @@ cdef void _transpose_and_reshape_result(
     int n,
     int R
 ) noexcept nogil:
-    """ Equivalent to src.reshape(R,n,r).transpose(2,1,0).reshape(r*n,R) """
-    cdef int i, j, k
+    """ Optimized version using BLAS dcopy with CORRECTED stride """
+    cdef int i, j
+    
+    # --- dcopy parameters ---
+    cdef int n_copy = R
+    
+    # THE FIX: Stride is n (row skip) * r (length of a row)
+    cdef int incx = n * r
+    
+    cdef int incy = 1
+
     # Parallelize the outer loop over 'r'
     for i in prange(r, nogil=True):
         for j in range(n):
-            for k in range(R):
-                dest[i * n + j, k] = src[k * n + j, i]
+            # The dcopy call remains the same, but now uses the correct incx
+            dcopy(
+                &n_copy,
+                <double*>&src[j, i],
+                &incx,
+                &dest[i * n + j, 0],
+                &incy
+            )
 
 
 @cython.boundscheck(False)
@@ -190,14 +217,17 @@ cdef void _elementwise_multiply_inplace(
     double[:, ::1] target,      # The array to be modified
     const double[:, ::1] source, # The array to multiply by
 ) noexcept nogil:
-    cdef int i, j
-    cdef int shape0 = target.shape[0]
-    cdef int shape1 = target.shape[1]
-
-    # Parallelize the outer loop
-    for i in prange(shape0, nogil=True):
-        for j in range(shape1):
-            target[i, j] *= source[i, j]
+    # Ensure the shapes are identical before entering the nogil block in the calling code
+    cdef int n_elements = target.shape[0] * target.shape[1]
+    
+    # Get direct pointers to the underlying data buffers
+    cdef double* target_ptr = &target[0, 0]
+    cdef const double* source_ptr = &source[0, 0]
+    
+    cdef int i
+    # Parallelize over the entire flattened array
+    for i in prange(n_elements, nogil=True):
+        target_ptr[i] *= source_ptr[i]
 
 
 @cython.boundscheck(False)
