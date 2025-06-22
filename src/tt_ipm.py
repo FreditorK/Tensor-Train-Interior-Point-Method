@@ -68,7 +68,6 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
             print(f"\tAttention: {e}")
             size_limit = 0
 
-    info = 0
     if m > size_limit:
         Op = MatVecWrapper(
             XAX_k[0, 0], XAX_k[0, 1], XAX_k[2, 1], XAX_k[2, 2],
@@ -83,7 +82,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         local_rhs[1] -= cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[2, 2], block_A_k[2, 2], XAX_k1[2, 2], inv_I*rhs[:, 1])
 
         max_iter = min(max(2 * int(np.ceil(block_res_old / termination_tol)), 2), 30)
-        solution_now, info = lgmres(
+        solution_now, _ = lgmres(
             Op,
             local_rhs.ravel(),
             rtol=1e-10,
@@ -154,7 +153,8 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
                 np.vstack((y, x, z, t)).reshape(x_shape[1], x_shape[0], x_shape[2], x_shape[3]),
                 (1, 0, 2, 3)
             )
-        except:
+        except Exception as e:
+            print(f"\tAttention: {e}")
             size_limit = 0
 
     if m > size_limit:
@@ -499,7 +499,6 @@ def _update(x_step_size, z_step_size, X_tt, Z_tt, Delta_X_tt, Delta_Z_tt, status
     if 0 < x_step_size < 1e-5 and 0 < z_step_size < 1e-5:
         status.is_last_iter = True
     else:
-        status.is_last_iter = status.is_last_iter or (tt_norm(Delta_X_tt) + tt_norm(Delta_Z_tt) < status.eps)
         if status.is_last_iter:
             X_tt = _tt_symmetrise(tt_add(X_tt, tt_scale(x_step_size, Delta_X_tt)), status.op_tol)
         else:
@@ -613,7 +612,6 @@ def tt_ipm(
     # We normalise the objective to the scale of the average constraint
     status.primal_error_normalisation = 1 + tt_norm(bias_tt)
     status.dual_error_normalisation = 1 + tt_norm(obj_tt)
-    status.feasibility_tol = feasibility_tol + (op_tol/2) # account for error introduced in psd_rank_reduce
 
     lhs_skeleton = TTBlockMatrix()
     lhs_skeleton[1, 2] = tt_reshape(tt_identity(2 * dim), (4, 4))

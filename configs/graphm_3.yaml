@@ -1,13 +1,13 @@
 # Common
 dim: !!int 3
 max_rank: !!int 2 # (2)
-seeds: [52]  # !!52, 68, 23, 9175, 212!! 
+seeds: [53]  # !!53, 68, 23, 9175, 212!! 
 gap_tol: !!float 5e-4
 verbose: True
 # TT-IPM
 op_tol: !!float 1e-4
 max_iter: !!int 25
 warm_up: !!int 0
-mals_rank_restriction: !!int 25
+mals_rank_restriction: !!int 26
 mals_restarts: !!int 2
 max_refinement:  !!int 5
