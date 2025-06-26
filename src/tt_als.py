@@ -8,6 +8,7 @@ sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
 from opt_einsum import contract as einsum
+from sksparse.cholmod import cholesky as sparse_cholesky
 
 class TTBlockVector:
     def __init__(self):
@@ -662,31 +663,29 @@ class CgIterInv(scp.sparse.linalg.LinearOperator):
                              "%s did not converge (info = %i)."
                              % (self.ifunc.__name__, info))
         return b
-    
 
-def cholesky_inverse_operator(M):
-    #TODO: By default eigsh uses sparse LU, we should use sparse choleksy
-    """
-    chol = cholesky(M)
 
-    n = M.shape[0]
+class CholInv(scp.sparse.linalg.LinearOperator):
+    def __init__(self, M):
+        M = M.tocsc()
+        self.shape = M.shape
+        self.dtype = M.dtype
 
-    def matvec(x):
-        return chol.solve_A(x)
+        # CHOLMOD needs symmetric matrix
+        self.factor = sparse_cholesky(M)
 
-    return LinearOperator((n, n), matvec=matvec, dtype=M.dtype)
-    """
-    pass
+    def _matvec(self, x):
+        return self.factor.solve_A(x)
 
 
 def _step_size_local_solve(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k, A_k, XAX_k1, m, step_size, size_limit, eps):
     if m <= size_limit:
         previous_solution = previous_solution.reshape(-1, 1)
-        D = cached_einsum(
+        D = scp.sparse.csr_matrix(cached_einsum(
             "lsr,smnS,LSR->lmLrnR",
             XDX_k, Delta_k, XDX_k1
-        ).reshape(m, m)
-        A = cached_einsum("lsr,smnS,LSR->lmLrnR", XAX_k, A_k, XAX_k1).reshape(m, m)
+        ).reshape(m, m))
+        A = scp.sparse.csr_matrix(cached_einsum("lsr,smnS,LSR->lmLrnR", XAX_k, A_k, XAX_k1).reshape(m, m))
         try:
             eig_val, solution_now = scp.sparse.linalg.eigsh((1/step_size)*A + D, tol=eps, k=1, ncv=min(m, 25), maxiter=10*m, which="SA", v0=previous_solution)
         except Exception as e:
@@ -695,7 +694,8 @@ def _step_size_local_solve(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k, A_k
             solution_now = previous_solution
         if eig_val < 0:
             try:
-                eig_val, solution_now = scp.sparse.linalg.eigsh(-D, M=A, tol=eps, k=1, ncv=min(m, 25), which="LA", maxiter=10*m, v0=previous_solution)
+                Minv = CholInv(A)
+                eig_val, solution_now = scp.sparse.linalg.eigsh(-D, M=A, Minv=Minv, tol=eps, k=1, ncv=min(m, 25), which="LA", maxiter=10*m, v0=previous_solution)
                 step_size = max(0, min(step_size, 1/ eig_val[0]))
             except Exception as e:
                 print(f"\tAttention: {e}")
