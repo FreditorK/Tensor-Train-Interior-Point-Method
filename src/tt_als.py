@@ -252,21 +252,15 @@ def _bck_sweep(
         termination_tol
 ):
     local_res = np.inf if swp == 0 else 0
-    r_max_record = 0
     for k in range(d - 1, -1, -1):
         block_A_k = block_A[k]
-        # TODO: This is wrong, shiieet
-        if swp > 0:
-            previous_solution = x_cores[k]
-            solution_now, block_res_old = local_solver(XAX[k], block_A_k, XAX[k + 1],
-                                                       Xb[k], block_b[k], Xb[k + 1],
-                                                       previous_solution,
-                                                       size_limit, termination_tol)
-            local_res = max(local_res, block_res_old)
-
-            solution_now = np.reshape(solution_now, (rx[k] * block_size, N[k] * rx[k + 1])).T
-        else:
-            solution_now = np.reshape(x_cores[k], (rx[k] * block_size, N[k] * rx[k + 1])).T
+        previous_solution = x_cores[k]
+        solution_now, block_res_old = local_solver(XAX[k], block_A_k, XAX[k + 1],
+                                                    Xb[k], block_b[k], Xb[k + 1],
+                                                    previous_solution,
+                                                    size_limit, termination_tol)
+        local_res = max(local_res, block_res_old)
+        solution_now = np.reshape(solution_now, (rx[k] * block_size, N[k] * rx[k + 1])).T
 
 
         if k > 0:
@@ -281,7 +275,6 @@ def _bck_sweep(
             v = s.reshape(-1, 1) * v
 
             r = min(prune_singular_vals(s, real_tol), r_max)
-            r_max_record += np.sum(s[r:])
             u = np.reshape(u[:, :r].T, (r, N[k], rx[k + 1]))
             v = v[:r].T.reshape(rx[k], block_size, r)
 
@@ -296,7 +289,7 @@ def _bck_sweep(
         else:
             x_cores[k] = np.reshape(solution_now.T, (rx[k], block_size, N[k], rx[k + 1]))
 
-    return x_cores, XAX, Xb, rx, local_res, r_max_record
+    return x_cores, XAX, Xb, rx, local_res
 
 
 def _fwd_sweep(
@@ -318,7 +311,6 @@ def _fwd_sweep(
         termination_tol
 ):
     local_res = np.inf if swp == 0 else 0
-    r_max_record = 0
     for k in range(d):
         block_A_k = block_A[k]
         if swp > 0:
@@ -337,6 +329,7 @@ def _fwd_sweep(
             solution_now = np.reshape(x_cores[k], (rx[k] * N[k],  block_size * rx[k + 1]))
 
         if k < d - 1:
+            print("Norm", np.linalg.norm(solution_now))
             if min(rx[k] * N[k],  block_size * rx[k + 1]) > 2*r_max:
                 u, s, v = scp.sparse.linalg.svds(solution_now, k=r_max, tol=eps, which="LM")
                 idx = np.argsort(s)[::-1]  # descending order
@@ -347,7 +340,6 @@ def _fwd_sweep(
                 u, s, v = scp.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
 
             r = min(prune_singular_vals(s, real_tol), r_max)
-            r_max_record += np.sum(s[r:])
             v = s.reshape(-1, 1) * v
 
             u = u[:, :r].reshape(rx[k], N[k], r)
@@ -364,7 +356,7 @@ def _fwd_sweep(
         else:
             x_cores[k] = np.reshape(solution_now, (rx[k], N[k], block_size, rx[k + 1])).transpose(0, 2, 1, 3)
 
-    return x_cores, XAX, Xb, rx, local_res, r_max_record
+    return x_cores, XAX, Xb, rx, local_res
 
 
 def _tt_block_als(
@@ -393,12 +385,9 @@ def _tt_block_als(
     if local_solver is None:
         local_solver = _default_local_solver
 
-    direction = 1
     if x0 is None:
-        x_cores = tt_normalise([np.random.randn(1, *c.shape[1:-1], 1) for c in model_entry[:-1]]) + [np.random.randn(1, block_size, *x_shape, 1)]
+        x_cores = [np.random.randn(1, block_size, *x_shape, 1)] + tt_normalise([np.random.randn(1, *c.shape[1:-1], 1) for c in model_entry[1:]])
     else:
-        if len(x0[0].shape) > len(x0[-1].shape):
-            direction *= -1
         x_cores = x0
 
     if verbose:
@@ -417,13 +406,12 @@ def _tt_block_als(
         size_limit = (block_size*d)**2*N[0]
 
     rx = np.array([1] + tt_ranks(x_cores) + [1])
-    local_res_fwd = np.inf
     trunc_tol = tol/np.sqrt(d)
     refinement = refinement or size_limit == 0
-    r_maxes = np.concatenate(([r_max_warm_up], np.linspace(r_max_warm_up, r_max_final, nswp - 2), [r_max_final])).astype(int)
+    r_maxes = np.concatenate((np.linspace(r_max_warm_up, r_max_final, nswp - 1), [r_max_final])).astype(int)
 
     for swp, r_max in enumerate(r_maxes):
-        x_cores, XAX, Xb, rx, local_res_bwd, rmax_record = _bck_sweep(
+        x_cores, XAX, Xb, rx, local_res_fwd = _fwd_sweep(
             local_solver,
             x_cores,
             XAX,
@@ -441,7 +429,7 @@ def _tt_block_als(
             r_max,
             termination_tol
         )
-        x_cores, XAX, Xb, rx, local_res_fwd, rmax_record = _fwd_sweep(
+        x_cores, XAX, Xb, rx, local_res_bwd = _bck_sweep(
             local_solver,
             x_cores,
             XAX,
@@ -459,20 +447,20 @@ def _tt_block_als(
             r_max,
             termination_tol
         )
-        if local_res_fwd < termination_tol:
+        if local_res_bwd < termination_tol:
             break
 
         if verbose:
             print('\tStarting Sweep: %d' % swp)
-            print(f"\tTrunc loss: {rmax_record}")
-            print(f'\tRel. Residual {local_res_fwd}')
+            print(f"\tCurrent Rank Restriction: {r_max}")
+            print(f'\tRel. Residual {local_res_bwd}')
             print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
 
 
     if verbose:
         print("\n\t---Results---")
         print('\tSolution rank is', rx[1:-1])
-        print('\tRel. Residual ', local_res_fwd)
+        print('\tRel. Residual ', local_res_bwd)
         print('\tNumber of sweeps', swp+1)
         print('\tTime: ', time.time() - t0)
         print('\tTime per sweep: ', (time.time() - t0) / (swp+1), flush=True)
@@ -665,7 +653,7 @@ class CgIterInv(scp.sparse.linalg.LinearOperator):
         return b
 
 
-class CholInv(scp.sparse.linalg.LinearOperator):
+class SpCholInv(scp.sparse.linalg.LinearOperator):
     def __init__(self, M):
         M = M.tocsc()
         self.shape = M.shape
@@ -694,7 +682,7 @@ def _step_size_local_solve(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k, A_k
             solution_now = previous_solution
         if eig_val < 0:
             try:
-                Minv = CholInv(A)
+                Minv = SpCholInv(A)
                 eig_val, solution_now = scp.sparse.linalg.eigsh(-D, M=A, Minv=Minv, tol=eps, k=1, ncv=min(m, 25), which="LA", maxiter=10*m, v0=previous_solution)
                 step_size = max(0, min(step_size, 1/ eig_val[0]))
             except Exception as e:

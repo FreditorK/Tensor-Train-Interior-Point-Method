@@ -83,7 +83,6 @@ if __name__ == "__main__":
                         op_tol=config["op_tol"],
                         warm_up=config["warm_up"],
                         aho_direction=False,
-                        mals_rank_restriction=config["mals_rank_restriction"],
                         mals_restarts=config["mals_restarts"],
                         max_refinement=config["max_refinement"]
                     )
@@ -105,7 +104,6 @@ if __name__ == "__main__":
                     op_tol=config["op_tol"],
                     warm_up=config["warm_up"],
                     aho_direction=False,
-                    mals_rank_restriction=config["mals_rank_restriction"],
                     mals_restarts=config["mals_restarts"],
                     max_refinement=config["max_refinement"]
                 )

@@ -331,29 +331,6 @@ def tt_merge_cores(train_tt):
     return [einsum("kijr, rsdK -> kisjdK", c_1, c_2, optimize=path) for c_1, c_2 in zip(train_tt[:-1:2], train_tt[1::2])]
 
 
-def tt_random_rank_one(dim):
-    off_diag = np.round(np.random.rand())
-    return [np.array([[np.round(np.random.rand()), off_diag], [off_diag, np.round(np.random.rand())]]).reshape(1, 2, 2, 1) for _ in range(dim)]
-
-
-def tt_random_graph(dim, max_rank, eps=1e-9):
-    if dim == 1:
-        a = np.round(np.random.rand())
-        b = np.round(np.random.rand())
-        c = np.round(np.random.rand())
-        return [np.array([[b, a], [a, c]]).reshape(1, 2, 2, 1)]
-    max_rank = min(2**(dim-1), max_rank)
-    mask_matrix = tt_sub(tt_one_matrix(dim), tt_identity(dim))
-    graph = tt_zero_matrix(dim)
-    rank = 0
-    while rank < max_rank - 1 or tt_inner_prod(graph, graph) < eps:
-        new_graph = tt_random_rank_one(dim)
-        masked_new_graph = tt_fast_hadamard(tt_sub(mask_matrix, graph), new_graph, eps)
-        graph = tt_rank_reduce(tt_add(graph, masked_new_graph), eps)
-        rank = np.max(tt_ranks(graph)) - (tt_inner_prod(graph,  graph) < eps)
-    return graph
-
-
 def tt_entrywise_sum(train_tt):
     eq = 'ab,aijm,bijn->mn' if train_tt[0].ndim == 4 else 'ab,aim,bin->mn'
     one = np.ones((1, *train_tt[0].shape[1:-1], 1))
@@ -408,3 +385,173 @@ def tt_triu_one_matrix(dim):
             + [np.concatenate((np.concatenate((all_one, E(0, 1)), axis=0), np.concatenate((all_zeros, E(0, 0) + E(1, 1)), axis=0)), axis=-1) for _ in range(dim-2)]
             + [np.concatenate((all_one, E(0, 1) + E(0, 0) + E(1, 1)), axis=0)]
     )
+
+
+def _null_projector(
+    basis_vectors: np.ndarray,
+    discarded_indices: Set[int]
+) -> np.ndarray:
+    dimension = len(basis_vectors)
+    available_indices = list(set(range(dimension)) - discarded_indices)
+    num_available = len(available_indices)
+
+    if num_available == 0:
+        return np.zeros((dimension, dimension))
+
+    # Start with a projector onto the valid subspace.
+    projector = np.eye(dimension)
+    for i in discarded_indices:
+        projector -= np.outer(basis_vectors[i], basis_vectors[i])
+
+    # Determine how many random pairs to couple.
+    num_couplings = np.random.randint(num_available) if num_available > 0 else 0
+    if num_couplings == 0:
+        return projector
+
+    # Select source and target indices for the random couplings.
+    source_indices = np.random.choice(available_indices, size=num_couplings, replace=False)
+    target_indices = np.random.choice(available_indices, size=num_couplings, replace=False)
+
+    # Add the random couplings. This operation makes the matrix no longer a strict
+    # projection, but a transformation that maps a source vector to a target vector.
+    for i, j in zip(source_indices, target_indices):
+        projector += np.outer(basis_vectors[i], basis_vectors[j] - basis_vectors[i])
+
+    return projector
+
+
+def _diag_projector(
+    basis_vectors: np.ndarray,
+    discarded_indices: Set[int],
+    limit=2
+) -> Tuple[np.ndarray, Set[int]]:
+    dimension = len(basis_vectors)
+    num_couplings = np.random.randint(dimension) if dimension > 0 else 0
+
+    source_indices = np.random.choice(dimension, size=num_couplings, replace=False)
+    target_indices_1 = np.random.choice(dimension, size=num_couplings, replace=False)
+    target_indices_2 = np.random.choice(dimension, size=num_couplings, replace=False)
+
+    # Start with an identity matrix.
+    projector_1 = np.eye(dimension)
+    projector_2 = np.eye(dimension)
+    updated_discarded_indices = discarded_indices.copy()
+
+    # Apply transformations and update the discarded set.
+    # If a source vector `i` was in the discarded set, it's now mapped to `j`,
+    # so `j` effectively takes its place in the discarded set.
+    for i, j_1, j_2 in zip(source_indices, target_indices_1, target_indices_2):
+        if i in discarded_indices:
+            if len(updated_discarded_indices) <= limit or (j_1 in discarded_indices) or (j_2 in discarded_indices):
+                projector_1 += np.outer(basis_vectors[i], basis_vectors[j_1] - basis_vectors[i])
+                projector_2 += np.outer(basis_vectors[i], basis_vectors[j_2] - basis_vectors[i])
+                updated_discarded_indices.discard(i)
+                updated_discarded_indices.add(j_1)
+                updated_discarded_indices.add(j_2)
+        else:
+            projector_1 += np.outer(basis_vectors[i], basis_vectors[j_1] - basis_vectors[i])
+            projector_2 += np.outer(basis_vectors[i], basis_vectors[j_2] - basis_vectors[i])
+
+    return projector_1, projector_2, updated_discarded_indices
+
+def _random_projector(basis_vectors: np.ndarray) -> np.ndarray:
+    dimension = len(basis_vectors)
+    if dimension == 0:
+        return np.array([[]])
+        
+    num_couplings = np.random.randint(dimension)
+    
+    source_indices = np.random.choice(dimension, size=num_couplings, replace=False)
+    target_indices = np.random.choice(dimension, size=num_couplings, replace=False)
+
+    projector = np.eye(dimension)
+    for i, j in zip(source_indices, target_indices):
+        projector += np.outer(basis_vectors[i], basis_vectors[j] - basis_vectors[i])
+        
+    return projector
+
+
+def _bin_rand_tril(dim: int, rank: int) -> List[np.ndarray]:
+    if rank <= 0:
+        return []
+        
+    # 1. Generate an orthonormal basis using QR decomposition of a random matrix.
+    random_matrix = np.random.randn(rank, rank)
+    q_matrix, _ = np.linalg.qr(random_matrix, mode='reduced')
+    basis_vectors = q_matrix.T  # Each row is a basis vector
+
+    # 2. Initialize the first core and the set of discarded indices.
+    initial_indices = np.random.choice(rank, size=3, replace=True)
+    # Shape: (left_bond, bond_dim, physical_dim) -> (1, 4, dimension)
+    initial_core = np.zeros((1, 4, rank))
+    initial_core[:, [0, 2, 3], :] = basis_vectors[initial_indices]
+    
+    # These indices are "used" by the fixed parts of the boundary core.
+    discarded_indices = {initial_indices[0], initial_indices[2]}
+    tensor_cores = [initial_core]
+
+    if dim <= 1:
+        return tensor_cores
+
+    # 3. Generate the intermediate cores in a loop.
+    for _ in range(dim - 2):
+        core = np.empty((rank, 4, rank))
+        core[:, 1, :] = _null_projector(basis_vectors, discarded_indices)
+        core[:, 0, :], core[:, 3, :], discarded_indices = _diag_projector(basis_vectors, discarded_indices, limit=rank-1)
+        core[:, 2, :] = _random_projector(basis_vectors)
+
+        tensor_cores.append(core)
+
+    # 4. Generate the final core, ensuring orthogonality to the discarded set.
+    available_indices = list(set(range(rank)) - discarded_indices)
+    num_available = len(available_indices)
+
+    # Shape: (physical_dim, bond_dim, right_bond) -> (dimension, 4, 1)
+    terminal_core = np.zeros((rank, 4, 1))
+    
+    # Select a random index for the one non-zero slice.
+    final_fixed_index = np.random.choice(rank)
+
+    if num_available > 0:
+        # If there are available orthogonal vectors, use them for the other slices.
+        ortho_indices = np.random.choice(available_indices, size=3, replace=True)
+        final_indices = [ortho_indices[0], ortho_indices[1], final_fixed_index, ortho_indices[2]]
+        
+        # Construct the core slices from the chosen basis vectors
+        # basis_vectors[final_indices] has shape (4, dimension). We transpose
+        # it to fit the core's slice shape of (dimension, 4).
+        terminal_core[:, :, 0] = basis_vectors[final_indices].T
+    else:
+        # If no orthogonal vectors are left, only set the one required slice.
+        terminal_core[:, 2, 0] = basis_vectors[final_fixed_index]
+
+    tensor_cores.append(terminal_core)
+
+    return tensor_cores
+
+
+def tt_random_graph(dim, r, eps=1e-12):
+    print("====Starting Graph Sampling====")
+    if r == 1:
+        graph_tt = []
+        for _ in range(dim-1):
+            binary_numbers = np.random.randint(0, 2, size=3)
+            if np.sum(binary_numbers) == 0:
+                index_to_change = np.random.randint(0, 3)
+                binary_numbers[index_to_change] = 1
+            graph_tt.append(np.array([[binary_numbers[0], binary_numbers[1]], [binary_numbers[1], binary_numbers[2]]]).reshape(1, 2, 2, 1))
+
+        graph_tt.append(np.array([[0, 1], [1, 0]]).reshape(1, 2, 2, 1))
+        return graph_tt
+    max_rank = 0
+    rejection_counter = 0
+    while max_rank != r:
+        tril_r = 2*r
+        tril = _bin_rand_tril(dim, tril_r)
+        tril = tt_reshape(tril, (2, 2))
+        graph_tt = tt_rank_reduce(tt_add(tril, tt_transpose(tril)), eps)
+        print(f"Graph #{rejection_counter} rank: ", tt_ranks(graph_tt))
+        max_rank = np.max(tt_ranks(graph_tt))
+        rejection_counter += 1
+    print("===Terminated Graph Sampling===")
+    return graph_tt

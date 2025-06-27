@@ -112,12 +112,12 @@ def tt_padding_op(dim):
 
 def tt_obj_matrix(rank, dim):
     G_A = tt_random_graph(dim, rank)
-    # print("Graph A: ")
-    # print(np.round(tt_matrix_to_matrix(G_A), decimals=2))
+    print("Graph A: ")
+    print(np.round(tt_matrix_to_matrix(G_A), decimals=2))
 
     G_B = tt_random_graph(dim, rank)
-    # print("Graph B: ")
-    # print(np.round(tt_matrix_to_matrix(G_B), decimals=2))
+    print("Graph B: ")
+    print(np.round(tt_matrix_to_matrix(G_B), decimals=2))
 
     # print("Objective matrix: ")
     C_tt = [E(0, 0)] + G_B + G_A
@@ -278,7 +278,6 @@ if __name__ == "__main__":
                     op_tol=config["op_tol"],
                     warm_up=config["warm_up"],
                     aho_direction=False,
-                    mals_rank_restriction=config["mals_rank_restriction"],
                     mals_restarts=config["mals_restarts"],
                     max_refinement=config["max_refinement"]
                 )
@@ -300,7 +299,6 @@ if __name__ == "__main__":
                 op_tol=config["op_tol"],
                 warm_up=config["warm_up"],
                 aho_direction=False,
-                mals_rank_restriction=config["mals_rank_restriction"],
                 mals_restarts=config["mals_restarts"],
                 max_refinement=config["max_refinement"]
             )
@@ -327,3 +325,5 @@ if __name__ == "__main__":
         print(f"Peak memory avg {np.mean(memory):.3f} MB", flush=True)
     print(f"Complementary Slackness avg: {np.mean(complementary_slackness)}", flush=True)
     print(f"Total feasibility error avg: {np.mean(feasibility_errors)}", flush=True)
+
+    print(tt_matrix_to_matrix(X_tt))
