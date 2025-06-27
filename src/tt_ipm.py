@@ -55,9 +55,8 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
             mL_eq @= A
             A = mL_eq
             A += cached_einsum('lsr,smnS,LSR->lmLrnR',XAX_k[0, 0], block_A_k[0, 0], XAX_k1[0, 0]).reshape(m, m)
-            b -= A @ previous_solution[:, 0].reshape(-1, 1)
             solution_now = np.empty(x_shape)
-            solution_now[:, 0] = scp.linalg.solve(A, b, check_finite=False, overwrite_a=True, overwrite_b=True).reshape(x_shape[0], x_shape[2], x_shape[3]).__iadd__(previous_solution[:, 0])
+            solution_now[:, 0] = scp.linalg.solve(A, b, check_finite=False, overwrite_a=True, overwrite_b=True).reshape(x_shape[0], x_shape[2], x_shape[3])
             solution_now[:, 2] = (
                 mR_d - cached_einsum('lsr,smnS,LSR,lmL->rnR', XAX_k[0, 1], block_A_k[0, 1], XAX_k1[0, 1], solution_now[:, 0]).reshape(-1, 1)
                 ).__imul__(inv_I.reshape(-1, 1)).reshape(x_shape[0], x_shape[2], x_shape[3])
@@ -99,8 +98,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         solution_now = np.transpose(solution_now.reshape(2, x_shape[0], x_shape[2], x_shape[3]), (1, 0, 2, 3))
 
         if use_prev_sol:
-            solution_now[:, 0] += previous_solution[:, 0]
-            solution_now[:, 1] += previous_solution[:, 1]
+            solution_now[:, :2] += previous_solution[:, :2]
             
         z = inv_I * (rhs[:, 1] - cached_einsum('lsr,smnS,LSR,lmL->rnR', XAX_k[0, 1], block_A_k[0, 1], XAX_k1[0, 1], solution_now[:, 0]))
         solution_now = np.concatenate((solution_now, z.reshape(x_shape[0], 1, x_shape[2], x_shape[3])), axis=1)
@@ -141,23 +139,13 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
             C = T_op @ forward_backward_sub(L_L_Z, (L_X * inv_I.reshape(1, -1)) @ mL_eq.T, overwrite_b=True)
             D = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[3, 3], block_A_k[3, 3], XAX_k1[3, 3]).reshape(m, m).__iadd__(T_op @ forward_backward_sub(L_L_Z, L_X))
 
-            u = (
-                    mR_p - mL_eq @ (L_L_Z_inv_mR_c - forward_backward_sub(L_L_Z, (L_X * inv_I.reshape(1, -1)) @ mR_d, overwrite_b=True))
-                    - A @ previous_solution[:, 0].reshape(-1, 1)
-                    - B @ previous_solution[:, 3].reshape(-1, 1)
-            )
-            v = (
-                    mR_t - T_op @ (L_L_Z_inv_mR_c - forward_backward_sub(L_L_Z, (L_X * inv_I.reshape(1, -1)) @ mR_d, overwrite_b=True))
-                    - C @ previous_solution[:, 0].reshape(-1, 1)
-                    - D @ previous_solution[:, 3].reshape(-1, 1)
-            )
+            u = mR_p - mL_eq @ (L_L_Z_inv_mR_c - forward_backward_sub(L_L_Z, (L_X * inv_I.reshape(1, -1)) @ mR_d, overwrite_b=True))
+            v = mR_t - T_op @ (L_L_Z_inv_mR_c - forward_backward_sub(L_L_Z, (L_X * inv_I.reshape(1, -1)) @ mR_d, overwrite_b=True))
             Dlu, Dpiv = scp.linalg.lu_factor(D, check_finite=False, overwrite_a=True)
             rhs_l = u.__isub__(B @ scp.linalg.lu_solve((Dlu, Dpiv), v, check_finite=False))
             lhs_l = A.__isub__(B.__imatmul__(scp.linalg.lu_solve((Dlu, Dpiv), C, check_finite=False)))
             y = scp.linalg.lu_solve(scp.linalg.lu_factor(lhs_l, check_finite=False, overwrite_a=True), rhs_l, check_finite=False, overwrite_b=True)
             t = scp.linalg.lu_solve((Dlu, Dpiv), v.__isub__(C @ y), check_finite=False, overwrite_b=True)
-            y += previous_solution[:, 0].reshape(-1, 1)
-            t += previous_solution[:, 3].reshape(-1, 1)
             z = (inv_I.reshape(-1, 1) * (mR_d - mL_eq.T @ y)).__isub__(t)
             x = L_L_Z_inv_mR_c.__isub__(forward_backward_sub(L_L_Z, L_X @ z, overwrite_b=True))
 
@@ -628,7 +616,7 @@ def tt_ipm(
         verbose,
         1,
         1,
-        2 + len(obj_tt)
+        2*len(obj_tt)
     )
     lag_maps = {key: tt_rank_reduce(value, eps=eps) for key, value in lag_maps.items()}
     obj_tt = tt_rank_reduce(obj_tt, eps=eps)

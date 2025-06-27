@@ -329,7 +329,6 @@ def _fwd_sweep(
             solution_now = np.reshape(x_cores[k], (rx[k] * N[k],  block_size * rx[k + 1]))
 
         if k < d - 1:
-            print("Norm", np.linalg.norm(solution_now))
             if min(rx[k] * N[k],  block_size * rx[k + 1]) > 2*r_max:
                 u, s, v = scp.sparse.linalg.svds(solution_now, k=r_max, tol=eps, which="LM")
                 idx = np.argsort(s)[::-1]  # descending order
@@ -399,7 +398,7 @@ def _tt_block_als(
     XAX =  [{key: np.ones((1, 1, 1)) for key in block_A}] + [{key: None for key in block_A} for _ in range(d-1)] + [{key: np.ones((1, 1, 1)) for key in block_A}]  # size is rk x Rk x rk
     Xb = [{key: np.ones((1, 1)) for key in block_b}] + [{key: None for key in block_b} for _ in range(d-1)] + [{key: np.ones((1, 1)) for key in block_b}]   # size is rk x rbk
 
-    r_max_warm_up = min(d+1, r_max_final)
+    r_max_warm_up = min(d+2, r_max_final)
     size_limit = 0
     x_cores = tt_rank_retraction(x_cores, [r_max_warm_up]*(d-1)) if x0 is not None else x_cores
     if not refinement:
