@@ -299,6 +299,7 @@ def _bck_sweep(
         block_A_k = block_A[k]
         block_b_k = block_b[k]
         if swp > 0 and not last:
+            print("Round", k)
             previous_solution = x_cores[k]
             solution_now, block_res_old, block_res_new, rhs, norm_rhs = local_solver(XAX[k], block_A_k, XAX[k + 1],
                                                                                      Xb[k], block_b_k, Xb[k + 1],
@@ -355,8 +356,7 @@ def _bck_sweep(
                     u = np.concatenate((np.reshape(u, (r, N[k], rx[k + 1])), uz), axis=0)
                     u, R = scp.linalg.qr(u.reshape(-1, N[k]*rx[k+1]).T, mode="economic", check_finite=False, overwrite_a=True)
                     u = u.T.reshape(-1, N[k], rx[k+1])
-                    v = np.concatenate((v, np.zeros((rx[k], block_size, kr))), axis=-1)
-                    v = einsum("Rdk, kr -> Rdr", v, R.T, optimize=[(0, 1)])
+                    v = einsum("Rdk, kr -> Rdr", v, R.T[:v.shape[-1]], optimize=[(0, 1)])
                     r = u.shape[0]
 
                 nrmsc *= (normA[k - 1] * normx[k - 1]) / normb[k - 1]
@@ -441,6 +441,7 @@ def _fwd_sweep(
         block_A_k = block_A[k]
         block_b_k = block_b[k]
         if swp > 0 and not last:
+            print("Round", k)
             previous_solution = x_cores[k]
             solution_now, block_res_old, block_res_new, rhs, norm_rhs = local_solver(
                 XAX[k], block_A_k, XAX[k + 1], Xb[k],
@@ -499,8 +500,7 @@ def _fwd_sweep(
                     u = np.concatenate((u[:, :, :r], uz), axis=-1)
                     u, R = scp.linalg.qr(u.reshape(rx[k]*N[k], -1), mode="economic", check_finite=False, overwrite_a=True)
                     u = u.reshape(rx[k], N[k], -1)
-                    v = np.concatenate((v[:r], np.zeros((kr, block_size, rx[k + 1]))), axis=0)
-                    v = einsum("rR, Rdk -> rdk", R, v, optimize=[(0, 1)])
+                    v = einsum("rR, Rdk -> rdk", R[:, :v.shape[0]], v, optimize=[(0, 1)])
                     r = v.shape[0]
                 else:
                     u = u[:, :, :r]
@@ -703,11 +703,11 @@ def _default_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, prev
     x_shape = previous_solution.shape
     block_size = x_shape[1]
     m = x_shape[0]*x_shape[2]*x_shape[3]
-    rhs = np.zeros_like(previous_solution)
+    rhs = np.empty_like(previous_solution)
     x_shape = (x_shape[1], x_shape[0], x_shape[2], x_shape[3])
     for i in block_b_k:
         rhs[:, i] = cached_einsum('br,bmB,BR->rmR', Xb_k[i], nrmsc * block_b_k[i], Xb_k1[i])
-    norm_rhs = np.linalg.norm(rhs)
+    norm_rhs = max(np.linalg.norm(rhs), 1e-10)
     block_res_old = np.linalg.norm(
         block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution) - rhs) / norm_rhs
     def mat_vec(x_vec):
@@ -718,14 +718,14 @@ def _default_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, prev
 
     linear_op = scp.sparse.linalg.LinearOperator((block_size * m, block_size * m), matvec=mat_vec)
     if block_res_old  >= 1:
-        solution_now, info = scp.sparse.linalg.lgmres(linear_op, np.transpose(rhs, (1, 0, 2, 3)).reshape(-1, 1), rtol=1e-10, maxiter=100)
+        solution_now, info = scp.sparse.linalg.lgmres(linear_op, np.transpose(rhs, (1, 0, 2, 3)).reshape(-1, 1), rtol=1e-10, outer_k=5, inner_m=30, maxiter=100)
+        solution_now = np.transpose(solution_now.reshape(*x_shape), (1, 0, 2, 3))
     else:
         solution_now, info = scp.sparse.linalg.lgmres(linear_op, np.transpose(
-            rhs - block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution), (1, 0, 2, 3)).reshape(-1, 1), rtol=1e-10, maxiter=100)
-    solution_now = np.transpose(solution_now.reshape(*x_shape), (1, 0, 2, 3))
-
-    if block_res_old  < 1:
+            rhs - block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution), (1, 0, 2, 3)).reshape(-1, 1), rtol=1e-10, outer_k=5, inner_m=30, maxiter=100)
+        solution_now = np.transpose(solution_now.reshape(*x_shape), (1, 0, 2, 3))
         solution_now += previous_solution
+
     block_res_new = np.linalg.norm(
         block_A_k.block_local_product(XAX_k, XAX_k1, solution_now) - rhs) / norm_rhs
     

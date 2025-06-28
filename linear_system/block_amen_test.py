@@ -40,7 +40,7 @@ block_b_tt = TTBlockVector()
 block_b_tt[0] = b_1_tt
 block_b_tt[1] = b_2_tt
 block_b_tt[2] = b_3_tt
-sol, _ = tt_block_amen(block_matrix_tt, block_b_tt, term_tol=1e-6, verbose=True, nswp=20, amen=True, kick_rank=8)
+sol, _ = tt_block_amen(block_matrix_tt, block_b_tt, term_tol=1e-6, verbose=True, nswp=20, amen=True, kick_rank=4)
 block_sol_1 = _tt_get_block(0, sol)
 block_sol_2 =  _tt_get_block(1, sol)
 block_sol_3 =  _tt_get_block(2, sol)
