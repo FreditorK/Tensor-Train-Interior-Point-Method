@@ -4,7 +4,7 @@ import os
 sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
-from src.tt_als import cached_einsum, TTBlockMatrix, TTBlockVector, tt_restarted_block_als, tt_max_generalised_eigen, tt_min_eig, tt_mat_mat_mul
+from src.tt_als import cached_einsum, TTBlockMatrix, TTBlockVector, tt_max_generalised_eigen, tt_min_eig, tt_mat_mat_mul
 from dataclasses import dataclass
 from enum import Enum
 from src.tt_ops import lgmres
