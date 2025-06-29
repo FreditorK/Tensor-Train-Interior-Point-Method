@@ -4,7 +4,7 @@ import os
 sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
-from src.tt_als import cached_einsum, TTBlockMatrix, TTBlockVector, tt_max_generalised_eigen, tt_min_eig, tt_mat_mat_mul
+from src.tt_als import cached_einsum, TTBlockMatrix, TTBlockVector, tt_max_generalised_eigen, tt_min_eig, tt_mat_mat_mul,tt_restarted_block_als
 from dataclasses import dataclass
 from enum import Enum
 from src.tt_ops import lgmres
@@ -29,16 +29,20 @@ def forward_backward_sub(L, b, overwrite_b=False):
     x = scp.linalg.solve_triangular(L.T, y, lower=False, check_finite=False, overwrite_b=True)
     return x
 
-def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous_solution, size_limit, termination_tol):
+def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous_solution, size_limit, lgmres_discount, rtol=1e-10):
     x_shape = previous_solution.shape
     m = x_shape[0] * x_shape[2] * x_shape[3]
     rhs = np.empty_like(previous_solution)
     rhs[:, 0] = cached_einsum('br,bmB,BR->rmR', Xb_k[0], block_b_k[0], Xb_k1[0]) if 0 in block_b_k else 0
     rhs[:, 1] = cached_einsum('br,bmB,BR->rmR', Xb_k[1], block_b_k[1], Xb_k1[1]) if 1 in block_b_k else 0
     rhs[:, 2] = cached_einsum('br,bmB,BR->rmR', Xb_k[2], block_b_k[2], Xb_k1[2]) if 2 in block_b_k else 0
+    norm_rhs = max(np.linalg.norm(rhs), 1e-10)
     inv_I = np.divide(1, cached_einsum('lsr,smnS,LSR->lmL', XAX_k[1, 2], block_A_k[1, 2], XAX_k1[1, 2]))
-    block_res_old = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution).__isub__(rhs))
-    if m <= size_limit:
+    block_res_old = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution).__isub__(rhs)) / norm_rhs
+
+    dense_solve = np.sqrt(x_shape[0]*x_shape[3]) <= size_limit
+
+    if dense_solve:
         try:
             L_L_Z = scp.linalg.cholesky(
                 cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[2, 1], block_A_k[2, 1], XAX_k1[2, 1]).reshape(m, m),
@@ -67,9 +71,9 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
                 ).reshape(x_shape[0], x_shape[2], x_shape[3])
         except Exception as e:
             print(f"\tAttention: {e}\n\t==>Switching Schur for LGMRES")
-            size_limit = 0
+            dense_solve = False
 
-    if m > size_limit:
+    if not dense_solve:
         Op = MatVecWrapper(
             XAX_k[0, 0], XAX_k[0, 1], XAX_k[2, 1], XAX_k[2, 2],
             block_A_k[0, 0], block_A_k[0, 1], block_A_k[2, 1], block_A_k[2, 2],
@@ -86,14 +90,13 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         local_rhs_norm_prime = np.linalg.norm(local_rhs - local_vec)
         use_prev_sol = (local_rhs_norm_prime < local_rhs_norm)
 
-        max_iter = min(max(2 * int(np.ceil(block_res_old / termination_tol)), 2), 30)
         solution_now, info = lgmres(
             Op,
             (local_rhs - local_vec if use_prev_sol else local_rhs).ravel(),
-            rtol=1e-10,
+            rtol=rtol,
             outer_k=5,
-            inner_m=25,
-            maxiter=max_iter
+            inner_m=int(np.ceil(lgmres_discount*(2 * m))),
+            maxiter=100
         )
         solution_now = np.transpose(solution_now.reshape(2, x_shape[0], x_shape[2], x_shape[3]), (1, 0, 2, 3))
 
@@ -103,12 +106,16 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         z = inv_I * (rhs[:, 1] - cached_einsum('lsr,smnS,LSR,lmL->rnR', XAX_k[0, 1], block_A_k[0, 1], XAX_k1[0, 1], solution_now[:, 0]))
         solution_now = np.concatenate((solution_now, z.reshape(x_shape[0], 1, x_shape[2], x_shape[3])), axis=1)
 
-    block_res_new = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, solution_now).__isub__(rhs))
+    block_res_new = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, solution_now).__isub__(rhs)) / norm_rhs
+
+    if not dense_solve:
+        score = 1 + np.tanh(((block_res_new/rtol) - 1)/4)
+        lgmres_discount = max(min(1, lgmres_discount*score), 0.01)
 
     if block_res_old < block_res_new:
         solution_now = previous_solution
 
-    return solution_now, block_res_old
+    return solution_now, block_res_old, min(block_res_old, block_res_new), rhs, norm_rhs, lgmres_discount
 
 def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous_solution, size_limit, termination_tol):
     x_shape = previous_solution.shape
@@ -572,7 +579,7 @@ class IPMStatus:
     eigen_z0 = None
     eigen_xt0 = None
     eigen_zt0 = None
-    kkt_iterations = 6
+    kkt_iterations = 14
     centrl_error_normalisation: float = 1.0
     eta = 1e-2
 
@@ -616,7 +623,7 @@ def tt_ipm(
         verbose,
         1,
         1,
-        2*len(obj_tt)
+        10*len(obj_tt)
     )
     lag_maps = {key: tt_rank_reduce(value, eps=eps) for key, value in lag_maps.items()}
     obj_tt = tt_rank_reduce(obj_tt, eps=eps)
