@@ -299,7 +299,10 @@ def tt_l2_dist(train_tt_1, train_tt_2):
     return np.sqrt(tt_inner_prod(diff_tt, diff_tt))
 
 def tt_norm(train_tt):
-    return np.sqrt(tt_inner_prod(train_tt, train_tt))
+    inner_prod_scal = tt_inner_prod(train_tt, train_tt)
+    if inner_prod_scal > 0:
+        return np.sqrt(inner_prod_scal)
+    return 0.0
 
 def tt_diag(vec_tt, eps=1e-18):
     identity = np.eye(vec_tt[0].shape[1])

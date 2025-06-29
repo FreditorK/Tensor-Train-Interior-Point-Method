@@ -145,7 +145,7 @@ class TTBlockMatrix:
                         tt_add(result.get_row(k), tt_mat_vec_mul(tt_transpose(self._data[i, j]), _tt_get_block(t, x_cores), op_tol, eps)),
                         eps)
                 else:
-                    result[i] = tt_mat_vec_mul(self._data[i, j], _tt_get_block(j, x_cores), op_tol, eps)
+                    result[k] = tt_mat_vec_mul(tt_transpose(self._data[i, j]), _tt_get_block(t, x_cores), op_tol, eps)
             if (i, j) in self._aliases:
                 k, t = self._aliases[i, j]
                 if k in result.keys():
@@ -153,7 +153,7 @@ class TTBlockMatrix:
                         tt_add(result.get_row(k), tt_mat_vec_mul(self._data[i, j], _tt_get_block(t, x_cores), op_tol, eps)),
                         eps)
                 else:
-                    result[i] = tt_mat_vec_mul(self._data[i, j], _tt_get_block(j, x_cores), op_tol, eps)
+                    result[k] = tt_mat_vec_mul(self._data[i, j], _tt_get_block(t, x_cores), op_tol, eps)
         return result
 
 
@@ -200,7 +200,7 @@ class TTBlockMatrixView:
             result[:, i] += cached_einsum('lsr,smnS,LSR,rnR->lmL', ZAX_k[i, j], self._data[i, j][self._idx], ZAX_kp1[i, j], x_core[:, j])
             if (i, j) in self._transposes:
                 k, t = self._transposes[i, j]
-                result[:, k] += cached_einsum('lsr,smnS,LSR,lmL->rnR', ZAX_k[k, t], self._data[i, j][self._idx], ZAX_kp1[k, t], x_core[:, t])
+                result[:, k] += cached_einsum('lsr,snmS,LSR,rnR->lmL', ZAX_k[k, t], self._data[i, j][self._idx], ZAX_kp1[k, t], x_core[:, t])
             if (i, j) in self._aliases:
                 k, t = self._aliases[i,  j]
                 result[:, k] += cached_einsum('lsr,smnS,LSR,rnR->lmL', ZAX_k[i, j], self._data[i, j][self._idx], ZAX_kp1[i, j], x_core[:, t])
@@ -213,7 +213,7 @@ class TTBlockMatrixView:
             result[:, i] += cached_einsum('lsr,smnS,LSR,rnR->lmL', ZAX_k[i, j], self._data[i, j][self._idx], XAX_kp1[i, j], x_core[:, j])
             if (i, j) in self._transposes:
                 k, t = self._transposes[i, j]
-                result[:, k] += cached_einsum('lsr,smnS,LSR,rmL->rnR', ZAX_k[k, t], self._data[i, j][self._idx], XAX_kp1[i, j], x_core[:, t])
+                result[:, k] += cached_einsum('lsr,snmS,RSL,rnR->lmL', ZAX_k[k, t], self._data[i, j][self._idx], XAX_kp1[i, j], x_core[:, t])
             if (i, j) in self._aliases:
                 k, t = self._aliases[i,  j]
                 result[:, k] += cached_einsum('lsr,smnS,LSR,rnR->lmL', ZAX_k[i, j], self._data[i, j][self._idx], XAX_kp1[i, j], x_core[:, t])
@@ -226,7 +226,7 @@ class TTBlockMatrixView:
             result[:, i] += cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[i, j], self._data[i, j][self._idx], ZAX_kp1[i, j], x_core[:, j])
             if (i, j) in self._transposes:
                 k, t = self._transposes[i, j]
-                result[:, k] += cached_einsum('lsr,smnS,LSR,lmR->rnR', XAX_k[i, j], self._data[i, j][self._idx], ZAX_kp1[k, t], x_core[:, t])
+                result[:, k] += cached_einsum('rsl,snmS,LSR,rnR->lmL', XAX_k[i, j], self._data[i, j][self._idx], ZAX_kp1[k, t], x_core[:, t])
             if (i, j) in self._aliases:
                 k, t = self._aliases[i,  j]
                 result[:, k] += cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[i, j], self._data[i, j][self._idx], ZAX_kp1[i, j], x_core[:, t])
@@ -270,16 +270,12 @@ def _bck_sweep(
         local_solver,
         x_cores,
         z_cores,
-        normx,
         XAX,
         ZAX,
         block_A,
-        normA,
         Xb,
         Zb,
         block_b,
-        normb,
-        nrmsc,
         rx,
         rz,
         N,
@@ -291,7 +287,8 @@ def _bck_sweep(
         r_max,
         kick_rank,
         last,
-        amen
+        amen,
+        lgmres_discount
 ):
     local_res = np.inf if swp == 0 else 0
     local_dx = np.inf if swp == 0 else 0
@@ -299,11 +296,10 @@ def _bck_sweep(
         block_A_k = block_A[k]
         block_b_k = block_b[k]
         if swp > 0 and not last:
-            print("Round", k)
             previous_solution = x_cores[k]
-            solution_now, block_res_old, block_res_new, rhs, norm_rhs = local_solver(XAX[k], block_A_k, XAX[k + 1],
+            solution_now, block_res_old, block_res_new, rhs, norm_rhs, lgmres_discount = local_solver(XAX[k], block_A_k, XAX[k + 1],
                                                                                      Xb[k], block_b_k, Xb[k + 1],
-                                                                                     previous_solution, nrmsc, eps)
+                                                                                     previous_solution, 0.5*r_max, lgmres_discount)
 
             local_res = max(local_res, block_res_old)
             dx = np.linalg.norm(solution_now - previous_solution) / np.linalg.norm(solution_now)
@@ -311,7 +307,7 @@ def _bck_sweep(
 
             if amen:
                 Az = block_A_k.compressed_block_local_product(ZAX[k], ZAX[k + 1], solution_now, shape=(rz[k], block_size, N[k], rz[k + 1]))
-                rhsz = block_b_k.block_local_product(Zb[k], Zb[k + 1], nrmsc, (rz[k], block_size, N[k], rz[k + 1]))
+                rhsz = block_b_k.block_local_product(Zb[k], Zb[k + 1], 1, (rz[k], block_size, N[k], rz[k + 1]))
                 resz = np.reshape(rhsz.__isub__(Az), (rz[k] * block_size, N[k] * rz[k + 1])).T
 
             solution_now = np.reshape(solution_now, (rx[k] * block_size, N[k] * rx[k + 1])).T
@@ -340,7 +336,7 @@ def _bck_sweep(
                     res -= block_A_k.block_local_product(XAX[k], XAX[k + 1],
                                                 np.reshape((u[:, None, r] @ v[None, r, :]).T,
                                                            (rx[k], block_size, N[k], rx[k + 1])))
-                    if np.linalg.norm(res) / norm_rhs > max(2 * op_tol, block_res_new):
+                    if np.linalg.norm(res) / norm_rhs > max(2 * eps, block_res_new):
                         break
                 r += 1
                 u = np.reshape(u[:, :r].T, (r, N[k], rx[k + 1]))
@@ -348,7 +344,7 @@ def _bck_sweep(
                 if amen and not last:
                     # amen enhancement
                     Axz = block_A_k.lcompressed_block_local_product(ZAX[k], XAX[k + 1], solution_now, shape=(rz[k], block_size, N[k], rx[k + 1]))
-                    rhsxz = block_b_k.block_local_product(Zb[k], Xb[k + 1], nrmsc, (rz[k], block_size, N[k], rx[k + 1]))
+                    rhsxz = block_b_k.block_local_product(Zb[k], Xb[k + 1], 1, (rz[k], block_size, N[k], rx[k + 1]))
                     resxz = rhsxz.__isub__(Axz)
                     kr = min(kick_rank, rz[k] * block_size, N[k] * rx[k + 1])
                     uz, _ = truncated_svd(np.reshape(resxz, (rz[k] * block_size, N[k] * rx[k + 1])).T, kr)
@@ -359,7 +355,6 @@ def _bck_sweep(
                     v = einsum("Rdk, kr -> Rdr", v, R.T[:v.shape[-1]], optimize=[(0, 1)])
                     r = u.shape[0]
 
-                nrmsc *= (normA[k - 1] * normx[k - 1]) / normb[k - 1]
             else:
                 r = min(prune_singular_vals(s, eps), r_max)
                 u = np.reshape(u[:, :r].T, (r, N[k], rx[k + 1]))
@@ -367,22 +362,11 @@ def _bck_sweep(
 
             x_cores[k] = u
             x_cores[k - 1] = einsum('rdc,cbR->rbdR', x_cores[k - 1], v, optimize=[(0, 1)])
-            norm_now = np.linalg.norm(x_cores[k - 1])
-            normx[k - 1] *= norm_now
-            x_cores[k - 1] /= norm_now
             rx[k] = r
 
             XAX[k] = {(i, j): _compute_phi_bck_A(XAX[k + 1][(i, j)], x_cores[k], block_A_k[(i, j)], x_cores[k]) for (i, j) in block_A_k}
-            normA[k - 1] = max(
-                np.sqrt(sum((1 + ((i, j) in block_A[k]._aliases) + ((i, j) in block_A_k._transposes))*np.sum(XAX[k][i, j] ** 2) for (i, j) in block_A_k._data)),
-                eps
-            )
-            XAX[k] = {(i, j): XAX[k][(i, j)] / normA[k - 1] for (i, j) in block_A[k]}
 
             Xb[k] = {i: _compute_phi_bck_rhs(Xb[k + 1][i], block_b_k[i], x_cores[k]) for i in block_b_k}
-            normb[k - 1] = max(np.sqrt(sum(np.sum(v ** 2) for v in Xb[k].values())), eps)
-
-            Xb[k] = {i: Xb[k][i] / normb[k - 1] for i in block_b_k}
 
             if amen and not last:
                 kr = min(kick_rank, *resz.shape)
@@ -390,38 +374,31 @@ def _bck_sweep(
                 uz = uz.T.reshape(kr, N[k], rz[k + 1])
                 vz = np.reshape(vz.T, (rz[k], block_size, kr))
                 z_cores[k] = uz
-                z_cores[k - 1] = einsum('rdc,cbR->rbdR', z_cores[k - 1], vz, optimize=[(0, 1)]) / norm_now
+                z_cores[k - 1] = einsum('rdc,cbR->rbdR', z_cores[k - 1], vz, optimize=[(0, 1)])
                 rz[k] = uz.shape[0]
 
                 ZAX[k] = {(i, j): _compute_phi_bck_A(ZAX[k + 1][(i, j)], z_cores[k], block_A_k[(i, j)], x_cores[k]) for (i, j) in block_A_k}
                 ZAX[k].update({(l, t): _compute_phi_bck_A(ZAX[k + 1][(l, t)], z_cores[k], np.transpose(block_A_k[(i, j)], (0, 2, 1, 3)), x_cores[k]) for (i, j), (l, t) in block_A_k._transposes.items()})
-                ZAX[k] = {(i, j): ZAX[k][(i, j)] / normA[k - 1] for (i, j) in block_A_k.tkeys()}
                 Zb[k] = {i: _compute_phi_bck_rhs(Zb[k + 1][i], block_b_k[i], z_cores[k]) for i in block_b_k}
-                Zb[k] = {i: Zb[k][i] / normb[k - 1] for i in block_b_k}
 
-            nrmsc *= normb[k - 1] / (normA[k - 1] * normx[k - 1])
         else:
             x_cores[k] = np.reshape(solution_now.T, (rx[k], block_size, N[k], rx[k + 1]))
             if amen and not last:
                 z_cores[k] = np.reshape(resz.T, (rz[k], block_size, N[k], rz[k + 1]))
 
-    return x_cores, normx, XAX, normA, Xb, normb, nrmsc, rx, local_res, local_dx
+    return x_cores, XAX, Xb, rx, local_res, local_dx, lgmres_discount
 
 
 def _fwd_sweep(
         local_solver,
         x_cores,
         z_cores,
-        normx,
         XAX,
         ZAX,
         block_A,
-        normA,
         Xb,
         Zb,
         block_b,
-        normb,
-        nrmsc,
         rx,
         rz,
         N,
@@ -433,7 +410,8 @@ def _fwd_sweep(
         r_max,
         kick_rank,
         last,
-        amen
+        amen,
+        lgmres_discount
 ):
     local_res = np.inf if swp == 0 else 0
     local_dx = np.inf if swp == 0 else 0
@@ -441,13 +419,12 @@ def _fwd_sweep(
         block_A_k = block_A[k]
         block_b_k = block_b[k]
         if swp > 0 and not last:
-            print("Round", k)
             previous_solution = x_cores[k]
-            solution_now, block_res_old, block_res_new, rhs, norm_rhs = local_solver(
+            solution_now, block_res_old, block_res_new, rhs, norm_rhs, lgmres_discount = local_solver(
                 XAX[k], block_A_k, XAX[k + 1], Xb[k],
                 block_b_k, Xb[k + 1],
-                previous_solution, nrmsc,
-                eps
+                previous_solution,
+                0.5*r_max, lgmres_discount
             )
 
             local_res = max(local_res, block_res_old)
@@ -456,7 +433,7 @@ def _fwd_sweep(
 
             if amen:
                 Az = block_A_k.compressed_block_local_product(ZAX[k], ZAX[k + 1], solution_now, shape=(rz[k], block_size, N[k], rz[k + 1]))
-                rhsz = block_b_k.block_local_product(Zb[k], Zb[k + 1], nrmsc, (rz[k], block_size, N[k], rz[k + 1]))
+                rhsz = block_b_k.block_local_product(Zb[k], Zb[k + 1], 1, (rz[k], block_size, N[k], rz[k + 1]))
                 resz = np.transpose(rhsz.__isub__(Az), (0, 2, 1, 3)).reshape(rz[k] * N[k], block_size * rz[k + 1])
 
             solution_now = np.transpose(solution_now, (0, 2, 1, 3))
@@ -486,13 +463,13 @@ def _fwd_sweep(
                 r = r_start
                 for r in range(r_start - 1, 0, -1):
                     res -= block_A_k.block_local_product(XAX[k], XAX[k + 1], einsum("rbR, Rdk -> rdbk", u[:, :, None, r], v[None, r], optimize=[(0, 1)]))
-                    if np.linalg.norm(res) / norm_rhs > max(2 * op_tol, block_res_new):
+                    if np.linalg.norm(res) / norm_rhs > max(2 * eps, block_res_new):
                         break
                 r += 1
                 if amen:
                     # amen enhancement
                     Axz = block_A_k.rcompressed_block_local_product(XAX[k], ZAX[k + 1], einsum("rbR, Rdk -> rdbk", u[:, :, :r], v[:r], optimize=[(0, 1)]), shape=(rx[k], block_size, N[k], rz[k + 1]))
-                    rhsxz = block_b_k.block_local_product(Xb[k], Zb[k + 1], nrmsc, (rx[k], block_size, N[k], rz[k + 1]))
+                    rhsxz = block_b_k.block_local_product(Xb[k], Zb[k + 1], 1, (rx[k], block_size, N[k], rz[k + 1]))
                     resxz = np.transpose(rhsxz.__isub__(Axz), (0, 2, 1, 3))
                     kr = min(kick_rank, rx[k] * N[k], block_size * rz[k + 1])
                     uz, _ = truncated_svd(np.reshape(resxz, (rx[k] * N[k], block_size * rz[k + 1])), kr)
@@ -500,35 +477,24 @@ def _fwd_sweep(
                     u = np.concatenate((u[:, :, :r], uz), axis=-1)
                     u, R = scp.linalg.qr(u.reshape(rx[k]*N[k], -1), mode="economic", check_finite=False, overwrite_a=True)
                     u = u.reshape(rx[k], N[k], -1)
-                    v = einsum("rR, Rdk -> rdk", R[:, :v.shape[0]], v, optimize=[(0, 1)])
+                    v = einsum("rR, Rdk -> rdk", R[:, :r], v[:r], optimize=[(0, 1)])
                     r = v.shape[0]
                 else:
                     u = u[:, :, :r]
                     v = v[:r]
-                nrmsc *= normA[k] * normx[k] / normb[k]
             else:
                 r = min(prune_singular_vals(s, eps), r_max)
                 u = u[:, :, :r]
                 v = v[:r]
 
             v = einsum("rbR, Rdk -> rbdk", v, x_cores[k + 1], optimize=[(0, 1)])
-            norm_now = np.linalg.norm(v)
-            normx[k] *= norm_now
             x_cores[k] = u
-            x_cores[k + 1] = (v / norm_now).reshape(r, block_size, N[k + 1], rx[k + 2])
+            x_cores[k + 1] = v.reshape(r, block_size, N[k + 1], rx[k + 2])
             rx[k + 1] = r
 
             XAX[k + 1] = {(i, j): _compute_phi_fwd_A(XAX[k][(i, j)], x_cores[k], block_A_k[(i, j)], x_cores[k]) for
                           (i, j) in block_A_k}
-            normA[k] = max(
-                np.sqrt(
-                    sum((1 + ((i, j) in block_A_k._aliases) + ((i, j) in block_A_k._transposes))*np.sum(XAX[k+1][i, j] ** 2) for (i, j) in block_A_k._data)),
-                eps
-            )
-            XAX[k + 1] = {(i, j): XAX[k + 1][(i, j)] / normA[k] for (i, j) in block_A_k}
             Xb[k + 1] = {i: _compute_phi_fwd_rhs(Xb[k][i], block_b_k[i], x_cores[k]) for i in block_b_k}
-            normb[k] = max(np.sqrt(sum(np.sum(v ** 2) for v in Xb[k + 1].values())), eps)
-            Xb[k + 1] = {i: Xb[k + 1][i] / normb[k] for i in block_b_k}
 
             if amen and not last:
                 kr = min(kick_rank, *resz.shape)
@@ -536,16 +502,12 @@ def _fwd_sweep(
                 uz = np.reshape(uz, (rz[k], N[k], kr))
                 vz = np.reshape(vz, (kr, block_size, rz[k + 1]))
                 z_cores[k] = uz
-                z_cores[k + 1] = einsum("rbR, Rdk -> rbdk", vz, z_cores[k + 1], optimize=[(0, 1)]) / norm_now
+                z_cores[k + 1] = einsum("rbR, Rdk -> rbdk", vz, z_cores[k + 1], optimize=[(0, 1)])
                 rz[k + 1] = uz.shape[-1]
 
                 ZAX[k + 1] = {(i, j): _compute_phi_fwd_A(ZAX[k][(i, j)], z_cores[k], block_A_k[(i, j)], x_cores[k]) for (i, j) in block_A_k}
                 ZAX[k + 1].update({(l, t): _compute_phi_fwd_A(ZAX[k][(l, t)], z_cores[k], np.transpose(block_A_k[(i, j)], (0, 2, 1, 3)), x_cores[k]) for (i, j), (l, t) in block_A_k._transposes.items()})
-                ZAX[k + 1] = {(i, j): ZAX[k + 1][(i, j)] / normA[k] for (i, j) in block_A_k.tkeys()}
                 Zb[k + 1] = {i: _compute_phi_fwd_rhs(Zb[k][i], block_b_k[i], z_cores[k]) for i in block_b_k}
-                Zb[k + 1] = {i: Zb[k + 1][i] / normb[k] for i in block_b_k}
-
-            nrmsc *= normb[k] / (normA[k] * normx[k])
 
         else:
             x_cores[k] = np.reshape(solution_now, (rx[k], N[k], block_size, rx[k + 1])).transpose(0, 2, 1, 3)
@@ -553,10 +515,10 @@ def _fwd_sweep(
                 z_cores[k] = np.reshape(resz, (rz[k], N[k], block_size, rz[k + 1])).transpose(0, 2, 1, 3)
 
 
-    return x_cores, normx, XAX, normA, Xb, normb, nrmsc, rx, local_res, local_dx
+    return x_cores, XAX, Xb, rx, local_res, local_dx, lgmres_discount
 
 
-def tt_block_amen(block_A, block_b, term_tol, r_max=100, eps=1e-10, nswp=22, x0=None, size_limit=None, local_solver=None, kick_rank=2, amen=False, verbose=False):
+def tt_block_amen(block_A, block_b, term_tol, r_max=100, eps=1e-12, nswp=22, x0=None, local_solver=None, kick_rank=2, amen=False, verbose=False):
 
     block_size = np.max(list(k[0] for k in block_A.keys())) + 1
     model_entry = next(iter(block_b.values()))
@@ -581,11 +543,6 @@ def tt_block_amen(block_A, block_b, term_tol, r_max=100, eps=1e-10, nswp=22, x0=
 
     XAX =  [{key: np.ones((1, 1, 1)) for key in block_A}] + [{key: None for key in block_A} for _ in range(d-1)] + [{key: np.ones((1, 1, 1)) for key in block_A}]  # size is rk x Rk x rk
     Xb = [{key: np.ones((1, 1)) for key in block_b}] + [{key: None for key in block_b} for _ in range(d-1)] + [{key: np.ones((1, 1)) for key in block_b}]   # size is rk x rbk
-
-    normA = np.ones(d - 1)
-    normb = np.ones(d - 1)
-    nrmsc = 1.0
-    normx = np.ones(d - 1)
     rx = np.array([1] + tt_ranks(x_cores) + [1])
 
     ZAX = None
@@ -604,23 +561,20 @@ def tt_block_amen(block_A, block_b, term_tol, r_max=100, eps=1e-10, nswp=22, x0=
         )
         rz = np.array([1] + tt_ranks(z_cores) + [1])
     last = False
+    lgmres_discount = 0.1
 
     for swp in range(nswp):
         if direction > 0:
-            x_cores, normx, XAX, normA, Xb, normb, nrmsc, rx, local_res, local_dx = _bck_sweep(
+            x_cores, XAX, Xb, rx, local_res, local_dx, lgmres_discount = _bck_sweep(
                 local_solver,
                 x_cores,
                 z_cores,
-                normx,
                 XAX,
                 ZAX,
                 block_A,
-                normA,
                 Xb,
                 Zb,
                 block_b,
-                normb,
-                nrmsc,
                 rx,
                 rz,
                 N,
@@ -632,23 +586,20 @@ def tt_block_amen(block_A, block_b, term_tol, r_max=100, eps=1e-10, nswp=22, x0=
                 r_max,
                 kick_rank,
                 last,
-                amen
+                amen,
+                lgmres_discount
             )
         else:
-            x_cores, normx, XAX, normA, Xb, normb, nrmsc, rx, local_res, local_dx = _fwd_sweep(
+            x_cores, XAX, Xb, rx, local_res, local_dx, lgmres_discount = _fwd_sweep(
                 local_solver,
                 x_cores,
                 z_cores,
-                normx,
                 XAX,
                 ZAX,
                 block_A,
-                normA,
                 Xb,
                 Zb,
                 block_b,
-                normb,
-                nrmsc,
                 rx,
                 rz,
                 N,
@@ -660,29 +611,21 @@ def tt_block_amen(block_A, block_b, term_tol, r_max=100, eps=1e-10, nswp=22, x0=
                 r_max,
                 kick_rank,
                 last,
-                amen
+                amen,
+                lgmres_discount
             )
-
-
-        a = np.exp(np.sum(np.log(normx)) / d)
-        res = block_A.block_product([a * core for core in x_cores], 1e-8) - block_b
-        print("Res-norm:", res.norm)
-        if amen:
-            print("Z-norm:", tt_norm([a * core for core in z_cores]))
-            print(tt_ranks(z_cores))
-
-        if verbose:
-            print('\tStarting Sweep:\n\tMax num of sweeps: %d' % swp)
-            print(f'\tDirection {direction}')
-            print(f'\tResidual {local_res}')
-            print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
 
         if last:
             break
         if local_res < term_tol or local_dx < eps or swp == nswp - 2:
-            if verbose:
-                print("\t===Finishing up===")
             last = True
+
+        if verbose:
+            print("\t===Finishing up===" if last else f"\t=====Sweep {swp+1}=====")
+            print(f'\tDirection {direction}')
+            print(f'\tResidual {local_res:.3e}')
+            print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
+            print(f'\tLGMRES-discount: {lgmres_discount:3f}')
 
         direction *= -1
 
@@ -690,51 +633,81 @@ def tt_block_amen(block_A, block_b, term_tol, r_max=100, eps=1e-10, nswp=22, x0=
     if verbose:
         print("\n\t---Results---")
         print('\tSolution rank is', rx[1:-1])
-        print('\tResidual ', local_res)
-        print('\tNumber of sweeps', swp+1)
-        print('\tTime: ', time.time() - t0)
-        print('\tTime per sweep: ', (time.time() - t0) / (swp+1), flush=True)
+        print(f'\tResidual {local_res:.3e}', )
+        print('\tNumber of sweeps', swp)
+        print(f'\tTime: {time.time() - t0:3f}s')
+        print(f'\tTime per sweep: {(time.time() - t0) / (swp+1):3f}s', flush=True)
 
-    normx = np.exp(np.sum(np.log(normx)) / d)
+    return x_cores, local_res
 
-    return [normx * core for core in x_cores], np.max(local_res)
-
-def _default_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous_solution, nrmsc, rtol):
+def _default_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous_solution, size_limit, lgmres_discount, rtol=1e-10):
     x_shape = previous_solution.shape
     block_size = x_shape[1]
     m = x_shape[0]*x_shape[2]*x_shape[3]
     rhs = np.empty_like(previous_solution)
     x_shape = (x_shape[1], x_shape[0], x_shape[2], x_shape[3])
     for i in block_b_k:
-        rhs[:, i] = cached_einsum('br,bmB,BR->rmR', Xb_k[i], nrmsc * block_b_k[i], Xb_k1[i])
+        rhs[:, i] = cached_einsum('br,bmB,BR->rmR', Xb_k[i], block_b_k[i], Xb_k1[i])
     norm_rhs = max(np.linalg.norm(rhs), 1e-10)
     block_res_old = np.linalg.norm(
         block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution) - rhs) / norm_rhs
-    def mat_vec(x_vec):
-        return np.transpose(block_A_k.block_local_product(
-            XAX_k, XAX_k1,
-            np.transpose(x_vec.reshape(*x_shape), (1, 0, 2, 3))
-        ), (1, 0, 2, 3)).reshape(-1, 1)
-
-    linear_op = scp.sparse.linalg.LinearOperator((block_size * m, block_size * m), matvec=mat_vec)
-    if block_res_old  >= 1:
-        solution_now, info = scp.sparse.linalg.lgmres(linear_op, np.transpose(rhs, (1, 0, 2, 3)).reshape(-1, 1), rtol=1e-10, outer_k=5, inner_m=30, maxiter=100)
-        solution_now = np.transpose(solution_now.reshape(*x_shape), (1, 0, 2, 3))
-    else:
-        solution_now, info = scp.sparse.linalg.lgmres(linear_op, np.transpose(
-            rhs - block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution), (1, 0, 2, 3)).reshape(-1, 1), rtol=1e-10, outer_k=5, inner_m=30, maxiter=100)
-        solution_now = np.transpose(solution_now.reshape(*x_shape), (1, 0, 2, 3))
-        solution_now += previous_solution
-
-    block_res_new = np.linalg.norm(
-        block_A_k.block_local_product(XAX_k, XAX_k1, solution_now) - rhs) / norm_rhs
     
-    print("Block_res", block_res_new, block_res_old, info)
+    dense_solve = np.sqrt(x_shape[0]*x_shape[3]) <= size_limit
+
+    if dense_solve:
+        # Create an empty block matrix container
+        B_blocks = [[None for _ in range(block_size)] for _ in range(block_size)]
+
+        for (i, j) in block_A_k:
+            local_B = cached_einsum('lsr,smnS,LSR->lmLrnR',
+                                    XAX_k[i, j], block_A_k[i, j], XAX_k1[i, j]).reshape(m, m)
+            local_B_sparse = scp.sparse.csc_matrix(local_B)
+
+            B_blocks[i][j] = local_B_sparse
+
+            if (i, j) in block_A_k._transposes:
+                k, t = block_A_k._transposes[i, j]
+                B_blocks[k][t] = local_B_sparse.T
+
+            if (i, j) in block_A_k._aliases:
+                k, t = block_A_k._aliases[i, j]
+                B_blocks[k][t] = local_B_sparse
+
+        B_sparse = scp.sparse.bmat(B_blocks, format='csc')
+        rhs_reshaped = np.transpose(rhs, (1, 0, 2, 3)).reshape(-1)
+        x = scp.sparse.linalg.spsolve(B_sparse, rhs_reshaped)
+        solution_now = x.reshape(*x_shape).transpose(1, 0, 2, 3)
+    else:
+        def mat_vec(x_vec):
+            return np.transpose(block_A_k.block_local_product(
+                XAX_k, XAX_k1,
+                np.transpose(x_vec.reshape(*x_shape), (1, 0, 2, 3))
+            ), (1, 0, 2, 3)).reshape(-1, 1)
+
+        linear_op = scp.sparse.linalg.LinearOperator((block_size * m, block_size * m), matvec=mat_vec)
+        if block_res_old  >= 1:
+            solution_now, info = scp.sparse.linalg.lgmres(linear_op, np.transpose(rhs, (1, 0, 2, 3)).reshape(-1, 1), rtol=rtol, outer_k=5, inner_m=int(np.ceil(lgmres_discount*(block_size * m))), maxiter=100)
+            solution_now = np.transpose(solution_now.reshape(*x_shape), (1, 0, 2, 3))
+        else:
+            solution_now, info = scp.sparse.linalg.lgmres(linear_op, np.transpose(
+                rhs - block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution), (1, 0, 2, 3)).reshape(-1, 1), rtol=rtol, outer_k=5, inner_m=int(np.ceil(lgmres_discount*(block_size * m))), maxiter=100)
+            solution_now = np.transpose(solution_now.reshape(*x_shape), (1, 0, 2, 3))
+            solution_now += previous_solution
+
+    block_res_new = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, solution_now) - rhs) / norm_rhs
+
+    if not dense_solve:
+        score = 1 + np.tanh(((block_res_new/rtol) - 1)/4)
+        lgmres_discount = max(min(1, lgmres_discount*score), 0.01)
+    
+    #print("Block_res", block_res_new, block_res_old, info)
+    #print(np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, solution_now) - rhs),np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution) - rhs))
+
 
     if block_res_old < block_res_new:
         solution_now = previous_solution
 
-    return solution_now, block_res_old, min(block_res_old, block_res_new), rhs, norm_rhs
+    return solution_now, block_res_old, min(block_res_old, block_res_new), rhs, norm_rhs, lgmres_discount
 
 
 
