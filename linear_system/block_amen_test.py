@@ -4,7 +4,7 @@ import os
 sys.path.append(os.getcwd() + '/../')
 from src.tt_ops import *
 from src.tt_ops import tt_rank_reduce
-from src.tt_als import TTBlockMatrix, TTBlockVector, tt_block_amen, tt_restarted_block_als
+from src.tt_als import TTBlockMatrix, TTBlockVector, tt_block_amen, tt_restarted_block_amen
 from src.tt_ipm import _tt_get_block
 
 np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=4, suppress=True)
@@ -43,7 +43,7 @@ block_b_tt[0] = b_1_tt
 block_b_tt[1] = b_2_tt
 block_b_tt[2] = b_3_tt
 print("b-ranks", tt_ranks(b_1_tt), tt_ranks(b_2_tt), tt_ranks(b_3_tt))
-sol, _ = tt_restarted_block_als(block_matrix_tt, block_b_tt, op_tol=1e-5, termination_tol=1e-6, rank_restriction=16, verbose=True, inner_m=20)
+sol, _ = tt_restarted_block_amen(block_matrix_tt, block_b_tt, op_tol=1e-5, termination_tol=1e-6, rank_restriction=16, verbose=True, inner_m=20)
 block_sol_1 = _tt_get_block(0, sol)
 block_sol_2 =  _tt_get_block(1, sol)
 block_sol_3 =  _tt_get_block(2, sol)

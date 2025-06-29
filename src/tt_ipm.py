@@ -4,7 +4,7 @@ import os
 sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
-from src.tt_als import cached_einsum, TTBlockMatrix, TTBlockVector, tt_max_generalised_eigen, tt_min_eig, tt_mat_mat_mul,tt_restarted_block_als
+from src.tt_als import cached_einsum, TTBlockMatrix, TTBlockVector, tt_max_generalised_eigen, tt_min_eig, tt_mat_mat_mul,tt_restarted_block_amen
 from dataclasses import dataclass
 from enum import Enum
 from src.tt_ops import lgmres
@@ -39,28 +39,26 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
     norm_rhs = max(np.linalg.norm(rhs), 1e-10)
     inv_I = np.divide(1, cached_einsum('lsr,smnS,LSR->lmL', XAX_k[1, 2], block_A_k[1, 2], XAX_k1[1, 2]))
     block_res_old = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution).__isub__(rhs)) / norm_rhs
-
     dense_solve = np.sqrt(x_shape[0]*x_shape[3]) <= size_limit
 
     if dense_solve:
         try:
-            L_L_Z = scp.linalg.cholesky(
-                cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[2, 1], block_A_k[2, 1], XAX_k1[2, 1]).reshape(m, m),
-                check_finite=False, lower=True, overwrite_a=True
-            )
             mR_p = rhs[:, 0].reshape(m, 1)
             mR_d = rhs[:, 1].reshape(m, 1)
             mR_c = rhs[:, 2].reshape(m, 1)
             L_X_I_inv = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[2, 2], block_A_k[2, 2], XAX_k1[2, 2]).reshape(m, m).__imul__(inv_I.reshape(1, -1))
             mL_eq = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[0, 1], block_A_k[0, 1], XAX_k1[0, 1]).reshape(m, m)
+            L_L_Z = scp.linalg.cholesky(
+                cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[2, 1], block_A_k[2, 1], XAX_k1[2, 1]).reshape(m, m),
+                check_finite=False, lower=True, overwrite_a=True
+            )
             b = mR_p - mL_eq @ forward_backward_sub(L_L_Z, mR_c - L_X_I_inv @ mR_d, overwrite_b=True)
             A = forward_backward_sub(L_L_Z, L_X_I_inv, overwrite_b=True)
-            A @= mL_eq.T
-            mL_eq @= A
-            A = mL_eq
+            np.matmul(A, mL_eq.T, out=A)
+            np.matmul(mL_eq, A, out=A)
             A += cached_einsum('lsr,smnS,LSR->lmLrnR',XAX_k[0, 0], block_A_k[0, 0], XAX_k1[0, 0]).reshape(m, m)
             solution_now = np.empty(x_shape)
-            solution_now[:, 0] = scp.linalg.solve(A, b, check_finite=False, overwrite_a=True, overwrite_b=True).reshape(x_shape[0], x_shape[2], x_shape[3])
+            solution_now[:, 0] = scp.linalg.solve(A, b, check_finite=False, overwrite_a=True, overwrite_b=True, assume_a="gen").reshape(x_shape[0], x_shape[2], x_shape[3])
             solution_now[:, 2] = (
                 mR_d - cached_einsum('lsr,smnS,LSR,lmL->rnR', XAX_k[0, 1], block_A_k[0, 1], XAX_k1[0, 1], solution_now[:, 0]).reshape(-1, 1)
                 ).__imul__(inv_I.reshape(-1, 1)).reshape(x_shape[0], x_shape[2], x_shape[3])
@@ -214,26 +212,26 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
 
 def tt_compute_primal_feasibility(lin_op_tt, bias_tt, X_tt, status):
     primal_feas = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(lin_op_tt, tt_reshape(X_tt, (4,)), status.eps), bias_tt),
-                   0.1*min(status.op_tol, status.feasibility_tol))  # primal feasibility
+                   0.5*min(status.op_tol, status.feasibility_tol))  # primal feasibility
     return primal_feas
 
 
 def tt_compute_dual_feasibility(obj_tt, lin_op_tt_adj, Z_tt, Y_tt, T_tt, status):
     dual_feas = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(lin_op_tt_adj, Y_tt, status.eps),
                                       tt_rank_reduce(tt_add(tt_reshape(Z_tt, (4,)), obj_tt), status.eps)),
-                               status.eps if status.ineq_status is IneqStatus.ACTIVE else 0.1*min(status.op_tol,
+                               status.eps if status.ineq_status is IneqStatus.ACTIVE else 0.5*min(status.op_tol,
                                                                                               status.feasibility_tol))
     if status.ineq_status is IneqStatus.ACTIVE and T_tt is not None:
-        dual_feas = tt_rank_reduce(tt_sub(dual_feas, tt_reshape(T_tt, (4,))), 0.1*min(status.op_tol, status.feasibility_tol))
+        dual_feas = tt_rank_reduce(tt_sub(dual_feas, tt_reshape(T_tt, (4,))), 0.5*min(status.op_tol, status.feasibility_tol))
     return dual_feas
 
 
 def tt_compute_centrality(X_tt, Z_tt, status):
     if status.aho_direction:
-        centrality_feas = tt_reshape(tt_scale(-1, _tt_symmetrise(tt_mat_mat_mul(X_tt, Z_tt, min(status.op_tol, 0.1*status.mu), status.eps),
-                                                        min(status.op_tol, 0.1*status.mu))), (4,))
+        centrality_feas = tt_reshape(tt_scale(-1, _tt_symmetrise(tt_mat_mat_mul(X_tt, Z_tt, min(status.op_tol, 0.5*status.mu), status.eps),
+                                                        min(status.op_tol, 0.5*status.mu))), (4,))
     else:
-        centrality_feas = tt_reshape(tt_scale(-1, tt_mat_mat_mul(Z_tt, X_tt, min(status.op_tol, 0.1*status.mu), status.eps)), (4,))
+        centrality_feas = tt_reshape(tt_scale(-1, tt_mat_mat_mul(Z_tt, X_tt, min(status.op_tol, 0.5*status.mu), status.eps)), (4,))
     return centrality_feas
 
 
@@ -584,6 +582,21 @@ class IPMStatus:
     eta = 1e-2
 
 
+def _ipm_format_output(X_tt, Y_tt, T_tt, Z_tt, iteration, dim):
+    """Formats the final results into the desired output structure."""
+    ranksX = tt_ranks(X_tt)
+    ranksZ = tt_ranks(Z_tt)
+    ranksY = tt_ranks(Y_tt)
+    ranksT = tt_ranks(T_tt) if T_tt else [0] * (dim - 1)
+    
+    print("---Terminated---")
+    print(f"Converged in {iteration} iterations.")
+    print(f"Ranks: X={ranksX}, Z={ranksZ}, Y={ranksY}, T={ranksT}")
+    
+    results = {"num_iters": iteration, "ranksX": ranksX, "ranksY": ranksY, "ranksZ": ranksZ, "ranksT": ranksT}
+    return X_tt, Y_tt, T_tt, Z_tt, results
+
+
 def tt_ipm(
     lag_maps,
     obj_tt,
@@ -637,7 +650,7 @@ def tt_ipm(
 
     lhs_skeleton = TTBlockMatrix()
     lhs_skeleton[1, 2] = tt_reshape(tt_identity(2 * dim), (4, 4))
-    solver_ineq = lambda lhs, rhs, x0, nwsp, refinement, restriction, termination_tol: tt_restarted_block_als(
+    solver_ineq = lambda lhs, rhs, x0, nwsp, refinement, restriction, termination_tol: tt_restarted_block_amen(
         lhs,
         rhs,
         rank_restriction=restriction, # max(4*dim + dim + 4, 25)
@@ -650,7 +663,7 @@ def tt_ipm(
         refinement=refinement,
         verbose=verbose
     )
-    solver_eq = lambda lhs, rhs, x0, nwsp, refinement, restriction, termination_tol: tt_restarted_block_als(
+    solver_eq = lambda lhs, rhs, x0, nwsp, refinement, restriction, termination_tol: tt_restarted_block_amen(
         lhs,
         rhs,
         rank_restriction=restriction, # max(3*dim + dim + 3, 25)
@@ -811,4 +824,4 @@ def tt_ipm(
         f"Ranks X_tt: {tt_ranks(X_tt)}, Z_tt: {tt_ranks(Z_tt)}, \n"
         f"      Y_tt: {tt_ranks(Y_tt)}, T_tt: {tt_ranks(T_tt) if T_tt else None} \n"
     )
-    return X_tt, Y_tt, T_tt, Z_tt, {"num_iters": iteration}
+    return _ipm_format_output(X_tt, Y_tt, T_tt, Z_tt, iteration, status.dim)

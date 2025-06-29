@@ -10,6 +10,7 @@ sys.path.append(os.getcwd() + '/../../')
 from src.tt_ipm import *
 from memory_profiler import memory_usage
 import time
+from src.utils import print_results_summary
 
 
 def tt_G_entrywise_mask_op(G):
@@ -49,51 +50,40 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Script with optional memory tracking.")
     parser.add_argument("--track_mem", action="store_true", help="Enable memory tracking from a certain point.")
     parser.add_argument("--config", type=str, required=True, help="Path to the YAML configuration file")
-    parser.add_argument('--rank', type=int, required=False, help='An integer input', default=0)
     args = parser.parse_args()
     with open(os.getcwd() + '/../../' + args.config, "r") as file:
         config = yaml.safe_load(file)
-        problem_creation_times = []
-        runtimes = []
-        memory = []
-        complementary_slackness = []
-        feasibility_errors = []
-        num_iters = []
-        for seed in config["seeds"]:
-            print("Seed: ", seed)
+
+    # --- Data Collection Arrays (using the improved NumPy structure) ---
+    num_ranks = len(config["max_ranks"])
+    num_seeds = len(config["seeds"])
+    dim = config["dim"]
+
+    problem_creation_times = np.zeros((num_ranks, num_seeds))
+    runtimes = np.zeros((num_ranks, num_seeds))
+    memory = np.zeros((num_ranks, num_seeds))
+    complementary_slackness = np.zeros((num_ranks, num_seeds))
+    feasibility_errors = np.zeros((num_ranks, num_seeds))
+    num_iters = np.zeros((num_ranks, num_seeds))
+    ranksX = np.zeros((num_ranks, num_seeds, dim - 1))
+    ranksY = np.zeros((num_ranks, num_seeds, dim - 1))
+    ranksZ = np.zeros((num_ranks, num_seeds, dim - 1))
+
+    # --- Main Experiment Loop (with nested loops for ranks and seeds) ---
+    for r_i, rank in enumerate(config["max_ranks"]):
+        print(f"\n===== Processing Rank: {rank} =====")
+        for s_i, seed in enumerate(config["seeds"]):
+            print(f"  --- Running Seed: {seed} ---")
             np.random.seed(seed)
-            t0 = time.time()
-            rank = config["max_rank"] if args.rank == 0 else args.rank
             t1 = time.time()
-            obj_tt, L_tt, bias_tt, lag_y = create_problem(config["dim"], config["max_rank"])
+            # Use the 'rank' from the loop, not from config
+            obj_tt, L_tt, bias_tt, lag_y = create_problem(dim, rank)
             lag_maps = {"y": lag_y}
             t2 = time.time()
-            if args.track_mem:
-                start_mem = memory_usage(max_usage=True, include_children=True)
-
-                def wrapper():
-                    X_tt, Y_tt, T_tt, Z_tt, info = tt_ipm(
-                        lag_maps,
-                        obj_tt,
-                        L_tt,
-                        bias_tt,
-                        max_iter=config["max_iter"],
-                        verbose=config["verbose"],
-                        gap_tol=config["gap_tol"],
-                        op_tol=config["op_tol"],
-                        warm_up=config["warm_up"],
-                        aho_direction=False,
-                        mals_restarts=config["mals_restarts"],
-                        max_refinement=config["max_refinement"]
-                    )
-                    return X_tt, Y_tt, T_tt, Z_tt, info
-
-
-                res = memory_usage(proc=wrapper, max_usage=True, retval=True, include_children=True)
-                X_tt, Y_tt, T_tt, Z_tt, info = res[1]
-                memory.append(res[0] - start_mem)
-            else:
-                X_tt, Y_tt, T_tt, Z_tt, info = tt_ipm(
+            
+            # Define the IPM execution logic as a callable
+            def run_ipm():
+                return tt_ipm(
                     lag_maps,
                     obj_tt,
                     L_tt,
@@ -107,26 +97,33 @@ if __name__ == "__main__":
                     mals_restarts=config["mals_restarts"],
                     max_refinement=config["max_refinement"]
                 )
-            t3 = time.time()
-            runtimes.append(t3 - t2)
-            problem_creation_times.append(t2 - t1)
-            complementary_slackness.append(abs(tt_inner_prod(X_tt, Z_tt)))
-            primal_res = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(L_tt, tt_reshape(X_tt, (4, ))), bias_tt), eps=1e-12)
 
-            feasibility_errors.append(tt_inner_prod(primal_res,  primal_res))
-            num_iters.append(info["num_iters"])
-            print(f"Converged after {num_iters[-1]:.1f} iterations", flush=True)
-            print(f"Problem created in {problem_creation_times[-1]:.3f}s", flush=True)
-            print(f"Problem solved in {runtimes[-1]:.3f}s", flush=True)
             if args.track_mem:
-                print(f"Peak memory {memory[-1]:.3f} MB", flush=True)
-            print(f"Complementary Slackness: {complementary_slackness[-1]}", flush=True)
-            print(f"Total feasibility error: {feasibility_errors[-1]}", flush=True)
-        print("--- Run Summary ---", flush=True)
-        print(f"Converged after avg {np.mean(num_iters):.1f} iterations", flush=True)
-        print(f"Problem created in avg {np.mean(problem_creation_times):.3f}s", flush=True)
-        print(f"Problem solved in avg {np.mean(runtimes):.3f}s", flush=True)
-        if args.track_mem:
-            print(f"Peak memory avg {np.mean(memory):.3f} MB", flush=True)
-        print(f"Complementary Slackness avg: {np.mean(complementary_slackness)}", flush=True)
-        print(f"Total feasibility error  avg: {np.mean(feasibility_errors)}", flush=True)
+                start_mem = memory_usage(max_usage=True, include_children=True)
+                def wrapper():
+                    return run_ipm()
+                
+                res = memory_usage(proc=wrapper, max_usage=True, retval=True, include_children=True)
+                X_tt, Y_tt, T_tt, Z_tt, info = res[1]
+                memory[r_i, s_i] = res[0] - start_mem
+            else:
+                X_tt, Y_tt, T_tt, Z_tt, info = run_ipm()
+
+            t3 = time.time()
+            
+            # --- Store Results in NumPy arrays using (r_i, s_i) indices ---
+            problem_creation_times[r_i, s_i] = t2 - t1
+            runtimes[r_i, s_i] = t3 - t2
+            complementary_slackness[r_i, s_i] = abs(tt_inner_prod(X_tt, Z_tt))
+            primal_res = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(L_tt, tt_reshape(X_tt, (4, ))), bias_tt), eps=1e-12)
+            feasibility_errors[r_i, s_i] = tt_inner_prod(primal_res,  primal_res)
+            num_iters[r_i, s_i] = info["num_iters"]
+            # Saving the rank arrays, which was missing previously
+            ranksX[r_i, s_i, :] = info["ranksX"]
+            ranksY[r_i, s_i, :] = info["ranksY"]
+            ranksZ[r_i, s_i, :] = info["ranksZ"]
+
+            print(f"Convergence after {num_iters[r_i, s_i]:.0f} iterations. Compl Slackness: {complementary_slackness[r_i, s_i]:.4e}. Feasibility error: {feasibility_errors[r_i, s_i]:.4e}")
+            print(f"Convergence in {runtimes[r_i, s_i]}s. Memory: {memory[r_i, s_i]} MB.")
+
+    print_results_summary(config, args, runtimes, problem_creation_times, num_iters, feasibility_errors, complementary_slackness, ranksX, ranksY, ranksZ, memory)

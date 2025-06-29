@@ -9,8 +9,6 @@ sys.path.append(os.getcwd() + '/../')
 from src.tt_ops import *
 from opt_einsum import contract as einsum
 from sksparse.cholmod import cholesky as sparse_cholesky
-from sklearn.utils.extmath import randomized_svd
-
 
 def _tt_get_block(i, block_matrix_tt):
     b = np.argmax([len(c.shape) for c in block_matrix_tt])
@@ -299,7 +297,7 @@ def _bck_sweep(
             previous_solution = x_cores[k]
             solution_now, block_res_old, block_res_new, rhs, norm_rhs, lgmres_discount = local_solver(XAX[k], block_A_k, XAX[k + 1],
                                                                                      Xb[k], block_b_k, Xb[k + 1],
-                                                                                     previous_solution, 0.5*r_max, lgmres_discount)
+                                                                                     previous_solution, 0.2*r_max, lgmres_discount)
 
             local_res = max(local_res, block_res_old)
             dx = np.linalg.norm(solution_now - previous_solution) / np.linalg.norm(solution_now)
@@ -427,7 +425,7 @@ def _fwd_sweep(
                 XAX[k], block_A_k, XAX[k + 1], Xb[k],
                 block_b_k, Xb[k + 1],
                 previous_solution,
-                0.5*r_max, lgmres_discount
+                0.2*r_max, lgmres_discount
             )
 
             local_res = max(local_res, block_res_old)
@@ -635,7 +633,7 @@ def tt_block_amen(block_A, block_b, term_tol, r_max=100, eps=1e-12, nswp=22, x0=
             print(f'\tDirection {direction}')
             print(f'\tResidual {local_res:.3e}')
             print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
-            print(f'\tLGMRES-discount: {lgmres_discount:3f}')
+            print(f'\tLGMRES-discount: {lgmres_discount:2f}')
 
         direction *= -1
 
@@ -709,9 +707,6 @@ def _default_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, prev
     if not dense_solve:
         score = 1 + np.tanh(((block_res_new/rtol) - 1)/4)
         lgmres_discount = max(min(1, lgmres_discount*score), 0.01)
-    
-    #print("Block_res", block_res_new, block_res_old, info)
-    #print(np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, solution_now) - rhs),np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution) - rhs))
 
 
     if block_res_old < block_res_new:
@@ -720,7 +715,7 @@ def _default_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, prev
     return solution_now, block_res_old, min(block_res_old, block_res_new), rhs, norm_rhs, lgmres_discount
 
 
-def tt_restarted_block_als(
+def tt_restarted_block_amen(
     block_A,
     block_b,
     rank_restriction,
@@ -737,9 +732,10 @@ def tt_restarted_block_als(
     if x0 is not None:
         dim = len(x0)
         x0 = tt_rank_retraction(x0, [dim]*(dim-1))
-    def solve_als(rhs, rank, x0):
+
+    def solve_als(rhs, rank, x0, refinement):
         return tt_block_amen(
-            block_A, rhs, termination_tol, r_max=rank, eps=eps, nswp=inner_m, x0=x0, local_solver=local_solver, kick_rank=4, amen=True, verbose=verbose
+            block_A, rhs, termination_tol, r_max=rank, eps=eps, nswp=inner_m, x0=x0, local_solver=local_solver, kick_rank=2 + 2*refinement, amen=True, verbose=verbose
         )
 
     def update_rhs(rhs, x_cores):
@@ -759,7 +755,7 @@ def tt_restarted_block_als(
         raise RuntimeError(f"\n\tAbsolute tolerance already reached: {orig_rhs_norm} < {op_tol}")
 
     # === First ALS solve ===
-    x_cores, res = solve_als(rhs, rank_restriction, x0)
+    x_cores, res = solve_als(rhs, rank_restriction, x0, False)
 
     if res < termination_tol:
         if verbose:
@@ -788,7 +784,7 @@ def tt_restarted_block_als(
         if verbose:
             print(f"\n\t--- Restart {i}")
 
-        new_x_cores, res = solve_als(rhs, rank_restriction, None)
+        new_x_cores, res = solve_als(rhs, rank_restriction, None, True)
 
         rhs = update_rhs(rhs, new_x_cores)
         prev_rhs_norm, rhs_norm = rhs_norm, rhs.norm
