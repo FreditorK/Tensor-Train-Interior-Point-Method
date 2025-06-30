@@ -8,6 +8,5 @@ verbose: True
 op_tol: !!float 1e-4
 max_iter: !!int 25
 warm_up: !!int 0
-mals_rank_restriction: !!int 26
 mals_restarts: !!int 2
 max_refinement:  !!int 5

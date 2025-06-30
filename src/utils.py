@@ -1,8 +1,138 @@
 import numpy as np
+import argparse
+import os
+import sys
+import time
+import yaml
+from memory_profiler import memory_usage
+
+sys.path.append(os.getcwd() + '/../../')
+
+from src.tt_ops import *
+from src.tt_ipm import tt_ipm
+
+def run_experiment(create_problem_fn):
+
+    np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=4, suppress=True)
+
+    parser = argparse.ArgumentParser(description="Script with optional memory tracking.")
+    parser.add_argument("--track_mem", action="store_true", help="Enable memory tracking from a certain point.")
+    parser.add_argument("--config", type=str, required=True, help="Path to the YAML configuration file")
+    args = parser.parse_args()
+
+    with open(os.path.join(os.getcwd(), "../../", args.config), "r") as file:
+        config = yaml.safe_load(file)
+
+    num_ranks = len(config["max_ranks"])
+    num_seeds = len(config["seeds"])
+    dim = config["dim"]
+
+    # Always allocate the common arrays
+    problem_creation_times = np.zeros((num_ranks, num_seeds))
+    runtimes = np.zeros((num_ranks, num_seeds))
+    memory = np.zeros((num_ranks, num_seeds))
+    complementary_slackness = np.zeros((num_ranks, num_seeds))
+    feasibility_errors = np.zeros((num_ranks, num_seeds))
+    num_iters = np.zeros((num_ranks, num_seeds))
+    
+    if "graphm" in args.config:
+        ranksX = np.zeros((num_ranks, num_seeds, 2 * dim))
+        ranksY = np.zeros((num_ranks, num_seeds, 2 * dim))
+        ranksZ = np.zeros((num_ranks, num_seeds, 2 * dim))
+        ranksT = np.zeros((num_ranks, num_seeds, 2 * dim))
+    else:
+        ranksX = np.zeros((num_ranks, num_seeds, dim - 1))
+        ranksY = np.zeros((num_ranks, num_seeds, dim - 1))
+        ranksZ = np.zeros((num_ranks, num_seeds, dim - 1))
+        ranksT = None
+
+    for r_i, rank in enumerate(config["max_ranks"]):
+        print(f"\n===== Processing Rank: {rank} =====")
+        for s_i, seed in enumerate(config["seeds"]):
+            print(f"  --- Running Seed: {seed} ---")
+            np.random.seed(seed)
+            t1 = time.time()
+
+            # Support either 4-return or 5-return variant
+            problem = create_problem_fn(dim, rank)
+
+            if len(problem) == 5:
+                obj_tt, L_op_tt, bias_tt, ineq_mask, lag_maps = problem
+            else:
+                obj_tt, L_op_tt, bias_tt, lag_y = problem
+                ineq_mask = None
+                lag_maps = {"y": lag_y}
+
+            # Reshape everything as needed
+            lag_maps = {k: tt_reshape(v, (4, 4)) for k, v in lag_maps.items()}
+            obj_tt = tt_reshape(obj_tt, (4,))
+            bias_tt = tt_reshape(bias_tt, (4,))
+            t2 = time.time()
+
+            def run_ipm():
+                return tt_ipm(
+                    lag_maps,
+                    obj_tt,
+                    L_op_tt,
+                    bias_tt,
+                    ineq_mask=ineq_mask,
+                    max_iter=config["max_iter"],
+                    verbose=config["verbose"],
+                    gap_tol=config["gap_tol"],
+                    op_tol=config["op_tol"],
+                    warm_up=config["warm_up"],
+                    aho_direction=False,
+                    mals_restarts=config["mals_restarts"],
+                    max_refinement=config["max_refinement"]
+                )
+
+            if args.track_mem:
+                start_mem = memory_usage(max_usage=True, include_children=True)
+
+                def wrapper(): return run_ipm()
+
+                res = memory_usage(proc=wrapper, max_usage=True, retval=True, include_children=True)
+                X_tt, Y_tt, T_tt, Z_tt, info = res[1]
+                memory[r_i, s_i] = res[0] - start_mem
+            else:
+                X_tt, Y_tt, T_tt, Z_tt, info = run_ipm()
+
+            t3 = time.time()
+
+            # Store metrics
+            problem_creation_times[r_i, s_i] = t2 - t1
+            runtimes[r_i, s_i] = t3 - t2
+            complementary_slackness[r_i, s_i] = abs(tt_inner_prod(X_tt, Z_tt))
+            primal_res = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(L_op_tt, tt_reshape(X_tt, (4,))), bias_tt), eps=1e-12)
+            feasibility_errors[r_i, s_i] = tt_inner_prod(primal_res, primal_res)
+            num_iters[r_i, s_i] = info["num_iters"]
+            ranksX[r_i, s_i, :] = info["ranksX"]
+            ranksY[r_i, s_i, :] = info["ranksY"]
+            ranksZ[r_i, s_i, :] = info["ranksZ"]
+
+            # Only track T if it exists
+            if ranksT is not None:
+                ranksT[r_i, s_i, :] = info["ranksT"]
+
+            print(f"Convergence after {num_iters[r_i, s_i]:.0f} iterations. "
+                  f"Compl Slackness: {complementary_slackness[r_i, s_i]:.4e}. "
+                  f"Feasibility error: {feasibility_errors[r_i, s_i]:.4e}")
+            print(f"Convergence in {runtimes[r_i, s_i]:.2f}s. Memory: {memory[r_i, s_i]:.2f} MB.")
+
+    # Pass ranksT only if it was ever used
+    print_results_summary(
+        config, args,
+        runtimes, problem_creation_times, num_iters,
+        feasibility_errors, complementary_slackness,
+        ranksX, ranksY, ranksZ,
+        ranksT=ranksT,
+        memory=memory
+    )
+
 
 def print_results_summary(config, args, runtimes, problem_creation_times,
                           num_iters, feasibility_errors, complementary_slackness,
-                          ranksX, ranksY, ranksZ, memory=None):
+                          ranksX, ranksY, ranksZ, ranksT=None, memory=None):
     print("\n" + "=" * 80)
     print(f"{'FINAL RESULTS SUMMARY':^80}")
     print("=" * 80)
@@ -42,11 +172,15 @@ def print_results_summary(config, args, runtimes, problem_creation_times,
         avg_ranks_X = np.mean(ranksX[r_i, :, :], axis=0)
         avg_ranks_Y = np.mean(ranksY[r_i, :, :], axis=0)
         avg_ranks_Z = np.mean(ranksZ[r_i, :, :], axis=0)
+        if ranksT is not None:
+            avg_ranks_T = np.mean(ranksT[r_i, :, :], axis=0)
 
         print(f"  {'-' * 28} | {'-' * 12} | {'-' * 12}")
         print(f"  {'Avg Ranks X':<28}: {np.array2string(avg_ranks_X, precision=1, floatmode='fixed', separator=', ')}")
         print(f"  {'Avg Ranks Y':<28}: {np.array2string(avg_ranks_Y, precision=1, floatmode='fixed', separator=', ')}")
         print(f"  {'Avg Ranks Z':<28}: {np.array2string(avg_ranks_Z, precision=1, floatmode='fixed', separator=', ')}")
+        if ranksT is not None:
+            print(f"  {'Avg Ranks T':<28}: {np.array2string(avg_ranks_T, precision=1, floatmode='fixed', separator=', ')}")
         print("")
 
     print("=" * 80)

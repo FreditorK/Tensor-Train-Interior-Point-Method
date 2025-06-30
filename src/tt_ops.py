@@ -546,7 +546,7 @@ def tt_random_graph(dim, r, skew=0.0, eps=1e-12):
     if r == 1:
         graph_tt = []
         for _ in range(dim-1):
-            binary_numbers = np.random.randint(0, 2, size=3)
+            binary_numbers = np.random.choice([0, 1], size=3, replace=True, p=skewed_probabilities(2, skew))
             if np.sum(binary_numbers) == 0:
                 index_to_change = np.random.randint(0, 3)
                 binary_numbers[index_to_change] = 1

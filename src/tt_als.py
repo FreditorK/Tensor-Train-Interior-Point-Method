@@ -153,6 +153,13 @@ class TTBlockMatrix:
                 else:
                     result[k] = tt_mat_vec_mul(self._data[i, j], _tt_get_block(t, x_cores), op_tol, eps)
         return result
+    
+    def get_submatrix(self, row_index, col_index):
+        submatrix = TTBlockMatrix()
+        submatrix._data = {(i, j): v for (i, j), v in self._data.items() if i <= row_index and j <= col_index}
+        submatrix ._aliases = {(i, j):  (k, t) for (i, j), (k, t) in self._aliases.items() if k <= row_index and t <= col_index}
+        submatrix ._transposes = {(i, j):  (k, t) for (i, j), (k, t) in self._transposes.items() if k <= row_index and t <= col_index}
+        return submatrix
 
 
 class TTBlockMatrixView:
@@ -278,7 +285,7 @@ def _bck_sweep(
         rz,
         N,
         block_size,
-        op_tol,
+        trunc_tol,
         d,
         swp,
         eps,
@@ -286,7 +293,8 @@ def _bck_sweep(
         kick_rank,
         last,
         amen,
-        lgmres_discount
+        lgmres_discount,
+        direct_solve_failure
 ):
     local_res = np.inf if swp == 0 else 0
     local_dx = np.inf if swp == 0 else 0
@@ -295,9 +303,9 @@ def _bck_sweep(
         block_b_k = block_b[k]
         if swp > 0 and not last:
             previous_solution = x_cores[k]
-            solution_now, block_res_old, block_res_new, rhs, norm_rhs, lgmres_discount = local_solver(XAX[k], block_A_k, XAX[k + 1],
+            solution_now, block_res_old, block_res_new, rhs, norm_rhs, lgmres_discount, direct_solve_failure  = local_solver(XAX[k], block_A_k, XAX[k + 1],
                                                                                      Xb[k], block_b_k, Xb[k + 1],
-                                                                                     previous_solution, 0.2*r_max, lgmres_discount)
+                                                                                     previous_solution, r_max**(2/3), lgmres_discount, not direct_solve_failure )
 
             local_res = max(local_res, block_res_old)
             dx = np.linalg.norm(solution_now - previous_solution) / np.linalg.norm(solution_now)
@@ -337,7 +345,7 @@ def _bck_sweep(
                     res -= block_A_k.block_local_product(XAX[k], XAX[k + 1],
                                                 np.reshape((u[:, None, r] @ v[None, r, :]).T,
                                                            (rx[k], block_size, N[k], rx[k + 1])))
-                    if np.linalg.norm(res) / norm_rhs > max(2 * eps, block_res_new):
+                    if np.linalg.norm(res) / norm_rhs > max(2 * trunc_tol, block_res_new):
                         break
                 r += 1
                 u = np.reshape(u[:, :r].T, (r, N[k], rx[k + 1]))
@@ -387,7 +395,7 @@ def _bck_sweep(
             if amen and not last:
                 z_cores[k] = np.reshape(resz.T, (rz[k], block_size, N[k], rz[k + 1]))
 
-    return x_cores, z_cores, XAX, Xb, rx, local_res, local_dx, lgmres_discount
+    return x_cores, z_cores, XAX, Xb, rx, local_res, local_dx, lgmres_discount, direct_solve_failure 
 
 
 def _fwd_sweep(
@@ -404,7 +412,7 @@ def _fwd_sweep(
         rz,
         N,
         block_size,
-        op_tol,
+        trunc_tol,
         d,
         swp,
         eps,
@@ -412,7 +420,8 @@ def _fwd_sweep(
         kick_rank,
         last,
         amen,
-        lgmres_discount
+        lgmres_discount,
+        direct_solve_failure 
 ):
     local_res = np.inf if swp == 0 else 0
     local_dx = np.inf if swp == 0 else 0
@@ -421,11 +430,11 @@ def _fwd_sweep(
         block_b_k = block_b[k]
         if swp > 0 and not last:
             previous_solution = x_cores[k]
-            solution_now, block_res_old, block_res_new, rhs, norm_rhs, lgmres_discount = local_solver(
+            solution_now, block_res_old, block_res_new, rhs, norm_rhs, lgmres_discount, direct_solve_failure = local_solver(
                 XAX[k], block_A_k, XAX[k + 1], Xb[k],
                 block_b_k, Xb[k + 1],
                 previous_solution,
-                0.2*r_max, lgmres_discount
+                r_max**(2/3), lgmres_discount, not direct_solve_failure 
             )
 
             local_res = max(local_res, block_res_old)
@@ -469,7 +478,7 @@ def _fwd_sweep(
                 r = r_start
                 for r in range(r_start - 1, 0, -1):
                     res -= block_A_k.block_local_product(XAX[k], XAX[k + 1], einsum("rbR, Rdk -> rdbk", u[:, :, None, r], v[None, r], optimize=[(0, 1)]))
-                    if np.linalg.norm(res) / norm_rhs > max(2 * eps, block_res_new):
+                    if np.linalg.norm(res) / norm_rhs > max(2 * trunc_tol, block_res_new):
                         break
                 r += 1
                 if amen:
@@ -521,7 +530,7 @@ def _fwd_sweep(
                 z_cores[k] = np.reshape(resz, (rz[k], N[k], block_size, rz[k + 1])).transpose(0, 2, 1, 3)
 
 
-    return x_cores, z_cores, XAX, Xb, rx, local_res, local_dx, lgmres_discount
+    return x_cores, z_cores, XAX, Xb, rx, local_res, local_dx, lgmres_discount, direct_solve_failure 
 
 
 def tt_block_amen(block_A, block_b, term_tol, r_max=100, eps=1e-12, nswp=22, x0=None, local_solver=None, kick_rank=2, amen=False, verbose=False):
@@ -569,10 +578,12 @@ def tt_block_amen(block_A, block_b, term_tol, r_max=100, eps=1e-12, nswp=22, x0=
     last = False
     final_local_res = np.inf 
     lgmres_discount = 0.1
+    direct_solve_failure = False
+    trunc_tol = term_tol / np.sqrt(d)
 
     for swp in range(nswp):
         if direction > 0:
-            x_cores, z_cores, XAX, Xb, rx, local_res, local_dx, lgmres_discount = _bck_sweep(
+            x_cores, z_cores, XAX, Xb, rx, local_res, local_dx, lgmres_discount, direct_solve_failure = _bck_sweep(
                 local_solver,
                 x_cores,
                 z_cores,
@@ -586,7 +597,7 @@ def tt_block_amen(block_A, block_b, term_tol, r_max=100, eps=1e-12, nswp=22, x0=
                 rz,
                 N,
                 block_size,
-                term_tol,
+                trunc_tol,
                 d,
                 swp,
                 eps,
@@ -594,10 +605,11 @@ def tt_block_amen(block_A, block_b, term_tol, r_max=100, eps=1e-12, nswp=22, x0=
                 kick_rank,
                 last,
                 amen,
-                lgmres_discount
+                lgmres_discount,
+                direct_solve_failure 
             )
         else:
-            x_cores, z_cores, XAX, Xb, rx, local_res, local_dx, lgmres_discount = _fwd_sweep(
+            x_cores, z_cores, XAX, Xb, rx, local_res, local_dx, lgmres_discount, direct_solve_failure = _fwd_sweep(
                 local_solver,
                 x_cores,
                 z_cores,
@@ -611,7 +623,7 @@ def tt_block_amen(block_A, block_b, term_tol, r_max=100, eps=1e-12, nswp=22, x0=
                 rz,
                 N,
                 block_size,
-                term_tol,
+                trunc_tol,
                 d,
                 swp,
                 eps,
@@ -619,7 +631,8 @@ def tt_block_amen(block_A, block_b, term_tol, r_max=100, eps=1e-12, nswp=22, x0=
                 kick_rank,
                 last,
                 amen,
-                lgmres_discount
+                lgmres_discount,
+                direct_solve_failure 
             )
 
         if last:
@@ -632,8 +645,8 @@ def tt_block_amen(block_A, block_b, term_tol, r_max=100, eps=1e-12, nswp=22, x0=
             print("\t===Finishing up===" if last else f"\t=====Sweep {swp+1}=====")
             print(f'\tDirection {direction}')
             print(f'\tResidual {local_res:.3e}')
-            print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
-            print(f'\tLGMRES-discount: {lgmres_discount:2f}')
+            print(f"\tTT-sol rank: {tt_ranks(x_cores)}")
+            print(f'\tLGMRES-discount: {lgmres_discount:2f}', flush=True)
 
         direction *= -1
 
@@ -648,7 +661,7 @@ def tt_block_amen(block_A, block_b, term_tol, r_max=100, eps=1e-12, nswp=22, x0=
 
     return x_cores, final_local_res
 
-def _default_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous_solution, size_limit, lgmres_discount, rtol=1e-10):
+def _default_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous_solution, size_limit, lgmres_discount, dense_solve=True, rtol=1e-10):
     x_shape = previous_solution.shape
     block_size = x_shape[1]
     m = x_shape[0]*x_shape[2]*x_shape[3]
@@ -660,32 +673,37 @@ def _default_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, prev
     block_res_old = np.linalg.norm(
         block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution) - rhs) / norm_rhs
     
-    dense_solve = np.sqrt(x_shape[0]*x_shape[3]) <= size_limit
+    dense_solve = (np.sqrt(x_shape[0]*x_shape[3]) <= size_limit) and dense_solve
+    direct_solve_failure = False
 
     if dense_solve:
-        # Create an empty block matrix container
-        B_blocks = [[None for _ in range(block_size)] for _ in range(block_size)]
+        try:
+            B_blocks = [[None for _ in range(block_size)] for _ in range(block_size)]
 
-        for (i, j) in block_A_k:
-            local_B = cached_einsum('lsr,smnS,LSR->lmLrnR',
-                                    XAX_k[i, j], block_A_k[i, j], XAX_k1[i, j]).reshape(m, m)
-            local_B_sparse = scp.sparse.csc_matrix(local_B)
+            for (i, j) in block_A_k:
+                local_B = cached_einsum('lsr,smnS,LSR->lmLrnR',
+                                        XAX_k[i, j], block_A_k[i, j], XAX_k1[i, j]).reshape(m, m)
+                local_B_sparse = scp.sparse.csc_matrix(local_B)
 
-            B_blocks[i][j] = local_B_sparse
+                B_blocks[i][j] = local_B_sparse
 
-            if (i, j) in block_A_k._transposes:
-                k, t = block_A_k._transposes[i, j]
-                B_blocks[k][t] = local_B_sparse.T
+                if (i, j) in block_A_k._transposes:
+                    k, t = block_A_k._transposes[i, j]
+                    B_blocks[k][t] = local_B_sparse.T
 
-            if (i, j) in block_A_k._aliases:
-                k, t = block_A_k._aliases[i, j]
-                B_blocks[k][t] = local_B_sparse
+                if (i, j) in block_A_k._aliases:
+                    k, t = block_A_k._aliases[i, j]
+                    B_blocks[k][t] = local_B_sparse
 
-        B_sparse = scp.sparse.bmat(B_blocks, format='csc')
-        rhs_reshaped = np.transpose(rhs, (1, 0, 2, 3)).reshape(-1)
-        x = scp.sparse.linalg.spsolve(B_sparse, rhs_reshaped)
-        solution_now = x.reshape(*x_shape).transpose(1, 0, 2, 3)
-    else:
+            B_sparse = scp.sparse.bmat(B_blocks, format='csc')
+            rhs_reshaped = np.transpose(rhs, (1, 0, 2, 3)).reshape(-1)
+            x = scp.sparse.linalg.spsolve(B_sparse, rhs_reshaped)
+            solution_now = x.reshape(*x_shape).transpose(1, 0, 2, 3)
+        except Exception as e:
+            print(f"\tAttention: {e}")
+            direct_solve_failure = True
+
+    if not dense_solve or direct_solve_failure:
         def mat_vec(x_vec):
             return np.transpose(block_A_k.block_local_product(
                 XAX_k, XAX_k1,
@@ -712,7 +730,7 @@ def _default_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, prev
     if block_res_old < block_res_new:
         solution_now = previous_solution
 
-    return solution_now, block_res_old, min(block_res_old, block_res_new), rhs, norm_rhs, lgmres_discount
+    return solution_now, block_res_old, min(block_res_old, block_res_new), rhs, norm_rhs, lgmres_discount, direct_solve_failure
 
 
 def tt_restarted_block_amen(
@@ -751,7 +769,8 @@ def tt_restarted_block_amen(
 
     rhs = block_b
     orig_rhs_norm = rhs.norm
-    if orig_rhs_norm < op_tol:
+    
+    if orig_rhs_norm < 0.5*op_tol:
         raise RuntimeError(f"\n\tAbsolute tolerance already reached: {orig_rhs_norm} < {op_tol}")
 
     # === First ALS solve ===
