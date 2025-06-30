@@ -1,12 +1,12 @@
 # Common
 dim: !!int 10
 max_rank: !!int 4
-seeds: [33, 666, 42, 95, 34] # Tier 1: 121 (42, 23, 666), Tier 2: 43 (good but very slow 12k), 9254 (good but slow 13k) Tier 3: 59
+seeds: [33, 666, 42, 95, 34] # !! 33, 666, 42, 95, 34 !!
 gap_tol: !!float 3e-4
-verbose: True
+verbose: False
 # TT-IPM
 op_tol: !!float 1e-4
 max_iter: !!int 30
-warm_up: !!int 0
+warm_up: !!int 3
 mals_restarts: !!int 2
 max_refinement:  !!int 6

@@ -1,9 +1,9 @@
 # Common
 dim: !!int 8
 max_rank: !!int 4
-seeds: [8] # Tier 1: 8, (5, 41, 7, 9) Tier 2: 83 (good but slow 2k), 86 (good but slow 4k), 90 (good but slow 2k), 6 (good but slow 3k) Tier 3:
+seeds: [8, 5, 41, 7, 9] # !! 8, 5, 41, 7, 9 !!
 gap_tol: !!float 3e-4
-verbose: True
+verbose: False
 # TT-IPM
 op_tol: !!float 1e-4
 max_iter: !!int 18

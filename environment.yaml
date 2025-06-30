@@ -8,3 +8,6 @@ dependencies:
   - cvxpy==1.6.4
   - opt_einsum==3.4.0
   - Cython==3.0.11
+  - pip
+  - pip:
+      - scikit-sparse

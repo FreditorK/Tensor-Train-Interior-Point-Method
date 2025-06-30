@@ -72,8 +72,6 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
             print(f"\tAttention: {e}\n\t==>Switching Schur for LGMRES")
             direct_solve_failure = True
 
-    info = 0
-
     if not dense_solve or direct_solve_failure:
         Op = MatVecWrapper(
             XAX_k[0, 0], XAX_k[0, 1], XAX_k[2, 1], XAX_k[2, 2],

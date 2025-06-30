@@ -33,8 +33,9 @@ def run_experiment(create_problem_fn):
     memory = np.zeros((num_ranks, num_seeds))
     complementary_slackness = np.zeros((num_ranks, num_seeds))
     feasibility_errors = np.zeros((num_ranks, num_seeds))
+    dual_feasibility_errors = np.zeros((num_ranks, num_seeds))
     num_iters = np.zeros((num_ranks, num_seeds))
-    
+
     if "graphm" in args.config:
         ranksX = np.zeros((num_ranks, num_seeds, 2 * dim))
         ranksY = np.zeros((num_ranks, num_seeds, 2 * dim))
@@ -105,6 +106,8 @@ def run_experiment(create_problem_fn):
             complementary_slackness[r_i, s_i] = abs(tt_inner_prod(X_tt, Z_tt))
             primal_res = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(L_op_tt, tt_reshape(X_tt, (4,))), bias_tt), eps=1e-12)
             feasibility_errors[r_i, s_i] = tt_inner_prod(primal_res, primal_res)
+            dual_res = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(tt_transpose(L_op_tt), tt_reshape(Y_tt, (4, )), eps=1e-12), tt_rank_reduce(tt_add(tt_reshape(Z_tt, (4,)), obj_tt), eps=1e-12)), eps=1e-12)
+            dual_feasibility_errors[r_i, s_i] = tt_inner_prod(dual_res, dual_res)
             num_iters[r_i, s_i] = info["num_iters"]
             ranksX[r_i, s_i, :] = info["ranksX"]
             ranksY[r_i, s_i, :] = info["ranksY"]
@@ -123,64 +126,97 @@ def run_experiment(create_problem_fn):
     print_results_summary(
         config, args,
         runtimes, problem_creation_times, num_iters,
-        feasibility_errors, complementary_slackness,
+        feasibility_errors, dual_feasibility_errors, complementary_slackness,
         ranksX, ranksY, ranksZ,
         ranksT=ranksT,
         memory=memory
     )
 
 
+def format_ranks_with_std(mean_array, std_array, precision=1):
+    """Helper function to format rank arrays into a 'mean±std' string."""
+    if mean_array is None or std_array is None:
+        return "N/A"
+    
+    mean_array = np.asarray(mean_array)
+    std_array = np.asarray(std_array)
+    
+    if mean_array.size == 0:
+        return "[]"
+        
+    formatted_parts = [f"{m:.{precision}f}±{s:.{precision}f}" for m, s in zip(mean_array, std_array)]
+    return f"[{', '.join(formatted_parts)}]"
+
 def print_results_summary(config, args, runtimes, problem_creation_times,
-                          num_iters, feasibility_errors, complementary_slackness,
+                          num_iters, feasibility_errors, dual_feasibility_errors, complementary_slackness,
                           ranksX, ranksY, ranksZ, ranksT=None, memory=None):
+    """
+    Prints a formatted summary of the experimental results, including means
+    and standard deviations for performance metrics and tensor ranks in a 'mean ± std' format.
+    """
     print("\n" + "=" * 80)
     print(f"{'FINAL RESULTS SUMMARY':^80}")
     print("=" * 80)
-    print("Means and standard deviations (Std) are calculated over all seeds.\n")
+    print("Values are reported as Mean ± Standard Deviation over all seeds.\n")
 
     for r_i, rank in enumerate(config["max_ranks"]):
-        # --- Calculate Means ---
+        # --- Calculate Means for Metrics ---
         mean_runtime = np.mean(runtimes[r_i, :])
         mean_creation_time = np.mean(problem_creation_times[r_i, :])
         mean_iters = np.mean(num_iters[r_i, :])
         mean_feasibility = np.mean(feasibility_errors[r_i, :])
+        mean_dual_feasibility = np.mean(dual_feasibility_errors[r_i, :])
         mean_slackness = np.mean(complementary_slackness[r_i, :])
 
-        # --- Calculate Standard Deviations ---
+        # --- Calculate Standard Deviations for Metrics ---
         std_runtime = np.std(runtimes[r_i, :])
         std_creation_time = np.std(problem_creation_times[r_i, :])
         std_iters = np.std(num_iters[r_i, :])
         std_feasibility = np.std(feasibility_errors[r_i, :])
+        std_dual_feasibility = np.std(dual_feasibility_errors[r_i, :])
         std_slackness = np.std(complementary_slackness[r_i, :])
 
         # --- Print Table for the Current Rank ---
         print(f"--- Rank: {rank} ---")
-        print(f"  {'Metric':<28} | {'Mean':>12} | {'Std Dev':>12}")
-        print(f"  {'-' * 28} | {'-' * 12} | {'-' * 12}")
-        print(f"  {'Solution Time (s)':<28} | {mean_runtime:12.3f} | {std_runtime:12.3f}")
-        print(f"  {'Problem Creation (s)':<28} | {mean_creation_time:12.3f} | {std_creation_time:12.3f}")
-        print(f"  {'Iterations':<28} | {mean_iters:12.1f} | {std_iters:12.1f}")
-        print(f"  {'Feasibility Error':<28} | {mean_feasibility:12.4e} | {std_feasibility:12.4e}")
-        print(f"  {'Complementary Slackness':<28} | {mean_slackness:12.4e} | {std_slackness:12.4e}")
+        print(f"  {'Metric':<28} | {'Value (Mean ± Std)':>25}")
+        print(f"  {'-' * 28} | {'-' * 25}")
+        print(f"  {'Solution Time (s)':<28} | {f'{mean_runtime:.3f} ± {std_runtime:.3f}':>25}")
+        print(f"  {'Problem Creation (s)':<28} | {f'{mean_creation_time:.3f} ± {std_creation_time:.3f}':>25}")
+        print(f"  {'Iterations':<28} | {f'{mean_iters:.1f} ± {std_iters:.1f}':>25}")
+        print(f"  {'Feasibility Error':<28} | {f'{mean_feasibility:.2e} ± {std_feasibility:.2e}':>25}")
+        print(f"  {'Dual Feasibility Error':<28} | {f'{mean_dual_feasibility:.2e} ± {std_dual_feasibility:.2e}':>25}")
+        print(f"  {'Complementary Slackness':<28} | {f'{mean_slackness:.2e} ± {std_slackness:.2e}':>25}")
 
         if args.track_mem and memory is not None:
             mean_mem = np.mean(memory[r_i, :])
             std_mem = np.std(memory[r_i, :])
-            print(f"  {'Peak Memory (MB)':<28} | {mean_mem:12.3f} | {std_mem:12.3f}")
+            print(f"  {'Peak Memory (MB)':<28} | {f'{mean_mem:.3f} ± {std_mem:.3f}':>25}")
 
-        # --- Calculate and Print Average Rank Arrays ---
+        # --- Calculate and Print Rank Statistics ---
+        print(f"  {'-' * 28} | {'-' * 25}")
+        print(f"  {'Rank Statistics':<55}")
+
+        # Ranks for X
         avg_ranks_X = np.mean(ranksX[r_i, :, :], axis=0)
+        std_ranks_X = np.std(ranksX[r_i, :, :], axis=0)
+        print(f"  {'  Ranks X':<26}: {format_ranks_with_std(avg_ranks_X, std_ranks_X)}")
+
+        # Ranks for Y
         avg_ranks_Y = np.mean(ranksY[r_i, :, :], axis=0)
+        std_ranks_Y = np.std(ranksY[r_i, :, :], axis=0)
+        print(f"  {'  Ranks Y':<26}: {format_ranks_with_std(avg_ranks_Y, std_ranks_Y)}")
+
+        # Ranks for Z
         avg_ranks_Z = np.mean(ranksZ[r_i, :, :], axis=0)
+        std_ranks_Z = np.std(ranksZ[r_i, :, :], axis=0)
+        print(f"  {'  Ranks Z':<26}: {format_ranks_with_std(avg_ranks_Z, std_ranks_Z)}")
+
+        # Ranks for T (if provided)
         if ranksT is not None:
             avg_ranks_T = np.mean(ranksT[r_i, :, :], axis=0)
+            std_ranks_T = np.std(ranksT[r_i, :, :], axis=0)
+            print(f"  {'  Ranks T':<26}: {format_ranks_with_std(avg_ranks_T, std_ranks_T)}")
 
-        print(f"  {'-' * 28} | {'-' * 12} | {'-' * 12}")
-        print(f"  {'Avg Ranks X':<28}: {np.array2string(avg_ranks_X, precision=1, floatmode='fixed', separator=', ')}")
-        print(f"  {'Avg Ranks Y':<28}: {np.array2string(avg_ranks_Y, precision=1, floatmode='fixed', separator=', ')}")
-        print(f"  {'Avg Ranks Z':<28}: {np.array2string(avg_ranks_Z, precision=1, floatmode='fixed', separator=', ')}")
-        if ranksT is not None:
-            print(f"  {'Avg Ranks T':<28}: {np.array2string(avg_ranks_T, precision=1, floatmode='fixed', separator=', ')}")
-        print("")
+        print("")  # Add a newline for spacing between rank blocks
 
     print("=" * 80)
