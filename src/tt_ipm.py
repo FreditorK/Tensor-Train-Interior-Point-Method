@@ -749,6 +749,7 @@ def tt_ipm(
         status.centrl_error_normalisation = 1 + abs(tt_inner_prod(obj_tt, tt_reshape(X_tt, (4, ))))
         status.centrality_error = status.mu / status.centrl_error_normalisation
         status.is_central = np.less(status.centrality_error, (1 + (status.ineq_status is IneqStatus.ACTIVE))*centrality_tol)
+        status.eta = max(min(status.eta, 2 * status.mu), status.op_tol)
 
         lhs_matrix_tt, rhs_vec_tt, status = tt_infeasible_newton_system(
             lhs,
