@@ -553,6 +553,7 @@ def tt_random_graph(dim, r, skew=0.0, eps=1e-12):
             graph_tt.append(np.array([[binary_numbers[0], binary_numbers[1]], [binary_numbers[1], binary_numbers[2]]]).reshape(1, 2, 2, 1))
 
         graph_tt.append(np.array([[0, 1], [1, 0]]).reshape(1, 2, 2, 1))
+        print("===Terminated Graph Sampling===")
         return graph_tt
     max_rank = 0
     rejection_counter = 0

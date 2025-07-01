@@ -119,8 +119,8 @@ def run_experiment(create_problem_fn):
 
             print(f"Convergence after {num_iters[r_i, s_i]:.0f} iterations. "
                   f"Compl Slackness: {complementary_slackness[r_i, s_i]:.4e}. "
-                  f"Feasibility error: {feasibility_errors[r_i, s_i]:.4e}"
-                  f"Dual Feasibility error: {dual_feasibility_errors[r_i, s_i]:.4e}")
+                  f"Feasibility error: {feasibility_errors[r_i, s_i]:.4e}. "
+                  f"Dual Feasibility error: {dual_feasibility_errors[r_i, s_i]:.4e}.")
             print(f"Convergence in {runtimes[r_i, s_i]:.2f}s. Memory: {memory[r_i, s_i]:.2f} MB.")
 
     # Pass ranksT only if it was ever used

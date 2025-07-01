@@ -41,7 +41,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
     block_res_old = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution).__isub__(rhs)) / norm_rhs
     direct_solve_failure = not dense_solve
     dense_solve = (np.sqrt(x_shape[0]*x_shape[3]) <= size_limit) and dense_solve
-
+    
     if dense_solve:
         try:
             mR_p = rhs[:, 0].reshape(m, 1)
@@ -94,8 +94,8 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
             (local_rhs - local_vec if use_prev_sol else local_rhs).ravel(),
             rtol=rtol,
             outer_k=5,
-            inner_m=int(np.ceil(lgmres_discount*(2 * m))),
-            maxiter=66
+            inner_m=max(int(np.ceil(lgmres_discount*(2 * m))), 10),
+            maxiter=50
         )
         solution_now = np.transpose(solution_now.reshape(2, x_shape[0], x_shape[2], x_shape[3]), (1, 0, 2, 3))
 
@@ -108,8 +108,8 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
     block_res_new = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, solution_now).__isub__(rhs)) / norm_rhs
 
     if not dense_solve or direct_solve_failure:
-        score = 1 + np.tanh(((block_res_new/rtol) - 1)/4)
-        lgmres_discount = max(min(1, lgmres_discount*score), 0.01)
+        score = 1.02 if block_res_new/rtol > 1 else 0.99
+        lgmres_discount = max(min(0.25, lgmres_discount*score), 1e-3)
 
     if block_res_old < block_res_new:
         solution_now = previous_solution
@@ -187,8 +187,8 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
             (local_rhs - local_vec if use_prev_sol else local_rhs).ravel(),
             rtol=1e-10,
             outer_k=5,
-            inner_m=int(np.ceil(lgmres_discount*(2 * m))),
-            maxiter=99
+            inner_m=max(int(np.ceil(lgmres_discount*(3 * m))), 10),
+            maxiter=60
         )
 
         solution_now = np.transpose(solution_now.reshape(3, x_shape[0], x_shape[2], x_shape[3]),
@@ -208,8 +208,8 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
     block_res_new = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, solution_now) - rhs) / norm_rhs
 
     if not dense_solve or direct_solve_failure:
-        score = 1 + np.tanh(((block_res_new/rtol) - 1)/4)
-        lgmres_discount = max(min(1, lgmres_discount*score), 0.01)
+        score = 1.02 if block_res_new/rtol > 1 else 0.99
+        lgmres_discount = max(min(0.25, lgmres_discount*score), 1e-3)
 
     if block_res_old < block_res_new:
         solution_now = previous_solution
@@ -649,7 +649,7 @@ def tt_ipm(
     gap_tol=1e-4,
     aho_direction=True,
     op_tol=1e-5,
-    abs_tol=1e-4,
+    abs_tol=5e-4,
     eps=1e-12,
     mals_restarts=3,
     verbose=False
@@ -749,7 +749,7 @@ def tt_ipm(
         status.centrl_error_normalisation = 1 + abs(tt_inner_prod(obj_tt, tt_reshape(X_tt, (4, ))))
         status.centrality_error = status.mu / status.centrl_error_normalisation
         status.is_central = np.less(status.centrality_error, (1 + (status.ineq_status is IneqStatus.ACTIVE))*centrality_tol)
-        status.eta = max(min(status.eta, 2 * status.mu), status.op_tol)
+        status.eta = max(min(status.eta, 0.5*status.mu), status.op_tol)
 
         lhs_matrix_tt, rhs_vec_tt, status = tt_infeasible_newton_system(
             lhs,

@@ -577,7 +577,7 @@ def tt_block_amen(block_A, block_b, term_tol, r_max=100, eps=1e-12, nswp=22, x0=
         rz = np.array([1] + tt_ranks(z_cores) + [1])
     last = False
     final_local_res = np.inf 
-    lgmres_discount = 0.1
+    lgmres_discount = 0.01
     direct_solve_failure = False
     trunc_tol = term_tol / np.sqrt(d)
 
@@ -723,8 +723,8 @@ def _default_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, prev
     block_res_new = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, solution_now) - rhs) / norm_rhs
 
     if not dense_solve:
-        score = 1 + np.tanh(((block_res_new/rtol) - 1)/4)
-        lgmres_discount = max(min(1, lgmres_discount*score), 0.01)
+        score = 1.1 if block_res_new/rtol > 1 else 0.99
+        lgmres_discount = max(min(0.5, lgmres_discount*score), 1e-3)
 
 
     if block_res_old < block_res_new:
@@ -769,16 +769,16 @@ def tt_restarted_block_amen(
 
     rhs = block_b
     orig_rhs_norm = rhs.norm
-    
+
     if orig_rhs_norm < 0.5*op_tol:
-        raise RuntimeError(f"\n\tAbsolute tolerance already reached: {orig_rhs_norm} < {op_tol}")
+        raise RuntimeError(f"\n\tAbsolute tolerance already reached: {orig_rhs_norm:4f} < {op_tol:4f}")
 
     # === First ALS solve ===
     x_cores, res = solve_als(rhs, rank_restriction, x0, False)
 
     if res < termination_tol:
         if verbose:
-            print(f"\n\tTerminated on local criterion, Relative Error < {termination_tol}")
+            print(f"\n\tTerminated on local criterion, Relative Error < {termination_tol:4f}")
         return x_cores, res
 
     # === Update RHS and check for early stopping ===
@@ -790,10 +790,10 @@ def tt_restarted_block_amen(
             print(f"\n\tTerminated on global criterion, Relative Error = {rhs_norm / orig_rhs_norm:.3e}")
         return x_cores, res
     if rhs_norm > orig_rhs_norm:
-        raise RuntimeError(f"Terminated on instability: ||rhs|| = {rhs_norm} > previous = {orig_rhs_norm}")
+        raise RuntimeError(f"Terminated on instability: ||rhs|| = {rhs_norm:4f} > previous = {orig_rhs_norm:4f}")
 
     if verbose:
-        print(f"\n\tRelative Error = {rhs_norm / orig_rhs_norm:.3e}")
+        print(f"\n\tRelative Error = {rhs_norm / orig_rhs_norm:4f}")
 
     # === Restart loop ===
     for i in range(1, num_restarts):
@@ -810,24 +810,24 @@ def tt_restarted_block_amen(
 
         if rhs_norm >= prev_rhs_norm:
             if prev_rhs_norm >= orig_rhs_norm:
-                raise RuntimeError(f"Terminated on instability: ||rhs|| = {prev_rhs_norm} > previous = {orig_rhs_norm}")
+                raise RuntimeError(f"Terminated on instability: ||rhs|| = {prev_rhs_norm:4f} > previous = {orig_rhs_norm:4f}")
             if verbose:
-                print(f"\n\tTerminated on instability: ||rhs|| = {rhs_norm} > previous = {prev_rhs_norm}")
+                print(f"\n\tTerminated on instability: ||rhs|| = {rhs_norm:4f} > previous = {prev_rhs_norm:4f}")
             return x_cores, prev_rhs_norm
 
         if rhs_norm < termination_tol * orig_rhs_norm:
             if verbose:
-                print(f"\n\tTerminated on global criterion, Relative Error = {rhs_norm / orig_rhs_norm:.3e}")
+                print(f"\n\tTerminated on global criterion, Relative Error = {rhs_norm / orig_rhs_norm:4f}")
             x_cores = tt_rank_reduce_py(tt_add(x_cores, new_x_cores), eps=eps)
             break
 
         if verbose:
-            print(f"\n\tRelative Error = {rhs_norm / orig_rhs_norm:.3e}")
+            print(f"\n\tRelative Error = {rhs_norm / orig_rhs_norm:4f}")
         x_cores = tt_rank_reduce_py(tt_add(x_cores, new_x_cores), eps=eps)
 
     else:
         if verbose:
-            print(f"\n\tNumber of restarts exhausted, Relative Error = {rhs_norm / orig_rhs_norm:.3e}")
+            print(f"\n\tNumber of restarts exhausted, Relative Error = {rhs_norm / orig_rhs_norm:4f}")
 
     return x_cores, res
 
@@ -877,7 +877,7 @@ class CgIterInv(scp.sparse.linalg.LinearOperator):
         self.M = M
         self.shape = M.shape
         self.tol = tol
-        self.ifunc = lambda b: scp.sparse.linalg.cg(M, b, maxiter=1000, rtol=tol, atol=0)
+        self.ifunc = lambda b: scp.sparse.linalg.cg(M, b, maxiter=500, rtol=tol)
 
     def _matvec(self, x):
         b, info = self.ifunc(x)
@@ -901,8 +901,9 @@ class SpCholInv(scp.sparse.linalg.LinearOperator):
         return self.factor.solve_A(x)
 
 
-def _step_size_local_solve(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k, A_k, XAX_k1, m, step_size, size_limit, eps):
-    if m <= size_limit:
+def _step_size_local_solve(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k, A_k, XAX_k1, dense_solve, step_size, eps, lanczos_discount):
+    m = np.prod(previous_solution.shape)
+    if dense_solve:
         previous_solution = previous_solution.reshape(-1, 1)
         D = scp.sparse.csr_matrix(cached_einsum(
             "lsr,smnS,LSR->lmLrnR",
@@ -910,19 +911,21 @@ def _step_size_local_solve(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k, A_k
         ).reshape(m, m))
         A = scp.sparse.csr_matrix(cached_einsum("lsr,smnS,LSR->lmLrnR", XAX_k, A_k, XAX_k1).reshape(m, m))
         try:
-            eig_val, solution_now = scp.sparse.linalg.eigsh((1/step_size)*A + D, tol=eps, k=1, ncv=min(m, 25), maxiter=10*m, which="SA", v0=previous_solution)
+            eig_val, solution_now = scp.sparse.linalg.eigsh((1/step_size)*A + D, tol=eps, k=1, ncv=max(int(np.floor(lanczos_discount*m)), min(m, 5)), maxiter=10*m, which="SA", v0=previous_solution)
         except Exception as e:
             print(f"\tAttention: {e}")
             eig_val = previous_solution.T @ ((1/step_size)*A + D)  @ previous_solution
             solution_now = previous_solution
+            lanczos_discount = min(0.999, lanczos_discount*1.1)
         if eig_val < 0:
             try:
                 Minv = SpCholInv(A)
-                eig_val, solution_now = scp.sparse.linalg.eigsh(-D, M=A, Minv=Minv, tol=eps, k=1, ncv=min(m, 25), which="LA", maxiter=10*m, v0=previous_solution)
+                eig_val, solution_now = scp.sparse.linalg.eigsh(-D, M=A, Minv=Minv, tol=eps, k=1, ncv=max(int(np.floor(lanczos_discount*m)), min(m, 5)), which="LA", maxiter=10*m, v0=previous_solution)
                 step_size = max(0, min(step_size, 1/ eig_val[0]))
             except Exception as e:
                 print(f"\tAttention: {e}")
                 solution_now = previous_solution
+                lanczos_discount = min(0.999, lanczos_discount*1.1)
 
         eig_val = previous_solution.T @ ((1/step_size)*A + D) @ previous_solution
         old_res = np.linalg.norm(((1/step_size)*A + D) @ previous_solution - eig_val*previous_solution)
@@ -939,26 +942,30 @@ def _step_size_local_solve(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k, A_k
         AD_op = scp.sparse.linalg.LinearOperator((m, m), matvec=lambda x_vec: (mat_vec_A(x_vec) / step_size).__isub__(mat_vec_D(x_vec)))
 
         try:
-            eig_val, solution_now = scp.sparse.linalg.eigsh(AD_op, tol=eps, k=1, ncv=min(m, 25), which="SA", maxiter=10*m, v0=previous_solution)
+            eig_val, solution_now = scp.sparse.linalg.eigsh(AD_op, tol=eps, k=1, ncv=max(int(np.floor(lanczos_discount*m)), min(m, 5)), which="SA", maxiter=10*m, v0=previous_solution)
         except Exception as e:
             eig_val = previous_solution.T @ AD_op(previous_solution)
             solution_now = previous_solution
+            lanczos_discount = min(0.999, lanczos_discount*1.1)
         if eig_val < 0:
             try:
                 Minv = CgIterInv(A_op, tol=eps)
-                eig_val, solution_now = scp.sparse.linalg.eigsh(D_op, M=A_op, Minv=Minv, tol=eps, k=1, ncv=min(m, 25), which="LA", maxiter=10*m, v0=previous_solution)
+                eig_val, solution_now = scp.sparse.linalg.eigsh(D_op, M=A_op, Minv=Minv, tol=eps, k=1, ncv=max(int(np.floor(lanczos_discount*m)), min(m, 5)), which="LA", maxiter=10*m, v0=previous_solution)
                 step_size = max(0, min(step_size, 1 / eig_val[0]))
             except Exception as e:
                 print(f"\tAttention: {e}")
                 solution_now = previous_solution
+                lanczos_discount = min(0.999, lanczos_discount*1.1)
 
         eig_val = previous_solution.T @ AD_op(previous_solution)
         old_res = np.linalg.norm(AD_op(previous_solution).__isub__(eig_val * previous_solution))
-    return solution_now.reshape(-1, 1), step_size, old_res
+    lanczos_discount = max(0.1, lanczos_discount*0.999)
+    return solution_now.reshape(-1, 1), step_size, old_res, lanczos_discount
 
 
-def _local_psd_check(previous_solution, XAX_k, A_k, XAX_k1, m, size_limit, eps):
-    if m <= size_limit:
+def _local_psd_check(previous_solution, XAX_k, A_k, XAX_k1, dense_solve, eps):
+    m = np.prod(previous_solution.shape)
+    if dense_solve:
         try:
             eig_val, _ = scp.sparse.linalg.eigsh(cached_einsum("lsr,smnS,LSR->lmLrnR", XAX_k, A_k, XAX_k1).reshape(m, m), tol=eps, k=1, which="SA")
         except:
@@ -991,11 +998,11 @@ def tt_max_generalised_eigen(A, Delta, x0=None, kick_rank=None, nswp=10, tol=1e-
     if x0 is None:
         x_cores = tt_random_gaussian([2]*(len(A)-1), (A[0].shape[2],))
         if kick_rank is None:
-            kick_rank = np.maximum(np.ceil(symmetric_powers_of_two(len(A)-1) / (nswp-1)), 2).astype(int)
+            kick_rank = np.maximum(np.ceil(symmetric_powers_of_two(len(A)-1) / (nswp-2)), 2).astype(int)
     else:
         x_cores = x0
         if kick_rank is None:
-            kick_rank = np.maximum(np.ceil(symmetric_powers_of_two(len(A)-1) - np.array(tt_ranks(x_cores)) / (nswp-1)), 2).astype(int)
+            kick_rank = np.maximum(np.ceil((symmetric_powers_of_two(len(A)-1) - np.array(tt_ranks(x_cores))) / (nswp-2)), 2).astype(int)
 
     d = len(x_cores)
     rx = np.array([1] + tt_ranks(x_cores) + [1])
@@ -1005,17 +1012,18 @@ def tt_max_generalised_eigen(A, Delta, x0=None, kick_rank=None, nswp=10, tol=1e-
     XDX = [np.ones((1, 1, 1))] + [None] * (d - 1) + [np.ones((1, 1, 1))]
 
     step_size = 1
+    lanczos_discount = 0.5
     last = False
-    size_limit = N[0] * (int(np.sqrt(d) * d))**2 / (d/2)
+    size_limit = (2**(d/2))**(3/4)
     local_res = np.inf*np.ones((2, d-1))
     for swp in range(nswp):
         for k in range(d - 1, -1, -1):
             if swp > 0:
                 previous_solution = x_cores[k]
-                solution_now, step_size, res = _step_size_local_solve(previous_solution, XDX[k], Delta[k], XDX[k+1], XAX[k], A[k], XAX[k+1], rx[k] * N[k] * rx[k + 1], step_size, size_limit, tol)
+                solution_now, step_size, res, lanczos_discount = _step_size_local_solve(previous_solution, XDX[k], Delta[k], XDX[k+1], XAX[k], A[k], XAX[k+1], np.sqrt(rx[k] * rx[k + 1]) < size_limit, step_size, tol, lanczos_discount)
 
                 if 2*local_res[0, k-1] < res:
-                    if not _local_psd_check(previous_solution, XAX[k], A[k], XAX[k+1], rx[k] * N[k] * rx[k + 1], size_limit, tol):
+                    if not _local_psd_check(previous_solution, XAX[k], A[k], XAX[k+1], np.sqrt(rx[k] * rx[k + 1]) < size_limit, tol):
                         print(f"\t Matrix A is not positive definite!", flush=True)
                         break
                 else:
@@ -1058,12 +1066,13 @@ def tt_max_generalised_eigen(A, Delta, x0=None, kick_rank=None, nswp=10, tol=1e-
             print('\tStep size: %f' % step_size)
             print(f"\tDirection: {-1}")
             print(f'\tResidual {np.max(local_res[0])}')
+            print(f'\tLanczos Discount {lanczos_discount:2f}')
             print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
         for k in range(d):
             previous_solution = x_cores[k]
-            solution_now, step_size, res = _step_size_local_solve(previous_solution, XDX[k], Delta[k], XDX[k+1], XAX[k], A[k], XAX[k+1], rx[k] * N[k] * rx[k + 1], step_size, size_limit, tol)
+            solution_now, step_size, res, lanczos_discount = _step_size_local_solve(previous_solution, XDX[k], Delta[k], XDX[k+1], XAX[k], A[k], XAX[k+1], np.sqrt(rx[k] * rx[k + 1]) < size_limit, step_size, tol, lanczos_discount)
             if 2*local_res[1, k-1] < res:
-                if not _local_psd_check(previous_solution, XAX[k], A[k], XAX[k + 1], rx[k] * N[k] * rx[k + 1], size_limit, tol):
+                if not _local_psd_check(previous_solution, XAX[k], A[k], XAX[k + 1], np.sqrt(rx[k] * rx[k + 1]) < size_limit, tol):
                     print(f"\t Matrix A is not positive definite!", flush=True)
                     break
             else:
@@ -1101,6 +1110,7 @@ def tt_max_generalised_eigen(A, Delta, x0=None, kick_rank=None, nswp=10, tol=1e-
             print('\tStep size: %f' % step_size)
             print(f"\tDirection: {1}")
             print(f'\tResidual {np.max(local_res[1])}')
+            print(f'\tLanczos Discount {lanczos_discount:2f}')
             print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
 
     max_res  = min(np.max(local_res[0]), np.max(local_res[1]))
