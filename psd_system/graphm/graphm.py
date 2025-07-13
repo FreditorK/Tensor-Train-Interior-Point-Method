@@ -4,6 +4,7 @@ import os
 sys.path.append(os.getcwd() + '/../../')
 
 from src.tt_ops import *
+from src.tt_als import tt_mat_mat_mul
 from src.utils import run_experiment
 
 Q_PREFIX = [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1), np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)]
@@ -117,7 +118,7 @@ def tt_obj_matrix(rank, dim):
     # print("Objective matrix: ")
     C_tt = [E(0, 0)] + G_B + G_A
     # print(np.round(tt_matrix_to_matrix(C_tt), decimals=2))
-    return tt_normalise(C_tt, radius=1)
+    return C_tt
 
 """
         [Q   P  0 ]
@@ -190,14 +191,6 @@ def create_problem(n, max_rank):
     #eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, Q_m_P_op_bias))
 
     # ---
-    # IX
-    padding_op = tt_padding_op(2 * n)
-    padding_op_bias = [E(1, 1)] + tt_identity(2 * n)
-
-    L_op_tt = tt_rank_reduce(tt_add(L_op_tt, padding_op))
-    eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, padding_op_bias))
-
-    # ---
     # Inequality Operator
     # X
     ineq_mask = tt_rank_reduce([E(0, 0)] + tt_sub(tt_one_matrix(n), tt_identity(n)) + tt_sub(tt_one_matrix(n), tt_identity(n)))
@@ -229,7 +222,17 @@ def create_problem(n, max_rank):
         "t": tt_diag_op(lag_map_t)
     }
 
-    return C_tt, L_op_tt, eq_bias_tt, ineq_mask, lag_maps
+    scale = max(2**(2*n + 1 - 7), 1)
+    eq_bias_tt = tt_normalise(eq_bias_tt, radius=scale)
+
+    # IX
+    padding_op = tt_padding_op(2 * n)
+    padding_op_bias = [E(1, 1)] + tt_identity(2 * n)
+
+    L_op_tt = tt_rank_reduce(tt_add(L_op_tt, padding_op))
+    eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, padding_op_bias))
+
+    return tt_normalise(C_tt, radius=scale), L_op_tt, eq_bias_tt, ineq_mask, lag_maps
 
 if __name__ == "__main__":
     run_experiment(create_problem)

@@ -107,6 +107,8 @@ def run_experiment(create_problem_fn):
             primal_res = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(L_op_tt, tt_reshape(X_tt, (4,))), bias_tt), eps=1e-12)
             feasibility_errors[r_i, s_i] = tt_inner_prod(primal_res, primal_res)
             dual_res = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(tt_transpose(L_op_tt), tt_reshape(Y_tt, (4, )), eps=1e-12), tt_rank_reduce(tt_add(tt_reshape(Z_tt, (4,)), obj_tt), eps=1e-12)), eps=1e-12)
+            if T_tt is not None:
+                dual_res = tt_rank_reduce(tt_sub(dual_res, tt_reshape(T_tt, (4,))), eps=1e-12)
             dual_feasibility_errors[r_i, s_i] = tt_inner_prod(dual_res, dual_res)
             num_iters[r_i, s_i] = info["num_iters"]
             ranksX[r_i, s_i, :] = info["ranksX"]

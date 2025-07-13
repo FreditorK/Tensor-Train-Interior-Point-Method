@@ -52,6 +52,9 @@ class TTBlockVector:
         for i in self._data.keys():
             block_vec[i] = tt_rank_reduce(tt_sub(self.get_row(i), other.get_row(i)), 1e-12)
         return block_vec
+    
+    def scale(self, s):
+        self._data = {key: tt_rank_reduce(tt_scale(s, value), 1e-12) for (key, value) in self._data.items()}
 
 
 class TTBlockVectorView:
@@ -268,7 +271,10 @@ def compute_phi_fwd_rhs(Phi_now, core_rhs, core):
 
 def truncated_svd(matrix, trunc_rank):
     u, s, v = scp.linalg.svd(matrix, full_matrices=False, check_finite=False, overwrite_a=True)
-    return u[:, :trunc_rank], s[:trunc_rank].reshape(-1, 1) * v[:trunc_rank]
+    u = u[:, :trunc_rank]
+    s = s[:trunc_rank]
+    v = v[:trunc_rank]
+    return u, s.reshape(-1, 1) * v
 
 
 def _bck_sweep(
@@ -305,7 +311,7 @@ def _bck_sweep(
             previous_solution = x_cores[k]
             solution_now, block_res_old, block_res_new, rhs, norm_rhs, lgmres_discount, direct_solve_failure  = local_solver(XAX[k], block_A_k, XAX[k + 1],
                                                                                      Xb[k], block_b_k, Xb[k + 1],
-                                                                                     previous_solution, r_max**(2/3), lgmres_discount, not direct_solve_failure )
+                                                                                     previous_solution, d**(5/3), lgmres_discount, not direct_solve_failure )
 
             local_res = max(local_res, block_res_old)
             dx = np.linalg.norm(solution_now - previous_solution) / np.linalg.norm(solution_now)
@@ -326,14 +332,7 @@ def _bck_sweep(
                 resz = np.reshape(z_cores[k], (rz[k] * block_size, N[k] * rz[k + 1])).T
 
         if k > 0:
-            if min(rx[k] * block_size, N[k] * rx[k + 1]) > 2*r_max:
-                u, s, v = scp.sparse.linalg.svds(solution_now, k=r_max, tol=eps, which="LM")
-                idx = np.argsort(s)[::-1]  # descending order
-                s = s[idx]
-                u = u[:, idx]
-                v = v[idx, :]
-            else:
-                u, s, v = scp.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True)
+            u, s, v = scp.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True)
             v = s.reshape(-1, 1) * v
 
             if swp > 0 and not last:
@@ -434,7 +433,7 @@ def _fwd_sweep(
                 XAX[k], block_A_k, XAX[k + 1], Xb[k],
                 block_b_k, Xb[k + 1],
                 previous_solution,
-                r_max**(2/3), lgmres_discount, not direct_solve_failure 
+                d**(5/3), lgmres_discount, not direct_solve_failure 
             )
 
             local_res = max(local_res, block_res_old)
@@ -459,14 +458,7 @@ def _fwd_sweep(
 
 
         if k < d - 1:
-            if min(rx[k] * N[k],  block_size * rx[k + 1]) > 2*r_max:
-                u, s, v = scp.sparse.linalg.svds(solution_now, k=r_max, tol=eps, which="LM")
-                idx = np.argsort(s)[::-1]  # descending order
-                s = s[idx]
-                u = u[:, idx]
-                v = v[idx, :]
-            else:
-                u, s, v = scp.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True)
+            u, s, v = scp.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True)
             v = s.reshape(-1, 1) * v
             u = u.reshape(rx[k], N[k], -1)
             v = v.reshape(-1, block_size, rx[k + 1])
@@ -576,12 +568,13 @@ def tt_block_amen(block_A, block_b, term_tol, r_max=100, eps=1e-12, nswp=22, x0=
         )
         rz = np.array([1] + tt_ranks(z_cores) + [1])
     last = False
-    final_local_res = np.inf 
-    lgmres_discount = 1e-3
+    final_local_res = np.inf
+    lgmres_discount = 1e-3 / np.sqrt(d)
     direct_solve_failure = False
     trunc_tol = term_tol / np.sqrt(d)
 
-    for swp in range(nswp):
+    for swp in range(nswp+1):
+
         if direction > 0:
             x_cores, z_cores, XAX, Xb, rx, local_res, local_dx, lgmres_discount, direct_solve_failure = _bck_sweep(
                 local_solver,
@@ -637,6 +630,7 @@ def tt_block_amen(block_A, block_b, term_tol, r_max=100, eps=1e-12, nswp=22, x0=
 
         if last:
             break
+
         if local_res < term_tol or local_dx < eps or swp == nswp - 2:
             last = True
             final_local_res = local_res
@@ -645,7 +639,7 @@ def tt_block_amen(block_A, block_b, term_tol, r_max=100, eps=1e-12, nswp=22, x0=
             print("\t===Finishing up===" if last else f"\t=====Sweep {swp+1}=====")
             print(f'\tDirection {direction}')
             print(f'\tResidual {local_res:.3e}')
-            print(f"\tTT-sol rank: {tt_ranks(x_cores)}")
+            print(f"\tTT-sol rank: {rx[1:-1]}")
             print(f'\tLGMRES-discount: {lgmres_discount:2f}', flush=True)
 
         direction *= -1
@@ -744,16 +738,15 @@ def tt_restarted_block_amen(
     inner_m=10,
     x0=None,
     local_solver=None,
-    refinement=False,
     verbose=False
 ):
     if x0 is not None:
         dim = len(x0)
         x0 = tt_rank_retraction(x0, [dim]*(dim-1))
 
-    def solve_als(rhs, rank, x0, refinement):
+    def solve_als(rhs, rank, x0, iters, kick_rank):
         return tt_block_amen(
-            block_A, rhs, termination_tol, r_max=rank, eps=eps, nswp=inner_m, x0=x0, local_solver=local_solver, kick_rank=2 + 2*refinement, amen=True, verbose=verbose
+            block_A, rhs, termination_tol, r_max=rank, eps=eps, nswp=iters, x0=x0, local_solver=local_solver, kick_rank=kick_rank, amen=True, verbose=verbose
         )
 
     def update_rhs(rhs, x_cores):
@@ -774,60 +767,49 @@ def tt_restarted_block_amen(
         raise RuntimeError(f"\n\tAbsolute tolerance already reached: {orig_rhs_norm:4f} < {op_tol:4f}")
 
     # === First ALS solve ===
-    x_cores, res = solve_als(rhs, rank_restriction, x0, False)
+    x_cores, res = solve_als(rhs, rank_restriction, x0, inner_m, 2)
 
     if res < termination_tol:
         if verbose:
             print(f"\n\tTerminated on local criterion, Relative Error < {termination_tol:4f}")
         return x_cores, res
 
-    # === Update RHS and check for early stopping ===
-    rhs = update_rhs(rhs, x_cores)
-    rhs_norm = rhs.norm
+    rhs_norm = update_rhs(rhs, x_cores).norm
 
     if rhs_norm < termination_tol * orig_rhs_norm:
         if verbose:
             print(f"\n\tTerminated on global criterion, Relative Error = {rhs_norm / orig_rhs_norm:.3e}")
         return x_cores, res
-    if rhs_norm > orig_rhs_norm:
-        raise RuntimeError(f"Terminated on instability: ||rhs|| = {rhs_norm:4f} > previous = {orig_rhs_norm:4f}")
+    elif rhs_norm < orig_rhs_norm:
+        if verbose:
+            print(f"\n\tTerminated on leniency, Relative Error = {rhs_norm / orig_rhs_norm:.3e}")
+        return x_cores, res
 
     if verbose:
         print(f"\n\tRelative Error = {rhs_norm / orig_rhs_norm:4f}")
 
     # === Restart loop ===
     for i in range(1, num_restarts):
-        if rhs_norm / orig_rhs_norm > 0.5:
-            inner_m += 1
-
         if verbose:
             print(f"\n\t--- Restart {i}")
+        
+        dim = len(x_cores)
+        x_cores = tt_rank_retraction(x_cores, [2*dim]*(dim-1))
+        x_cores, res = solve_als(rhs, int(np.ceil(rank_restriction*1.1)), x_cores, inner_m+1, 3)
 
-        new_x_cores, res = solve_als(rhs, rank_restriction, None, True)
-
-        rhs = update_rhs(rhs, new_x_cores)
-        prev_rhs_norm, rhs_norm = rhs_norm, rhs.norm
-
-        if rhs_norm >= prev_rhs_norm:
-            if prev_rhs_norm >= orig_rhs_norm:
-                raise RuntimeError(f"Terminated on instability: ||rhs|| = {prev_rhs_norm:4f} > previous = {orig_rhs_norm:4f}")
-            if verbose:
-                print(f"\n\tTerminated on instability: ||rhs|| = {rhs_norm:4f} > previous = {prev_rhs_norm:4f}")
-            return x_cores, prev_rhs_norm
+        rhs_norm = update_rhs(rhs, x_cores).norm
 
         if rhs_norm < termination_tol * orig_rhs_norm:
             if verbose:
-                print(f"\n\tTerminated on global criterion, Relative Error = {rhs_norm / orig_rhs_norm:4f}")
-            x_cores = tt_rank_reduce_py(tt_add(x_cores, new_x_cores), eps=eps)
-            break
-
-        if verbose:
-            print(f"\n\tRelative Error = {rhs_norm / orig_rhs_norm:4f}")
-        x_cores = tt_rank_reduce_py(tt_add(x_cores, new_x_cores), eps=eps)
-
+                print(f"\n\tTerminated on global criterion, Relative Error = {rhs_norm / orig_rhs_norm:.3e}")
+            return x_cores, res
+        elif rhs_norm < orig_rhs_norm:
+            if verbose:
+                print(f"\n\tTerminated on leniency, Relative Error = {rhs_norm / orig_rhs_norm:.3e}")
+            return x_cores, res
     else:
         if verbose:
-            print(f"\n\tNumber of restarts exhausted, Relative Error = {rhs_norm / orig_rhs_norm:4f}")
+            print(f"\n\tNumber of restarts exhausted, Relative Error = {rhs_norm / orig_rhs_norm:3e}. Consider increasing rank ceiling.")
 
     return x_cores, res
 
@@ -997,12 +979,10 @@ def tt_max_generalised_eigen(A, Delta, x0=None, kick_rank=None, nswp=10, tol=1e-
         t0 = time.time()
     if x0 is None:
         x_cores = tt_random_gaussian([2]*(len(A)-1), (A[0].shape[2],))
-        if kick_rank is None:
-            kick_rank = np.maximum(np.ceil(symmetric_powers_of_two(len(A)-1) / (nswp-2)), 2).astype(int)
     else:
         x_cores = x0
-        if kick_rank is None:
-            kick_rank = np.maximum(np.ceil((symmetric_powers_of_two(len(A)-1) - np.array(tt_ranks(x_cores))) / (nswp-2)), 2).astype(int)
+    if kick_rank is None:
+        kick_rank = symmetric_powers_of_two(len(A)-1)
 
     d = len(x_cores)
     rx = np.array([1] + tt_ranks(x_cores) + [1])
@@ -1016,9 +996,10 @@ def tt_max_generalised_eigen(A, Delta, x0=None, kick_rank=None, nswp=10, tol=1e-
     last = False
     size_limit = (2**(d/2))**(3/4)
     local_res = np.inf*np.ones((2, d-1))
+    trunc_tol = 0.1*tol/np.sqrt(d)
     for swp in range(nswp):
         for k in range(d - 1, -1, -1):
-            if swp > 0:
+            if swp > 0 and not last:
                 previous_solution = x_cores[k]
                 solution_now, step_size, res, lanczos_discount = _step_size_local_solve(previous_solution, XDX[k], Delta[k], XDX[k+1], XAX[k], A[k], XAX[k+1], np.sqrt(rx[k] * rx[k + 1]) < size_limit, step_size, tol, lanczos_discount)
 
@@ -1035,9 +1016,9 @@ def tt_max_generalised_eigen(A, Delta, x0=None, kick_rank=None, nswp=10, tol=1e-
             if k > 0:
                 u, s, v = scp.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
                 v = s.reshape(-1, 1) * v
-                r = prune_singular_vals(s, 0.1*tol)
+                r = prune_singular_vals(s, trunc_tol)
                 if not last:
-                    kick = kick_rank[k-1]
+                    kick = int(np.ceil((kick_rank[k-1] - r) / (swp+1)))
                     u, v, r = _add_kick_rank(u[:, :r], v[:r], kick)
                 else:
                     u = u[:, :r]
@@ -1069,21 +1050,25 @@ def tt_max_generalised_eigen(A, Delta, x0=None, kick_rank=None, nswp=10, tol=1e-
             print(f'\tLanczos Discount {lanczos_discount:2f}')
             print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
         for k in range(d):
-            previous_solution = x_cores[k]
-            solution_now, step_size, res, lanczos_discount = _step_size_local_solve(previous_solution, XDX[k], Delta[k], XDX[k+1], XAX[k], A[k], XAX[k+1], np.sqrt(rx[k] * rx[k + 1]) < size_limit, step_size, tol, lanczos_discount)
-            if 2*local_res[1, k-1] < res:
-                if not _local_psd_check(previous_solution, XAX[k], A[k], XAX[k + 1], np.sqrt(rx[k] * rx[k + 1]) < size_limit, tol):
-                    print(f"\t Matrix A is not positive definite!", flush=True)
-                    break
+            if not last:
+                previous_solution = x_cores[k]
+                solution_now, step_size, res, lanczos_discount = _step_size_local_solve(previous_solution, XDX[k], Delta[k], XDX[k+1], XAX[k], A[k], XAX[k+1], np.sqrt(rx[k] * rx[k + 1]) < size_limit, step_size, tol, lanczos_discount)
+                if 2*local_res[1, k-1] < res:
+                    if not _local_psd_check(previous_solution, XAX[k], A[k], XAX[k + 1], np.sqrt(rx[k] * rx[k + 1]) < size_limit, tol):
+                        print(f"\t Matrix A is not positive definite!", flush=True)
+                        break
+                else:
+                    local_res[1, k-1] = res
+                solution_now = np.reshape(solution_now, (rx[k] * N[k], rx[k + 1]))
             else:
-                local_res[1, k-1] = res
-            solution_now = np.reshape(solution_now, (rx[k] * N[k], rx[k + 1]))
+                solution_now = np.reshape(x_cores[k], (rx[k] * N[k], rx[k + 1]))
+                
             if k < d - 1:
                 u, s, v = scp.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
                 v = s.reshape(-1, 1) * v
-                r = prune_singular_vals(s, 0.1*tol)
+                r = prune_singular_vals(s, trunc_tol)
                 if not last:
-                    kick = kick_rank[k]
+                    kick = int(np.ceil((kick_rank[k] - r) / (swp+1)))
                     u, v, r = _add_kick_rank(u[:, :r], v[:r, :], kick)
                 else:
                     u = u[:, :r]
@@ -1138,7 +1123,7 @@ def tt_min_eig(A, x0=None, kick_rank=None, nswp=10, tol=1e-12, verbose=False):
     else:
         x_cores = tt_rank_retraction(x0, [2]*(len(A)-1))
     if kick_rank is None:
-        kick_rank = np.maximum((symmetric_powers_of_two(len(A))/(nswp -1)), 2).astype(int)
+        kick_rank = symmetric_powers_of_two(len(A)-1)
     d = len(x_cores)
     rx = np.array([1] + tt_ranks(x_cores) + [1])
     N = np.array([c.shape[1] for c in x_cores])
@@ -1148,6 +1133,7 @@ def tt_min_eig(A, x0=None, kick_rank=None, nswp=10, tol=1e-12, verbose=False):
     max_res = 0
     last = False
     size_limit = N[0] * (int(np.sqrt(d) * d))**2 / (d/2)
+    trunc_tol = 0.1*tol/np.sqrt(d)
     for swp in range(nswp):
         max_res = np.inf if swp == 0 else 0
         for k in range(d - 1, -1, -1):
@@ -1162,9 +1148,9 @@ def tt_min_eig(A, x0=None, kick_rank=None, nswp=10, tol=1e-12, verbose=False):
             if k > 0:
                 u, s, v = scp.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
                 v = s.reshape(-1, 1) * v
-                r = prune_singular_vals(s, 0.5*tol)
+                r = prune_singular_vals(s, trunc_tol)
                 if not last:
-                    kick = kick_rank[k]
+                    kick = int(np.ceil((kick_rank[k-1] - r) / (swp+1)))
                     u, v, r = _add_kick_rank(u[:, :r], v[:r], kick)
                 else:
                     u = u[:, :r]
@@ -1199,9 +1185,9 @@ def tt_min_eig(A, x0=None, kick_rank=None, nswp=10, tol=1e-12, verbose=False):
             if k < d - 1:
                 u, s, v = scp.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
                 v = s.reshape(-1, 1) * v
-                r = prune_singular_vals(s, 0.5*tol)
+                r = prune_singular_vals(s, trunc_tol)
                 if not last:
-                    kick = kick_rank[k]
+                    kick = int(np.ceil((kick_rank[k] - r) / (swp+1)))
                     u, v, r = _add_kick_rank(u[:, :r], v[:r, :], kick)
                 else:
                     u = u[:, :r]
