@@ -742,7 +742,7 @@ def tt_restarted_block_amen(
 ):
     if x0 is not None:
         dim = len(x0)
-        x0 = tt_rank_retraction(x0, [dim]*(dim-1))
+        x0 = tt_rank_retraction(x0, [int(np.ceil(0.9*dim**(5/3)))]*(dim-1))
 
     def solve_als(rhs, rank, x0, iters, kick_rank):
         return tt_block_amen(

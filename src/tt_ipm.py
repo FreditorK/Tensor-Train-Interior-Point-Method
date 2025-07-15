@@ -8,11 +8,7 @@ from src.tt_als import cached_einsum, TTBlockMatrix, TTBlockVector, tt_max_gener
 from dataclasses import dataclass
 from enum import Enum
 from src.tt_ops import lgmres
-from sksparse.cholmod import cholesky
-import scipy.sparse as sps
-import scipy.sparse.linalg as spsla
 import warnings
-import gc
 warnings.simplefilter("error")
 
 class IneqStatus(Enum):
@@ -28,33 +24,12 @@ class IneqStatus(Enum):
     def __str__(self):
         return self.name.lower().replace('_', ' ')
 
-def einsum_to_sparse(einsum_str, *operands, m):
-    """
-    Computes einsum to a dense matrix, thresholds it, and returns a sparse matrix.
-    The large intermediate dense matrix is garbage collected when the function returns,
-    minimizing peak memory usage.
-    """
-    dense_matrix = cached_einsum(einsum_str, *operands).reshape(m, m)
-    dense_matrix[np.abs(dense_matrix) < 1e-12] = 0
-    return sps.csc_matrix(dense_matrix, copy=False)
-
-
-def einsum_to_sparse_inv_I(einsum_str, *operands, inv_I, m):
-    """
-    Computes einsum to a dense matrix, thresholds it, and returns a sparse matrix.
-    The large intermediate dense matrix is garbage collected when the function returns,
-    minimizing peak memory usage.
-    """
-    dense_matrix = cached_einsum(einsum_str, *operands).reshape(m, m).__imul__(inv_I.reshape(1, -1))
-    dense_matrix[np.abs(dense_matrix) < 1e-12] = 0
-    return sps.csc_matrix(dense_matrix, copy=False)
-
 def forward_backward_sub(L, b, overwrite_b=False):
     y = scp.linalg.solve_triangular(L, b, lower=True, check_finite=False, overwrite_b=overwrite_b)
     x = scp.linalg.solve_triangular(L.T, y, lower=False, check_finite=False, overwrite_b=True)
     return x
 
-def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous_solution, size_limit, lgmres_discount, dense_solve=True, rtol=1e-8):
+def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous_solution, size_limit, lgmres_discount, dense_solve=True, rtol=1e-5):
     x_shape = previous_solution.shape
     m = x_shape[0] * x_shape[2] * x_shape[3]
     rhs = np.empty_like(previous_solution)
@@ -125,8 +100,8 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
             local_rhs.flatten(),
             rtol=rtol,
             outer_k=5,
-            inner_m=min(max(int(np.ceil(lgmres_discount*(2 * m))), 5), 50),
-            maxiter=30
+            inner_m=int(np.clip(lgmres_discount*(2 * m), a_min=2, a_max=100)),
+            maxiter=50
         )
         solution_now = np.transpose(solution_now.reshape(2, x_shape[0], x_shape[2], x_shape[3]), (1, 0, 2, 3))
 
@@ -139,15 +114,14 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
     block_res_new = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, solution_now).__isub__(rhs)) / norm_rhs
 
     if not dense_solve or direct_solve_failure:
-        score = 1.1 if block_res_new/rtol > 1 else 0.99
-        lgmres_discount *= score
+        lgmres_discount *= np.log(block_res_new/rtol + 1)
 
     if block_res_old < block_res_new:
         solution_now = previous_solution
 
     return solution_now, block_res_old, min(block_res_old, block_res_new), rhs, norm_rhs, lgmres_discount, direct_solve_failure
 
-def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous_solution, size_limit, lgmres_discount, dense_solve=True, rtol=1e-8):
+def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous_solution, size_limit, lgmres_discount, dense_solve=True, rtol=1e-5):
     x_shape = previous_solution.shape
     m = x_shape[0] * x_shape[2] * x_shape[3]
     rhs = np.empty_like(previous_solution)
@@ -222,10 +196,10 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
         solution_now, info = lgmres(
             linear_op,
             local_rhs.flatten() ,
-            rtol=1e-10,
+            rtol=rtol,
             outer_k=5,
-            inner_m=min(max(int(np.ceil(lgmres_discount*(3 * m))), 5), 50),
-            maxiter=30
+            inner_m=int(np.clip(lgmres_discount*(2 * m), a_min=2, a_max=100)),
+            maxiter=50
         )
 
         solution_now = np.transpose(solution_now.reshape(3, x_shape[0], x_shape[2], x_shape[3]),
@@ -245,8 +219,7 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
     block_res_new = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, solution_now) - rhs) / norm_rhs
 
     if not dense_solve or direct_solve_failure:
-        score = 1.1 if block_res_new/rtol > 1 else 0.99
-        lgmres_discount *= score
+        lgmres_discount *= np.log(block_res_new/rtol + 1)
 
     if block_res_old < block_res_new:
         solution_now = previous_solution
@@ -565,7 +538,7 @@ def _initialise(ineq_mask, status, dim):
 
     if status.ineq_status is IneqStatus.ACTIVE:
         T_tt = tt_scale(status.eps, ineq_mask)
-        X_tt = tt_rank_reduce(tt_add(X_tt, tt_scale(status.ineq_boundary_val, ineq_mask)), status.op_tol)
+        X_tt = tt_rank_reduce(tt_add(X_tt, tt_scale(1/2**(dim/2), ineq_mask)), status.op_tol)
 
     return X_tt, Y_tt, Z_tt, T_tt
 
