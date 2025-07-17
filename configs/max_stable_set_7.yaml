@@ -1,9 +1,9 @@
 # Common
 dim: !!int 7
 max_ranks: [1]
-seeds: [5] # !! 5, 7, 91, 9, 84 !!
+seeds: [5, 7, 91, 9, 84] # !! 5, 7, 91, 9, 84 !!
 gap_tol: !!float 3e-4
-verbose: True
+verbose: False
 # TT-IPM
 op_tol: !!float 1e-4
 max_iter: !!int 20
