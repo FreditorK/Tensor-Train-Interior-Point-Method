@@ -194,10 +194,11 @@ def save_results_summary(config, args, runtimes, problem_creation_times, num_ite
     The filename is generated to include config name, track_mem, seeds, and ranks.
     """
     # Build a descriptive filename
+    dim = config["dim"]
     track_mem_str = f"trackmem_{getattr(args, 'track_mem', False)}"
     seeds_str = f"seeds_{'-'.join(map(str, config.get('seeds', [])))}"
     ranks_str = f"ranks_{'-'.join(map(str, config.get('max_ranks', [])))}"
-    base_name = f"summary_{track_mem_str}_{seeds_str}_{ranks_str}.npz"
+    base_name = f"summary_dim-{dim}_{track_mem_str}_{seeds_str}_{ranks_str}.npz"
     # Sanitize filename (remove/replace problematic characters)
     base_name = re.sub(r'[^a-zA-Z0-9_.-]', '_', base_name)
     # Get results directory relative to this file's parent (project root)
