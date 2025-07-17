@@ -1,5 +1,6 @@
 import sys
 import os
+import numpy as np
 
 sys.path.append(os.getcwd() + '/../')
 
@@ -538,6 +539,7 @@ def _initialise(ineq_mask, status, dim):
 
     if status.ineq_status is IneqStatus.ACTIVE:
         T_tt = tt_scale(status.eps, ineq_mask)
+        # Need to initialise so it stays psd
         X_tt = tt_rank_reduce(tt_add(X_tt, tt_scale(1/2**(dim/2), ineq_mask)), status.op_tol)
 
     return X_tt, Y_tt, Z_tt, T_tt
@@ -571,8 +573,8 @@ class IPMStatus:
     ineq_boundary_val: float = 0.01
     sigma: float = 0.5
     num_ineq_constraints: float = 0
-    lag_map_t: list = None
-    lag_map_y: list = None
+    lag_map_t = None
+    lag_map_y = None
     compl_ineq_mask = None
     mals_delta0 = None
     eigen_x0 = None
@@ -833,8 +835,8 @@ def tt_ipm(
         if _ipm_check_for_stalled_progress(prev_errors, status, gap_tol):
             status.is_last_iter = True
 
-        prev_errors['primal'] = status.primal_error, 
-        prev_errors['dual'] = status.dual_error, 
+        prev_errors['primal'] = status.primal_error
+        prev_errors['dual'] = status.dual_error
         prev_errors['centrality'] = status.centrality_error
 
     return _ipm_format_output(X_tt, Y_tt, T_tt, Z_tt, iteration, status.dim)

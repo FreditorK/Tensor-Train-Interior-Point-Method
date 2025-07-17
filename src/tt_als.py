@@ -814,7 +814,7 @@ def tt_restarted_block_amen(
     return x_cores, res
 
 
-def tt_rl_orthogonalise_py(train_tt: List[np.array]):
+def tt_rl_orthogonalise_py(train_tt: List[np.ndarray]):
     dim = len(train_tt)
     if dim == 1:
         return train_tt
@@ -827,7 +827,7 @@ def tt_rl_orthogonalise_py(train_tt: List[np.array]):
                                                                                        train_tt[idx].shape[0])
     return train_tt
 
-def tt_rank_reduce_py(train_tt: List[np.array], eps=1e-18):
+def tt_rank_reduce_py(train_tt: List[np.ndarray], eps=1e-18):
     """ Might reduce TT-rank """
     dim = len(train_tt)
     ranks = np.array([1] + tt_ranks(train_tt) + [1])

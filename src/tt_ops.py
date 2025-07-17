@@ -1,7 +1,12 @@
 import scipy as scp
+import numpy as np
 from typing import *
 
 from cy_src.tt_ops_cy import *
+from cy_src.tt_ops_cy import (
+    tt_identity, tt_zero_matrix, tt_one_matrix, tt_transpose, tt_ranks, tt_scale, tt_rank_reduce, tt_psd_rank_reduce, tt_mask_rank_reduce, tt_add, tt_fast_matrix_vec_mul, tt_fast_hadamard, tt_inner_prod, tt_normalise, tt_random_gaussian,
+    tt_swap_all, tt_rl_orthogonalise, prune_singular_vals, tt_fast_mat_mat_mul
+)
 from cy_src.lgmres_cy import lgmres, MatVecWrapper, IneqMatVecWrapper
 from functools import reduce
 from functools import lru_cache
@@ -22,7 +27,7 @@ def cached_einsum(equation: str, *operands):
     expr = get_contract_expr_cached(equation, tuple(op.shape for op in operands))
     return expr(*operands)
 
-def tt_rl_orthogonalise_py(train_tt: List[np.array]):
+def tt_rl_orthogonalise_py(train_tt: List[np.ndarray]):
     dim = len(train_tt)
     if dim == 1:
         return train_tt
@@ -36,14 +41,14 @@ def tt_rl_orthogonalise_py(train_tt: List[np.array]):
         ).reshape(-1, *shape_im1[1:-1], train_tt[i].shape[0])
     return train_tt
 
-def tt_lr_orthogonalise_py(train_tt: List[np.array]):
+def tt_lr_orthogonalise_py(train_tt: List[np.ndarray]):
     train_tt = tt_swap_all(train_tt)
     train_tt = tt_rl_orthogonalise(train_tt)
     train_tt = tt_swap_all(train_tt)
     return train_tt
 
 
-def tt_rl_contraction(train_1_tt: List[np.array], train_2_tt: List[np.array]):
+def tt_rl_contraction(train_1_tt: List[np.ndarray], train_2_tt: List[np.ndarray]):
     new_cores = [
         train_1_tt[-1].reshape(train_1_tt[-1].shape[0], -1) @ train_2_tt[-1].reshape(train_2_tt[-1].shape[0], -1).T]
     for core_1, core_2 in zip(train_1_tt[-2:0:-1], train_2_tt[-2:0:-1]):
@@ -53,21 +58,21 @@ def tt_rl_contraction(train_1_tt: List[np.array], train_2_tt: List[np.array]):
     return new_cores[::-1]
 
 
-def tt_lr_contraction(train_1_tt: List[np.array], train_2_tt: List[np.array]):
+def tt_lr_contraction(train_1_tt: List[np.ndarray], train_2_tt: List[np.ndarray]):
     train_1_tt = tt_swap_all(train_1_tt)
     train_2_tt = tt_swap_all(train_2_tt)
     train_1_tt = tt_rl_contraction(train_1_tt, train_2_tt)
     return tt_swap_all(train_1_tt)
 
 
-def tt_lr_random_orthogonalise(train_tt: List[np.array], target_ranks: List[int]) -> List[np.array]:
+def tt_lr_random_orthogonalise(train_tt: List[np.ndarray], target_ranks: List[int]) -> List[np.ndarray]:
     if len(train_tt) > 1:
         tt_gaussian = tt_random_gaussian(target_ranks, shape=train_tt[0].shape[1:-1])
         return _tt_lr_random_orthogonalise(train_tt, tt_gaussian)
     return train_tt
 
 
-def tt_rl_random_orthogonalise(train_tt: List[np.array], target_ranks: List[int]) -> List[np.array]:
+def tt_rl_random_orthogonalise(train_tt: List[np.ndarray], target_ranks: List[int]) -> List[np.ndarray]:
     if len(train_tt) > 1:
         tt_gaussian = tt_swap_all(tt_random_gaussian(target_ranks, shape=train_tt[0].shape[1:-1]))
         train_tt = tt_swap_all(train_tt)
@@ -96,7 +101,7 @@ def _tt_lr_random_orthogonalise(train_tt, gaussian_tt):
     return train_tt
 
 
-def tt_rank_reduce_py(train_tt: List[np.array], eps=1e-18):
+def tt_rank_reduce_py(train_tt: List[np.ndarray], eps=1e-18):
     """ Might reduce TT-rank """
     dim = len(train_tt)
     ranks = np.array([1] + tt_ranks(train_tt) + [1])
@@ -124,7 +129,7 @@ def tt_rank_reduce_py(train_tt: List[np.array], eps=1e-18):
     return train_tt
 
 
-def tt_rank_retraction(train_tt: List[np.array], upper_ranks: List[int]):
+def tt_rank_retraction(train_tt: List[np.ndarray], upper_ranks: List[int]):
     """ Might reduce TT-rank """
     train_tt = tt_rl_orthogonalise_py(train_tt)
     rank = 1
@@ -147,7 +152,7 @@ def tt_rank_retraction(train_tt: List[np.array], upper_ranks: List[int]):
     return train_tt
 
 
-def tt_svd(tensor: np.array, err_bound=1e-18) -> List[np.array]:
+def tt_svd(tensor: np.ndarray, err_bound=1e-18) -> List[np.ndarray]:
     """ Converts a tensor into a tensor train """
     shape = tensor.shape
     err_bound = err_bound * np.sqrt(np.divide(tensor.reshape(1, -1) @ tensor.reshape(-1, 1), len(shape) - 1))
@@ -171,7 +176,7 @@ def tt_svd(tensor: np.array, err_bound=1e-18) -> List[np.array]:
     return cores
 
 
-def tt_entry(train_tt: List[np.array], indices: List[int]) -> np.array:
+def tt_entry(train_tt: List[np.ndarray], indices: List[int]) -> np.ndarray:
     """
     Returns the entry of a TT-train according to the indices
     """
@@ -181,7 +186,7 @@ def tt_entry(train_tt: List[np.array], indices: List[int]) -> np.array:
     )
 
 
-def tt_sub(train_1_tt: List[np.array], train_2_tt: List[np.array]) -> List[np.array]:
+def tt_sub(train_1_tt: List[np.ndarray], train_2_tt: List[np.ndarray]) -> List[np.ndarray]:
     return tt_add(train_1_tt, tt_scale(-1, train_2_tt))
 
 def tt_to_tensor(tt_train):
@@ -287,7 +292,7 @@ def _tt_generalised_nystroem(tt_train, tt_gaussian_1, tt_gaussian_2):
     return tt_train
 
 
-def tt_generalised_nystroem(tt_train, target_ranks: List[int]) -> List[np.array]:
+def tt_generalised_nystroem(tt_train, target_ranks: List[int]) -> List[np.ndarray]:
     if len(tt_train) > 1:
         tt_gaussian_1 = tt_random_gaussian(target_ranks, shape=tt_train[0].shape[1:-1])
         tt_gaussian_2 = tt_random_gaussian([r + 1 for r in target_ranks], shape=tt_train[0].shape[1:-1])
@@ -435,7 +440,7 @@ def _diag_projector(
     discarded_indices: Set[int],
     skew,
     limit=2
-) -> Tuple[np.ndarray, Set[int]]:
+) -> Tuple[np.ndarray, np.ndarray, Set[int]]:
     dimension = len(basis_vectors)
     num_couplings = np.random.randint(dimension) if dimension > 0 else 0
 
