@@ -1,12 +1,12 @@
 # Common
 dim: !!int 11
 max_ranks: [1]
-seeds: [14] # Tier 1: 48, (14, 937, 23, 22) Tier 2: 45 (0.24 compl slackness), Tier 3: 94
+seeds: [48, 14, 937, 23, 22] 
 gap_tol: !!float 3e-4
-verbose: True
+verbose: False
 # TT-IPM
 op_tol: !!float 1e-4
 max_iter: !!int 30
-warm_up: !!int 0
+warm_up: !!int 3
 mals_restarts: !!int 2
 max_refinement:  !!int 6
