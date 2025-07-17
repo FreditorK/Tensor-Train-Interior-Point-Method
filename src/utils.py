@@ -194,14 +194,14 @@ def save_results_summary(config, args, runtimes, problem_creation_times, num_ite
     The filename is generated to include config name, track_mem, seeds, and ranks.
     """
     # Build a descriptive filename
-    config_name = str(config.get('config', 'config')).split('/')[-1].replace('.yaml', '') if 'config' in config else 'config'
     track_mem_str = f"trackmem_{getattr(args, 'track_mem', False)}"
     seeds_str = f"seeds_{'-'.join(map(str, config.get('seeds', [])))}"
     ranks_str = f"ranks_{'-'.join(map(str, config.get('max_ranks', [])))}"
-    base_name = f"summary_{config_name}_{track_mem_str}_{seeds_str}_{ranks_str}.npz"
+    base_name = f"summary_{track_mem_str}_{seeds_str}_{ranks_str}.npz"
     # Sanitize filename (remove/replace problematic characters)
     base_name = re.sub(r'[^a-zA-Z0-9_.-]', '_', base_name)
-    results_dir = "/home/fred/Projects/TT-IPM/results"
+    # Get results directory relative to this file's parent (project root)
+    results_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'results'))
     if not os.path.exists(results_dir):
         os.makedirs(results_dir)
     if filename is None:
