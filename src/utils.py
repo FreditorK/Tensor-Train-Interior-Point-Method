@@ -194,7 +194,6 @@ def save_results_summary(config, args, runtimes, problem_creation_times, num_ite
     The filename is generated to include config name, track_mem, seeds, and ranks.
     """
     # Build a descriptive filename
-    dim = config["dim"]
     track_mem_str = f"trackmem_{getattr(args, 'track_mem', False)}"
     seeds_str = f"seeds_{'-'.join(map(str, config.get('seeds', [])))}"
     ranks_str = f"ranks_{'-'.join(map(str, config.get('max_ranks', [])))}"

@@ -101,7 +101,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
             local_rhs.flatten(),
             rtol=rtol,
             outer_k=5,
-            inner_m=int(np.clip(lgmres_discount*(2 * m), a_min=2, a_max=100)),
+            inner_m=int(np.clip(lgmres_discount*(2 * m), a_min=5, a_max=50)),
             maxiter=50
         )
         solution_now = np.transpose(solution_now.reshape(2, x_shape[0], x_shape[2], x_shape[3]), (1, 0, 2, 3))
@@ -199,7 +199,7 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
             local_rhs.flatten() ,
             rtol=rtol,
             outer_k=5,
-            inner_m=int(np.clip(lgmres_discount*(2 * m), a_min=2, a_max=100)),
+            inner_m=int(np.clip(lgmres_discount*(2 * m), a_min=5, a_max=50)),
             maxiter=50
         )
 
@@ -532,8 +532,8 @@ def _tt_get_ineq_step_sizes(x_step_size, z_step_size, X_tt, T_tt, Delta_X_tt, De
 
 
 def _initialise(ineq_mask, status, dim):
-    X_tt = tt_identity(dim)
-    Z_tt = tt_identity(dim)
+    X_tt = tt_scale(np.sqrt(dim), tt_identity(dim))
+    Z_tt = tt_scale(np.sqrt(dim), tt_identity(dim))
     Y_tt = tt_reshape(tt_zero_matrix(dim), (4, ))
     T_tt = None
 
@@ -661,7 +661,7 @@ def tt_ipm(
     abs_tol=5e-4,
     eps=1e-12,
     mals_restarts=3,
-    r_max=500,
+    r_max=1000,
     verbose=False
 ):
     centrality_tol = gap_tol
@@ -802,7 +802,6 @@ def tt_ipm(
             else:
                 status.is_last_iter = True
         else:
-            print(tt_norm(X_tt), tt_norm(Y_tt), tt_norm(Z_tt), tt_norm(Delta_X_tt), tt_norm(Delta_Y_tt), tt_norm(Delta_Z_tt))
             if status.is_last_iter:
                 X_tt = _tt_symmetrise(tt_add(X_tt, tt_scale(x_step_size, Delta_X_tt)), status.op_tol)
             else:
