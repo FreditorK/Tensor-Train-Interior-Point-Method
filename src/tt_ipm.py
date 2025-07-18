@@ -115,7 +115,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
     block_res_new = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, solution_now).__isub__(rhs)) / norm_rhs
 
     if not dense_solve or direct_solve_failure:
-        lgmres_discount *= np.log(block_res_new/rtol + 1)
+        lgmres_discount = min(lgmres_discount*np.log(block_res_new/rtol + 1), 1)
 
     if block_res_old < block_res_new:
         solution_now = previous_solution
@@ -220,7 +220,7 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
     block_res_new = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, solution_now) - rhs) / norm_rhs
 
     if not dense_solve or direct_solve_failure:
-        lgmres_discount *= np.log(block_res_new/rtol + 1)
+        lgmres_discount = min(lgmres_discount*np.log(block_res_new/rtol + 1), 1)
 
     if block_res_old < block_res_new:
         solution_now = previous_solution
