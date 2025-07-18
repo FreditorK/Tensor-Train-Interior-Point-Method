@@ -311,7 +311,7 @@ def _bck_sweep(
             previous_solution = x_cores[k]
             solution_now, block_res_old, block_res_new, rhs, norm_rhs, lgmres_discount, direct_solve_failure  = local_solver(XAX[k], block_A_k, XAX[k + 1],
                                                                                      Xb[k], block_b_k, Xb[k + 1],
-                                                                                     previous_solution, d**(5/3), lgmres_discount, not direct_solve_failure )
+                                                                                     previous_solution, d**(5/3), lgmres_discount, not direct_solve_failure)
 
             local_res = max(local_res, block_res_old)
             dx = np.linalg.norm(solution_now - previous_solution) / np.linalg.norm(solution_now)
@@ -433,7 +433,7 @@ def _fwd_sweep(
                 XAX[k], block_A_k, XAX[k + 1], Xb[k],
                 block_b_k, Xb[k + 1],
                 previous_solution,
-                d**(5/3), lgmres_discount, not direct_solve_failure 
+                d**(5/3), lgmres_discount, not direct_solve_failure
             )
 
             local_res = max(local_res, block_res_old)

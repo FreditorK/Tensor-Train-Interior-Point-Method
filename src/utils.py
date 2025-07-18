@@ -62,9 +62,9 @@ def run_experiment(create_problem_fn):
             )
             if (feas_err > 1e-3) or (slack > 1e-3):
                 print(f"Seed {seed} is pathological (feasibility error: {feas_err:.2e}, slackness: {slack:.2e}). Suggesting a new seed.")
-                new_seed = np.random.randint(0, 2**32-1)
+                new_seed = np.random.randint(0, 2**10)
                 while new_seed in used_seeds:
-                    new_seed = np.random.randint(0, 2**32-1)
+                    new_seed = np.random.randint(0, 2**10)
                 print(f"New seed suggested: {new_seed}")
                 used_seeds.add(new_seed)
                 config["seeds"][s_i] = new_seed

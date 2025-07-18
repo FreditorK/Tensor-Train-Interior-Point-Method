@@ -33,7 +33,6 @@ cimport scipy.linalg.cython_blas as blas
 from numpy.linalg import LinAlgError
 from scipy.linalg import qr_insert
 from scipy.linalg.cython_lapack cimport dtrtrs
-from cython.parallel cimport prange
 from libc.string cimport memcpy
 from scipy.linalg.cython_blas cimport dcopy
 
@@ -157,7 +156,7 @@ cdef void _transpose_reshape_step2(
     cdef int i, j, k
     cdef size_t block_size = S * sizeof(double)
     
-    for i in prange(r, nogil=True):
+    for i in range(r):
         for j in range(R):
             for k in range(n):
                 memcpy(
@@ -181,7 +180,7 @@ cdef void _transpose_reshape_step3(
     cdef int incx = n
     cdef int incy = 1
 
-    for i in prange(r, nogil=True):
+    for i in range(r):
         for j in range(R):
             for l in range(n):
                 dcopy(
@@ -199,7 +198,7 @@ cdef void _transpose_reshape_step3(
 @cython.inline
 cdef void _transpose_reshape_multiply_inplace(
     const double[:, ::1] src,      # shape (R*n, r)
-    double[:, ::1] dest,           # shape (r*n, R)
+    double[:, ::1] dest,          # shape (r*n, R)
     const double[:, ::1] source_to_multiply, # The array to multiply by
     int r,
     int n,
@@ -207,10 +206,10 @@ cdef void _transpose_reshape_multiply_inplace(
 ) noexcept nogil:
     cdef int i, j, k
     
-    for i in prange(r, nogil=True):
+    for i in range(r):
         for j in range(n):
             for k in range(R):
-                dest[i * n + j, k] = src[j + k * n, i] * source_to_multiply[i * n + j, k]
+                dest[i * n + j, k] = src[k * n + j, i] * source_to_multiply[i * n + j, k]
 
 
 @cython.boundscheck(False)
@@ -595,7 +594,7 @@ cdef tuple _fgmres(
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.nonecheck(False)
-cpdef tuple lgmres(BaseMatVec linear_op, cnp.ndarray[double, ndim=1] b, double rtol=1e-5, double atol=0., int maxiter=1000, int inner_m=30, int outer_k=3):
+cpdef tuple lgmres(BaseMatVec linear_op, cnp.ndarray[double, ndim=1] b, double rtol=1e-5, double atol=0., int maxiter=1000, int inner_m=30, int outer_k=3, min_improvement=1e-8):
 
     cdef:
         double b_norm, r_norm, inner_res_0, ptol, ptol_max_factor = 1.0
@@ -612,6 +611,7 @@ cpdef tuple lgmres(BaseMatVec linear_op, cnp.ndarray[double, ndim=1] b, double r
 
     b_norm = cy_nrm2(b)
     atol = max(atol, rtol * b_norm)
+    nx = 1.0
 
     if b_norm == 0:
         return b, 0
@@ -620,7 +620,7 @@ cpdef tuple lgmres(BaseMatVec linear_op, cnp.ndarray[double, ndim=1] b, double r
         r_outer = linear_op.matvec(x) - b
 
         r_norm = cy_nrm2(r_outer)
-        if r_norm <= max(atol, rtol * b_norm):
+        if r_norm <= max(atol, rtol * b_norm) or nx < min_improvement*b_norm:
             break
 
         v0 = -r_outer

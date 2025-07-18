@@ -102,7 +102,8 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
             rtol=rtol,
             outer_k=5,
             inner_m=int(np.clip(lgmres_discount*(2 * m), a_min=5, a_max=50)),
-            maxiter=50
+            maxiter=50,
+            min_improvement=1e-2
         )
         solution_now = np.transpose(solution_now.reshape(2, x_shape[0], x_shape[2], x_shape[3]), (1, 0, 2, 3))
 
@@ -200,7 +201,8 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
             rtol=rtol,
             outer_k=5,
             inner_m=int(np.clip(lgmres_discount*(2 * m), a_min=5, a_max=50)),
-            maxiter=50
+            maxiter=50,
+            min_improvement=1e-2
         )
 
         solution_now = np.transpose(solution_now.reshape(3, x_shape[0], x_shape[2], x_shape[3]),
