@@ -531,9 +531,9 @@ def _tt_get_ineq_step_sizes(x_step_size, z_step_size, X_tt, T_tt, Delta_X_tt, De
     return x_step_size, z_step_size
 
 
-def _initialise(ineq_mask, status, dim):
-    X_tt = tt_scale(np.sqrt(dim), tt_identity(dim))
-    Z_tt = tt_scale(np.sqrt(dim), tt_identity(dim))
+def _initialise(ineq_mask, status, dim, epsilonDash):
+    X_tt = tt_scale(epsilonDash, tt_identity(dim))
+    Z_tt = tt_scale(epsilonDash, tt_identity(dim))
     Y_tt = tt_reshape(tt_zero_matrix(dim), (4, ))
     T_tt = None
 
@@ -662,6 +662,7 @@ def tt_ipm(
     eps=1e-12,
     mals_restarts=3,
     r_max=1000,
+    epsilonDash=1,
     verbose=False
 ):
     centrality_tol = gap_tol
@@ -739,7 +740,7 @@ def tt_ipm(
     lhs_skeleton[0, 0] = lag_maps["y"]
     status.lag_map_y = lag_maps["y"]
 
-    X_tt, Y_tt, Z_tt, T_tt = _initialise(ineq_mask, status, dim)
+    X_tt, Y_tt, Z_tt, T_tt = _initialise(ineq_mask, status, dim, epsilonDash)
 
     iteration = 0
     finishing_steps = max_refinement

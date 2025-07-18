@@ -255,7 +255,8 @@ def run_and_record(seed, r_i, s_i, rank, config, args, create_problem_fn, memory
             warm_up=config["warm_up"],
             aho_direction=False,
             mals_restarts=config["mals_restarts"],
-            max_refinement=config["max_refinement"]
+            max_refinement=config["max_refinement"],
+            epsilonDash=config["epsilonDash"]
         )
     if args.track_mem:
         start_mem = memory_usage(max_usage=True, include_children=True)
