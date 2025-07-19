@@ -562,13 +562,19 @@ def tt_random_graph(dim, r, skew=0.0, eps=1e-12):
         return graph_tt
     max_rank = 0
     rejection_counter = 0
-    while max_rank != r and rejection_counter < 100:
+    current_graph_tt = None
+    current_rank = -np.inf
+    for rejection_counter in range(1, 100):
         tril_r = 2*r
         tril = _bin_rand_tril(dim, tril_r, np.clip(skew, a_min=0, a_max=5))
         tril = tt_reshape(tril, (2, 2))
         graph_tt = tt_rank_reduce(tt_add(tril, tt_transpose(tril)), eps)
         print(f"Graph #{rejection_counter} rank: ", tt_ranks(graph_tt))
         max_rank = np.max(tt_ranks(graph_tt))
-        rejection_counter += 1
-    print("===Terminated Graph Sampling===")
-    return graph_tt
+        if current_rank < max_rank <= r:
+            current_rank = max_rank
+            current_graph_tt = graph_tt
+        if current_rank == r:
+            break
+    print("===Terminated Graph Sampling=== rank: ", tt_ranks(current_graph_tt),  flush=True)
+    return current_graph_tt
