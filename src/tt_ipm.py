@@ -1,6 +1,7 @@
 import sys
 import os
 import numpy as np
+import traceback
 
 sys.path.append(os.getcwd() + '/../')
 
@@ -74,7 +75,9 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
                 overwrite_b=True
                 ).reshape(x_shape[0], x_shape[2], x_shape[3])
         except Exception as e:
-            print(f"\tAttention: {e}\n\t==>Switching Schur for LGMRES")
+            tb = traceback.extract_tb(e.__traceback__)
+            last = tb[-1]
+            print(f"\t❌ {type(e).__name__} in {last.filename}, \n\tline {last.lineno}: {last.line.strip()}")
             direct_solve_failure = True
 
     if not dense_solve or direct_solve_failure:
@@ -173,7 +176,9 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
                 (1, 0, 2, 3)
             )
         except Exception as e:
-            print(f"\tAttention: {e}\n\t==>Switching Schur for LGMRES")
+            tb = traceback.extract_tb(e.__traceback__)
+            last = tb[-1]
+            print(f"\t❌ {type(e).__name__} in {last.filename},\n\tline {last.lineno}: {last.line.strip()}")
             direct_solve_failure = True
 
     if not dense_solve or direct_solve_failure:
@@ -449,8 +454,10 @@ def _tt_ipm_newton_step(
         else:
             status.sigma = 0
     except Exception as e:
-            print(f"\tAttention: TT-solver failed with exception: {e}")
-            return 0, 0, None, None, None, None, status
+        print(f"\n\t⚠️ Attention: {e}")
+        print("\n\t==> Full traceback (most recent call last):")
+        traceback.print_exc(file=sys.stdout)
+        return 0, 0, None, None, None, None, status
 
     return x_step_size, z_step_size, Delta_X_tt, Delta_Y_tt, Delta_Z_tt, Delta_T_tt, status
 

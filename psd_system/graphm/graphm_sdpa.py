@@ -31,8 +31,8 @@ if __name__ == "__main__":
         np.random.seed(seed)
         t0 = time.time()
         n = 2**config["dim"]
-        G_A = tt_matrix_to_matrix(tt_random_graph(config["dim"], config["max_rank"]))
-        G_B = tt_matrix_to_matrix(tt_random_graph(config["dim"], config["max_rank"]))
+        G_A = tt_matrix_to_matrix(tt_random_graph(config["dim"], config["max_ranks"][0]))
+        G_B = tt_matrix_to_matrix(tt_random_graph(config["dim"], config["max_ranks"][0]))
         t1 = time.time()
         if args.track_mem:
             tracemalloc.start()  # Start memory tracking

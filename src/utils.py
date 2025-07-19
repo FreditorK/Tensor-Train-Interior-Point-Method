@@ -14,7 +14,7 @@ from src.tt_ipm import tt_ipm
 
 def run_experiment(create_problem_fn):
 
-    np.set_printoptions(linewidth=100000, threshold=100, precision=4, suppress=True)
+    np.set_printoptions(linewidth=1000000, threshold=10000, precision=4, suppress=True)
 
     parser = argparse.ArgumentParser(description="Script with optional memory tracking.")
     parser.add_argument("--track_mem", action="store_true", help="Enable memory tracking from a certain point.")
@@ -265,6 +265,7 @@ def run_and_record(seed, r_i, s_i, rank, config, args, create_problem_fn, memory
         memory[r_i, s_i] = res[0] - start_mem
     else:
         X_tt, Y_tt, T_tt, Z_tt, info = run_ipm()
+
     t3 = time.time()
     problem_creation_times[r_i, s_i] = t2 - t1
     runtimes[r_i, s_i] = t3 - t2
