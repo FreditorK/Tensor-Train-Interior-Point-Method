@@ -382,7 +382,7 @@ def _bck_sweep(
                 uz = uz.T.reshape(kr, N[k], rz[k + 1])
                 vz = np.reshape(vz.T, (rz[k], block_size, kr))
                 z_cores[k] = uz
-                z_cores[k - 1] = einsum('rdc,cbR->rbdR', z_cores[k - 1], vz, optimize=[(0, 1)])
+                z_cores[k - 1] = einsum('rdc,cbR->rbdR', z_cores[k - 1], vz, optimize=[(0, 1)]) / scales
                 rz[k] = uz.shape[0]
 
                 ZAX[k] = {(i, j): compute_phi_bck_A(ZAX[k + 1][(i, j)], z_cores[k], block_A_k[(i, j)], x_cores[k]) for (i, j) in block_A_k}
@@ -390,9 +390,9 @@ def _bck_sweep(
                 Zb[k] = {i: compute_phi_bck_rhs(Zb[k + 1][i], block_b_k[i], z_cores[k]) for i in block_b_k}
 
         else:
-            x_cores[k] = np.reshape(solution_now.T, (rx[k], block_size, N[k], rx[k + 1]))/scales
+            x_cores[k] = np.reshape(solution_now.T, (rx[k], block_size, N[k], rx[k + 1])) / scales
             if amen and not last:
-                z_cores[k] = np.reshape(resz.T, (rz[k], block_size, N[k], rz[k + 1]))
+                z_cores[k] = np.reshape(resz.T, (rz[k], block_size, N[k], rz[k + 1])) / scales
 
     return x_cores, z_cores, XAX, Xb, rx, local_res, local_dx, lgmres_discount, direct_solve_failure 
 
@@ -509,7 +509,7 @@ def _fwd_sweep(
                 uz = np.reshape(uz, (rz[k], N[k], kr))
                 vz = np.reshape(vz, (kr, block_size, rz[k + 1]))
                 z_cores[k] = uz
-                z_cores[k + 1] = einsum("rbR, Rdk -> rbdk", vz, z_cores[k + 1], optimize=[(0, 1)])
+                z_cores[k + 1] = einsum("rbR, Rdk -> rbdk", vz, z_cores[k + 1], optimize=[(0, 1)]) / scales
                 rz[k + 1] = uz.shape[-1]
 
                 ZAX[k + 1] = {(i, j): compute_phi_fwd_A(ZAX[k][(i, j)], z_cores[k], block_A_k[(i, j)], x_cores[k]) for (i, j) in block_A_k}
@@ -517,9 +517,9 @@ def _fwd_sweep(
                 Zb[k + 1] = {i: compute_phi_fwd_rhs(Zb[k][i], block_b_k[i], z_cores[k]) for i in block_b_k}
 
         else:
-            x_cores[k] = np.reshape(solution_now, (rx[k], N[k], block_size, rx[k + 1])).transpose(0, 2, 1, 3)/scales
+            x_cores[k] = np.reshape(solution_now, (rx[k], N[k], block_size, rx[k + 1])).transpose(0, 2, 1, 3) / scales
             if amen and not last:
-                z_cores[k] = np.reshape(resz, (rz[k], N[k], block_size, rz[k + 1])).transpose(0, 2, 1, 3)
+                z_cores[k] = np.reshape(resz, (rz[k], N[k], block_size, rz[k + 1])).transpose(0, 2, 1, 3) / scales
 
 
     return x_cores, z_cores, XAX, Xb, rx, local_res, local_dx, lgmres_discount, direct_solve_failure 
@@ -808,11 +808,7 @@ def tt_restarted_block_amen(
                 print(f"\n\tTerminated on leniency, Relative Error = {rhs_norm / orig_rhs_norm:.3e}")
             return x_cores, res
     else:
-        if verbose:
-            print(f"\n\tNumber of restarts exhausted, Relative Error = {rhs_norm / orig_rhs_norm:3e}. Consider increasing rank ceiling.")
-
-    return x_cores, res
-
+        raise RuntimeError(f"\n\tNumber of restarts exhausted, Relative Error = {rhs_norm / orig_rhs_norm:3e}. Consider increasing rank ceiling.")
 
 def tt_rl_orthogonalise_py(train_tt: List[np.ndarray]):
     dim = len(train_tt)

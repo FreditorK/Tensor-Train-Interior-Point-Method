@@ -35,6 +35,7 @@ from scipy.linalg import qr_insert
 from scipy.linalg.cython_lapack cimport dtrtrs
 from libc.string cimport memcpy
 from scipy.linalg.cython_blas cimport dcopy
+from libc.math cimport isfinite
 
 cnp.import_array() # Initialize NumPy C-API
 
@@ -47,9 +48,9 @@ cdef:
 @cython.wraparound(False)
 @cython.nonecheck(False)
 @cython.inline
-cdef void cy_axpy(double[:] dx, double[:] x) noexcept nogil:
+cdef void cy_axpy(double[:] dx, double[:] x, double alpha = 1.0) noexcept nogil:
     cdef int n = len(x)
-    blas.daxpy(&n, &global_alpha, &dx[0], &inc, &x[0], &inc)
+    blas.daxpy(&n, &alpha, &dx[0], &inc, &x[0], &inc)
 
 
 @cython.boundscheck(False)
@@ -527,7 +528,7 @@ cdef tuple _fgmres(
         bint b_breakdown = False
         double w_norm
         double res = np.nan
-        double eps = np.finfo(v0.dtype).eps
+        double eps = 2.220446049250313e-16
         double alpha = 0.0
         double[:] hcur, b1
         cnp.ndarray[double, ndim = 1] z, w, y
@@ -558,10 +559,12 @@ cdef tuple _fgmres(
             cy_full_axpy(vs[:, i], w, -alpha)
         hcur[i+1] = cy_nrm2(w)
 
-        with np.errstate(over='ignore', divide='ignore'):
-            alpha = 1 / hcur[j+1]
+        if hcur[j+1] != 0.0:
+            alpha = 1.0 / hcur[j+1]
+        else:
+            alpha = 0.0  # or some other default value
 
-        if np.isfinite(alpha):
+        if isfinite(alpha):
             cy_scal(alpha, w)
 
         if not (hcur[j+1] > eps * w_norm):
@@ -582,7 +585,7 @@ cdef tuple _fgmres(
         if res < atol or b_breakdown:
             break
 
-    if not np.isfinite(R[j,j]):
+    if not isfinite(R[j,j]):
         raise LinAlgError()
 
     a1 = np.asfortranarray(R[:j+1,:j+1])
@@ -597,7 +600,7 @@ cdef tuple _fgmres(
 cpdef tuple lgmres(BaseMatVec linear_op, cnp.ndarray[double, ndim=1] b, double rtol=1e-5, double atol=0., int maxiter=1000, int inner_m=30, int outer_k=3, min_improvement=1e-8):
 
     cdef:
-        double b_norm, r_norm, inner_res_0, ptol, ptol_max_factor = 1.0
+        double b_norm, r_norm, prev_r_norm, inner_res_0, ptol, ptol_max_factor = 1.0
         int k_outer
         int outer_idx = 0
         double pres, nx  # Preconditioned residual norm
@@ -619,8 +622,9 @@ cpdef tuple lgmres(BaseMatVec linear_op, cnp.ndarray[double, ndim=1] b, double r
     for k_outer in range(maxiter):
         r_outer = linear_op.matvec(x) - b
 
+        prev_r_norm = r_norm
         r_norm = cy_nrm2(r_outer)
-        if r_norm <= max(atol, rtol * b_norm) or nx < min_improvement*b_norm:
+        if r_norm <= max(atol, rtol * b_norm) or abs(prev_r_norm - r_norm) < min_improvement*b_norm:
             break
 
         v0 = -r_outer

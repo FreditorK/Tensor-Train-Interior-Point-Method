@@ -1,13 +1,17 @@
-# Common
-dim: !!int 2
-max_ranks: [1]
-seeds: [5, 4, 2, 12, 3]
-gap_tol: !!float 2e-4
-verbose: True
-# TT-IPM
-op_tol: !!float 1e-4
-max_iter: !!int 15
-warm_up: !!int 3
-mals_restarts: !!int 2
-max_refinement:  !!int 5
-epsilonDash: !!float 1
+dim: 2
+epsilonDash: 1.0
+gap_tol: 0.0002
+mals_restarts: 2
+max_iter: 15
+max_ranks:
+- 1
+max_refinement: 5
+op_tol: 0.0001
+seeds:
+- 616
+- 695
+- 889
+- 495
+- 351
+verbose: true
+warm_up: 3
