@@ -311,7 +311,7 @@ def _bck_sweep(
             previous_solution = x_cores[k]
             solution_now, block_res_old, block_res_new, rhs, norm_rhs, lgmres_discount, direct_solve_failure  = local_solver(XAX[k], block_A_k, XAX[k + 1],
                                                                                      Xb[k], block_b_k, Xb[k + 1],
-                                                                                     previous_solution, d**(5/3), lgmres_discount, not direct_solve_failure)
+                                                                                     previous_solution, block_size*d, lgmres_discount, not direct_solve_failure)
 
             local_res = max(local_res, block_res_old)
             dx = np.linalg.norm(solution_now - previous_solution) / np.linalg.norm(solution_now)
@@ -336,6 +336,7 @@ def _bck_sweep(
             v = s.reshape(-1, 1) * v
 
             if swp > 0 and not last:
+                trunc_lim = max(2*trunc_tol, block_res_new)
                 r_start = min(prune_singular_vals(s, eps), r_max)
                 solution_now = np.reshape((u[:, :r_start] @ v[:r_start]).T, (rx[k], block_size, N[k], rx[k + 1]))
                 res = block_A_k.block_local_product(XAX[k], XAX[k + 1], solution_now) - rhs
@@ -344,7 +345,7 @@ def _bck_sweep(
                     res -= block_A_k.block_local_product(XAX[k], XAX[k + 1],
                                                 np.reshape((u[:, None, r] @ v[None, r, :]).T,
                                                            (rx[k], block_size, N[k], rx[k + 1])))
-                    if np.linalg.norm(res) / norm_rhs > max(2 * trunc_tol, block_res_new):
+                    if np.linalg.norm(res) / norm_rhs > trunc_lim:
                         break
                 r += 1
                 u = np.reshape(u[:, :r].T, (r, N[k], rx[k + 1]))
@@ -433,7 +434,7 @@ def _fwd_sweep(
                 XAX[k], block_A_k, XAX[k + 1], Xb[k],
                 block_b_k, Xb[k + 1],
                 previous_solution,
-                d**(5/3), lgmres_discount, not direct_solve_failure
+                block_size*d, lgmres_discount, not direct_solve_failure
             )
 
             local_res = max(local_res, block_res_old)
@@ -464,13 +465,14 @@ def _fwd_sweep(
             v = v.reshape(-1, block_size, rx[k + 1])
 
             if swp > 0 and not last:
-                r_start = min(prune_singular_vals(s, eps), r_max)
+                trunc_lim = max(2*trunc_tol, block_res_new)
+                r_start = min(prune_singular_vals(s, 2*eps), r_max)
                 solution_now = einsum("rbR, Rdk -> rbdk", u[:, :, :r_start], v[:r_start], optimize=[(0, 1)])
                 res = block_A_k.block_local_product(XAX[k], XAX[k + 1], np.transpose(solution_now, (0, 2, 1, 3))) - rhs
                 r = r_start
                 for r in range(r_start - 1, 0, -1):
                     res -= block_A_k.block_local_product(XAX[k], XAX[k + 1], einsum("rbR, Rdk -> rdbk", u[:, :, None, r], v[None, r], optimize=[(0, 1)]))
-                    if np.linalg.norm(res) / norm_rhs > max(2 * trunc_tol, block_res_new):
+                    if np.linalg.norm(res) / norm_rhs > trunc_lim:
                         break
                 r += 1
                 if amen:
@@ -742,7 +744,7 @@ def tt_restarted_block_amen(
 ):
     if x0 is not None:
         dim = len(x0)
-        x0 = tt_rank_retraction(x0, [int(np.ceil(0.9*dim**(5/3)))]*(dim-1))
+        x0 = tt_rank_retraction(x0, [dim]*(dim-1))
 
     def solve_als(rhs, rank, x0, iters, kick_rank):
         return tt_block_amen(

@@ -1,6 +1,8 @@
 import sys
 import os
 
+from cvxpy.utilities.performance_utils import T
+
 sys.path.append(os.getcwd() + '/../../')
 
 from src.tt_ops import *
@@ -163,6 +165,7 @@ def create_problem(n, max_rank):
     #partial_tr_op_bias = tt_zero_matrix(2 * n + 1)
 
     L_op_tt = partial_tr_op
+    print(tt_ranks(L_op_tt))
     #eq_bias_tt = partial_tr_op_bias
     # ---
     # V
@@ -171,7 +174,8 @@ def create_problem(n, max_rank):
     partial_tr_J_op_bias = tt_add(partial_tr_J_op_bias, [E(0, 0)] + tt_sub(tt_triu_one_matrix(n), tt_identity(n)) + [E(1, 0) for _ in range(n)])
     partial_tr_J_op_bias = tt_rank_reduce(tt_add(partial_tr_J_op_bias, [E(0, 0)] + tt_sub(tt_identity(n), [E(0, 0) for _ in range(n)]) + [E(1, 1) for _ in range(n)]))
 
-    L_op_tt = tt_rank_reduce(tt_add(L_op_tt, partial_tr_J_op))
+    L_op_tt = tt_rank_reduce(tt_add(L_op_tt, partial_tr_J_op), 1e-12)
+    print(tt_ranks(L_op_tt))
     eq_bias_tt = partial_tr_J_op_bias # tt_rank_reduce(tt_add(eq_bias_tt, partial_tr_J_op_bias))
 
     # ---
@@ -179,7 +183,8 @@ def create_problem(n, max_rank):
     diag_block_sum_op = tt_diag_block_sum_linear_op(n, 2 * n)
     diag_block_sum_op_bias = [E(0, 0) for _ in range(n + 1)] + tt_identity(n)
 
-    L_op_tt = tt_rank_reduce(tt_add(L_op_tt, diag_block_sum_op))
+    L_op_tt = tt_rank_reduce(tt_add(L_op_tt, diag_block_sum_op), 1e-12)
+    print(tt_ranks(L_op_tt))
     eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, diag_block_sum_op_bias))
 
     # ---
@@ -187,7 +192,8 @@ def create_problem(n, max_rank):
     Q_m_P_op = tt_Q_m_P_op(2 * n)
     #Q_m_P_op_bias = tt_zero_matrix(2 * n + 1)
 
-    L_op_tt = tt_rank_reduce(tt_add(L_op_tt, Q_m_P_op))
+    L_op_tt = tt_rank_reduce(tt_add(L_op_tt, Q_m_P_op), 1e-12)
+    print(tt_ranks(L_op_tt))
     #eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, Q_m_P_op_bias))
 
     # ---
@@ -222,14 +228,15 @@ def create_problem(n, max_rank):
         "t": tt_diag_op(lag_map_t)
     }
 
-    scale = max(2**(2*n + 1 - 7), 1)
+    scale = max(2**(2*n + 1 - 7), 1) #
     eq_bias_tt = tt_normalise(eq_bias_tt, radius=scale)
 
     # IX
     padding_op = tt_padding_op(2 * n)
     padding_op_bias = [E(1, 1)] + tt_identity(2 * n)
 
-    L_op_tt = tt_rank_reduce(tt_add(L_op_tt, padding_op))
+    L_op_tt = tt_rank_reduce(tt_add(L_op_tt, padding_op), 1e-12)
+    print(tt_ranks(L_op_tt))
     eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, padding_op_bias))
 
     return tt_normalise(C_tt, radius=scale), L_op_tt, eq_bias_tt, ineq_mask, lag_maps
