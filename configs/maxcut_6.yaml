@@ -1,6 +1,6 @@
 # Common
 dim: !!int 6
-max_ranks: [1]
+max_ranks: [1, 2, 3, 4, 5]
 seeds: [73, 54, 624, 7, 9] # !! 73, 54, 624, 7, 9 !!
 gap_tol: !!float 3e-4
 verbose: False

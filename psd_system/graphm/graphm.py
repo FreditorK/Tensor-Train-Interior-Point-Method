@@ -1,12 +1,10 @@
-from operator import eq
 import sys
 import os
-
-from cvxpy.utilities.performance_utils import T
 
 sys.path.append(os.getcwd() + '/../../')
 
 from src.tt_ops import *
+from src.tt_als import tt_mat_mat_mul
 from src.utils import run_experiment
 
 Q_PREFIX = [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1), np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1)]
@@ -16,14 +14,9 @@ Q_PREFIX = [np.array([[1.0, 0.0], [0.0, 0.0]]).reshape(1, 2, 2, 1), np.array([[1
 
 def tt_partial_trace_op(block_size, dim):
     # 4.9
-    matrix_tt = tt_sub(tt_one_matrix(dim - block_size), tt_identity(dim - block_size))
-    block_op_0 = []
-    for i, c in enumerate(tt_split_bonds(tt_identity(block_size))):
-        core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
-        core[:, 0] = c
-        block_op_0.append(core)
-    op_tt_0 = tt_diag(tt_split_bonds(matrix_tt)) + block_op_0
-    return tt_reshape(tt_rank_reduce(Q_PREFIX + op_tt_0), (4, 4))
+    op_tt = tt_diag(tt_split_bonds(tt_sub(tt_one_matrix(dim - block_size), tt_identity(dim - block_size))))
+    block_op = tt_diag(tt_split_bonds(tt_identity(block_size)))
+    return tt_reshape(tt_rank_reduce(Q_PREFIX + op_tt + block_op), (4, 4))
 
 # ------------------------------------------------------------------------------
 # Constraint 5 -----------------------------------------------------------------
@@ -37,16 +30,23 @@ def tt_partial_J_trace_op(block_size, dim):
         core[:, 1] = c
         block_op_0.append(core)
     op_tt_0 = tt_diag(tt_split_bonds(matrix_tt)) + block_op_0
-
-    matrix_tt = tt_sub(tt_one_matrix(dim - block_size), tt_identity(dim - block_size))
+    # 4.10.1
+    matrix_tt = tt_sub(tt_triu_one_matrix(dim-block_size), tt_identity(dim-block_size))
     block_op_1 = []
     for i, c in enumerate(tt_split_bonds(tt_sub(tt_one_matrix(block_size), tt_identity(block_size)))):
         core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
-        core[:, 1] = c
+        core[:, (i+1) % 2] = c
         block_op_1.append(core)
     op_tt_1 = tt_diag(tt_split_bonds(matrix_tt)) + block_op_1
-
-    return tt_reshape(tt_rank_reduce(Q_PREFIX + tt_add(op_tt_0, op_tt_1)), (4, 4))
+    # 4.10.2
+    matrix_tt = tt_sub(tt_tril_one_matrix(dim - block_size), tt_identity(dim - block_size))
+    block_op_2 = []
+    for i, c in enumerate(tt_split_bonds(tt_sub(tt_one_matrix(block_size), tt_identity(block_size)))):
+        core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
+        core[:, i % 2] = c
+        block_op_2.append(core)
+    op_tt_2 = tt_diag(tt_split_bonds(matrix_tt)) + block_op_2
+    return tt_reshape(tt_rank_reduce(Q_PREFIX + tt_sum(op_tt_0, op_tt_1, op_tt_2)), (4, 4))
 
 # ------------------------------------------------------------------------------
 # Constraint 6 -----------------------------------------------------------------
@@ -138,10 +138,10 @@ def tt_obj_matrix(rank, dim):
 
 
         [ 6  6  | 4  0  | 7 | 0 0 0]
-        [ 6  6  | 0  5  | 7 | 0 0 0]
+        [ 6  6  | 5  4  | 7 | 0 0 0]
         [--------------------------]
-        [ 4  0  | 0  6  | 7 | 0 0 0]
-        [ 0  5  | 6  5  | 7 | 0 0 0]
+        [ 4  5  | 0  6  | 7 | 0 0 0]
+        [ 0  4  | 6  5  | 7 | 0 0 0]
     Y = [--------------------------]
         [ 7  7  | 7  7  | P | 0 0 0]
         [--------------------------]
@@ -167,9 +167,11 @@ def create_problem(n, max_rank):
     # ---
     # V
     partial_tr_J_op = tt_partial_J_trace_op(n, 2 * n)
-    partial_tr_J_op_bias = tt_rank_reduce([E(0, 0)] + tt_sub(tt_one_matrix(n), [E(0, 0) for _ in range(n)]) + [E(1, 1) for _ in range(n)])
+    partial_tr_J_op_bias = [E(0, 0)] + tt_sub(tt_tril_one_matrix(n), tt_identity(n)) + [E(0, 1) for _ in range(n)]
+    partial_tr_J_op_bias = tt_add(partial_tr_J_op_bias, [E(0, 0)] + tt_sub(tt_triu_one_matrix(n), tt_identity(n)) + [E(1, 0) for _ in range(n)])
+    partial_tr_J_op_bias = tt_rank_reduce(tt_add(partial_tr_J_op_bias, [E(0, 0)] + tt_sub(tt_identity(n), [E(0, 0) for _ in range(n)]) + [E(1, 1) for _ in range(n)]))
 
-    L_op_tt = tt_rank_reduce(tt_add(L_op_tt, partial_tr_J_op), 1e-12)
+    L_op_tt = tt_rank_reduce(tt_add(L_op_tt, partial_tr_J_op))
     eq_bias_tt = partial_tr_J_op_bias # tt_rank_reduce(tt_add(eq_bias_tt, partial_tr_J_op_bias))
 
     # ---
@@ -177,7 +179,7 @@ def create_problem(n, max_rank):
     diag_block_sum_op = tt_diag_block_sum_linear_op(n, 2 * n)
     diag_block_sum_op_bias = [E(0, 0) for _ in range(n + 1)] + tt_identity(n)
 
-    L_op_tt = tt_rank_reduce(tt_add(L_op_tt, diag_block_sum_op), 1e-12)
+    L_op_tt = tt_rank_reduce(tt_add(L_op_tt, diag_block_sum_op))
     eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, diag_block_sum_op_bias))
 
     # ---
@@ -185,13 +187,13 @@ def create_problem(n, max_rank):
     Q_m_P_op = tt_Q_m_P_op(2 * n)
     #Q_m_P_op_bias = tt_zero_matrix(2 * n + 1)
 
-    L_op_tt = tt_rank_reduce(tt_add(L_op_tt, Q_m_P_op), 1e-12)
+    L_op_tt = tt_rank_reduce(tt_add(L_op_tt, Q_m_P_op))
     #eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, Q_m_P_op_bias))
 
     # ---
     # Inequality Operator
     # X
-    ineq_mask = tt_rank_reduce([E(0, 0)] + tt_sub(tt_one_matrix(n), tt_identity(n)) + tt_one_matrix(n))
+    ineq_mask = tt_rank_reduce([E(0, 0)] + tt_sub(tt_one_matrix(n), tt_identity(n)) + tt_sub(tt_one_matrix(n), tt_identity(n)))
     # ---
 
     # ---
@@ -205,10 +207,11 @@ def create_problem(n, max_rank):
                 pad,  # P
                 [E(0, 1)] + [E(0, 0) + E(1, 0) for _ in range(2 * n)],  # 7
                 [E(1, 0)] + [E(0, 0) + E(0, 1) for _ in range(2 * n)],  # 7
-                [E(0, 0)] + [E(0, 0) for _ in range(n)] + tt_identity(n),# 6.1
+                [E(0, 0)] + [E(0, 0) for _ in range(n)] + tt_identity(n),
+                # 6.1
                 [E(0, 0)] + tt_identity(n) + tt_sub(tt_one_matrix(n), tt_identity(n)),  # 6.2
                 partial_tr_J_op_bias,  # 5
-                [E(0, 0)] + tt_sub(tt_one_matrix(n), tt_identity(n)) + [E(0, 0) for _ in range(n)]  # 4
+                [E(0, 0)] + tt_sub(tt_one_matrix(n), tt_identity(n)) + tt_identity(n)  # 4
 
             )
     )
@@ -219,24 +222,17 @@ def create_problem(n, max_rank):
         "t": tt_diag_op(lag_map_t)
     }
 
-
-    scale = max(2**(2*n + 1 - 7), 1) #
+    scale = max(2**(2*n + 1 - 7), 1)
     eq_bias_tt = tt_normalise(eq_bias_tt, radius=scale)
 
     # IX
     padding_op = tt_padding_op(2 * n)
     padding_op_bias = [E(1, 1)] + tt_identity(2 * n)
 
-    L_op_tt = tt_rank_reduce(tt_add(L_op_tt, padding_op), 1e-12)
+    L_op_tt = tt_rank_reduce(tt_add(L_op_tt, padding_op))
     eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, padding_op_bias))
 
-    print(tt_ranks(L_op_tt))
-
-    print("MAtrix rank", np.linalg.matrix_rank(tt_matrix_to_matrix(tt_add(L_op_tt, tt_diag_op(lag_map_y)))))
-
-
-
-    #return tt_normalise(C_tt, radius=scale), L_op_tt, eq_bias_tt, ineq_mask, lag_maps
+    return tt_normalise(C_tt, radius=scale), L_op_tt, eq_bias_tt, ineq_mask, lag_maps
 
 if __name__ == "__main__":
     run_experiment(create_problem)
