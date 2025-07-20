@@ -2,7 +2,7 @@ dim: 6
 epsilonDash: 2.0
 gap_tol: 0.0003
 mals_restarts: 2
-max_iter: 18
+max_iter: 20
 max_ranks:
 - 1
 - 2
