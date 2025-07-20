@@ -548,24 +548,21 @@ def _bin_rand_tril(dim: int, rank: int, skew=0.0) -> List[np.ndarray]:
 
 def tt_random_graph(dim, r, skew=0.0, eps=1e-12):
     print("====Starting Graph Sampling====")
-    if r == 1:
-        graph_tt = []
-        for _ in range(dim-1):
-            binary_numbers = np.random.choice([0, 1], size=3, replace=True, p=skewed_probabilities(2, skew))
-            if np.sum(binary_numbers) == 0:
-                index_to_change = np.random.randint(0, 3)
-                binary_numbers[index_to_change] = 1
-            graph_tt.append(np.array([[binary_numbers[0], binary_numbers[1]], [binary_numbers[1], binary_numbers[2]]]).reshape(1, 2, 2, 1))
+    current_graph_tt = []
+    for _ in range(dim-1):
+        binary_numbers = np.random.choice([0, 1], size=3, replace=True, p=skewed_probabilities(2, skew))
+        if np.sum(binary_numbers) == 0:
+            index_to_change = np.random.randint(0, 3)
+            binary_numbers[index_to_change] = 1
+        current_graph_tt.append(np.array([[binary_numbers[0], binary_numbers[1]], [binary_numbers[1], binary_numbers[2]]]).reshape(1, 2, 2, 1))
 
-        graph_tt.append(np.array([[0, 1], [1, 0]]).reshape(1, 2, 2, 1))
-        print("===Terminated Graph Sampling===")
-        return graph_tt
-    max_rank = 0
-    rejection_counter = 0
-    current_graph_tt = None
-    current_rank = -np.inf
-    for rejection_counter in range(1, 100):
-        tril_r = 2*r
+    current_graph_tt.append(np.array([[0, 1], [1, 0]]).reshape(1, 2, 2, 1))
+    if r == 1:
+        print("===Terminated Graph Sampling===", tt_ranks(current_graph_tt),  flush=True)
+        return current_graph_tt
+    current_rank = 1
+    for rejection_counter in range(1, 500):
+        tril_r = np.random.randint(r, 2*r)
         tril = _bin_rand_tril(dim, tril_r, np.clip(skew, a_min=0, a_max=5))
         tril = tt_reshape(tril, (2, 2))
         graph_tt = tt_rank_reduce(tt_add(tril, tt_transpose(tril)), eps)
