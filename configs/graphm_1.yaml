@@ -2,7 +2,7 @@
 dim: !!int 1
 max_ranks: [1]
 seeds: [7]
-gap_tol: !!float 2e-4
+gap_tol: !!float 1e-3
 verbose: True
 # TT-IPM
 op_tol: !!float 1e-4

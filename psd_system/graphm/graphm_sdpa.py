@@ -2,7 +2,6 @@
 import sys
 import os
 import argparse
-import tracemalloc
 import yaml
 import sdpap
 
@@ -34,8 +33,6 @@ if __name__ == "__main__":
         G_A = tt_matrix_to_matrix(tt_random_graph(config["dim"], config["max_ranks"][0]))
         G_B = tt_matrix_to_matrix(tt_random_graph(config["dim"], config["max_ranks"][0]))
         t1 = time.time()
-        if args.track_mem:
-            tracemalloc.start()  # Start memory tracking
         t2 = time.time()
         J_n = np.ones((n, n))
 
@@ -93,7 +90,7 @@ if __name__ == "__main__":
         if args.track_mem:
             def wrapper():
                 prob = cp.Problem(objective, constraints)
-                _ = prob.solve(solver=cp.SDPA, epsilonDash=1e-6 / 2**config["dim"], epsilonStar=1e-5 / 2**config["dim"], verbose=True, numThreads=1, omegaStar=100, betaStar=0.5, gammaStar=0.9)
+                _ = prob.solve(solver=cp.SDPA, epsilonDash=1e-6 / n, epsilonStar=1e-5 / n, verbose=True, numThreads=1, omegaStar=100, betaStar=0.5, gammaStar=0.9)
                 return prob
 
             res, prob = memory_usage(proc=wrapper, max_usage=True, retval=True, include_children=True)
@@ -115,7 +112,7 @@ if __name__ == "__main__":
         t3 = time.time()
         problem_creation_times.append(t2 - t1)
         runtimes.append(t3 - t2)
-        complementary_slackness.append(np.trace(X @ Z))
+        complementary_slackness.append(np.abs(np.trace(X @ Z)))
         feasibility_errors.append(0)
     print(f"Problem created in avg {np.mean(problem_creation_times):.3f}s")
     print(f"Problem solved in avg {np.mean(runtimes):.3f}s")
@@ -123,5 +120,3 @@ if __name__ == "__main__":
         print(f"Peak memory avg {np.mean(memory):.3f} MB")
     print(f"Complementary Slackness avg: {np.mean(complementary_slackness)}")
     print(f"Total feasibility error avg: {np.mean(feasibility_errors)}")
-
-    print(X)

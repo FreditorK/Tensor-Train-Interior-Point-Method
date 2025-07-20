@@ -64,6 +64,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
             np.matmul(A, mL_eq.T, out=A)
             np.matmul(mL_eq, A, out=A)
             A += cached_einsum('lsr,smnS,LSR->lmLrnR',XAX_k[0, 0], block_A_k[0, 0], XAX_k1[0, 0]).reshape(m, m)
+            A.flat[::A.shape[1] + 1] += 1e-11
             solution_now = np.empty(x_shape)
             solution_now[:, 0] = scp.linalg.solve(A, b, check_finite=False, overwrite_a=True, overwrite_b=True, assume_a="gen").reshape(x_shape[0], x_shape[2], x_shape[3])
             solution_now[:, 2] = (
@@ -77,7 +78,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         except Exception as e:
             tb = traceback.extract_tb(e.__traceback__)
             last = tb[-1]
-            print(f"\t❌ {type(e).__name__} in {last.filename}, \n\tline {last.lineno}: {last.line.strip()}")
+            print(f"\t⚠️ {type(e).__name__} in {last.filename}, \n\tline {last.lineno}: {last.line.strip()}")
             direct_solve_failure = True
 
     if not dense_solve or direct_solve_failure:
@@ -103,8 +104,8 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
             Op,
             local_rhs.flatten(),
             rtol=rtol,
-            outer_k=6,
-            inner_m=int(np.clip(lgmres_discount*(2 * m), a_min=6, a_max=50)),
+            outer_k=5,
+            inner_m=int(np.clip(lgmres_discount*(2 * m), a_min=5, a_max=50)),
             maxiter=50,
             min_improvement=rtol/10
         )
@@ -178,10 +179,11 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
         except Exception as e:
             tb = traceback.extract_tb(e.__traceback__)
             last = tb[-1]
-            print(f"\t❌ {type(e).__name__} in {last.filename},\n\tline {last.lineno}: {last.line.strip()}")
+            print(f"\t⚠️ {type(e).__name__} in {last.filename},\n\tline {last.lineno}: {last.line.strip()}")
             direct_solve_failure = True
 
     if not dense_solve or direct_solve_failure:
+
         linear_op = IneqMatVecWrapper(
             XAX_k[0, 0], XAX_k[0, 1], XAX_k[2, 1], XAX_k[2, 2], XAX_k[3, 1], XAX_k[3, 3],
             block_A_k[0, 0], block_A_k[0, 1], block_A_k[2, 1], block_A_k[2, 2], block_A_k[3, 1], block_A_k[3, 3],
@@ -204,8 +206,8 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
             linear_op,
             local_rhs.flatten() ,
             rtol=rtol,
-            outer_k=6,
-            inner_m=int(np.clip(lgmres_discount*(2 * m), a_min=6, a_max=50)),
+            outer_k=5,
+            inner_m=int(np.clip(lgmres_discount*(3 * m), a_min=5, a_max=50)),
             maxiter=50,
             min_improvement=rtol/10
         )
@@ -765,6 +767,7 @@ def tt_ipm(
         status.mu = np.divide(abs(ZX) + abs(TX), (2 ** dim + (status.ineq_status is IneqStatus.ACTIVE)*status.num_ineq_constraints))
         status.centrl_error_normalisation = 1 + abs(tt_inner_prod(obj_tt, tt_reshape(X_tt, (4, ))))
         status.centrality_error = status.mu / status.centrl_error_normalisation
+        #print("hhahhah", status.centrality_error, (1 + (status.ineq_status is IneqStatus.ACTIVE))*centrality_tol)
         status.is_central = np.less(status.centrality_error, (1 + (status.ineq_status is IneqStatus.ACTIVE))*centrality_tol)
         status.eta = max(min(status.eta, 2*status.mu), status.op_tol)
 

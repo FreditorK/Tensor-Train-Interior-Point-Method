@@ -571,7 +571,7 @@ def tt_block_amen(block_A, block_b, term_tol, r_max=100, eps=1e-12, nswp=22, x0=
         rz = np.array([1] + tt_ranks(z_cores) + [1])
     last = False
     final_local_res = np.inf
-    lgmres_discount = 1e-3 / np.sqrt(d)
+    lgmres_discount = 1e-6 / np.sqrt(d)
     direct_solve_failure = False
     trunc_tol = term_tol / np.sqrt(d)
 
