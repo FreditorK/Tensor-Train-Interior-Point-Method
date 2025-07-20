@@ -32,7 +32,7 @@ def tt_partial_J_trace_op(block_size, dim):
     # 4.10.1
     matrix_tt = tt_sub(tt_triu_one_matrix(dim-block_size), tt_identity(dim-block_size))
     block_op_1 = []
-    for i, c in enumerate(tt_split_bonds(tt_sub(tt_one_matrix(block_size), tt_identity(block_size)))):
+    for i, c in enumerate(tt_split_bonds(tt_one_matrix(block_size))): # TODO: Should be tt_sub(tt_one_matrix(block_size), tt_identity(block_size)) but this results in lower rank
         core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
         core[:, (i+1) % 2] = c
         block_op_1.append(core)
@@ -40,7 +40,7 @@ def tt_partial_J_trace_op(block_size, dim):
     # 4.10.2
     matrix_tt = tt_sub(tt_tril_one_matrix(dim - block_size), tt_identity(dim - block_size))
     block_op_2 = []
-    for i, c in enumerate(tt_split_bonds(tt_sub(tt_one_matrix(block_size), tt_identity(block_size)))):
+    for i, c in enumerate(tt_split_bonds(tt_one_matrix(block_size))): # TODO: Should be tt_sub(tt_one_matrix(block_size), tt_identity(block_size)) but this results in lower rank
         core = np.zeros((c.shape[0], 2, 2, c.shape[-1]))
         core[:, i % 2] = c
         block_op_2.append(core)

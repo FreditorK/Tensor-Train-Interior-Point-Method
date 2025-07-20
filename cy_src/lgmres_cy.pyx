@@ -98,23 +98,17 @@ cdef double cy_nrm2(double[:] x) nogil:
 @cython.nonecheck(False)
 @cython.inline
 cdef void cy_dgemm(
-        const double[:, :] A,
+        const double[:, ::1] A,
         const double[:, ::1] B,
         double[:, :] C,
         double alpha=1.0,
         double beta=0.0
 ) noexcept nogil:
-    cdef int M, N, K
-
-    M = A.shape[0]
-    K = A.shape[1]
-
-    N = B.shape[1]
-
+    cdef int M = A.shape[0]
     cdef int lda = A.shape[1]
     cdef int ldb = B.shape[1]
     cdef int ldc = C.shape[1]
-    cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, M, N, K,
+    cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, M, ldb, lda,
                 alpha, &A[0, 0], lda, &B[0, 0], ldb,
                 beta, &C[0, 0], ldc)
 
@@ -220,8 +214,8 @@ cdef void einsum(
         const double[:, ::1] XAX,
         const double[:, ::1] block_A,
         const double[:, ::1] XAX1,
-        const double[:, :] x_core,
-        double[:, :] out,
+        const double[:, ::1] x_core,
+        double[:, ::1] out,
         double[:, ::1] intermediate_mat1,
         double[:, ::1] intermediate_mat1_2,
         double[:, ::1] intermediate_mat2,
@@ -255,7 +249,7 @@ cdef class BaseMatVec:
         raise NotImplementedError("BaseMatVec.matvec must be implemented by subclass")
 
 cdef class MatVecWrapper(BaseMatVec):
-    cdef double[:,  ::1] result0, result1, temp, temp_reshaped
+    cdef double[:,  ::1] result0, result1, temp, temp_reshaped, x_reshaped_0, x_reshaped_1
     cdef const double[:,  ::1] XAX_k_00, XAX_k_01, XAX_k_01T, XAX_k_21, XAX_k_22
     cdef const double[:,  ::1] block_A_k_00, block_A_k_01, block_A_k_01T, block_A_k_21, block_A_k_22
     cdef const double[:,  ::1] XAX_kp1_00, XAX_kp1_01, XAX_kp1_01T, XAX_kp1_21, XAX_kp1_22
@@ -263,6 +257,7 @@ cdef class MatVecWrapper(BaseMatVec):
     cdef double[:, ::1] A_00_workspace1_2, A_00_workspace2_2, A_01_workspace1_2, A_01_workspace2_2,A_01T_workspace1_2, A_01T_workspace2_2, A_21_workspace1_2, A_21_workspace2_2, A_22_workspace1_2, A_22_workspace2_2
     cdef const double[:,  ::1] inv_I
     cdef int r, n, R  # shape dims
+    cdef size_t block_size
 
     def __init__(self,
                  cnp.ndarray[double, ndim=3] XAX_k_00,
@@ -334,37 +329,43 @@ cdef class MatVecWrapper(BaseMatVec):
         self.result1 = np.empty((self.R * self.n, self.r), dtype=np.float64)
         self.temp = np.empty((self.R*self.n, self.r), dtype=np.float64)
         self.temp_reshaped = np.empty((self.r*self.n, self.R), dtype=np.float64)
+        self.x_reshaped_0 = np.empty((self.r*self.n, self.R), dtype=np.float64)
+        self.x_reshaped_1 = np.empty((self.r*self.n, self.R), dtype=np.float64)
+        self.block_size = self.r * self.n * self.R * sizeof(double)
 
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.nonecheck(False)
     cpdef cnp.ndarray[double, ndim=1] matvec(self, cnp.ndarray[double, ndim=1] x_core):
-        cdef double[:, :, :] x_reshaped = x_core.view().reshape(2, self.r*self.n, self.R)
         cdef cnp.ndarray[double, ndim=4] result = np.empty((2, self.r, self.n, self.R), dtype=np.float64)
+        cdef double[:, :, :] x_reshaped_view = x_core.view().reshape(2, self.r*self.n, self.R)
+        cdef size_t block_size = self.r * self.n * self.R * sizeof(double)
 
         with nogil:
+            memcpy(&self.x_reshaped_0[0, 0], &x_reshaped_view[0, 0, 0], self.block_size)
+            memcpy(&self.x_reshaped_1[0, 0], &x_reshaped_view[1, 0, 0], self.block_size)
             einsum(
                 self.XAX_k_00, self.block_A_k_00, self.XAX_kp1_00, 
-                x_reshaped[0], self.result0, 
+                self.x_reshaped_0, self.result0, 
                 self.A_00_workspace1, self.A_00_workspace1_2, self.A_00_workspace2, self.A_00_workspace2_2,
                 self.r, self.n, self.R, 1.0, 0.0
                 )
             einsum(
                 self.XAX_k_01, self.block_A_k_01, self.XAX_kp1_01, 
-                x_reshaped[1], self.result0, 
+                self.x_reshaped_1, self.result0, 
                 self.A_01_workspace1, self.A_01_workspace1_2, self.A_01_workspace2, self.A_01_workspace2_2,
                 self.r, self.n, self.R, 1.0, 1.0
                 )
             einsum(
                 self.XAX_k_21, self.block_A_k_21, self.XAX_kp1_21, 
-                x_reshaped[1], self.result1, 
+                self.x_reshaped_1, self.result1, 
                 self.A_21_workspace1, self.A_21_workspace1_2, self.A_21_workspace2, self.A_21_workspace2_2,
                 self.r, self.n, self.R, 1.0, 0.0
                 )
             einsum(
                 self.XAX_k_01T, self.block_A_k_01T, self.XAX_kp1_01T, 
-                x_reshaped[0], self.temp, 
+                self.x_reshaped_0, self.temp, 
                 self.A_01T_workspace1, self.A_01T_workspace1_2, self.A_01T_workspace2, self.A_01T_workspace2_2,
                 self.r, self.n, self.R, 1.0, 0.0
                 )
@@ -381,7 +382,7 @@ cdef class MatVecWrapper(BaseMatVec):
         return result.ravel()
 
 cdef class IneqMatVecWrapper(BaseMatVec):
-    cdef double[:,  ::1] result0, result1, result2, temp, temp_reshaped
+    cdef double[:,  ::1] result0, result1, result2, temp, temp_reshaped, x_reshaped_0, x_reshaped_1, x_reshaped_2
     cdef double[:,  ::1] XAX_k_00, XAX_k_01, XAX_k_01T, XAX_k_21, XAX_k_22, XAX_k_31, XAX_k_33
     cdef double[:,  ::1] block_A_k_00, block_A_k_01, block_A_k_01T, block_A_k_21, block_A_k_22, block_A_k_31, block_A_k_33
     cdef double[:,  ::1] XAX_kp1_00, XAX_kp1_01, XAX_kp1_01T, XAX_kp1_21, XAX_kp1_22, XAX_kp1_31, XAX_kp1_33
@@ -389,6 +390,7 @@ cdef class IneqMatVecWrapper(BaseMatVec):
     cdef double[:, ::1] A_00_workspace1, A_00_workspace2, A_01_workspace1, A_01_workspace2,A_01T_workspace1, A_01T_workspace2, A_21_workspace1, A_21_workspace2, A_22_workspace1, A_22_workspace2, A_31_workspace1, A_31_workspace2, A_33_workspace1, A_33_workspace2
     cdef double[:, ::1] A_00_workspace1_2, A_00_workspace2_2, A_01_workspace1_2, A_01_workspace2_2,A_01T_workspace1_2, A_01T_workspace2_2, A_21_workspace1_2, A_21_workspace2_2, A_22_workspace1_2, A_22_workspace2_2, A_31_workspace1_2, A_31_workspace2_2, A_33_workspace1_2, A_33_workspace2_2
     cdef int r, n, R
+    cdef size_t block_size
 
     def __init__(self,
                  cnp.ndarray[double, ndim=3] XAX_k_00,
@@ -483,26 +485,34 @@ cdef class IneqMatVecWrapper(BaseMatVec):
         self.result2 = np.empty((self.R * self.n, self.r), dtype=np.float64)
         self.temp = np.empty((self.R*self.n, self.r), dtype=np.float64)
         self.temp_reshaped = np.empty((self.r*self.n, self.R), dtype=np.float64)
+        self.x_reshaped_0 = np.empty((self.r*self.n, self.R), dtype=np.float64)
+        self.x_reshaped_1 = np.empty((self.r*self.n, self.R), dtype=np.float64)
+        self.x_reshaped_2 = np.empty((self.r*self.n, self.R), dtype=np.float64)
+        self.block_size = self.r * self.n * self.R * sizeof(double)
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.nonecheck(False)
     cpdef cnp.ndarray[double, ndim=1] matvec(self, cnp.ndarray[double, ndim=1] x_core):
-        cdef double[:, :, :] x_reshaped = x_core.view().reshape((3, self.r*self.n, self.R))
         cdef cnp.ndarray[double, ndim=4] result = np.empty((3, self.r, self.n, self.R), dtype=np.float64)
+        cdef double[:, :, :] x_reshaped_view = x_core.view().reshape(3, self.r*self.n, self.R)
 
         with nogil:
-            einsum(self.XAX_k_00, self.block_A_k_00, self.XAX_kp1_00, x_reshaped[0], self.result0, self.A_00_workspace1, self.A_00_workspace1_2, self.A_00_workspace2, self.A_00_workspace2_2, self.r, self.n, self.R, 1.0, 0.0)
-            einsum(self.XAX_k_01, self.block_A_k_01, self.XAX_kp1_01, x_reshaped[1], self.result0, self.A_01_workspace1, self.A_01_workspace1_2, self.A_01_workspace2, self.A_01_workspace2_2, self.r, self.n, self.R, 1.0, 1.0)
+            memcpy(&self.x_reshaped_0[0, 0], &x_reshaped_view[0, 0, 0], self.block_size)
+            memcpy(&self.x_reshaped_1[0, 0], &x_reshaped_view[1, 0, 0], self.block_size)
+            memcpy(&self.x_reshaped_2[0, 0], &x_reshaped_view[2, 0, 0], self.block_size)
+
+            einsum(self.XAX_k_00, self.block_A_k_00, self.XAX_kp1_00, self.x_reshaped_0, self.result0, self.A_00_workspace1, self.A_00_workspace1_2, self.A_00_workspace2, self.A_00_workspace2_2, self.r, self.n, self.R, 1.0, 0.0)
+            einsum(self.XAX_k_01, self.block_A_k_01, self.XAX_kp1_01, self.x_reshaped_1, self.result0, self.A_01_workspace1, self.A_01_workspace1_2, self.A_01_workspace2, self.A_01_workspace2_2, self.r, self.n, self.R, 1.0, 1.0)
             
-            einsum(self.XAX_k_21, self.block_A_k_21, self.XAX_kp1_21, x_reshaped[1], self.result1, self.A_21_workspace1, self.A_21_workspace1_2, self.A_21_workspace2, self.A_21_workspace2_2, self.r, self.n, self.R, 1.0, 0.0)
-            einsum(self.XAX_k_01T, self.block_A_k_01T, self.XAX_kp1_01T, x_reshaped[0], self.temp, self.A_01T_workspace1, self.A_01T_workspace1_2, self.A_01T_workspace2, self.A_01T_workspace2_2, self.r, self.n, self.R, 1.0, 0.0)
+            einsum(self.XAX_k_21, self.block_A_k_21, self.XAX_kp1_21, self.x_reshaped_1, self.result1, self.A_21_workspace1, self.A_21_workspace1_2, self.A_21_workspace2, self.A_21_workspace2_2, self.r, self.n, self.R, 1.0, 0.0)
+            einsum(self.XAX_k_01T, self.block_A_k_01T, self.XAX_kp1_01T, self.x_reshaped_0, self.temp, self.A_01T_workspace1, self.A_01T_workspace1_2, self.A_01T_workspace2, self.A_01T_workspace2_2, self.r, self.n, self.R, 1.0, 0.0)
             _transpose_reshape_multiply_inplace(self.temp, self.temp_reshaped, self.inv_I, self.r, self.n, self.R)
-            cy_maxpy(x_reshaped[2], self.temp_reshaped)
+            cy_maxpy(self.x_reshaped_2, self.temp_reshaped)
             einsum(self.XAX_k_22, self.block_A_k_22, self.XAX_kp1_22, self.temp_reshaped, self.result1, self.A_22_workspace1, self.A_22_workspace1_2, self.A_22_workspace2, self.A_22_workspace2_2, self.r, self.n, self.R, -1.0, 1.0)
             
-            einsum(self.XAX_k_31, self.block_A_k_31, self.XAX_kp1_31, x_reshaped[1], self.result2, self.A_31_workspace1, self.A_31_workspace1_2, self.A_31_workspace2, self.A_31_workspace2_2, self.r, self.n, self.R, 1.0, 0.0)
-            einsum(self.XAX_k_33, self.block_A_k_33, self.XAX_kp1_33, x_reshaped[2], self.result2, self.A_33_workspace1, self.A_33_workspace1_2, self.A_33_workspace2, self.A_33_workspace2_2, self.r, self.n, self.R, 1.0, 1.0)
+            einsum(self.XAX_k_31, self.block_A_k_31, self.XAX_kp1_31, self.x_reshaped_1, self.result2, self.A_31_workspace1, self.A_31_workspace1_2, self.A_31_workspace2, self.A_31_workspace2_2, self.r, self.n, self.R, 1.0, 0.0)
+            einsum(self.XAX_k_33, self.block_A_k_33, self.XAX_kp1_33, self.x_reshaped_2, self.result2, self.A_33_workspace1, self.A_33_workspace1_2, self.A_33_workspace2, self.A_33_workspace2_2, self.r, self.n, self.R, 1.0, 1.0)
         
         result[0] = np.asarray(self.result0).reshape(self.R, self.n, self.r).transpose(2, 1, 0)
         result[1] = np.asarray(self.result1).reshape(self.R, self.n, self.r).transpose(2, 1, 0)

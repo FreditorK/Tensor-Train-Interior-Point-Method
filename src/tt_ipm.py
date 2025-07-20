@@ -767,7 +767,6 @@ def tt_ipm(
         status.mu = np.divide(abs(ZX) + abs(TX), (2 ** dim + (status.ineq_status is IneqStatus.ACTIVE)*status.num_ineq_constraints))
         status.centrl_error_normalisation = 1 + abs(tt_inner_prod(obj_tt, tt_reshape(X_tt, (4, ))))
         status.centrality_error = status.mu / status.centrl_error_normalisation
-        #print("hhahhah", status.centrality_error, (1 + (status.ineq_status is IneqStatus.ACTIVE))*centrality_tol)
         status.is_central = np.less(status.centrality_error, (1 + (status.ineq_status is IneqStatus.ACTIVE))*centrality_tol)
         status.eta = max(min(status.eta, 2*status.mu), status.op_tol)
 
