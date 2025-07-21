@@ -8,6 +8,6 @@ max_ranks:
 max_refinement: 5
 op_tol: 0.0001
 seeds:
-- 222
+- 710
 verbose: true
 warm_up: 3

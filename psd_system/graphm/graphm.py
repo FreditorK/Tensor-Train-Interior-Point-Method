@@ -160,7 +160,6 @@ def create_problem(n, max_rank):
     #partial_tr_op_bias = tt_zero_matrix(2 * n + 1)
 
     L_op_tt = partial_tr_op
-    print(tt_ranks(L_op_tt))
     #eq_bias_tt = partial_tr_op_bias
     # ---
     # V
@@ -170,7 +169,6 @@ def create_problem(n, max_rank):
     partial_tr_J_op_bias = tt_rank_reduce(tt_add(partial_tr_J_op_bias, [E(0, 0)] + tt_sub(tt_identity(n), [E(0, 0) for _ in range(n)]) + [E(1, 1) for _ in range(n)]))
 
     L_op_tt = tt_rank_reduce(tt_add(L_op_tt, partial_tr_J_op), 1e-12)
-    print(tt_ranks(L_op_tt))
     eq_bias_tt = partial_tr_J_op_bias # tt_rank_reduce(tt_add(eq_bias_tt, partial_tr_J_op_bias))
 
     # ---
@@ -179,7 +177,6 @@ def create_problem(n, max_rank):
     diag_block_sum_op_bias = [E(0, 0) for _ in range(n + 1)] + tt_identity(n)
 
     L_op_tt = tt_rank_reduce(tt_add(L_op_tt, diag_block_sum_op), 1e-12)
-    print(tt_ranks(L_op_tt))
     eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, diag_block_sum_op_bias))
 
     # ---
@@ -188,7 +185,6 @@ def create_problem(n, max_rank):
     #Q_m_P_op_bias = tt_zero_matrix(2 * n + 1)
 
     L_op_tt = tt_rank_reduce(tt_add(L_op_tt, Q_m_P_op), 1e-12)
-    print(tt_ranks(L_op_tt))
     #eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, Q_m_P_op_bias))
 
     # ---

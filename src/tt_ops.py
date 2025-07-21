@@ -7,7 +7,7 @@ from cy_src.tt_ops_cy import (
     tt_identity, tt_zero_matrix, tt_one_matrix, tt_transpose, tt_ranks, tt_scale, tt_rank_reduce, tt_psd_rank_reduce, tt_mask_rank_reduce, tt_add, tt_fast_matrix_vec_mul, tt_fast_hadamard, tt_inner_prod, tt_normalise, tt_random_gaussian,
     tt_swap_all, tt_rl_orthogonalise, prune_singular_vals, tt_fast_mat_mat_mul
 )
-from cy_src.lgmres_cy import lgmres, MatVecWrapper, IneqMatVecWrapper
+from cy_src.lgmres_cy import MatVecWrapper, IneqMatVecWrapper
 from functools import reduce
 from functools import lru_cache
 from opt_einsum import contract_expression

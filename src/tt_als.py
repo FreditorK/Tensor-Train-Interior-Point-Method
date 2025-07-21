@@ -299,7 +299,6 @@ def _bck_sweep(
         kick_rank,
         last,
         amen,
-        lgmres_discount,
         direct_solve_failure
 ):
     local_res = np.inf if swp == 0 else 0
@@ -309,9 +308,9 @@ def _bck_sweep(
         block_b_k = block_b[k]
         if swp > 0 and not last:
             previous_solution = x_cores[k]
-            solution_now, block_res_old, block_res_new, rhs, norm_rhs, lgmres_discount, direct_solve_failure  = local_solver(XAX[k], block_A_k, XAX[k + 1],
+            solution_now, block_res_old, block_res_new, rhs, norm_rhs, direct_solve_failure  = local_solver(XAX[k], block_A_k, XAX[k + 1],
                                                                                      Xb[k], block_b_k, Xb[k + 1],
-                                                                                     previous_solution, block_size*d, lgmres_discount, not direct_solve_failure)
+                                                                                     previous_solution, block_size*d, not direct_solve_failure)
 
             local_res = max(local_res, block_res_old)
             dx = np.linalg.norm(solution_now - previous_solution) / np.linalg.norm(solution_now)
@@ -395,7 +394,7 @@ def _bck_sweep(
             if amen and not last:
                 z_cores[k] = np.reshape(resz.T, (rz[k], block_size, N[k], rz[k + 1])) / scales
 
-    return x_cores, z_cores, XAX, Xb, rx, local_res, local_dx, lgmres_discount, direct_solve_failure 
+    return x_cores, z_cores, XAX, Xb, rx, local_res, local_dx, direct_solve_failure 
 
 
 def _fwd_sweep(
@@ -420,7 +419,6 @@ def _fwd_sweep(
         kick_rank,
         last,
         amen,
-        lgmres_discount,
         direct_solve_failure 
 ):
     local_res = np.inf if swp == 0 else 0
@@ -430,11 +428,11 @@ def _fwd_sweep(
         block_b_k = block_b[k]
         if swp > 0 and not last:
             previous_solution = x_cores[k]
-            solution_now, block_res_old, block_res_new, rhs, norm_rhs, lgmres_discount, direct_solve_failure = local_solver(
+            solution_now, block_res_old, block_res_new, rhs, norm_rhs, direct_solve_failure = local_solver(
                 XAX[k], block_A_k, XAX[k + 1], Xb[k],
                 block_b_k, Xb[k + 1],
                 previous_solution,
-                block_size*d, lgmres_discount, not direct_solve_failure
+                block_size*d, not direct_solve_failure
             )
 
             local_res = max(local_res, block_res_old)
@@ -524,7 +522,7 @@ def _fwd_sweep(
                 z_cores[k] = np.reshape(resz, (rz[k], N[k], block_size, rz[k + 1])).transpose(0, 2, 1, 3) / scales
 
 
-    return x_cores, z_cores, XAX, Xb, rx, local_res, local_dx, lgmres_discount, direct_solve_failure 
+    return x_cores, z_cores, XAX, Xb, rx, local_res, local_dx, direct_solve_failure 
 
 
 def tt_block_amen(block_A, block_b, term_tol, r_max=100, eps=1e-12, nswp=22, x0=None, local_solver=None, kick_rank=2, amen=False, verbose=False):
@@ -571,14 +569,13 @@ def tt_block_amen(block_A, block_b, term_tol, r_max=100, eps=1e-12, nswp=22, x0=
         rz = np.array([1] + tt_ranks(z_cores) + [1])
     last = False
     final_local_res = np.inf
-    lgmres_discount = 1e-6 / np.sqrt(d)
     direct_solve_failure = False
     trunc_tol = term_tol / np.sqrt(d)
 
     for swp in range(nswp+1):
 
         if direction > 0:
-            x_cores, z_cores, XAX, Xb, rx, local_res, local_dx, lgmres_discount, direct_solve_failure = _bck_sweep(
+            x_cores, z_cores, XAX, Xb, rx, local_res, local_dx, direct_solve_failure = _bck_sweep(
                 local_solver,
                 x_cores,
                 z_cores,
@@ -600,11 +597,10 @@ def tt_block_amen(block_A, block_b, term_tol, r_max=100, eps=1e-12, nswp=22, x0=
                 kick_rank,
                 last,
                 amen,
-                lgmres_discount,
                 direct_solve_failure 
             )
         else:
-            x_cores, z_cores, XAX, Xb, rx, local_res, local_dx, lgmres_discount, direct_solve_failure = _fwd_sweep(
+            x_cores, z_cores, XAX, Xb, rx, local_res, local_dx, direct_solve_failure = _fwd_sweep(
                 local_solver,
                 x_cores,
                 z_cores,
@@ -626,7 +622,6 @@ def tt_block_amen(block_A, block_b, term_tol, r_max=100, eps=1e-12, nswp=22, x0=
                 kick_rank,
                 last,
                 amen,
-                lgmres_discount,
                 direct_solve_failure 
             )
 
@@ -642,7 +637,6 @@ def tt_block_amen(block_A, block_b, term_tol, r_max=100, eps=1e-12, nswp=22, x0=
             print(f'\tDirection {direction}')
             print(f'\tResidual {local_res:.3e}')
             print(f"\tTT-sol rank: {rx[1:-1]}")
-            print(f'\tLGMRES-discount: {lgmres_discount:2f}', flush=True)
 
         direction *= -1
 
