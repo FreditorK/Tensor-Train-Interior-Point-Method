@@ -144,6 +144,7 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
             )
             mR_p = rhs[:, 0].reshape(m, 1)
             mR_d = rhs[:, 1].reshape(m, 1)
+            mR_c = rhs[:, 2].reshape(m, 1)
             mR_t = rhs[:, 3].reshape(m, 1)
             L_L_Z_inv_mR_c = forward_backward_sub(L_L_Z, rhs[:, 2].reshape(m, 1))
             L_L_Z_inv_L_X = forward_backward_sub(L_L_Z, cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[2, 2], block_A_k[2, 2], XAX_k1[2, 2]).reshape(m, m), overwrite_b=True)
