@@ -4,7 +4,7 @@ echo "Running: $1"
 # ---------------------------
 # Parameters
 # ---------------------------
-BASE_TIMEOUT=6400  # 2h
+BASE_TIMEOUT=25600 # 8h
 
 START_DIM=$2
 END_DIM=$3
