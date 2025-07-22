@@ -103,7 +103,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         if use_prev_sol:
             local_rhs -= local_vec
 
-        solution_now, _ = scp.sparse.linalg.lgmres(op, local_rhs.flatten(), rtol=rtol, outer_k=8, maxiter=50, inner_m=30)
+        solution_now, _ = scp.sparse.linalg.gcrotmk(op, local_rhs.flatten(), rtol=rtol, k=8, maxiter=50, m=30)
         solution_now = np.transpose(solution_now.reshape(2, x_shape[0], x_shape[2], x_shape[3]), (1, 0, 2, 3))
 
         if use_prev_sol:
@@ -204,7 +204,7 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
         if use_prev_sol:
             local_rhs -= local_vec
 
-        solution_now, _ = scp.sparse.linalg.lgmres(op, local_rhs.flatten(), rtol=rtol, outer_k=8, maxiter=50, inner_m=30)
+        solution_now, _ = scp.sparse.linalg.gcrotmk(op, local_rhs.flatten(), rtol=rtol, k=8, maxiter=50, m=30)
         solution_now = np.transpose(solution_now.reshape(3, x_shape[0], x_shape[2], x_shape[3]),
                                     (1, 0, 2, 3)) 
         
