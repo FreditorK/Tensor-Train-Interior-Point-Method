@@ -54,6 +54,7 @@ def run_experiment(create_problem_fn):
     for r_i, rank in enumerate(config["max_ranks"]):
         print(f"\n===== Processing Rank: {rank} =====")
         for s_i, seed in enumerate(config["seeds"]):
+            print(f"Running seed {seed}")
             feas_err, slack = run_and_record(
                 seed, r_i, s_i, rank, config, args, create_problem_fn, memory,
                 problem_creation_times, runtimes, complementary_slackness,

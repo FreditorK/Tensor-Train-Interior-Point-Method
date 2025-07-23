@@ -662,7 +662,7 @@ def tt_ipm(
     abs_tol=5e-4,
     eps=1e-12,
     mals_restarts=3,
-    r_max=1000,
+    r_max=700,
     epsilonDash=1,
     verbose=False
 ):
