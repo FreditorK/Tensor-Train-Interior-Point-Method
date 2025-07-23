@@ -44,15 +44,25 @@ if __name__ == "__main__":
         X = cp.Variable(C.shape, PSD=True)
         constraints = [X >> 0, cp.diag(X) == 1]
         if args.track_mem:
-            def wrapper():
-                prob = cp.Problem(cp.Maximize(cp.trace(C.T @ X)), constraints)
-                _ = prob.solve(solver=cp.SDPA, epsilonDash=1e-6 / 2**config["dim"], epsilonStar=1e-5 / 2**config["dim"], verbose=True, numThreads=1, omegaStar=100, betaStar=0.5, gammaStar=0.9)
-                return prob
-            res, prob = memory_usage(proc=wrapper, max_usage=True, retval=True, include_children=True)
+            try:
+                def wrapper():
+                    prob = cp.Problem(cp.Maximize(cp.trace(C.T @ X)), constraints)
+                    _ = prob.solve(solver=cp.SDPA, epsilonDash=1e-6 / 2**config["dim"], epsilonStar=1e-5 / 2**config["dim"], verbose=True, numThreads=1, omegaStar=100, betaStar=0.5, gammaStar=0.9)
+                    return prob
+                res, prob = memory_usage(proc=wrapper, max_usage=True, retval=True, include_children=True)
+            except Exception as e:
+                print(e)
+                print("Failed to solve problem")
+                continue
             memory[s_i] = res - start_mem
         else:
-            prob = cp.Problem(cp.Maximize(cp.trace(C.T @ X)), constraints)
-            _ = prob.solve(solver=cp.SDPA, epsilonDash=1e-6 / 2**config["dim"], epsilonStar=1e-5 / 2**config["dim"], verbose=True, numThreads=1, omegaStar=100, betaStar=0.5, gammaStar=0.9)
+            try:
+                prob = cp.Problem(cp.Maximize(cp.trace(C.T @ X)), constraints)
+                _ = prob.solve(solver=cp.SDPA, epsilonDash=1e-6 / 2**config["dim"], epsilonStar=1e-5 / 2**config["dim"], verbose=True, numThreads=1, omegaStar=100, betaStar=0.5, gammaStar=0.9)
+            except Exception as e:
+                print(e)
+                print("Failed to solve problem")
+                continue
         X_val = X.value
         Z = None
         for m in prob.solution.dual_vars.values():
