@@ -342,7 +342,7 @@ def _tt_ipm_newton_step(
         # Predictor
         if status.verbose:
             print("\n--- Predictor  step ---", flush=True)
-        Delta_tt, res = solver(lhs_matrix_tt, rhs_vec_tt, status.mals_delta0, status.kkt_iterations + status.is_last_iter, status.mals_rank_restriction, status.eta)
+        Delta_tt, _ = solver(lhs_matrix_tt, rhs_vec_tt, status.mals_delta0, status.kkt_iterations, status.mals_rank_restriction, status.eta)
         status.mals_delta0 = Delta_tt
         Delta_X_tt = _tt_symmetrise(tt_reshape(_tt_get_block(1, Delta_tt), (2, 2)), status.eps)
         Delta_Z_tt = _tt_symmetrise(tt_reshape(_tt_get_block(2, Delta_tt), (2, 2)), status.eps)
@@ -420,7 +420,7 @@ def _tt_ipm_newton_step(
                     min(status.op_tol, 0.1*status.mu)
                 ) if status.sigma > 1e-4 else rhs_vec_tt.get_row(2)
 
-            Delta_tt_cc, res = solver(lhs_matrix_tt, rhs_vec_tt, status.mals_delta0, status.kkt_iterations + status.is_last_iter, status.mals_rank_restriction, status.eta)
+            Delta_tt_cc, _ = solver(lhs_matrix_tt, rhs_vec_tt, status.mals_delta0, status.kkt_iterations, status.mals_rank_restriction, status.eta)
             status.mals_delta0 = Delta_tt_cc
             Delta_X_tt_cc = _tt_symmetrise(tt_reshape(_tt_get_block(1, Delta_tt_cc), (2, 2)), status.eps)
             Delta_Z_tt_cc = _tt_symmetrise(tt_reshape(_tt_get_block(2, Delta_tt_cc), (2, 2)), status.eps)
@@ -520,7 +520,7 @@ def _tt_get_ineq_step_sizes(x_step_size, z_step_size, X_tt, T_tt, Delta_X_tt, De
                     status.ineq_status = IneqStatus.SETTING_ACTIVE
         x_step_size *= x_ineq_step_size
 
-    if z_step_size > 0 and status.ineq_status is not IneqStatus.INACTIVE:
+    if z_step_size > 0 and status.ineq_status is IneqStatus.ACTIVE:
         t_step_size, status.eigen_zt0 = _ineq_step_size(
             T_tt,
             tt_scale(z_step_size, Delta_T_tt),
@@ -582,7 +582,7 @@ class IPMStatus:
     eigen_z0 = None
     eigen_xt0 = None
     eigen_zt0 = None
-    kkt_iterations = 8
+    kkt_iterations = 7
     centrl_error_normalisation: float = 1.0
     eta = 1e-3
 

@@ -791,7 +791,7 @@ def tt_restarted_block_amen(
         
         dim = len(x_cores)
         x_cores = tt_rank_retraction(x_cores, [2*dim]*(dim-1))
-        x_cores, res = solve_als(rhs, int(np.ceil(rank_restriction*1.1)), x_cores, inner_m+1, 3)
+        x_cores, res = solve_als(rhs, rank_restriction+4, x_cores, inner_m, 4)
 
         rhs_norm = update_rhs(rhs, x_cores).norm
 
