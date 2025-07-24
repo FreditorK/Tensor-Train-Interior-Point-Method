@@ -1,17 +1,17 @@
 #!/bin/bash
 
-echo "Running: $1_scgal"
+echo "Running: $1_scs"
 # ---------------------------
 # Parameters
 # ---------------------------
-BASE_TIMEOUT=1800  # 30 minutes
+BASE_TIMEOUT=6400  # 2h
 START_DIM=$2
 END_DIM=$3
 
 # ---------------------------
 # Delete log file if it exists
 # ---------------------------
-LOGFILE="results/scgal_$1_${START_DIM}_${END_DIM}.txt"
+LOGFILE="results/scs_$1_${START_DIM}_${END_DIM}.txt"
 if [ -f "$LOGFILE" ]; then
     rm "$LOGFILE"
 fi
@@ -58,7 +58,7 @@ trap 'echo -e "\n⚠️ Script resumed (was suspended). Memory may not have been
 # ---------------------------
 exec > >(tee -a "$LOGFILE") 2>&1
 
-echo "==== $1 SCGAL Batch Run Started at $(date) ===="
+echo "==== $1 SCS Batch Run Started at $(date) ===="
 
 cd psd_system/$1
 
@@ -76,7 +76,7 @@ for dim in $(seq $START_DIM $END_DIM); do
     echo -e "\n▶ Running dim=$dim with config=$CONFIG at $(date)"
     CURRENT_TIMEOUT=$((BASE_TIMEOUT * dim))
 
-    timeout "$CURRENT_TIMEOUT" python $1_scgal.py --config "$CONFIG" $TRACK_MEM
+    timeout "$CURRENT_TIMEOUT" python $1_scs.py --config "$CONFIG" $TRACK_MEM
     status=$?
 
     if [ $status -eq 124 ]; then

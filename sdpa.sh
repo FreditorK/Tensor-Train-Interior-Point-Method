@@ -38,10 +38,10 @@ fi
 # ---------------------------
 # Fix threads
 # ---------------------------
-export OMP_NUM_THREADS=8
-export MKL_NUM_THREADS=8
-export OPENBLAS_NUM_THREADS=8
-export NUMEXPR_NUM_THREADS=8
+export OMP_NUM_THREADS=16
+export MKL_NUM_THREADS=16
+export OPENBLAS_NUM_THREADS=16
+export NUMEXPR_NUM_THREADS=16
 
 # Cleanup on exit or interrupt
 cleanup() {

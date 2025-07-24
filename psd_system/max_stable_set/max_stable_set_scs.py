@@ -1,20 +1,33 @@
-# Import packages.
-import numpy as np
-import argparse
-import os
 import sys
 import os
-import sdpap
 import time
+
+import numpy as np
 import yaml
-from memory_profiler import memory_usage
-import cvxpy as cp
+import argparse
+import sdpap
 
 sys.path.append(os.getcwd() + '/../../')
-from maxcut import *
-from src.baselines import *
-from src.utils import print_results_summary 
+
+from src.tt_ops import *
+from memory_profiler import memory_usage
 import cvxpy as cp
+from src.utils import print_results_summary
+import warnings
+warnings.filterwarnings("ignore", message=".*Python recalculation of primal and/or dual feasibility error failed.*")
+
+
+def safe_dual_term(constr, var):
+    dual_val = constr.dual_value
+    if dual_val is None:
+        return 0
+    try:
+        grad_dict = constr.args[0].gradient
+        if var in grad_dict:
+            return grad_dict[var].T @ dual_val
+    except:
+        pass
+    return 0  # fallback if gradient missing or fails
 
 if __name__ == "__main__":
     np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=4, suppress=True)
@@ -36,8 +49,7 @@ if __name__ == "__main__":
     # num_iters = np.zeros(num_seeds)  # If available
 
     for s_i, seed in enumerate(config["seeds"]):
-        tried_new_seed = False
-        for attempt in range(3):  # At most two tries: original and one new random seed
+        for attempt in range(1):  # At most two tries: original and one new random seed
             if attempt == 0:
                 current_seed = seed
             else:
@@ -45,25 +57,49 @@ if __name__ == "__main__":
                 print(f"Trying with new random seed: {current_seed}")
             np.random.seed(current_seed)
             t1 = time.time()
-            C = tt_matrix_to_matrix(tt_obj_matrix(config["max_ranks"][0], config["dim"]))
+            G = tt_rank_reduce(tt_random_graph(config["dim"], config["max_ranks"][0]))
+            adj_matrix = np.round(tt_matrix_to_matrix(G), decimals=1)
             t2 = time.time()
+            J = np.ones_like(adj_matrix)
             if args.track_mem:
                 start_mem = memory_usage(max_usage=True, include_children=True)
-            X = cp.Variable(C.shape, symmetric=True)
-            constraints = [X >> 0, cp.diag(X) == 1]
+            X = cp.Variable(J.shape, symmetric=True)
+            constraints = [X >> 0]
+            constraints += [cp.diag(cp.vec(adj_matrix, order="F").flatten(order="F")) @ cp.vec(X, order="F") == 0]
+            constraints += [cp.trace(X) == 1]
             try:
                 if args.track_mem:
                     def wrapper():
-                        prob = cp.Problem(cp.Maximize(cp.trace(C.T @ X)), constraints)
-                        _ = prob.solve(solver=cp.SDPA, epsilonDash=1e-6 / 2**config["dim"], epsilonStar=1e-5 / 2**config["dim"], verbose=True, omegaStar=100.0, betaStar=0.5, gammaStar=0.9, domainMethod="basis")
+                        try:
+                            prob = cp.Problem(cp.Maximize(cp.trace(J.T @ X)), constraints)
+                            _ = prob.solve(solver=cp.SCS, eps=1e-6 / 2**config["dim"]) # needed to reduce for stability
+                        except:
+                            pass
                         return prob
                     res, prob = memory_usage(proc=wrapper, max_usage=True, retval=True, include_children=True)
                     memory[s_i] = res - start_mem
+                    X_val = X.value
                 else:
-                    prob = cp.Problem(cp.Maximize(cp.trace(C.T @ X)), constraints)
-                    _ = prob.solve(solver=cp.SDPA, epsilonDash=1e-6 / 2**config["dim"], epsilonStar=1e-5 / 2**config["dim"], verbose=True, omegaStar=100.0, betaStar=0.5, gammaStar=0.9, domainMethod="basis")
-                # If we get here, break out of the attempt loop (success)
-                break
+                    try:
+                        prob = cp.Problem(cp.Maximize(cp.trace(J.T @ X)), constraints)
+                        _ = prob.solve(solver=cp.SCS, eps=1e-5 / 2**config["dim"]) # needed to reduce for stability
+                    except:
+                        pass
+                    X_val = X.value
+                #data, _, _ = prob.get_problem_data(solver=cp.SDPA)
+                Z = constraints[0].dual_value
+                y_1 = constraints[1].dual_value
+                y_2 = constraints[2].dual_value
+                t3 = time.time()
+                problem_creation_times[s_i] = t2 - t1
+                runtimes[s_i] = t3 - t2
+                complementary_slackness[s_i] = np.abs(np.trace(X_val @ Z))
+                # Feasibility error: (trace(X)-1)^2 + norm(diag(adj_matrix) @ X)^2
+                feasibility_errors[s_i] = (np.trace(X_val)-1)**2 + np.linalg.norm(np.diag(adj_matrix.reshape(-1, 1, order="F").flatten()) @ X_val.reshape(-1, 1, order="F"))**2
+                dual_feas = Z + J - y_2*np.eye(len(Z)) - (np.diag(adj_matrix.flatten()) @ y_1).reshape(*Z.shape, order="F")
+                dual_feasibility_errors[s_i] = np.sum(dual_feas**2)
+                # num_iters[s_i] = ...  # If available
+                break  # Success, break out of attempt loop
             except Exception as e:
                 print(e)
                 if attempt == 0:
@@ -74,17 +110,6 @@ if __name__ == "__main__":
         else:
             # Only runs if both attempts failed
             continue
-        X_val = X.value
-        Z = constraints[0].dual_value
-        y = constraints[1].dual_value
-        t3 = time.time()
-        problem_creation_times[s_i] = t2 - t1
-        runtimes[s_i] = t3 - t2
-        complementary_slackness[s_i] = np.trace(X_val @ Z)
-        feasibility_errors[s_i] = np.linalg.norm(np.diag(X_val) - 1) ** 2
-        dual_feas = Z + C - np.diag(y)
-        dual_feasibility_errors[s_i] = np.sum(dual_feas**2)
-        # num_iters[s_i] = ...  # If available
 
     # Prepare dummy arrays for missing metrics to match the signature
     num_iters = np.zeros(num_seeds)
@@ -92,8 +117,8 @@ if __name__ == "__main__":
     ranksY = np.zeros((1, num_seeds, 1))
     ranksZ = np.zeros((1, num_seeds, 1))
 
-    print(f"Number of failed seeds: {num_failed_seeds}")
     # Print summary (adapt as needed)
+    print(f"Number of failed seeds: {num_failed_seeds}")
     print_results_summary(
         config, args,
         runtimes.reshape(1, -1), problem_creation_times.reshape(1, -1), num_iters.reshape(1, -1),

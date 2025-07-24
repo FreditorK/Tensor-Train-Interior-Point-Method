@@ -47,14 +47,15 @@ if __name__ == "__main__":
             t2 = time.time()
             constraint_matrices = [np.outer(column, column) for column in np.eye(C.shape[0])]
             bias = np.ones((C.shape[0], 1))
+            sketch_size = 2*int(np.ceil(np.sqrt(2 * (2 ** config["dim"] + 1))))
             try:
                 if args.track_mem:
                     start_mem = memory_usage(max_usage=True, include_children=True)
                     def wrapper():
                         X, duality_gaps, info = sketchy_cgal(-C, constraint_matrices, bias, (trace_param, trace_param),
-                                                             gap_tol=config["gap_tol"],
+                                                             gap_tol=0.1,
                                                              num_iter=1000 * 2 ** config["dim"],
-                                                             R=int(np.ceil(np.sqrt(2 * (2 ** config["dim"] + 1)))),
+                                                             R=sketch_size,
                                                              verbose=config["verbose"])
                         return X, duality_gaps, info
                     res = memory_usage(proc=wrapper, max_usage=True, retval=True, include_children=True)
@@ -62,9 +63,9 @@ if __name__ == "__main__":
                     memory[s_i] = res[0] - start_mem
                 else:
                     X, duality_gaps, info = sketchy_cgal(-C, constraint_matrices, bias, (trace_param, trace_param),
-                                                         gap_tol=config["gap_tol"],
+                                                         gap_tol=0.1,
                                                          num_iter=1000 * 2 ** config["dim"],
-                                                         R=int(np.ceil(np.sqrt(2 * (2 ** config["dim"] + 1)))),
+                                                         R=sketch_size,
                                                          verbose=config["verbose"])
                 # If we get here, break out of the attempt loop (success)
                 break
@@ -84,7 +85,6 @@ if __name__ == "__main__":
         aux_duality_gap[s_i] = duality_gaps[-1]
         feasibility_errors[s_i] = np.linalg.norm([np.trace(c.T @ X) - b for c, b in zip(constraint_matrices, bias.flatten())]) ** 2
         num_iters[s_i] = info["num_iters"]
-        print(X)
 
     # Prepare dummy arrays for missing metrics to match the signature
     ranksX = np.zeros((1, num_seeds, 1))
@@ -92,6 +92,7 @@ if __name__ == "__main__":
     ranksZ = np.zeros((1, num_seeds, 1))
 
     print(f"Number of failed seeds: {num_failed_seeds}")
+    print(f"Sketching Size: {sketch_size}")
     print_results_summary(
         config, args,
         runtimes.reshape(1, -1), problem_creation_times.reshape(1, -1), num_iters.reshape(1, -1),

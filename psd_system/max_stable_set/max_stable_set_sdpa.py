@@ -72,7 +72,7 @@ if __name__ == "__main__":
                     def wrapper():
                         try:
                             prob = cp.Problem(cp.Maximize(cp.trace(J.T @ X)), constraints)
-                            _ = prob.solve(solver=cp.SDPA, epsilonDash=1e-6 / 2**config["dim"], epsilonStar=1e-5 / 2**config["dim"], verbose=True, numThreads=1, omegaStar=100.0, betaStar=0.5, gammaStar=0.8) # needed to reduce for stability
+                            _ = prob.solve(solver=cp.SDPA, epsilonDash=1e-6 / 2**config["dim"], epsilonStar=1e-5 / 2**config["dim"], verbose=True, omegaStar=100.0, betaStar=0.5, gammaStar=0.8, domainMethod="basis") # needed to reduce for stability
                         except:
                             pass
                         return prob
@@ -82,7 +82,7 @@ if __name__ == "__main__":
                 else:
                     try:
                         prob = cp.Problem(cp.Maximize(cp.trace(J.T @ X)), constraints)
-                        _ = prob.solve(solver=cp.SDPA, epsilonDash=1e-6 / 2**config["dim"], epsilonStar=1e-5 / 2**config["dim"], verbose=True, numThreads=1, omegaStar=100.0, betaStar=0.5, gammaStar=0.8) # needed to reduce for stability
+                        _ = prob.solve(solver=cp.SDPA, epsilonDash=1e-6 / 2**config["dim"], epsilonStar=1e-5 / 2**config["dim"], verbose=True, omegaStar=100.0, betaStar=0.5, gammaStar=0.8,domainMethod="basis") # needed to reduce for stability
                     except:
                         pass
                     X_val = X.value

@@ -152,7 +152,7 @@ def print_results_summary(config, args, runtimes, problem_creation_times,
         print(f"  {'Iterations':<28} | {f'{mean_iters:.1f} ± {std_iters:.1f}':>25}")
         print(f"  {'Feasibility Error':<28} | {f'{mean_feasibility:.2e} ± {std_feasibility:.2e}':>25}")
         print(f"  {'Dual Feasibility Error':<28} | {f'{mean_dual_feasibility:.2e} ± {std_dual_feasibility:.2e}':>25}")
-        print(f"  {'Complementary Slackness':<28} | {f'{mean_slackness:.2e} ± {std_slackness:.2e}':>25}")
+        print(f"  {'Duality Gap':<28} | {f'{mean_slackness:.2e} ± {std_slackness:.2e}':>25}")
 
         if args.track_mem and memory is not None:
             mean_mem = np.mean(memory[r_i, :])
