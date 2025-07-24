@@ -10,9 +10,13 @@ scipy_include = os.path.join(scipy_include, '..', 'scipy')
 
 common_args = {
     'include_dirs': [np.get_include(), scipy_include],
-    'libraries': ['openblas'],  # Adjust to your actual BLAS backend
-    'extra_compile_args': ["-O3", "-march=native", "-ffast-math", "-funroll-loops", "-fopenmp"],
-    'extra_link_args': ["-lopenblas", "-O3", "-march=native", "-fopenmp"],
+    'libraries': ['mkl_rt'],  # Use MKL runtime dispatcher
+    'extra_compile_args': [
+        "-O3", "-march=native", "-ffast-math", "-funroll-loops", "-fopenmp"
+    ],
+    'extra_link_args': [
+        "-lmkl_rt", "-fopenmp"
+    ],
     'define_macros': [('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')]
 }
 

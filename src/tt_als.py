@@ -544,6 +544,7 @@ def tt_block_amen(block_A, block_b, term_tol, r_max=100, eps=1e-12, nswp=22, x0=
 
     if verbose:
         t0 = time.time()
+        tswp = t0
 
     N = [c.shape[-2] for c in x_cores]
     d = len(N)
@@ -637,6 +638,8 @@ def tt_block_amen(block_A, block_b, term_tol, r_max=100, eps=1e-12, nswp=22, x0=
             print(f'\tDirection {direction}')
             print(f'\tResidual {local_res:.3e}')
             print(f"\tTT-sol rank: {rx[1:-1]}")
+            print(f"\tTime: {(time.time() - tswp):3f}s")
+            tswp = time.time()
 
         direction *= -1
 
