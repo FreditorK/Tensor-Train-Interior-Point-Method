@@ -33,7 +33,7 @@ if __name__ == "__main__":
     feasibility_errors = np.zeros(num_seeds)
     dual_feasibility_errors = np.zeros(num_seeds)
     num_failed_seeds = 0
-    # num_iters = np.zeros(num_seeds)  # If available
+    num_iters = np.zeros(num_seeds)
 
     for s_i, seed in enumerate(config["seeds"]):
         tried_new_seed = False
@@ -84,10 +84,9 @@ if __name__ == "__main__":
         feasibility_errors[s_i] = np.linalg.norm(np.diag(X_val) - 1) ** 2
         dual_feas = Z + C - np.diag(y)
         dual_feasibility_errors[s_i] = np.sum(dual_feas**2)
-        # num_iters[s_i] = ...  # If available
+        num_iters[s_i] = prob.solver_stats.extra_stats["info"]["iter"]
 
     # Prepare dummy arrays for missing metrics to match the signature
-    num_iters = np.zeros(num_seeds)
     ranksX = np.zeros((1, num_seeds, 1))
     ranksY = np.zeros((1, num_seeds, 1))
     ranksZ = np.zeros((1, num_seeds, 1))

@@ -46,7 +46,7 @@ if __name__ == "__main__":
     feasibility_errors = np.zeros(num_seeds)
     dual_feasibility_errors = np.zeros(num_seeds)
     num_failed_seeds = 0
-    # num_iters = np.zeros(num_seeds)  # If available
+    num_iters = np.zeros(num_seeds)
 
     for s_i, seed in enumerate(config["seeds"]):
         for attempt in range(1):  # At most two tries: original and one new random seed
@@ -86,7 +86,6 @@ if __name__ == "__main__":
                     except:
                         pass
                     X_val = X.value
-                #data, _, _ = prob.get_problem_data(solver=cp.SDPA)
                 Z = constraints[0].dual_value
                 y_1 = constraints[1].dual_value
                 y_2 = constraints[2].dual_value
@@ -98,7 +97,7 @@ if __name__ == "__main__":
                 feasibility_errors[s_i] = (np.trace(X_val)-1)**2 + np.linalg.norm(np.diag(adj_matrix.reshape(-1, 1, order="F").flatten()) @ X_val.reshape(-1, 1, order="F"))**2
                 dual_feas = Z + J - y_2*np.eye(len(Z)) - (np.diag(adj_matrix.flatten()) @ y_1).reshape(*Z.shape, order="F")
                 dual_feasibility_errors[s_i] = np.sum(dual_feas**2)
-                # num_iters[s_i] = ...  # If available
+                num_iters[s_i] = prob.solver_stats.extra_stats["info"]["iter"]
                 break  # Success, break out of attempt loop
             except Exception as e:
                 print(e)
@@ -112,7 +111,6 @@ if __name__ == "__main__":
             continue
 
     # Prepare dummy arrays for missing metrics to match the signature
-    num_iters = np.zeros(num_seeds)
     ranksX = np.zeros((1, num_seeds, 1))
     ranksY = np.zeros((1, num_seeds, 1))
     ranksZ = np.zeros((1, num_seeds, 1))
