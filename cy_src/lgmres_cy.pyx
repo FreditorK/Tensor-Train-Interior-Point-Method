@@ -39,7 +39,6 @@ cdef:
     int inc = 1  # typical unit stride
     double global_alpha = 1.0
 
-
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.nonecheck(False)
@@ -47,7 +46,6 @@ cdef:
 cdef void cy_maxpy(double[:, :] dx, double[:, :] x) noexcept nogil:
     cdef int n = x.shape[0] * x.shape[1]
     blas.daxpy(&n, &global_alpha, &dx[0, 0], &inc, &x[0, 0], &inc)
-
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
@@ -181,15 +179,17 @@ cdef void pack_results(double[:, :] result0, double[:, :] result1, double[:] fla
     cdef int i, j, k, batch
     cdef int idx
 
-    for batch in range(2):
-        for i in range(r):
-            for j in range(n):
-                for k in range(R):
-                    idx = ((batch * r + i) * n + j) * R + k  # flatten index
-                    if batch == 0:
-                        flat_result[idx] = result0[k * n + j, i]
-                    else:
-                        flat_result[idx] = result1[k * n + j, i]
+    for i in range(r):
+        for j in range(n):
+            for k in range(R):
+                idx = (i * n + j) * R + k  # flatten index
+                flat_result[idx] = result0[k * n + j, i]
+
+    for i in range(r):
+        for j in range(n):
+            for k in range(R):
+                idx = ((r + i) * n + j) * R + k  # flatten index
+                flat_result[idx] = result1[k * n + j, i]
 
 
 cdef class BaseMatVec:

@@ -43,6 +43,8 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
     direct_solve_failure = not dense_solve
     dense_solve = (np.sqrt(x_shape[0]*x_shape[3]) <= size_limit) and dense_solve
 
+    dense_solve = False
+
     if block_res_old < rtol:
         return previous_solution, block_res_old, block_res_old, rhs, norm_rhs, direct_solve_failure
     
