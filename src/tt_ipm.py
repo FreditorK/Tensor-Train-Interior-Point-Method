@@ -1,5 +1,6 @@
 import sys
 import os
+from turtle import rt
 import numpy as np
 import traceback
 
@@ -11,6 +12,63 @@ from dataclasses import dataclass
 from enum import Enum
 import warnings
 warnings.simplefilter("error")
+from petsc4py import PETSc
+import numpy as np
+
+class LGMRESSolver:
+    def __init__(self, rtol=1e-8, max_iter=100, restart=50):
+        """
+        Initializes the LGMRES solver.
+
+        Args:
+            matvec_object: An object with a method matvec(x) that returns A @ x,
+                           where x is a NumPy array.
+            shape: A tuple (N, N) representing the shape of the linear operator A.
+            rtol: The relative tolerance for convergence.
+            max_iter: The maximum number of iterations.
+            restart: The number of iterations before GMRES restarts (inner iterations).
+            outer_k: The number of outer vectors to use for LGMRES augmentation.
+        """
+        self.matvec_object = None
+        self.shape = None
+
+        # PETSc solver setup
+        self.ksp = PETSc.KSP().create(comm=PETSc.COMM_WORLD)
+        # Set command line options for the solver, e.g., -ksp_monitor
+        self.ksp.setFromOptions() 
+        self.ksp.setType('dgmres')
+        self.ksp.setTolerances(rtol=rtol, max_it=max_iter)
+        self.ksp.setGMRESRestart(restart) 
+
+    def mult(self, mat, x, y):
+        x_np = x.getArray()
+        y_np = self.matvec_object.matvec(x_np)
+        y.setArray(y_np)
+
+    def solve_system(self, matvec_object, rhs_np, shape):
+        self.matvec_object = matvec_object
+        self.shape = shape
+
+        assert rhs_np.shape[0] == self.shape[0], \
+            f"RHS shape mismatch. Expected {self.shape[0]}, got {rhs_np.shape[0]}"
+
+        self.A_shell = PETSc.Mat().createPython(self.shape, comm=PETSc.COMM_WORLD)
+        self.A_shell.setPythonContext(self)
+        self.A_shell.setUp()
+        self.ksp.setOperators(self.A_shell)
+
+        b_petsc = PETSc.Vec().createWithArray(rhs_np, comm=PETSc.COMM_WORLD)
+        x_petsc = PETSc.Vec().createWithArray(np.zeros_like(rhs_np), comm=PETSc.COMM_WORLD)
+        self.ksp.solve(b_petsc, x_petsc)
+        sol = x_petsc.getArray()
+        return sol
+
+    def destroy(self, mat=None):
+        if hasattr(self, "A_shell") and self.A_shell:
+            self.A_shell.destroy()
+        if hasattr(self, "ksp") and self.ksp:
+            self.ksp.destroy()
+
 
 class IneqStatus(Enum):
     """
@@ -42,8 +100,6 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
     block_res_old = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution).__isub__(rhs)) / norm_rhs
     direct_solve_failure = not dense_solve
     dense_solve = (np.sqrt(x_shape[0]*x_shape[3]) <= size_limit) and dense_solve
-
-    dense_solve = False
 
     if block_res_old < rtol:
         return previous_solution, block_res_old, block_res_old, rhs, norm_rhs, direct_solve_failure
@@ -89,23 +145,19 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
             XAX_k1[0, 0], XAX_k1[0, 1], XAX_k1[2, 1], XAX_k1[2, 2],
             inv_I, x_shape[0], x_shape[2], x_shape[3]
         )
-        op = scp.sparse.linalg.LinearOperator(
-            shape=(2 * m, 2 * m),
-            matvec=matvec_wrapper.matvec,
-            dtype=np.float64
-        )
         local_rhs = np.empty((2, x_shape[0], x_shape[2], x_shape[3]))
         local_rhs[0] = rhs[:, 0]
         local_rhs[1] = rhs[:, 2]
         local_rhs[1] -= cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[2, 2], block_A_k[2, 2], XAX_k1[2, 2], inv_I*rhs[:, 1])
         local_rhs_norm = np.linalg.norm(local_rhs)
-        local_vec = op(np.transpose(previous_solution[:, :2], (1, 0, 2, 3)).flatten()).reshape(2, x_shape[0], x_shape[2], x_shape[3])
+        local_vec = matvec_wrapper.matvec(np.transpose(previous_solution[:, :2], (1, 0, 2, 3)).flatten()).reshape(2, x_shape[0], x_shape[2], x_shape[3])
         local_rhs_norm_prime = np.linalg.norm(local_rhs - local_vec)
         use_prev_sol = (local_rhs_norm_prime < local_rhs_norm)
         if use_prev_sol:
             local_rhs -= local_vec
 
-        solution_now, _ = scp.sparse.linalg.lgmres(op, local_rhs.flatten(), rtol=rtol, outer_k=8, maxiter=50, inner_m=25)
+        large_scale_solver = LGMRESSolver(rtol=rtol)
+        solution_now = large_scale_solver.solve_system(matvec_wrapper, local_rhs.flatten(), (2*m, 2*m))
         solution_now = np.transpose(solution_now.reshape(2, x_shape[0], x_shape[2], x_shape[3]), (1, 0, 2, 3))
 
         if use_prev_sol:
@@ -115,6 +167,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         solution_now = np.concatenate((solution_now, z.reshape(x_shape[0], 1, x_shape[2], x_shape[3])), axis=1)
 
     block_res_new = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, solution_now).__isub__(rhs)) / norm_rhs
+
 
     if block_res_old < block_res_new:
         solution_now = previous_solution
@@ -189,24 +242,20 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
             XAX_k1[0, 0], XAX_k1[0, 1], XAX_k1[2, 1], XAX_k1[2, 2], XAX_k1[3, 1], XAX_k1[3, 3],
             inv_I, x_shape[0], x_shape[2], x_shape[3]
         )
-        op = scp.sparse.linalg.LinearOperator(
-            shape=(3 * m, 3 * m),
-            matvec=matvec_wrapper.matvec,
-            dtype=np.float64
-        )
         local_rhs = np.empty((3, x_shape[0], x_shape[2], x_shape[3]))
         local_rhs[0] = rhs[:, 0]
         local_rhs[1] = rhs[:, 2] - cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[2, 2], block_A_k[2, 2],
                                                   XAX_k1[2, 2], inv_I * rhs[:, 1])
         local_rhs[2] = rhs[:, 3]
         local_rhs_norm = np.linalg.norm(local_rhs)
-        local_vec = op(np.transpose(previous_solution[:, [0, 1, 3]], (1, 0, 2, 3)).flatten()).reshape(3, x_shape[0], x_shape[2], x_shape[3])
+        local_vec = matvec_wrapper.matvec(np.transpose(previous_solution[:, [0, 1, 3]], (1, 0, 2, 3)).flatten()).reshape(3, x_shape[0], x_shape[2], x_shape[3])
         local_rhs_norm_prime = np.linalg.norm(local_rhs - local_vec)
         use_prev_sol = (local_rhs_norm_prime < local_rhs_norm)
         if use_prev_sol:
             local_rhs -= local_vec
 
-        solution_now, _ = scp.sparse.linalg.lgmres(op, local_rhs.flatten(), rtol=rtol, outer_k=8, maxiter=50, inner_m=25)
+        large_scale_solver = LGMRESSolver(rtol=rtol)
+        solution_now = large_scale_solver.solve_system(matvec_wrapper, local_rhs.flatten(), (3*m, 3*m))
         solution_now = np.transpose(solution_now.reshape(3, x_shape[0], x_shape[2], x_shape[3]),
                                     (1, 0, 2, 3)) 
         
@@ -661,7 +710,7 @@ def tt_ipm(
     gap_tol=1e-4,
     aho_direction=True,
     op_tol=1e-5,
-    abs_tol=5e-4,
+    abs_tol=8e-4,
     eps=1e-12,
     mals_restarts=3,
     r_max=750,
@@ -702,6 +751,7 @@ def tt_ipm(
 
     lhs_skeleton = TTBlockMatrix()
     lhs_skeleton[1, 2] = tt_reshape(tt_identity(2 * dim), (4, 4))
+    large_scale_local_solver = LGMRESSolver()
     solver_ineq = lambda lhs, rhs, x0, nwsp, restriction, termination_tol: tt_restarted_block_amen(
         lhs,
         rhs,

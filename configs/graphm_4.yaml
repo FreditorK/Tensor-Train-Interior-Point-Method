@@ -1,6 +1,6 @@
 dim: 4
 epsilonDash: 1.0
-gap_tol: 0.0008
+gap_tol: 0.0006
 mals_restarts: 2
 max_iter: 13
 max_ranks:
@@ -8,7 +8,7 @@ max_ranks:
 max_refinement: 3
 op_tol: 0.0001
 seeds:
-- 99
+- 97
 - 4
 - 8
 - 4922
