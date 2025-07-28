@@ -1,6 +1,5 @@
 import sys
 import os
-from turtle import rt
 import numpy as np
 import traceback
 
