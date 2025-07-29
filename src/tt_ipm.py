@@ -60,13 +60,16 @@ class LGMRESSolver:
         x_petsc = PETSc.Vec().createWithArray(np.zeros_like(rhs_np), comm=PETSc.COMM_WORLD)
         self.ksp.solve(b_petsc, x_petsc)
         sol = x_petsc.getArray()
+        b_petsc.destroy()
+        x_petsc.destroy()
         return sol
 
-    def destroy(self, mat=None):
-        if hasattr(self, "A_shell") and self.A_shell:
-            self.A_shell.destroy()
+    def destroy(self, _=None):
         if hasattr(self, "ksp") and self.ksp:
             self.ksp.destroy()
+            self.ksp = None
+        del self.matvec_object
+        del self.shape
 
 
 class IneqStatus(Enum):
@@ -157,6 +160,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
 
         large_scale_solver = LGMRESSolver(rtol=rtol)
         solution_now = large_scale_solver.solve_system(matvec_wrapper, local_rhs.flatten(), (2*m, 2*m))
+        large_scale_solver.destroy()
         solution_now = np.transpose(solution_now.reshape(2, x_shape[0], x_shape[2], x_shape[3]), (1, 0, 2, 3))
 
         if use_prev_sol:
@@ -255,6 +259,7 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
 
         large_scale_solver = LGMRESSolver(rtol=rtol)
         solution_now = large_scale_solver.solve_system(matvec_wrapper, local_rhs.flatten(), (3*m, 3*m))
+        large_scale_solver.destroy()
         solution_now = np.transpose(solution_now.reshape(3, x_shape[0], x_shape[2], x_shape[3]),
                                     (1, 0, 2, 3)) 
         
