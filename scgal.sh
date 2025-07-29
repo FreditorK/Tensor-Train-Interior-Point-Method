@@ -21,12 +21,14 @@ fi
 # ---------------------------
 
 # Try to find conda.sh and source it (adjust paths if needed)
-if [ -f "$HOME/miniconda3/etc/profile.d/conda.sh" ]; then
+if [ -f "$HOME/miniforge3/etc/profile.d/conda.sh" ]; then
+    source "$HOME/miniforge3/etc/profile.d/conda.sh"
+elif [ -f "$HOME/miniconda3/etc/profile.d/conda.sh" ]; then
     source "$HOME/miniconda3/etc/profile.d/conda.sh"
 elif [ -f "$HOME/anaconda3/etc/profile.d/conda.sh" ]; then
     source "$HOME/anaconda3/etc/profile.d/conda.sh"
 else
-    echo "❌ Conda not found. Please install conda or update this script."
+    echo "❌ Conda not found. Please install Miniforge, Miniconda, or Anaconda."
     exit 1
 fi
 
