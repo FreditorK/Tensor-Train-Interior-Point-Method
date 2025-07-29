@@ -35,7 +35,7 @@ class LGMRESSolver:
         self.ksp = PETSc.KSP().create(comm=PETSc.COMM_WORLD)
         # Set command line options for the solver, e.g., -ksp_monitor
         self.ksp.setFromOptions() 
-        self.ksp.setType('dgmres')
+        self.ksp.setType('lgmres')
         self.ksp.setTolerances(rtol=rtol, max_it=max_iter)
         self.ksp.setGMRESRestart(restart) 
 

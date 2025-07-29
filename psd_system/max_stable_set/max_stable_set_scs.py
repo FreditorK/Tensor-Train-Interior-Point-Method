@@ -5,7 +5,6 @@ import time
 import numpy as np
 import yaml
 import argparse
-import sdpap
 
 sys.path.append(os.getcwd() + '/../../')
 

@@ -4,7 +4,6 @@ import argparse
 import os
 import sys
 import os
-import sdpap
 import time
 import yaml
 from memory_profiler import memory_usage
