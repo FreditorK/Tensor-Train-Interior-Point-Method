@@ -254,6 +254,7 @@ def run_and_record(seed, r_i, s_i, rank, config, args, create_problem_fn, memory
             gap_tol=config["gap_tol"],
             op_tol=config["op_tol"],
             warm_up=config["warm_up"],
+            abs_tol=config["abs_tol"],
             aho_direction=False,
             mals_restarts=config["mals_restarts"],
             max_refinement=config["max_refinement"],

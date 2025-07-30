@@ -523,65 +523,6 @@ def _fwd_sweep(
 
 
     return x_cores, z_cores, XAX, Xb, rx, local_res, local_dx, direct_solve_failure 
-
-
-class LGMRESSolver:
-    def __init__(self, rtol=1e-8, max_iter=50, restart=25, outer_k=8):
-        """
-        Initializes the LGMRES solver.
-
-        Args:
-            matvec_object: An object with a method matvec(x) that returns A @ x,
-                           where x is a NumPy array.
-            shape: A tuple (N, N) representing the shape of the linear operator A.
-            rtol: The relative tolerance for convergence.
-            max_iter: The maximum number of iterations.
-            restart: The number of iterations before GMRES restarts (inner iterations).
-            outer_k: The number of outer vectors to use for LGMRES augmentation.
-        """
-        self.matvec_object = None
-        self.shape = None
-
-        # PETSc solver setup
-        self.ksp = PETSc.KSP().create(comm=PETSc.COMM_WORLD)
-        # Set command line options for the solver, e.g., -ksp_monitor
-        self.ksp.setFromOptions() 
-        self.ksp.setType('lgmres')
-        self.ksp.setTolerances(rtol=rtol, max_it=max_iter)
-        self.ksp.setGMRESRestart(restart)
-
-    def mult(self, mat, x, y):
-        x_np = x.getArray()
-        y_np = self.matvec_object.matvec(x_np)
-        y.setArray(y_np)
-
-    def solve_system(self, rhs_np, matvec_object, shape):
-        self.matvec_object = matvec_object
-        self.shape = shape
-
-        assert rhs_np.shape[0] == self.shape[0], \
-            f"RHS shape mismatch. Expected {self.shape[0]}, got {rhs_np.shape[0]}"
-
-        self.A_shell = PETSc.Mat().createPython(self.shape, comm=PETSc.COMM_WORLD)
-        self.A_shell.setPythonContext(self)
-        self.A_shell.setUp()
-        self.ksp.setOperators(self.A_shell)
-
-        b_petsc = PETSc.Vec().createWithArray(rhs_np, comm=PETSc.COMM_WORLD)
-        x_petsc = PETSc.Vec().createWithArray(np.zeros_like(rhs_np), comm=PETSc.COMM_WORLD)
-        self.ksp.solve(b_petsc, x_petsc)
-        sol = x_petsc.getArray()
-        # free PETSc objects explicitly
-        self.A_shell.destroy()
-        b_petsc.destroy()
-        x_petsc.destroy()
-        return sol
-
-    def destroy(self, mat=None):
-        if hasattr(self, "A_shell") and self.A_shell:
-            self.A_shell.destroy()
-        if hasattr(self, "ksp") and self.ksp:
-            self.ksp.destroy()
             
 
 def tt_block_amen(block_A, block_b, term_tol, r_max=100, eps=1e-12, nswp=22, x0=None, local_solver=None, kick_rank=2, amen=False, verbose=False):

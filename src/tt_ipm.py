@@ -15,7 +15,7 @@ from petsc4py import PETSc
 import numpy as np
 
 class LGMRESSolver:
-    def __init__(self, rtol=1e-8, max_iter=100, restart=50):
+    def __init__(self, rtol=1e-8, max_iter=100, restart=50, outer_k=8):
         """
         Initializes the LGMRES solver.
 
@@ -33,13 +33,17 @@ class LGMRESSolver:
 
         # PETSc solver setup
         self.ksp = PETSc.KSP().create(comm=PETSc.COMM_WORLD)
-        # Set command line options for the solver, e.g., -ksp_monitor
         self.ksp.setFromOptions() 
         self.ksp.setType('lgmres')
-        self.ksp.setTolerances(rtol=rtol, max_it=max_iter)
-        self.ksp.setGMRESRestart(restart) 
+        opts = PETSc.Options()
+        opts.setValue('-ksp_lgmres_augment', "8")
+        #opts.setValue('-ksp_dgmres_eigen', 49)
+        opts.setValue('-ksp_rtol', rtol)
+        opts.setValue('-ksp_max_it', max_iter)
+        opts.setValue('-ksp_gmres_restart', restart)
+        self.ksp.setFromOptions() 
 
-    def mult(self, mat, x, y):
+    def mult(self, _, x, y):
         x_np = x.getArray()
         y_np = self.matvec_object.matvec(x_np)
         y.setArray(y_np)
@@ -47,9 +51,6 @@ class LGMRESSolver:
     def solve_system(self, matvec_object, rhs_np, shape):
         self.matvec_object = matvec_object
         self.shape = shape
-
-        assert rhs_np.shape[0] == self.shape[0], \
-            f"RHS shape mismatch. Expected {self.shape[0]}, got {rhs_np.shape[0]}"
 
         self.A_shell = PETSc.Mat().createPython(self.shape, comm=PETSc.COMM_WORLD)
         self.A_shell.setPythonContext(self)
