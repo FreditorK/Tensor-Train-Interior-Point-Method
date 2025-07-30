@@ -15,7 +15,7 @@ from petsc4py import PETSc
 import numpy as np
 
 class LGMRESSolver:
-    def __init__(self, rtol=1e-8, max_iter=100, restart=50, outer_k=8):
+    def __init__(self, rtol=1e-8, max_iter=150, restart=50, outer_k=10):
         """
         Initializes the LGMRES solver.
 
@@ -36,7 +36,7 @@ class LGMRESSolver:
         self.ksp.setFromOptions() 
         self.ksp.setType('lgmres')
         opts = PETSc.Options()
-        opts.setValue('-ksp_lgmres_augment', "8")
+        opts.setValue('-ksp_lgmres_augment', outer_k)
         #opts.setValue('-ksp_dgmres_eigen', 49)
         opts.setValue('-ksp_rtol', rtol)
         opts.setValue('-ksp_max_it', max_iter)
@@ -398,7 +398,7 @@ def _tt_ipm_newton_step(
         # Predictor
         if status.verbose:
             print("\n--- Predictor  step ---", flush=True)
-        Delta_tt, _ = solver(lhs_matrix_tt, rhs_vec_tt, status.mals_delta0, status.kkt_iterations, status.mals_rank_restriction, status.eta)
+        Delta_tt, _ = solver(lhs_matrix_tt, rhs_vec_tt, status.mals_delta0, status.kkt_iterations + status.is_last_iter, status.mals_rank_restriction, status.eta)
         status.mals_delta0 = Delta_tt
         Delta_X_tt = _tt_symmetrise(tt_reshape(_tt_get_block(1, Delta_tt), (2, 2)), status.eps)
         Delta_Z_tt = _tt_symmetrise(tt_reshape(_tt_get_block(2, Delta_tt), (2, 2)), status.eps)
@@ -476,7 +476,7 @@ def _tt_ipm_newton_step(
                     min(status.op_tol, 0.1*status.mu)
                 ) if status.sigma > 1e-4 else rhs_vec_tt.get_row(2)
 
-            Delta_tt_cc, _ = solver(lhs_matrix_tt, rhs_vec_tt, status.mals_delta0, status.kkt_iterations, status.mals_rank_restriction, status.eta)
+            Delta_tt_cc, _ = solver(lhs_matrix_tt, rhs_vec_tt, status.mals_delta0, status.kkt_iterations + status.is_last_iter, status.mals_rank_restriction, status.eta)
             status.mals_delta0 = Delta_tt_cc
             Delta_X_tt_cc = _tt_symmetrise(tt_reshape(_tt_get_block(1, Delta_tt_cc), (2, 2)), status.eps)
             Delta_Z_tt_cc = _tt_symmetrise(tt_reshape(_tt_get_block(2, Delta_tt_cc), (2, 2)), status.eps)
