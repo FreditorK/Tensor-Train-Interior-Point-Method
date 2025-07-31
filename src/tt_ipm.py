@@ -15,7 +15,7 @@ from petsc4py import PETSc
 import numpy as np
 
 class LGMRESSolver:
-    def __init__(self, rtol=1e-8, max_iter=150, restart=50, outer_k=10):
+    def __init__(self, rtol=1e-8, max_iter=200, restart=50, outer_k=10):
         """
         Initializes the LGMRES solver.
 
@@ -37,7 +37,7 @@ class LGMRESSolver:
         self.ksp.setType('lgmres')
         opts = PETSc.Options()
         opts.setValue('-ksp_lgmres_augment', outer_k)
-        #opts.setValue('-ksp_dgmres_eigen', 49)
+        #opts.setValue('-ksp_dgmres_eigen', outer_k)
         opts.setValue('-ksp_rtol', rtol)
         opts.setValue('-ksp_max_it', max_iter)
         opts.setValue('-ksp_gmres_restart', restart)
@@ -159,7 +159,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         if use_prev_sol:
             local_rhs -= local_vec
 
-        large_scale_solver = LGMRESSolver(rtol=rtol)
+        large_scale_solver = LGMRESSolver(rtol=rtol, restart=min(m, 50))
         solution_now = large_scale_solver.solve_system(matvec_wrapper, local_rhs.flatten(), (2*m, 2*m))
         large_scale_solver.destroy()
         solution_now = np.transpose(solution_now.reshape(2, x_shape[0], x_shape[2], x_shape[3]), (1, 0, 2, 3))
@@ -212,17 +212,18 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
             u = mR_p - mL_eq @ (L_L_Z_inv_mR_c - (L_L_Z_inv_L_X * inv_I.reshape(1, -1)) @ mR_d)
             v = mR_t - T_op @ (L_L_Z_inv_mR_c - (L_L_Z_inv_L_X * inv_I.reshape(1, -1)) @ mR_d)
             A = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[0, 0], block_A_k[0, 0],XAX_k1[0, 0]).reshape(m, m).__iadd__(mL_eq @ (L_L_Z_inv_L_X * inv_I.reshape(1, -1)) @ mL_eq.T)
-            B = mL_eq @ L_L_Z_inv_L_X
-            C = T_op @ (L_L_Z_inv_L_X * inv_I.reshape(1, -1)) @ mL_eq.T
             D = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[3, 3], block_A_k[3, 3], XAX_k1[3, 3]).reshape(m, m).__iadd__(T_op @ L_L_Z_inv_L_X)
             D.flat[::D.shape[1] + 1] += 1e-11
+            np.matmul(T_op, L_L_Z_inv_L_X * inv_I.reshape(1, -1), out=T_op)
+            np.matmul(T_op, mL_eq.T, out=T_op)
+            np.matmul(mL_eq, L_L_Z_inv_L_X, out=mL_eq)
             Dlu, Dpiv = scp.linalg.lu_factor(D, check_finite=False, overwrite_a=True)
-            rhs_l = u.__isub__(B @ scp.linalg.lu_solve((Dlu, Dpiv), v, check_finite=False))
-            lhs_l = A.__isub__(B.__imatmul__(scp.linalg.lu_solve((Dlu, Dpiv), C, check_finite=False)))
+            rhs_l = u.__isub__(mL_eq @ scp.linalg.lu_solve((Dlu, Dpiv), v, check_finite=False))
+            lhs_l = A.__isub__(mL_eq.__imatmul__(scp.linalg.lu_solve((Dlu, Dpiv), T_op, check_finite=False)))
             y = scp.linalg.lu_solve(scp.linalg.lu_factor(lhs_l, check_finite=False, overwrite_a=True), rhs_l, check_finite=False, overwrite_b=True)
             solution_now = np.empty(x_shape)
             solution_now[:, 0] = y.reshape(x_shape[0], x_shape[2], x_shape[3])
-            solution_now[:, 3] = scp.linalg.lu_solve((Dlu, Dpiv), v.__isub__(C @ y), check_finite=False, overwrite_b=True).reshape(x_shape[0], x_shape[2], x_shape[3])
+            solution_now[:, 3] = scp.linalg.lu_solve((Dlu, Dpiv), v.__isub__(T_op @ y), check_finite=False, overwrite_b=True).reshape(x_shape[0], x_shape[2], x_shape[3])
             solution_now[:, 2] = (
                 mR_d - cached_einsum('lsr,smnS,LSR,lmL->rnR', XAX_k[0, 1], block_A_k[0, 1], XAX_k1[0, 1], solution_now[:, 0]).reshape(-1, 1)
                 ).__imul__(inv_I.reshape(-1, 1)).reshape(x_shape[0], x_shape[2], x_shape[3]).__isub__(solution_now[:, 3])
@@ -258,7 +259,7 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
         if use_prev_sol:
             local_rhs -= local_vec
 
-        large_scale_solver = LGMRESSolver(rtol=rtol)
+        large_scale_solver = LGMRESSolver(rtol=rtol, restart=min(m, 50))
         solution_now = large_scale_solver.solve_system(matvec_wrapper, local_rhs.flatten(), (3*m, 3*m))
         large_scale_solver.destroy()
         solution_now = np.transpose(solution_now.reshape(3, x_shape[0], x_shape[2], x_shape[3]),
