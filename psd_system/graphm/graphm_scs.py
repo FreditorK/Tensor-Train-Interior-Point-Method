@@ -1,6 +1,7 @@
 # Import packages.
 import sys
 import os
+from tabnanny import verbose
 import time
 import numpy as np
 import yaml
@@ -32,7 +33,7 @@ if __name__ == "__main__":
     feasibility_errors = np.zeros(num_seeds)
     dual_feasibility_errors = np.zeros(num_seeds)
     num_failed_seeds = 0
-    # num_iters = np.zeros(num_seeds)  # If available
+    num_iters = np.zeros(num_seeds)
 
     for s_i, seed in enumerate(config["seeds"]):
         for attempt in range(1):  # At most two tries: original and one new random seed
@@ -79,7 +80,7 @@ if __name__ == "__main__":
                     def wrapper():
                         try:
                             prob = cp.Problem(objective, constraints)
-                            _ = prob.solve(solver=cp.SDPA, epsilonDash=1e-6 / n, epsilonStar=1e-5 / n, verbose=True, omegaStar=100.0, betaStar=0.5, gammaStar=0.9)
+                            _ = prob.solve(solver=cp.SCS, eps=1e-6 / 2**config["dim"], verbose=True) # needed to reduce for stability
                         except:
                             pass
                         return prob
@@ -89,7 +90,7 @@ if __name__ == "__main__":
                 else:
                     try:
                         prob = cp.Problem(objective, constraints)
-                        _ = prob.solve(solver=cp.SDPA, epsilonDash=1e-6 / n, epsilonStar=1e-5 / n, verbose=True, omegaStar=100.0, betaStar=0.5, gammaStar=0.9)
+                        _ = prob.solve(solver=cp.SCS, eps=1e-6 / 2**config["dim"], verbose=True) # needed to reduce for stability
                     except:
                         pass
                     X_val = QP_mat.value
@@ -100,7 +101,7 @@ if __name__ == "__main__":
                         if 1 <= np.prod(m.shape) <= n ** 2 + 1 and len(m.shape) == 1:
                             y = m
                 Z = constraints[0].dual_value
-                data, chain, inverse_data = prob.get_problem_data(cp.SDPA)
+                data, chain, inverse_data = prob.get_problem_data(cp.SCS)
                 soln = chain.solve_via_data(prob, data)
                 # unpacks the solution returned by SCS into `problem`
                 prob.unpack_results(soln, chain, inverse_data)
@@ -113,12 +114,13 @@ if __name__ == "__main__":
                     complementary_slackness[s_i] = np.nan
                 # Feasibility error: (sum_diag - I_n)^2 + ... (customize as needed)
                 feasibility_errors[s_i] = sum([np.sum(c.residual**2) for c in constraints[1:]])  # Placeholder, customize if needed
-                dual_feas_sq = ((data["c"].flatten() - (data["A"].T @ np.concatenate([soln["eq_dual"], soln["ineq_dual"]], axis=0)).flatten()))**2
+                dual_feas_sq = (data["c"].flatten() + (data["A"].T @ soln["y"]).flatten())**2
                 dual_feas_diag_sq = dual_feas_sq[[sum(range(i)) for i in range(n**2+1)]]
                 for idx, i in enumerate([[sum(range(i)) for i in range(n**2+1)]]):
                     dual_feas_sq -= 0.5*dual_feas_diag_sq[idx]
                 # SDPA only stores the lower tri bits of symmetric variables, to make it fair we adjust the error
                 dual_feasibility_errors[s_i] = np.sum(2*dual_feas_sq)
+                num_iters[s_i] = prob.solver_stats.extra_stats["info"]["iter"]
                 break
             except Exception as e:
                 print(e)
@@ -132,7 +134,6 @@ if __name__ == "__main__":
             continue
 
     # Prepare dummy arrays for missing metrics to match the signature
-    num_iters = np.zeros(num_seeds)
     ranksX = np.zeros((1, num_seeds, 1))
     ranksY = np.zeros((1, num_seeds, 1))
     ranksZ = np.zeros((1, num_seeds, 1))

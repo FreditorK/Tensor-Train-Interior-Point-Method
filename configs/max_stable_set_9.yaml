@@ -1,13 +1,14 @@
-dim: 9
-epsilonDash: 9.0
-gap_tol: 0.0003
-mals_restarts: 2
-max_iter: 24
-max_ranks:
-- 1
-max_refinement: 5
-op_tol: 0.0001
-seeds:
-- 2629961373
-verbose: true
-warm_up: 3
+# Common
+dim: !!int 9
+max_ranks: [2]
+seeds: [42, 592, 83, 75, 124] # !!42, 592, 83, 75, 124!!
+gap_tol: !!float 3e-4
+verbose: False
+# TT-IPM
+op_tol: !!float 1e-4
+abs_tol: !!float 6e-4
+max_iter: !!int 26
+warm_up: !!int 3
+mals_restarts: !!int 2
+max_refinement:  !!int 5
+epsilonDash: !!float 2

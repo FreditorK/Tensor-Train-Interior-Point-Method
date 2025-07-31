@@ -4,7 +4,7 @@ gap_tol: 0.0003
 mals_restarts: 2
 max_iter: 20
 max_ranks:
-- 1
+- 2
 max_refinement: 5
 op_tol: 0.0001
 abs_tol: 6e-4
@@ -14,5 +14,5 @@ seeds:
 - 485
 - 95
 - 734
-verbose: True
+verbose: False
 warm_up: 3
