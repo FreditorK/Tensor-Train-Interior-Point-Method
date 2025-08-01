@@ -6,6 +6,7 @@ import time
 import yaml
 from memory_profiler import memory_usage
 import re
+import json
 
 sys.path.append(os.getcwd() + '/../../')
 
@@ -93,7 +94,7 @@ def run_experiment(create_problem_fn):
         memory=memory
     )
     save_results_summary(
-        config, args,
+        config, rank, args,
         runtimes, problem_creation_times, num_iters,
         feasibility_errors, dual_feasibility_errors, complementary_slackness,
         ranksX, ranksY, ranksZ,
@@ -191,41 +192,41 @@ def print_results_summary(config, args, runtimes, problem_creation_times,
     print("=" * 80)
 
 
-def save_results_summary(config, args, runtimes, problem_creation_times, num_iters, feasibility_errors, dual_feasibility_errors, complementary_slackness, ranksX, ranksY, ranksZ, ranksT=None, memory=None, filename=None):
-    """
-    Saves all results data to a compressed .npz file for easy reloading and plotting later.
-    The filename is generated to include config name, track_mem, seeds, and ranks.
-    """
-    # Build a descriptive filename
+
+def save_results_summary(config, rank, args, runtimes, problem_creation_times, num_iters,
+                               feasibility_errors, dual_feasibility_errors, complementary_slackness,
+                               ranksX, ranksY, ranksZ, ranksT=None, memory=None, filename=None):
+
     track_mem_str = f"trackmem_{getattr(args, 'track_mem', False)}"
     seeds_str = f"seeds_{'-'.join(map(str, config.get('seeds', [])))}"
-    ranks_str = f"ranks_{'-'.join(map(str, config.get('max_ranks', [])))}"
-    base_name = f"{args.config[8:-5]}_{track_mem_str}_{seeds_str}_{ranks_str}.npz"
-    # Sanitize filename (remove/replace problematic characters)
+    ranks_str = f"ranks_{'-'.join(str(rank))}"
+    base_name = f"{args.config[8:-5]}_{track_mem_str}_{seeds_str}_{ranks_str}.json"
     base_name = re.sub(r'[^a-zA-Z0-9_.-]', '_', base_name)
-    # Get results directory relative to this file's parent (project root)
+
     results_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'results'))
-    if not os.path.exists(results_dir):
-        os.makedirs(results_dir)
+    os.makedirs(results_dir, exist_ok=True)
+
     if filename is None:
         filename = os.path.join(results_dir, base_name)
-    # Save config and args as strings (for reproducibility)
-    np.savez_compressed(
-        filename,
-        config_str=str(config),
-        args_str=str(vars(args)),
-        runtimes=runtimes,
-        problem_creation_times=problem_creation_times,
-        num_iters=num_iters,
-        feasibility_errors=feasibility_errors,
-        dual_feasibility_errors=dual_feasibility_errors,
-        complementary_slackness=complementary_slackness,
-        ranksX=ranksX,
-        ranksY=ranksY,
-        ranksZ=ranksZ,
-        ranksT=ranksT if ranksT is not None else np.array([]),
-        memory=memory if memory is not None else np.array([])
-    )
+
+    data = {
+        "config_str": str(config),
+        "args_str": str(vars(args)),
+        "runtimes": runtimes.tolist(),
+        "problem_creation_times": problem_creation_times.tolist(),
+        "num_iters": num_iters.tolist(),
+        "feasibility_errors": feasibility_errors.tolist(),
+        "dual_feasibility_errors": dual_feasibility_errors.tolist(),
+        "complementary_slackness": complementary_slackness.tolist(),
+        "ranksX": ranksX.tolist(),
+        "ranksY": ranksY.tolist(),
+        "ranksZ": ranksZ.tolist(),
+        "ranksT": ranksT.tolist() if ranksT is not None else [],
+        "memory": memory.tolist() if memory is not None else [],
+    }
+
+    with open(filename, 'w') as f:
+        json.dump(data, f, indent=2)
 
 def run_and_record(seed, r_i, s_i, rank, config, args, create_problem_fn, memory, 
                    problem_creation_times, runtimes, complementary_slackness, 
