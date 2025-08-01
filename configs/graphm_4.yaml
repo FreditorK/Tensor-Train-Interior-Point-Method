@@ -12,5 +12,5 @@ seeds:
 - 232 # good
 - 4922 # good
 - 710 # good
-verbose: true
+verbose: false
 warm_up: 3
