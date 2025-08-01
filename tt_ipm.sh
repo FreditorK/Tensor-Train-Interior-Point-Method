@@ -81,7 +81,7 @@ for dim in $(seq $START_DIM $END_DIM); do
     echo -e "\n▶ Running dim=$dim with config=$CONFIG at $(date)"
     CURRENT_TIMEOUT=$((BASE_TIMEOUT * dim))
 
-    timeout "$CURRENT_TIMEOUT" python $1.py --config "$CONFIG" $TRACK_MEM
+    timeout "$CURRENT_TIMEOUT" python $1.py --config "$CONFIG" --rank $TXT_IDENTIFIER $TRACK_MEM
     status=$?
 
     if [ $status -eq 124 ]; then

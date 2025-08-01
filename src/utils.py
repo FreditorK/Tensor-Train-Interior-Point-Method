@@ -18,6 +18,7 @@ def run_experiment(create_problem_fn):
 
     parser = argparse.ArgumentParser(description="Script with optional memory tracking.")
     parser.add_argument("--track_mem", action="store_true", help="Enable memory tracking from a certain point.")
+    parser.add_argument("--rank", type=int, default=1, help="Rank of the process (default: 1)")
     parser.add_argument("--config", type=str, required=True, help="Path to the YAML configuration file")
     args = parser.parse_args()
 
@@ -51,34 +52,36 @@ def run_experiment(create_problem_fn):
 
     used_seeds = set(config["seeds"])
 
-    for r_i, rank in enumerate(config["max_ranks"]):
-        print(f"\n===== Processing Rank: {rank} =====")
-        for s_i, seed in enumerate(config["seeds"]):
-            print(f"Running seed {seed}")
+    rank = args.rank
+    r_i = 0
+    print(f"\n===== Processing Rank: {rank} =====")
+    for s_i, seed in enumerate(config["seeds"]):
+        print(f"Running seed {seed}")
+        feas_err, slack = run_and_record(
+            seed, r_i, s_i, rank, config, args, create_problem_fn, memory,
+            problem_creation_times, runtimes, complementary_slackness,
+            feasibility_errors, dual_feasibility_errors, num_iters,
+            ranksX, ranksY, ranksZ, ranksT, config_path
+        )
+        new_seed = seed
+        while (feas_err > 1e-3) or (slack > 1e-3):
+            print(f"Seed {new_seed} is pathological (feasibility error: {feas_err:.2e}, slackness: {slack:.2e}). Suggesting a new seed.")
+            new_seed = np.random.randint(0, 2**10)
+            while new_seed in used_seeds:
+                new_seed = np.random.randint(0, 2**10)
+            print(f"New seed suggested: {new_seed}")
+            used_seeds.add(new_seed)
+            config["seeds"][s_i] = new_seed
+            with open(config_path, "w") as file:
+                yaml.safe_dump(config, file)
+            # Rerun with new seed
             feas_err, slack = run_and_record(
-                seed, r_i, s_i, rank, config, args, create_problem_fn, memory,
+                new_seed, r_i, s_i, rank, config, args, create_problem_fn, memory,
                 problem_creation_times, runtimes, complementary_slackness,
                 feasibility_errors, dual_feasibility_errors, num_iters,
                 ranksX, ranksY, ranksZ, ranksT, config_path
             )
-            if (feas_err > 1e-3) or (slack > 1e-3):
-                print(f"Seed {seed} is pathological (feasibility error: {feas_err:.2e}, slackness: {slack:.2e}). Suggesting a new seed.")
-                new_seed = np.random.randint(0, 2**10)
-                while new_seed in used_seeds:
-                    new_seed = np.random.randint(0, 2**10)
-                print(f"New seed suggested: {new_seed}")
-                used_seeds.add(new_seed)
-                config["seeds"][s_i] = new_seed
-                with open(config_path, "w") as file:
-                    yaml.safe_dump(config, file)
-                # Rerun with new seed
-                feas_err, slack = run_and_record(
-                    new_seed, r_i, s_i, rank, config, args, create_problem_fn, memory,
-                    problem_creation_times, runtimes, complementary_slackness,
-                    feasibility_errors, dual_feasibility_errors, num_iters,
-                    ranksX, ranksY, ranksZ, ranksT, config_path
-                )
-                print(f"Rerun with new seed {new_seed} complete. Feasibility error: {feas_err:.2e}, Slackness: {slack:.2e}")
+            print(f"Rerun with new seed {new_seed} complete. Feasibility error: {feas_err:.2e}, Slackness: {slack:.2e}")
 
     # Pass ranksT only if it was ever used
     print_results_summary(

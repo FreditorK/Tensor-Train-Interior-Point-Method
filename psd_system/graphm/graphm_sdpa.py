@@ -44,8 +44,8 @@ if __name__ == "__main__":
             np.random.seed(current_seed)
             t1 = time.time()
             n = 2**config["dim"]
-            G_A = tt_matrix_to_matrix(tt_random_graph(config["dim"], config["max_ranks"][0]))
-            G_B = tt_matrix_to_matrix(tt_random_graph(config["dim"], config["max_ranks"][0]))
+            G_A = tt_matrix_to_matrix(tt_random_graph(config["dim"], 1))
+            G_B = tt_matrix_to_matrix(tt_random_graph(config["dim"], 1))
             t2 = time.time()
             J_n = np.ones((n, n))
             if args.track_mem:

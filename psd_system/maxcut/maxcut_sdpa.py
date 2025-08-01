@@ -45,7 +45,7 @@ if __name__ == "__main__":
                 print(f"Trying with new random seed: {current_seed}")
             np.random.seed(current_seed)
             t1 = time.time()
-            C = tt_matrix_to_matrix(tt_obj_matrix(config["max_ranks"][0], config["dim"]))
+            C = tt_matrix_to_matrix(tt_obj_matrix(1, config["dim"]))
             t2 = time.time()
             if args.track_mem:
                 start_mem = memory_usage(max_usage=True, include_children=True)

@@ -3,16 +3,14 @@ epsilonDash: 1.0
 gap_tol: 0.0006
 mals_restarts: 2
 max_iter: 13
-max_ranks:
-- 1
 max_refinement: 3
 op_tol: 0.0001
 abs_tol: 9e-4
 seeds:
 - 706 # good
 - 46 # good
-- 232
-- 4922
-- 710
+- 232 # good
+- 4922 # good
+- 710 # good
 verbose: true
 warm_up: 3

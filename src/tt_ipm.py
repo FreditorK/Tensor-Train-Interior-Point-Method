@@ -14,8 +14,71 @@ warnings.simplefilter("error")
 from petsc4py import PETSc
 import numpy as np
 
+
+class LSQRSolver:
+    def __init__(self, rtol=1e-8, max_iter=300):
+        """
+        PETSc-based LSQR solver (avoids squaring condition number).
+        """
+        self.matvec_object = None
+        self.shape = None
+
+        # Create KSP solver
+        self.ksp = PETSc.KSP().create(comm=PETSc.COMM_WORLD)
+        self.ksp.setType('lsqr')
+
+        # Set convergence criteria
+        opts = PETSc.Options()
+        opts.setValue('-ksp_rtol', rtol)
+        opts.setValue('-ksp_max_it', max_iter)
+        self.ksp.setFromOptions()
+
+    def mult(self, _, x, y):
+        """ y = A x """
+        x_np = x.getArray()
+        y_np = self.matvec_object.matvec(x_np)
+        y.setArray(y_np)
+
+    def multTranspose(self, _, x, y):
+        """ y = A^T x """
+        x_np = x.getArray()
+        y_np = self.matvec_object.rmatvec(x_np)  # Must be implemented by user!
+        y.setArray(y_np)
+
+    def solve_system(self, matvec_object, rhs_np, shape):
+        """
+        Solve min ||Ax - b||_2 using LSQR.
+        """
+        self.matvec_object = matvec_object
+        self.shape = shape
+
+        # Create matrix-free shell matrix
+        self.A_shell = PETSc.Mat().createPython(self.shape, comm=PETSc.COMM_WORLD)
+        self.A_shell.setPythonContext(self)
+        self.A_shell.setUp()
+
+        # Setup solver
+        self.ksp.setOperators(self.A_shell)
+
+        b_petsc = PETSc.Vec().createWithArray(rhs_np, comm=PETSc.COMM_WORLD)
+        x_petsc = PETSc.Vec().createWithArray(np.zeros(self.shape[1]), comm=PETSc.COMM_WORLD)
+
+        self.ksp.solve(b_petsc, x_petsc)
+        sol = x_petsc.getArray().copy()
+
+        b_petsc.destroy()
+        x_petsc.destroy()
+        return sol
+
+    def destroy(self):
+        if hasattr(self, "ksp") and self.ksp:
+            self.ksp.destroy()
+            self.ksp = None
+        del self.matvec_object
+        del self.shape
+
 class LGMRESSolver:
-    def __init__(self, rtol=1e-8, max_iter=200, restart=50, outer_k=10):
+    def __init__(self, rtol=1e-8, max_iter=300, restart=100, outer_k=10):
         """
         Initializes the LGMRES solver.
 
@@ -158,8 +221,10 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         use_prev_sol = (local_rhs_norm_prime < local_rhs_norm)
         if use_prev_sol:
             local_rhs -= local_vec
-
-        large_scale_solver = LGMRESSolver(rtol=rtol, restart=min(m, 50))
+        
+        num_iters = min(m, 100)
+        outer_k = max(num_iters // 10, 3)
+        large_scale_solver = LGMRESSolver(rtol=rtol, restart=num_iters, outer_k=outer_k)
         solution_now = large_scale_solver.solve_system(matvec_wrapper, local_rhs.flatten(), (2*m, 2*m))
         large_scale_solver.destroy()
         solution_now = np.transpose(solution_now.reshape(2, x_shape[0], x_shape[2], x_shape[3]), (1, 0, 2, 3))
@@ -172,9 +237,8 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
 
     block_res_new = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, solution_now).__isub__(rhs)) / norm_rhs
 
-
     if block_res_old < block_res_new:
-        solution_now = previous_solution
+        solution_now = previous_solution        
 
     return solution_now, block_res_old, min(block_res_old, block_res_new), rhs, norm_rhs, direct_solve_failure
 
@@ -190,7 +254,7 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
     norm_rhs = max(np.linalg.norm(rhs), 1e-10)
     block_res_old = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution).__isub__(rhs)) / norm_rhs
     direct_solve_failure = not dense_solve
-    dense_solve = (np.sqrt(x_shape[0]*x_shape[3]) <= size_limit) and dense_solve
+    dense_solve = (np.sqrt(x_shape[0]*x_shape[3]) <= 0.9*size_limit) and dense_solve
 
     if block_res_old < rtol:
         return previous_solution, block_res_old, block_res_old, rhs, norm_rhs, direct_solve_failure
@@ -259,7 +323,9 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
         if use_prev_sol:
             local_rhs -= local_vec
 
-        large_scale_solver = LGMRESSolver(rtol=rtol, restart=min(m, 50))
+        num_iters = min(m, 100)
+        outer_k = max(num_iters // 10, 3)
+        large_scale_solver = LGMRESSolver(rtol=rtol, restart=num_iters, outer_k=outer_k)
         solution_now = large_scale_solver.solve_system(matvec_wrapper, local_rhs.flatten(), (3*m, 3*m))
         large_scale_solver.destroy()
         solution_now = np.transpose(solution_now.reshape(3, x_shape[0], x_shape[2], x_shape[3]),

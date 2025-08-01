@@ -547,7 +547,6 @@ def _bin_rand_tril(dim: int, rank: int, skew=0.0) -> List[np.ndarray]:
 
 
 def tt_random_graph(dim, r, skew=0.0, eps=1e-12):
-    print("====Starting Graph Sampling====")
     current_graph_tt = []
     for _ in range(dim-1):
         binary_numbers = np.random.choice([0, 1], size=3, replace=True, p=skewed_probabilities(2, skew))
@@ -561,12 +560,11 @@ def tt_random_graph(dim, r, skew=0.0, eps=1e-12):
         print("===Terminated Graph Sampling===", tt_ranks(current_graph_tt),  flush=True)
         return current_graph_tt
     current_rank = 1
-    for rejection_counter in range(1, 500):
-        tril_r = np.random.randint(r, 2*r)
+    for rejection_counter in range(1, 1000):
+        tril_r = np.random.randint(r, 2*r+1)
         tril = _bin_rand_tril(dim, tril_r, np.clip(skew, a_min=0, a_max=5))
         tril = tt_reshape(tril, (2, 2))
         graph_tt = tt_rank_reduce(tt_add(tril, tt_transpose(tril)), eps)
-        print(f"Graph #{rejection_counter} rank: ", tt_ranks(graph_tt))
         max_rank = np.max(tt_ranks(graph_tt))
         if current_rank < max_rank <= r:
             current_rank = max_rank

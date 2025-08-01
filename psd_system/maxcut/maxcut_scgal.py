@@ -42,7 +42,7 @@ if __name__ == "__main__":
             np.random.seed(current_seed)
             t1 = time.time()
             trace_param = 2 ** config["dim"]
-            C = tt_matrix_to_matrix(tt_obj_matrix(config["max_ranks"][0], config["dim"]))
+            C = tt_matrix_to_matrix(tt_obj_matrix(1, config["dim"]))
             C *= trace_param / np.linalg.norm(C)
             t2 = time.time()
             constraint_matrices = [np.outer(column, column) for column in np.eye(C.shape[0])]

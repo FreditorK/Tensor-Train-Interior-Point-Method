@@ -56,7 +56,7 @@ if __name__ == "__main__":
                 print(f"Trying with new random seed: {current_seed}")
             np.random.seed(current_seed)
             t1 = time.time()
-            G = tt_rank_reduce(tt_random_graph(config["dim"], config["max_ranks"][0]))
+            G = tt_rank_reduce(tt_random_graph(config["dim"], 1))
             adj_matrix = np.round(tt_matrix_to_matrix(G), decimals=1)
             t2 = time.time()
             J = np.ones_like(adj_matrix)

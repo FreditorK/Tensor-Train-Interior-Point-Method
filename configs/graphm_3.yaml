@@ -1,7 +1,6 @@
 # Common
 dim: !!int 3
-max_ranks: [1]
-seeds: [710]  # !!710, 68, 23, 9175, 212!!  Why is 9175 so bad????
+seeds: [9175]  # !!710, 68, 23, 9175, 212!!  Why is 9175 so bad????
 gap_tol: !!float 5e-4
 verbose: True
 # TT-IPM
