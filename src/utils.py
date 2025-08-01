@@ -128,6 +128,7 @@ def print_results_summary(config, args, runtimes, problem_creation_times,
     print("=" * 80)
     seeds = config["seeds"]
     print(f"Values are reported as Mean ± Standard Deviation over all seeds {seeds}.\n")
+    r_i = 0
 
     # --- Calculate Means for Metrics ---
     mean_runtime = np.mean(runtimes[r_i, :])
