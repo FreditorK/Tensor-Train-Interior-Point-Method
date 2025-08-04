@@ -785,7 +785,7 @@ def tt_ipm(
     abs_tol=8e-4,
     eps=1e-12,
     mals_restarts=3,
-    r_max=750,
+    r_max=1000, # 750 for anythin but graphm rank 2-3 experiments
     epsilonDash=1,
     verbose=False
 ):

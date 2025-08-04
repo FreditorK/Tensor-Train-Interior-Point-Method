@@ -96,7 +96,8 @@ def process_json_to_latex(file_path, problem_type, method_name="TT-IPM", total_r
     dual_err_str = format_scientific(d_err_mean, d_err_std)
     duality_gap_str = format_scientific(gap_mean, gap_std)
     iterations_str = f"${iter_mean:.1f} \\pm {iter_std:.1f}$"
-    size_str = f"$2^{{{dim}}}$"
+    ex = 2*dim if problem_type == "graphm" else dim
+    size_str = f"$2^{{{ex}}}$"
 
     latex_row = (
         f"{method_cell} & {storage_str} & {runtime_str} & {primal_err_str} & "

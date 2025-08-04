@@ -4,7 +4,7 @@ echo "Running: $1"
 # ---------------------------
 # Parameters
 # ---------------------------
-BASE_TIMEOUT=25600 # 8h
+BASE_TIMEOUT=40000 # 12h changed for graphm  rank >2
 
 START_DIM=$2
 END_DIM=$3

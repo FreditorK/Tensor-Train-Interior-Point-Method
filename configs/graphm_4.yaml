@@ -7,10 +7,10 @@ max_refinement: 3
 op_tol: 0.0001
 abs_tol: 9e-4
 seeds:
-- 706 # good
-- 46 # good
-- 232 # good
-- 4922 # good
-- 710 # good
-verbose: false
+- 9428
+- 375
+- 482
+- 434
+- 928
+verbose: true
 warm_up: 3

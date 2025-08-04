@@ -219,7 +219,7 @@ def create_problem(n, max_rank):
         "t": tt_diag_op(lag_map_t)
     }
 
-    scale = max(2**(2*n + 1 - 7), 1) #
+    scale = max(2**(2*n + 1 - 7), 1)
     eq_bias_tt = tt_normalise(eq_bias_tt, radius=scale)
 
     # IX

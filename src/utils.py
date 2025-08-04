@@ -274,6 +274,8 @@ def run_and_record(seed, r_i, s_i, rank, config, args, create_problem_fn, memory
     t3 = time.time()
     problem_creation_times[r_i, s_i] = t2 - t1
     runtimes[r_i, s_i] = t3 - t2
+    if T_tt is not None:
+        Z_tt[0][:, 1, 1] = 0 # Shed the quantization bit
     complementary_slackness[r_i, s_i] = abs(tt_inner_prod(X_tt, Z_tt))
     primal_res = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(L_op_tt, tt_reshape(X_tt, (4,))), bias_tt), eps=1e-12)
     feasibility_errors[r_i, s_i] = tt_inner_prod(primal_res, primal_res)
