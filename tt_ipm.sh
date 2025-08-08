@@ -13,7 +13,7 @@ TXT_IDENTIFIER=$4
 # ---------------------------
 # Delete log file if it exists
 # ---------------------------
-LOGFILE="results/tt_ipm_$1_${START_DIM}_${END_DIM}_${TXT_IDENTIFIER}.txt"
+LOGFILE="results/tt_ipm_$1_${START_DIM}_${END_DIM}_${TXT_IDENTIFIER}_c1.txt"
 if [ -f "$LOGFILE" ]; then
     rm "$LOGFILE"
 fi
@@ -77,7 +77,7 @@ for arg in "$@"; do
 done
 
 for dim in $(seq $START_DIM $END_DIM); do
-    CONFIG="configs/$1_${dim}.yaml"
+    CONFIG="configs/${1}c1_${dim}.yaml"
     echo -e "\n▶ Running dim=$dim with config=$CONFIG at $(date)"
     CURRENT_TIMEOUT=$((BASE_TIMEOUT * dim))
 

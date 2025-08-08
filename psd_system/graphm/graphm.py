@@ -70,14 +70,15 @@ def tt_diag_block_sum_linear_op(block_size, dim):
 # Constraint 7 -----------------------------------------------------------------
 
 def tt_Q_m_P_op(dim):
-    #4.14
+    #4.14 |
     Q_part = [E(0,  0), E(1,  0)]
     for i in range(dim):
         core_1 = np.concatenate((E(0, 0), E(1, 1)), axis=-1)
-        core_2 = np.concatenate((E(0,0), E(0,  1)), axis=0)
+        core_2 = np.concatenate((E(0, 0), E(0, 1)), axis=0)
         Q_part.extend([core_1, core_2])
     P_part = [-E(0, 0), E(1, 1)] + tt_diag(tt_split_bonds([E(0, 0) + E(1, 0) for _ in range(dim)]))
     part_1 = tt_add(Q_part, P_part)
+    # --
     Q_part_2 = [E(1, 0), E(0, 0)]
     for i in range(dim):
         core_1 = np.concatenate((E(0, 0), E(0, 1)), axis=-1)
@@ -98,7 +99,7 @@ def tt_Q_m_P_op(dim):
 def tt_padding_op(dim):
     matrix_tt = [E(0, 1) + E(1, 0) +  E(1, 1)] + tt_one_matrix(dim)
     matrix_tt  = tt_sub(matrix_tt, [E(0, 1)] + [E(0, 0) + E(1, 0) for _ in range(dim)])
-    matrix_tt = tt_sub(matrix_tt, [E(1,  0)] + [E(0, 0) + E(0, 1) for _ in range(dim)])
+    matrix_tt = tt_sub(matrix_tt, [E(1, 0)] + [E(0, 0) + E(0, 1) for _ in range(dim)])
     basis = tt_diag(tt_split_bonds(matrix_tt))
     return tt_reshape(tt_rank_reduce(basis), (4, 4))
 
@@ -228,7 +229,7 @@ def create_problem(n, max_rank):
 
     L_op_tt = tt_rank_reduce(tt_add(L_op_tt, padding_op), 1e-12)
     eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, padding_op_bias))
-
+    
     return tt_normalise(C_tt, radius=scale), L_op_tt, eq_bias_tt, ineq_mask, lag_maps
 
 if __name__ == "__main__":
