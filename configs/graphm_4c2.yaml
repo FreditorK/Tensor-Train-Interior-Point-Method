@@ -12,5 +12,5 @@ seeds:
 - 5621
 - 2430
 - 460693
-verbose: true
+verbose: false
 warm_up: 3
