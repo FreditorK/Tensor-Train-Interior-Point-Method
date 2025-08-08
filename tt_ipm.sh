@@ -77,7 +77,7 @@ for arg in "$@"; do
 done
 
 for dim in $(seq $START_DIM $END_DIM); do
-    CONFIG="configs/${1}c1_${dim}.yaml"
+    CONFIG="configs/$1_${dim}c1.yaml"
     echo -e "\n▶ Running dim=$dim with config=$CONFIG at $(date)"
     CURRENT_TIMEOUT=$((BASE_TIMEOUT * dim))
 
