@@ -56,17 +56,23 @@ def collect_heatmap_data(problem_type, dim_range=None):
                     return 0
                 # data is nested in a list, so we take the first element
                 runs = rank_data[0]
-                avg_ranks = [np.mean(run) for run in runs if run]
-                return np.max(avg_ranks) if avg_ranks else 0
+                max_ranks = [np.max(run) for run in runs if run]
+                return np.mean(max_ranks) if max_ranks else 0
 
             primal_val = get_max_avg_rank(data.get("ranksX", []))
             dual_val = get_max_avg_rank(data.get("ranksY", []))
+            dual_val_ineq = get_max_avg_rank(data.get("ranksT", []))
             dualslack_val = get_max_avg_rank(data.get("ranksZ", []))
             
+            # Use defaultdict to simplify assignment
+            if not isinstance(plot_data[dim], defaultdict):
+                plot_data[dim] = defaultdict(dict, plot_data[dim])
+
             plot_data[dim][rank] = {
                 'primal': primal_val,
                 'dual': dual_val,
-                'dualslack': dualslack_val
+                'dualslack': dualslack_val,
+                'dualineq': dual_val_ineq
             }
 
         except (json.JSONDecodeError, IndexError) as e:
@@ -76,8 +82,8 @@ def collect_heatmap_data(problem_type, dim_range=None):
 
 def generate_dat_file_content(plot_data):
     """
-    Generates and prints the content for the .dat files, with a zero-padded border,
-    and recommends a color scale range.
+    Generates and prints the content for .dat files. The grid is one larger
+    than the data, with the last row and column zero-padded.
     """
     if not plot_data:
         print("No data available to generate .dat files.")
@@ -86,16 +92,21 @@ def generate_dat_file_content(plot_data):
     # Get the actual dimensions and ranks found in the data
     all_dims = sorted(plot_data.keys())
     all_ranks = sorted(list(set(rank for dim_data in plot_data.values() for rank in dim_data.keys())))
-    
-    # The grid size will be one larger than the number of dims/ranks to accommodate the zero-padding
+
+    if not all_dims or not all_ranks:
+        print("Data is missing dimensions or ranks.")
+        return
+        
+    # The grid is one larger than the data to create a zero-padded edge at the max coordinate
     grid_width = len(all_ranks) + 1
     grid_height = len(all_dims) + 1
 
     # --- Calculate global min/max for color scale recommendation ---
     all_values = []
+    # This calculation only considers the actual data, not the padded border
     for dim_data in plot_data.values():
         for rank_data in dim_data.values():
-            for key in ['primal', 'dual', 'dualslack']:
+            for key in ['primal', 'dual', 'dualslack', 'dualineq']:
                 value = rank_data.get(key, 0)
                 if value > 0:
                     all_values.append(value)
@@ -106,32 +117,35 @@ def generate_dat_file_content(plot_data):
         point_meta_max = np.ceil(max(all_values))
         recommendation = f"point meta min={int(point_meta_min)}, point meta max={int(point_meta_max)},"
 
-
     # --- Helper to generate content for one file ---
     def generate_single_file(file_name, data_key):
         print(f"\\begin{{filecontents*}}{{{file_name}}}")
         print("x y val")
-        # Loop through the grid coordinates
-        for y in range(grid_height):
-            for x in range(grid_width):
-                value = 0.0 # Default to 0 for the padded border
-                # If not on the border, get the actual data
-                if x > 0 and y > 0:
-                    # Map grid coordinates back to actual dim and rank
-                    # y-1 and x-1 because grid is 1-indexed for data
-                    dim = all_dims[y - 1]
-                    rank = all_ranks[x - 1]
-                    value = plot_data.get(dim, {}).get(rank, {}).get(data_key, 0)
-                
-                print(f"{x} {y} {value:.4f}")
+        # Loop through the full 0-indexed grid coordinates
+        for y_idx in range(grid_height):
+            for x_idx in range(grid_width):
+                # Check if the current coordinate is on the last row or column
+                is_on_border = (x_idx == grid_width - 1) or (y_idx == grid_height - 1)
+
+                if is_on_border:
+                    value = 0.0
+                else:
+                    # If not on the border, map indices to actual dim and rank
+                    dim = all_dims[y_idx]
+                    rank = all_ranks[x_idx]
+                    value = plot_data.get(dim, {}).get(rank, {}).get(data_key, 0.0)
+
+                print(f"{x_idx} {y_idx} {value:.4f}")
         print("\\end{filecontents*}")
 
-    # --- Generate all three files ---
+    # --- Generate all four files ---
     generate_single_file("primal.dat", "primal")
     print("\n")
     generate_single_file("dual.dat", "dual")
     print("\n")
     generate_single_file("dualslack.dat", "dualslack")
+    print("\n")
+    generate_single_file("dualineq.dat", "dualineq")
     
     # --- Print the recommendation ---
     print("\n" + "-"*20)

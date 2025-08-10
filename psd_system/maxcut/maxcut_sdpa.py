@@ -55,13 +55,13 @@ if __name__ == "__main__":
                 if args.track_mem:
                     def wrapper():
                         prob = cp.Problem(cp.Maximize(cp.trace(C.T @ X)), constraints)
-                        _ = prob.solve(solver=cp.SDPA, epsilonDash=1e-6 / 2**config["dim"], epsilonStar=1e-5 / 2**config["dim"], verbose=True, omegaStar=100.0, betaStar=0.5, gammaStar=0.9, domainMethod="basis")
+                        _ = prob.solve(solver=cp.SDPA, epsilonDash=1e-6 / 2**config["dim"], epsilonStar=1e-5 / 2**config["dim"], verbose=True, gammaStar=0.9, domainMethod="basis")
                         return prob
                     res, prob = memory_usage(proc=wrapper, max_usage=True, retval=True, include_children=True)
                     memory[s_i] = res - start_mem
                 else:
                     prob = cp.Problem(cp.Maximize(cp.trace(C.T @ X)), constraints)
-                    _ = prob.solve(solver=cp.SDPA, epsilonDash=1e-6 / 2**config["dim"], epsilonStar=1e-5 / 2**config["dim"], verbose=True, omegaStar=100.0, betaStar=0.5, gammaStar=0.9, domainMethod="basis")
+                    _ = prob.solve(solver=cp.SDPA, epsilonDash=1e-6 / 2**config["dim"], epsilonStar=1e-5 / 2**config["dim"], verbose=True, gammaStar=0.9, domainMethod="basis")
                 # If we get here, break out of the attempt loop (success)
                 break
             except Exception as e:

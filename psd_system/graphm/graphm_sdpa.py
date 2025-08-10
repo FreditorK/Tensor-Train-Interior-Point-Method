@@ -79,7 +79,7 @@ if __name__ == "__main__":
                     def wrapper():
                         try:
                             prob = cp.Problem(objective, constraints)
-                            _ = prob.solve(solver=cp.SDPA, epsilonDash=1e-6 / n, epsilonStar=1e-5 / n, verbose=True, omegaStar=100.0, betaStar=0.5, gammaStar=0.9)
+                            _ = prob.solve(solver=cp.SDPA, epsilonDash=1e-6 / n, epsilonStar=1e-5 / n, verbose=True, gammaStar=0.9)
                         except:
                             pass
                         return prob
@@ -89,7 +89,7 @@ if __name__ == "__main__":
                 else:
                     try:
                         prob = cp.Problem(objective, constraints)
-                        _ = prob.solve(solver=cp.SDPA, epsilonDash=1e-6 / n, epsilonStar=1e-5 / n, verbose=True, omegaStar=100.0, betaStar=0.5, gammaStar=0.9)
+                        _ = prob.solve(solver=cp.SDPA, epsilonDash=1e-6 / n, epsilonStar=1e-5 / n, verbose=True, gammaStar=0.9)
                     except:
                         pass
                     X_val = QP_mat.value

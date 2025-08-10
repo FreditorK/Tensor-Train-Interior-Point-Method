@@ -71,7 +71,7 @@ if __name__ == "__main__":
                     def wrapper():
                         try:
                             prob = cp.Problem(cp.Maximize(cp.trace(J.T @ X)), constraints)
-                            _ = prob.solve(solver=cp.SCS, eps=1e-6 / 2**config["dim"]) # needed to reduce for stability
+                            _ = prob.solve(solver=cp.SCS, eps=1e-5 / config["dim"]) # needed to reduce for stability
                         except:
                             pass
                         return prob
@@ -81,7 +81,7 @@ if __name__ == "__main__":
                 else:
                     try:
                         prob = cp.Problem(cp.Maximize(cp.trace(J.T @ X)), constraints)
-                        _ = prob.solve(solver=cp.SCS, eps=1e-5 / 2**config["dim"]) # needed to reduce for stability
+                        _ = prob.solve(solver=cp.SCS, eps=1e-5 / config["dim"]) # needed to reduce for stability
                     except:
                         pass
                     X_val = X.value

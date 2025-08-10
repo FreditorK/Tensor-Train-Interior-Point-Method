@@ -823,7 +823,6 @@ def tt_ipm(
 
     lhs_skeleton = TTBlockMatrix()
     lhs_skeleton[1, 2] = tt_reshape(tt_identity(2 * dim), (4, 4))
-    large_scale_local_solver = LGMRESSolver()
     solver_ineq = lambda lhs, rhs, x0, nwsp, restriction, termination_tol: tt_restarted_block_amen(
         lhs,
         rhs,

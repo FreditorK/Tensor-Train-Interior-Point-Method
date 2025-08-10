@@ -92,14 +92,14 @@ def generate_addplot_lines(plot_data):
         xshift = (i - (num_dims - 1) / 2.0) * jitter_step
         
         runtime_coords = " ".join([
-            f"(TT-Rank {r}, {rt:.2f})" 
+            f"({r}, {rt:.2f})" 
             for r, rt in plot_data[dim]['runtime_points']
         ])
         
         if runtime_coords:
             # Plot the actual data points but hide them from the legend
             plot_options = (
-                f"only marks, color={color}, mark=*, mark size=1.5pt, "
+                f"only marks, color={color}, mark=*, mark size=2pt, "
                 f"opacity=0.7, draw opacity=0, xshift={xshift}pt, forget plot"
             )
             print(f"\\addplot+[{plot_options}] coordinates {{{runtime_coords}}};")
@@ -114,14 +114,14 @@ def generate_addplot_lines(plot_data):
         xshift = (i - (num_dims - 1) / 2.0) * jitter_step
 
         memory_coords = " ".join([
-            f"(TT-Rank {r}, {mem:.2f})" 
+            f"({r}, {mem:.2f})" 
             for r, mem in plot_data[dim]['memory_points']
         ])
 
         if memory_coords:
             # Plot the actual data points but hide them from the legend
             plot_options = (
-                f"only marks, color={color}, mark=*, mark size=1.5pt, "
+                f"only marks, color={color}, mark=*, mark size=2pt, "
                 f"opacity=0.7, draw opacity=0, xshift={xshift}pt, forget plot"
             )
             print(f"\\addplot+[{plot_options}] coordinates {{{memory_coords}}};")
