@@ -1,0 +1,17 @@
+abs_tol: 9e-4
+dim: 7
+epsilonDash: 2.0
+epsilonDashineq: 100.0
+gap_tol: 0.0005
+mals_restarts: 2
+max_iter: 25
+max_refinement: 5
+op_tol: 0.0001
+seeds:
+- 936
+- 394
+- 42
+- 492
+- 482
+verbose: false
+warm_up: 3

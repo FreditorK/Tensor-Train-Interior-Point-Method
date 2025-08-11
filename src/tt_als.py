@@ -321,11 +321,11 @@ def _bck_sweep(
                 rhsz = block_b_k.block_local_product(Zb[k], Zb[k + 1], 1, (rz[k], block_size, N[k], rz[k + 1]))
                 resz = np.reshape(rhsz.__isub__(Az), (rz[k] * block_size, N[k] * rz[k + 1])).T
 
-            scales = np.array([np.linalg.norm(solution_now[:, k]) for k in range(solution_now.shape[1])]).reshape(1, -1, 1, 1)
+            scales = np.maximum(np.array([np.linalg.norm(solution_now[:, k]) for k in range(solution_now.shape[1])]), 1e-10).reshape(1, -1, 1, 1)
             solution_now = np.reshape(scales*solution_now, (rx[k] * block_size, N[k] * rx[k + 1])).T
         else:
             solution_now = x_cores[k]
-            scales = np.array([np.linalg.norm(solution_now[:, k]) for k in range(solution_now.shape[1])]).reshape(1, -1, 1, 1)
+            scales = np.maximum(np.array([np.linalg.norm(solution_now[:, k]) for k in range(solution_now.shape[1])]), 1e-10).reshape(1, -1, 1, 1)
             solution_now = np.reshape(scales*solution_now, (rx[k] * block_size, N[k] * rx[k + 1])).T
             if amen and not last:
                 resz = np.reshape(z_cores[k], (rz[k] * block_size, N[k] * rz[k + 1])).T
@@ -444,12 +444,12 @@ def _fwd_sweep(
                 rhsz = block_b_k.block_local_product(Zb[k], Zb[k + 1], 1, (rz[k], block_size, N[k], rz[k + 1]))
                 resz = np.transpose(rhsz.__isub__(Az), (0, 2, 1, 3)).reshape(rz[k] * N[k], block_size * rz[k + 1])
 
-            scales = np.array([np.linalg.norm(solution_now[:, k]) for k in range(solution_now.shape[1])]).reshape(1, -1, 1, 1)
+            scales = np.maximum(np.array([np.linalg.norm(solution_now[:, k]) for k in range(solution_now.shape[1])]), 1e-10).reshape(1, -1, 1, 1)
             solution_now = np.transpose(scales*solution_now, (0, 2, 1, 3))
             solution_now = np.reshape(solution_now, (rx[k] * N[k], block_size * rx[k + 1]))
         else:
             solution_now = x_cores[k]
-            scales = np.array([np.linalg.norm(solution_now[:, k]) for k in range(solution_now.shape[1])]).reshape(1, -1, 1, 1)
+            scales = np.maximum(np.array([np.linalg.norm(solution_now[:, k]) for k in range(solution_now.shape[1])]), 1e-10).reshape(1, -1, 1, 1)
             solution_now = (scales*solution_now).transpose(0, 2, 1, 3)
             solution_now = np.reshape(solution_now, (rx[k] * N[k],  block_size * rx[k + 1]))
             if amen and not last:

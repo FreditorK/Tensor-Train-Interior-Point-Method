@@ -1,5 +1,6 @@
 import sys
 import os
+from tkinter import Y
 import numpy as np
 import traceback
 
@@ -363,6 +364,7 @@ def tt_compute_dual_feasibility(obj_tt, lin_op_tt_adj, Z_tt, Y_tt, T_tt, status)
                                                                                               0.1*status.mu))
     if status.ineq_status is IneqStatus.ACTIVE and T_tt is not None:
         dual_feas = tt_rank_reduce(tt_sub(dual_feas, tt_reshape(T_tt, (4,))), min(status.op_tol, 0.1*status.mu))
+
     return dual_feas
 
 
@@ -635,7 +637,7 @@ def _tt_get_ineq_step_sizes(x_step_size, z_step_size, X_tt, T_tt, Delta_X_tt, De
             status
         )
         if not status.is_last_iter:
-            if 1 - x_ineq_step_size < status.eps and tt_norm(T_tt) < 0.5*status.op_tol:
+            if 1 - x_ineq_step_size < status.op_tol and tt_norm(T_tt) < status.op_tol:
                 if status.ineq_status is IneqStatus.ACTIVE:
                     status.ineq_status = IneqStatus.SETTING_INACTIVE
             else:
@@ -655,16 +657,17 @@ def _tt_get_ineq_step_sizes(x_step_size, z_step_size, X_tt, T_tt, Delta_X_tt, De
     return x_step_size, z_step_size
 
 
-def _initialise(ineq_mask, status, dim, epsilonDash):
+def _initialise(ineq_mask, status, dim, epsilonDash, epsilonDashineq):
     X_tt = tt_scale(epsilonDash, tt_identity(dim))
     Z_tt = tt_scale(epsilonDash, tt_identity(dim))
     Y_tt = tt_reshape(tt_zero_matrix(dim), (4, ))
     T_tt = None
 
     if status.ineq_status is IneqStatus.ACTIVE:
-        T_tt = tt_scale(status.eps, ineq_mask)
+        T_tt = tt_scale(epsilonDashineq*status.eps, ineq_mask)
         # Need to initialise so it stays psd
-        X_tt = tt_rank_reduce(tt_add(X_tt, tt_scale(1/2**(dim/2), ineq_mask)), status.op_tol)
+        x_step_size, _ = tt_max_generalised_eigen(X_tt, ineq_mask, tol=1e-7, verbose=status.verbose)
+        X_tt = tt_rank_reduce(tt_add(X_tt, tt_scale(0.1*x_step_size, ineq_mask)), status.op_tol)
 
     return X_tt, Y_tt, Z_tt, T_tt
 
@@ -710,18 +713,18 @@ class IPMStatus:
     eta = 1e-3
 
 
-def _ipm_format_output(X_tt, Y_tt, T_tt, Z_tt, iteration, dim):
+def _ipm_format_output(X_tt, Y_tt, T_tt, Z_tt, iteration, status):
     """Formats the final results into the desired output structure."""
     ranksX = tt_ranks(X_tt)
     ranksZ = tt_ranks(Z_tt)
     ranksY = tt_ranks(Y_tt)
-    ranksT = tt_ranks(T_tt) if T_tt else [0] * (dim - 1)
+    ranksT = tt_ranks(T_tt) if T_tt else [0] * (status.dim - 1)
     
     print("---Terminated---")
     print(f"Converged in {iteration} iterations.")
     print(f"Ranks: X={ranksX}, Z={ranksZ}, Y={ranksY}, T={ranksT}")
     
-    results = {"num_iters": iteration, "ranksX": ranksX, "ranksY": ranksY, "ranksZ": ranksZ, "ranksT": ranksT}
+    results = {"num_iters": iteration, "ranksX": ranksX, "ranksY": ranksY, "ranksZ": ranksZ, "ranksT": ranksT, "status": status}
     return X_tt, Y_tt, T_tt, Z_tt, results
 
 
@@ -787,6 +790,7 @@ def tt_ipm(
     mals_restarts=3,
     r_max=1000, # 750 for anythin but graphm rank 2-3 experiments
     epsilonDash=1,
+    epsilonDashineq=1,
     verbose=False
 ):
     centrality_tol = gap_tol
@@ -864,7 +868,7 @@ def tt_ipm(
     lhs_skeleton[0, 0] = lag_maps["y"]
     status.lag_map_y = lag_maps["y"]
 
-    X_tt, Y_tt, Z_tt, T_tt = _initialise(ineq_mask, status, dim, epsilonDash)
+    X_tt, Y_tt, Z_tt, T_tt = _initialise(ineq_mask, status, dim, epsilonDash, epsilonDashineq)
 
     iteration = 0
     finishing_steps = max_refinement
@@ -920,7 +924,6 @@ def tt_ipm(
             solver
         )
 
-
         if (Delta_X_tt is None and Delta_Z_tt is None) or (x_step_size < 1e-5 and z_step_size < 1e-5):
             if status.is_last_iter:
                 break
@@ -949,7 +952,6 @@ def tt_ipm(
                 lhs = lhs_skeleton.get_submatrix(2, 2)
                 status.mals_delta0 = None
                 status.ineq_status = IneqStatus.INACTIVE
-                T_tt = tt_scale(status.eps, ineq_mask)
             elif status.ineq_status is IneqStatus.SETTING_ACTIVE:
                 solver = solver_ineq
                 lhs = lhs_skeleton
@@ -963,4 +965,4 @@ def tt_ipm(
         prev_errors['dual'] = status.dual_error
         prev_errors['centrality'] = status.centrality_error
 
-    return _ipm_format_output(X_tt, Y_tt, T_tt, Z_tt, iteration, status.dim)
+    return _ipm_format_output(X_tt, Y_tt, T_tt, Z_tt, iteration, status)

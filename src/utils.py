@@ -11,7 +11,7 @@ import json
 sys.path.append(os.getcwd() + '/../../')
 
 from src.tt_ops import *
-from src.tt_ipm import tt_ipm
+from src.tt_ipm import IneqStatus, tt_ipm
 
 def run_experiment(create_problem_fn):
 
@@ -50,6 +50,8 @@ def run_experiment(create_problem_fn):
         ranksY = np.zeros((num_ranks, num_seeds, dim - 1))
         ranksZ = np.zeros((num_ranks, num_seeds, dim - 1))
         ranksT = None
+        if "corr_clust" in args.config:
+            ranksT = np.zeros((num_ranks, num_seeds, dim - 1))
 
     used_seeds = set(config["seeds"])
 
@@ -65,6 +67,7 @@ def run_experiment(create_problem_fn):
             ranksX, ranksY, ranksZ, ranksT, config_path
         )
         new_seed = seed
+        
         while (feas_err > 1e-3) or (slack > 1e-3):
             print(f"Seed {new_seed} is pathological (feasibility error: {feas_err:.2e}, slackness: {slack:.2e}). Suggesting a new seed.")
             new_seed = np.random.randint(0, 2**10)
@@ -83,6 +86,7 @@ def run_experiment(create_problem_fn):
                 ranksX, ranksY, ranksZ, ranksT, config_path
             )
             print(f"Rerun with new seed {new_seed} complete. Feasibility error: {feas_err:.2e}, Slackness: {slack:.2e}")
+        
 
     # Pass ranksT only if it was ever used
     print_results_summary(
@@ -261,7 +265,8 @@ def run_and_record(seed, r_i, s_i, rank, config, args, create_problem_fn, memory
             aho_direction=False,
             mals_restarts=config["mals_restarts"],
             max_refinement=config["max_refinement"],
-            epsilonDash=config["epsilonDash"]
+            epsilonDash=config["epsilonDash"],
+            epsilonDashineq= config["epsilonDashineq"] if "epsilonDashineq" in config else 1
         )
     if args.track_mem:
         start_mem = memory_usage(max_usage=True, include_children=True)
@@ -274,13 +279,11 @@ def run_and_record(seed, r_i, s_i, rank, config, args, create_problem_fn, memory
     t3 = time.time()
     problem_creation_times[r_i, s_i] = t2 - t1
     runtimes[r_i, s_i] = t3 - t2
-    if T_tt is not None:
-        Z_tt[0][:, 1, 1] = 0 # Shed the quantization bit
     complementary_slackness[r_i, s_i] = abs(tt_inner_prod(X_tt, Z_tt))
     primal_res = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(L_op_tt, tt_reshape(X_tt, (4,))), bias_tt), eps=1e-12)
     feasibility_errors[r_i, s_i] = tt_inner_prod(primal_res, primal_res)
     dual_res = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(tt_transpose(L_op_tt), tt_reshape(Y_tt, (4, )), eps=1e-12), tt_rank_reduce(tt_add(tt_reshape(Z_tt, (4,)), obj_tt), eps=1e-12)), eps=1e-12)
-    if T_tt is not None:
+    if info["status"].ineq_status is IneqStatus.ACTIVE:
         dual_res = tt_rank_reduce(tt_sub(dual_res, tt_reshape(T_tt, (4,))), eps=1e-12)
     dual_feasibility_errors[r_i, s_i] = tt_inner_prod(dual_res, dual_res)
     num_iters[r_i, s_i] = info["num_iters"]
