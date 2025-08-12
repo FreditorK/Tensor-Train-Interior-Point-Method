@@ -86,13 +86,13 @@ if __name__ == "__main__":
         runtimes[s_i] = t3 - t2
         complementary_slackness[s_i] = np.abs(np.trace(X_val @ Z))
         # Feasibility error: (sum_diag - I_n)^2 + ... (customize as needed)
-        feasibility_errors[s_i] = sum([np.sum(c.residual**2) for c in constraints[1:]])  # Placeholder, customize if needed
+        feasibility_errors[s_i] = np.abs(sum([np.sum(c.residual**2) for c in constraints[1:]]))  # Placeholder, customize if needed
         dual_feas_sq = (data["c"].flatten() + (data["A"].T @ soln["y"]).flatten())**2
         dual_feas_diag_sq = dual_feas_sq[[sum(range(i)) for i in range(2**config["dim"])]]
         for idx, i in enumerate([[sum(range(i)) for i in range(2**config["dim"])]]):
             dual_feas_sq -= 0.5*dual_feas_diag_sq[idx]
         # SDPA only stores the lower tri bits of symmetric variables, to make it fair we adjust the error
-        dual_feasibility_errors[s_i] = np.sum(2*dual_feas_sq)
+        dual_feasibility_errors[s_i] = np.abs(np.sum(2*dual_feas_sq))
         num_iters[s_i] = prob.solver_stats.extra_stats["info"]["iter"]
 
     # Prepare dummy arrays for missing metrics to match the signature

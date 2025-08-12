@@ -83,7 +83,7 @@ if __name__ == "__main__":
         problem_creation_times[s_i] = t2 - t1
         runtimes[s_i] = t3 - t2
         complementary_slackness[s_i] = np.abs(np.trace(X_val @ Z))
-        feasibility_errors[s_i] = np.linalg.norm(np.diag(X_val) - 1) ** 2
+        feasibility_errors[s_i] = np.abs(np.linalg.norm(np.diag(X_val) - 1) ** 2)
         data, chain, inverse_data = prob.get_problem_data(cp.SDPA)
         soln = chain.solve_via_data(prob, data)
         dual_feas_sq = ((data["c"].flatten() - (data["A"].T @ np.concatenate([soln["eq_dual"], soln["ineq_dual"]], axis=0)).flatten()))**2
@@ -91,7 +91,7 @@ if __name__ == "__main__":
         for idx, i in enumerate([[sum(range(i)) for i in range(2**config["dim"])]]):
             dual_feas_sq -= 0.5*dual_feas_diag_sq[idx]
         # SDPA only stores the lower tri bits of symmetric variables, to make it fair we adjust the error
-        dual_feasibility_errors[s_i] = np.sum(2*dual_feas_sq)
+        dual_feasibility_errors[s_i] = np.abs(np.sum(2*dual_feas_sq))
         # num_iters[s_i] = ...  # If available
 
     # Prepare dummy arrays for missing metrics to match the signature
