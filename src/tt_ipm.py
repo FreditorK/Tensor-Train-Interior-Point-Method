@@ -1,3 +1,4 @@
+from re import T
 import sys
 import os
 from tkinter import Y
@@ -664,7 +665,7 @@ def _initialise(ineq_mask, status, dim, epsilonDash, epsilonDashineq):
     T_tt = None
 
     if status.ineq_status is IneqStatus.ACTIVE:
-        T_tt = tt_scale(epsilonDashineq*status.eps, ineq_mask)
+        T_tt = tt_scale(epsilonDashineq*status.op_tol, ineq_mask)
         # Need to initialise so it stays psd
         x_step_size, _ = tt_max_generalised_eigen(X_tt, ineq_mask, tol=1e-7, verbose=status.verbose)
         X_tt = tt_rank_reduce(tt_add(X_tt, tt_scale(0.1*x_step_size, ineq_mask)), status.op_tol)
@@ -878,13 +879,15 @@ def tt_ipm(
     while finishing_steps > 0:
         iteration += 1
         status.aho_direction = (iteration > warm_up)
-        status.is_last_iter = status.is_last_iter or (max_iter - max_refinement < iteration)
+        if max_iter - max_refinement == iteration - 1:
+            print("============================================\n Hit maximum #iterations! Entering finishing phase.\n============================================")
+            status.is_last_iter = True
         ZX = tt_inner_prod(Z_tt, X_tt)
         TX = tt_inner_prod(X_tt, T_tt) + status.ineq_boundary_val*tt_entrywise_sum(T_tt) if status.ineq_status is IneqStatus.ACTIVE else 0
         status.mu = np.divide(abs(ZX) + abs(TX), (2 ** dim + (status.ineq_status is IneqStatus.ACTIVE)*status.num_ineq_constraints))
         status.centrl_error_normalisation = 1 + abs(tt_inner_prod(obj_tt, tt_reshape(X_tt, (4, ))))
         status.centrality_error = status.mu / status.centrl_error_normalisation
-        status.is_central = np.less(status.centrality_error, (1 + (status.ineq_status is IneqStatus.ACTIVE))*centrality_tol)
+        status.is_central = np.less(status.centrality_error, centrality_tol)
         status.eta = max(min(status.eta, 2*status.mu), status.op_tol)
 
         lhs_matrix_tt, rhs_vec_tt, status = tt_infeasible_newton_system(
@@ -928,6 +931,7 @@ def tt_ipm(
             if status.is_last_iter:
                 break
             else:
+                print("============================================\n Hit PSD boundary! Entering finishing phase.\n============================================")
                 status.is_last_iter = True
         else:
             if status.is_last_iter:
@@ -952,6 +956,7 @@ def tt_ipm(
                 lhs = lhs_skeleton.get_submatrix(2, 2)
                 status.mals_delta0 = None
                 status.ineq_status = IneqStatus.INACTIVE
+                T_tt = tt_scale(1000, T_tt)
             elif status.ineq_status is IneqStatus.SETTING_ACTIVE:
                 solver = solver_ineq
                 lhs = lhs_skeleton

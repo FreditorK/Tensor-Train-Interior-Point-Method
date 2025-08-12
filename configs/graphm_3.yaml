@@ -11,3 +11,4 @@ warm_up: !!int 3
 mals_restarts: !!int 2
 max_refinement:  !!int 3
 epsilonDash: !!float 1
+epsilonDashineq: !!float 1e-8

@@ -14,3 +14,4 @@ seeds:
 - 928
 verbose: true
 warm_up: 3
+epsilonDashineq: !!float 1e-8
