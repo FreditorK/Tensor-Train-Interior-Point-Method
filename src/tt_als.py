@@ -464,7 +464,7 @@ def _fwd_sweep(
 
             if swp > 0 and not last:
                 trunc_lim = max(2*trunc_tol, block_res_new)
-                r_start = min(prune_singular_vals(s, 2*eps), r_max)
+                r_start = min(prune_singular_vals(s, eps), r_max)
                 solution_now = einsum("rbR, Rdk -> rbdk", u[:, :, :r_start], v[:r_start], optimize=[(0, 1)])
                 res = block_A_k.block_local_product(XAX[k], XAX[k + 1], np.transpose(solution_now, (0, 2, 1, 3))) - rhs
                 r = r_start
@@ -732,7 +732,7 @@ def tt_restarted_block_amen(
     rank_restriction,
     op_tol,
     termination_tol=1e-3,
-    eps=1e-12,
+    eps=1e-11,
     num_restarts=3,
     inner_m=10,
     x0=None,

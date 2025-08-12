@@ -33,11 +33,11 @@ if __name__ == "__main__":
     feasibility_errors = np.zeros(num_seeds)
     dual_feasibility_errors = np.zeros(num_seeds)
     num_failed_seeds = 0
-    # num_iters = np.zeros(num_seeds)  # If available
+    num_iters = np.zeros(num_seeds)  # If available
 
     for s_i, seed in enumerate(config["seeds"]):
         tried_new_seed = False
-        for attempt in range(3):  # At most two tries: original and one new random seed
+        for attempt in range(1):  # At most two tries: original and one new random seed
             if attempt == 0:
                 current_seed = seed
             else:
@@ -57,13 +57,13 @@ if __name__ == "__main__":
                 if args.track_mem:
                     def wrapper():
                         prob = cp.Problem(cp.Maximize(cp.trace(C.T @ X)), constraints)
-                        _ = prob.solve(solver=cp.SDPA, epsilonDash=1e-6 / 2**config["dim"], epsilonStar=1e-5 / 2**config["dim"], verbose=True, gammaStar=0.75, domainMethod="basis")
+                        _ = prob.solve(solver=cp.SCS, eps=1e-5 / config["dim"], verbose=True)
                         return prob
                     res, prob = memory_usage(proc=wrapper, max_usage=True, retval=True, include_children=True)
                     memory[s_i] = res - start_mem
                 else:
                     prob = cp.Problem(cp.Maximize(cp.trace(C.T @ X)), constraints)
-                    _ = prob.solve(solver=cp.SDPA, epsilonDash=1e-6 / 2**config["dim"], epsilonStar=1e-5 / 2**config["dim"], verbose=True, gammaStar=0.75, domainMethod="basis")
+                    _ = prob.solve(solver=cp.SCS, eps=1e-5 / config["dim"], verbose=True)
                 # If we get here, break out of the attempt loop (success)
                 break
             except Exception as e:
@@ -77,25 +77,25 @@ if __name__ == "__main__":
             # Only runs if both attempts failed
             continue
         X_val = X.value
+        data, chain, inverse_data = prob.get_problem_data(cp.SCS)
+        soln = chain.solve_via_data(prob, data)
         Z = constraints[0].dual_value
         y = constraints[1].dual_value
         t3 = time.time()
         problem_creation_times[s_i] = t2 - t1
         runtimes[s_i] = t3 - t2
         complementary_slackness[s_i] = np.abs(np.trace(X_val @ Z))
-        feasibility_errors[s_i] = np.linalg.norm(np.diag(X_val) - 1) ** 2
-        data, chain, inverse_data = prob.get_problem_data(cp.SDPA)
-        soln = chain.solve_via_data(prob, data)
-        dual_feas_sq = ((data["c"].flatten() - (data["A"].T @ np.concatenate([soln["eq_dual"], soln["ineq_dual"]], axis=0)).flatten()))**2
+        # Feasibility error: (sum_diag - I_n)^2 + ... (customize as needed)
+        feasibility_errors[s_i] = sum([np.sum(c.residual**2) for c in constraints[1:]])  # Placeholder, customize if needed
+        dual_feas_sq = (data["c"].flatten() + (data["A"].T @ soln["y"]).flatten())**2
         dual_feas_diag_sq = dual_feas_sq[[sum(range(i)) for i in range(2**config["dim"])]]
         for idx, i in enumerate([[sum(range(i)) for i in range(2**config["dim"])]]):
             dual_feas_sq -= 0.5*dual_feas_diag_sq[idx]
         # SDPA only stores the lower tri bits of symmetric variables, to make it fair we adjust the error
         dual_feasibility_errors[s_i] = np.sum(2*dual_feas_sq)
-        # num_iters[s_i] = ...  # If available
+        num_iters[s_i] = prob.solver_stats.extra_stats["info"]["iter"]
 
     # Prepare dummy arrays for missing metrics to match the signature
-    num_iters = np.zeros(num_seeds)
     ranksX = np.zeros((1, num_seeds, 1))
     ranksY = np.zeros((1, num_seeds, 1))
     ranksZ = np.zeros((1, num_seeds, 1))

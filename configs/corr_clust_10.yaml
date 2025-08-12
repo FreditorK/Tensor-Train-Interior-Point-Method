@@ -9,9 +9,9 @@ max_refinement: 5
 op_tol: 0.0001
 seeds:
 - 765
-- 932
-- 42
-- 492
-- 482
+#- 932
+#- 42
+#- 492
+#- 482
 verbose: false
 warm_up: 3

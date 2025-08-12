@@ -93,7 +93,7 @@ if __name__ == "__main__":
                 t3 = time.time()
                 problem_creation_times[s_i] = t2 - t1
                 runtimes[s_i] = t3 - t2
-                complementary_slackness[s_i] = np.trace(X_val @ Z)
+                complementary_slackness[s_i] = np.abs(np.trace(X_val @ Z))
                 # Feasibility error: (trace(X)-1)^2 + norm(diag(adj_matrix) @ X)^2
                 feasibility_errors[s_i] = (np.trace(X_val)-1)**2 + np.linalg.norm(np.diag(adj_matrix.reshape(-1, 1, order="F").flatten()) @ X_val.reshape(-1, 1, order="F"))**2
                 dual_feas = Z + J - y_2*np.eye(len(Z)) - (np.diag(adj_matrix.flatten()) @ y_1).reshape(*Z.shape, order="F")

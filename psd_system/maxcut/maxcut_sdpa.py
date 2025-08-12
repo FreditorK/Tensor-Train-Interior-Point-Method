@@ -80,7 +80,7 @@ if __name__ == "__main__":
         t3 = time.time()
         problem_creation_times[s_i] = t2 - t1
         runtimes[s_i] = t3 - t2
-        complementary_slackness[s_i] = np.trace(X_val @ Z)
+        complementary_slackness[s_i] = np.abs(np.trace(X_val @ Z))
         feasibility_errors[s_i] = np.linalg.norm(np.diag(X_val) - 1) ** 2
         dual_feas = Z + C - np.diag(y)
         dual_feasibility_errors[s_i] = np.sum(dual_feas**2)
