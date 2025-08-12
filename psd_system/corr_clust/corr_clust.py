@@ -16,12 +16,15 @@ def tt_diag_constraint_op(dim):
 
 def tt_obj_matrix_and_ineq_mask(rank, dim):
     sim_graph_tt = tt_rank_reduce(tt_random_graph(dim, rank))
-    disim_graph_tt = tt_rank_reduce(tt_random_graph(dim, rank))
+    disim_graph_tt = tt_rank_reduce(tt_random_graph(dim, 1))
     cap_graph_tt = tt_rank_reduce(tt_fast_hadamard(sim_graph_tt, disim_graph_tt, 1e-12), 1e-12)
-    while tt_norm(cap_graph_tt) < 1e-12:
-        disim_graph_tt = tt_rank_reduce(tt_random_graph(dim, rank))
+    new_sim_graph_tt = sim_graph_tt
+    # Making sure we have two disjoint graphs
+    while tt_norm(cap_graph_tt) < 1e-12 or tt_norm(new_sim_graph_tt) < 1e-12:
+        disim_graph_tt = tt_rank_reduce(tt_random_graph(dim, 1))
         cap_graph_tt = tt_rank_reduce(tt_fast_hadamard(sim_graph_tt, disim_graph_tt, 1e-12), 1e-12)
-    sim_graph_tt = tt_sub(sim_graph_tt, cap_graph_tt)
+        new_sim_graph_tt = tt_sub(sim_graph_tt, cap_graph_tt)
+    sim_graph_tt = new_sim_graph_tt
     disim_graph_tt = cap_graph_tt
     actual_graph_tt = tt_rank_reduce(tt_add(sim_graph_tt, disim_graph_tt), 1e-12)
     disim_laplacian_tt = tt_sub(tt_diag(tt_fast_matrix_vec_mul(disim_graph_tt, [np.ones((1, 2, 1)) for _ in range(dim)],  1e-12)), disim_graph_tt)

@@ -134,7 +134,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate LaTeX \\addplot lines for scatter plots from experiment data.")
     parser.add_argument(
         "problem_type", 
-        choices=['maxcut', 'max_stable_set', 'graphm'],
+        choices=['maxcut', 'max_stable_set', 'graphm', 'corr_clust'],
         help="The type of problem to process (e.g., 'maxcut')."
     )
     parser.add_argument(

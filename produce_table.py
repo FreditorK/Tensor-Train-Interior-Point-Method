@@ -112,7 +112,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate a LaTeX table from experiment result JSON files.")
     parser.add_argument(
         "problem_type", 
-        choices=['maxcut', 'max_stable_set', 'graphm'],
+        choices=['maxcut', 'max_stable_set', 'graphm', 'corr_clust'],
         help="The type of problem to process (e.g., 'maxcut')."
     )
     args = parser.parse_args()
