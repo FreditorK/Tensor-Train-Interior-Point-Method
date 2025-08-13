@@ -1127,7 +1127,7 @@ def tt_min_eig(A, x0=None, kick_rank=None, nswp=10, tol=1e-12, verbose=False):
 
     max_res = 0
     last = False
-    size_limit = N[0] * (int(np.sqrt(d) * d))**2 / (d/2)
+    size_limit = (2**(d/2))**(3/4)
     trunc_tol = 0.1*tol/np.sqrt(d)
     for swp in range(nswp):
         max_res = np.inf if swp == 0 else 0
@@ -1221,12 +1221,13 @@ def tt_min_eig(A, x0=None, kick_rank=None, nswp=10, tol=1e-12, verbose=False):
 
 
 def _eigen_local_solve(previous_solution, XAX_k, A_k, XAX_k1, m, size_limit, eps):
-    if m <= size_limit:
+    if previous_solution.shape[0]*previous_solution.shape[-1] <= size_limit:
         previous_solution = previous_solution.reshape(-1, 1)
         A = cached_einsum("lsr,smnS,LSR->lmLrnR", XAX_k, A_k, XAX_k1).reshape(m, m)
         try:
-            eig_val, solution_now = scp.sparse.linalg.eigsh(A, tol=eps, k=1, which="SA", v0=previous_solution)
-        except:
+            eig_val, solution_now = scp.sparse.linalg.eigsh(A, tol=eps, k=1, which="SA", ncv=max(int(np.floor(0.5*m)), min(m, 5)), v0=previous_solution)
+        except Exception as e:
+            print(f"\tAttention: {e}")
             solution_now = previous_solution
             eig_val = previous_solution.T @ A @ previous_solution
         old_res = np.linalg.norm(eig_val * previous_solution - A @ previous_solution)
@@ -1238,8 +1239,9 @@ def _eigen_local_solve(previous_solution, XAX_k, A_k, XAX_k1, m, size_limit, eps
     mat_vec_A = lambda x_vec: _mat_vec_A(XAX_k, A_k, XAX_k1, x_vec.reshape(*x_shape)).reshape(-1, 1)
     A_op = scp.sparse.linalg.LinearOperator((m, m), matvec=mat_vec_A)
     try:
-        eig_val, solution_now = scp.sparse.linalg.eigsh(A_op, tol=eps, k=1, which="SA", v0=previous_solution)
-    except:
+        eig_val, solution_now = scp.sparse.linalg.eigsh(A_op, tol=eps, k=1, which="SA", ncv=max(int(np.floor(0.5*m)), min(m, 5)), v0=previous_solution)
+    except Exception as e:
+        print(f"\tAttention: {e}")
         solution_now = previous_solution
         eig_val = previous_solution.T @ A_op(previous_solution)
 

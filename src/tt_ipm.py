@@ -507,14 +507,12 @@ def _tt_ipm_newton_step(
                 )
                 e = max(1, 3 * min(x_step_size, z_step_size) ** 2)
                 status.sigma = min(0.99, (mu_aff/(ZX + TX))**e)
-                rhs_3 = tt_add(
-                        tt_scale(status.sigma * status.mu, tt_reshape(ineq_mask, (4,))),
-                        rhs_vec_tt.get_row(3)
-                        ) if status.sigma > 0 else rhs_vec_tt.get_row(3)
-                rhs_vec_tt[3] = tt_rank_reduce(
-                    rhs_3,
-                    min(status.op_tol, 0.1*status.mu)
-            )
+                if status.sigma > 1e-4:
+                    rhs_vec_tt[3]  = tt_rank_reduce(tt_add(
+                            tt_scale(status.sigma * status.mu, tt_reshape(ineq_mask, (4,))),
+                            rhs_vec_tt.get_row(3),
+                            ), min(status.op_tol, 0.1*status.mu)
+                            )
             else:
                 mu_aff = (
                     ZX + x_step_size * z_step_size * DXZ
@@ -611,18 +609,31 @@ def _tt_get_step_sizes(
 
 
 def _ineq_step_size(A_tt, Delta_tt, e_tt, status):
+    #A = tt_matrix_to_matrix(A_tt)
+    #D = tt_matrix_to_matrix(Delta_tt)
+    #i = np.argmin(A + D)
+    #row, col = np.unravel_index(i, A.shape)
+    #a_val = A[row, col]
+    #d_val = D[row, col]
+    #print()
+    #print(a_val, d_val, np.clip(-(1-status.op_tol)*a_val/d_val, a_min=0, a_max=1))
+    #print()
+
     sum_tt = tt_add(A_tt, Delta_tt)
     if status.compl_ineq_mask:
-        sum_tt = tt_add(sum_tt, tt_scale(tt_entrywise_sum(sum_tt)/status.num_ineq_constraints, status.compl_ineq_mask))
+        sum_tt = tt_add(sum_tt, tt_scale(tt_entrywise_sum(A_tt)/status.num_ineq_constraints, status.compl_ineq_mask))
     sum_tt = tt_rank_reduce(sum_tt, status.eps)
     e_tt, _ = tt_min_eig(tt_diag_op(sum_tt, status.eps), x0=e_tt, tol=1e-7, verbose=status.verbose)
     e_tt_sq = tt_reshape(tt_normalise(tt_fast_hadamard(e_tt, e_tt, status.eps)), (2, 2))
-    min_A_val = tt_inner_prod(A_tt, e_tt_sq)
+    min_A_val = np.abs(tt_inner_prod(A_tt, e_tt_sq))
     min_Delta_val = tt_inner_prod(Delta_tt, e_tt_sq)
-    if min_Delta_val >= 0:
+    if min_Delta_val >= -status.eps:
         step_size = 1
     else:
         step_size = np.clip(-(1-status.op_tol)*min_A_val/min_Delta_val, a_min=0, a_max=1)
+
+    #print(min_A_val, min_Delta_val)
+    #print(step_size, tt_inner_prod(e_tt_sq, status.compl_ineq_mask))
     return step_size, e_tt
 
 
@@ -651,7 +662,7 @@ def _tt_get_ineq_step_sizes(x_step_size, z_step_size, X_tt, T_tt, Delta_X_tt, De
             T_tt,
             tt_scale(z_step_size, Delta_T_tt),
             status.eigen_zt0,
-        status
+            status
         )
         z_step_size *= t_step_size
 
@@ -665,10 +676,10 @@ def _initialise(ineq_mask, status, dim, epsilonDash, epsilonDashineq):
     T_tt = None
 
     if status.ineq_status is IneqStatus.ACTIVE:
-        T_tt = tt_scale(epsilonDashineq*status.op_tol, ineq_mask)
+        T_tt = tt_scale(epsilonDashineq, ineq_mask)
         # Need to initialise so it stays psd
         x_step_size, _ = tt_max_generalised_eigen(X_tt, ineq_mask, tol=1e-7, verbose=status.verbose)
-        X_tt = tt_rank_reduce(tt_add(X_tt, tt_scale(0.1*x_step_size, ineq_mask)), status.op_tol)
+        X_tt = tt_rank_reduce(tt_add(X_tt, tt_scale(0.25*x_step_size, ineq_mask)), status.op_tol)
 
     return X_tt, Y_tt, Z_tt, T_tt
 
@@ -794,9 +805,9 @@ def tt_ipm(
     epsilonDashineq=1,
     verbose=False
 ):
+    dim = len(obj_tt)
     centrality_tol = gap_tol
     feasibility_tol = 2*gap_tol
-    dim = len(obj_tt)
     status = IPMStatus(
         len(obj_tt),
         feasibility_tol,
