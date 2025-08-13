@@ -80,7 +80,7 @@ class LSQRSolver:
         del self.shape
 
 class LGMRESSolver:
-    def __init__(self, rtol=1e-8, max_iter=300, restart=100, outer_k=10):
+    def __init__(self, rtol=1e-8, max_iter=500, restart=100, outer_k=10):
         """
         Initializes the LGMRES solver.
 
@@ -256,7 +256,7 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
     norm_rhs = max(np.linalg.norm(rhs), 1e-10)
     block_res_old = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution).__isub__(rhs)) / norm_rhs
     direct_solve_failure = not dense_solve
-    dense_solve = (np.sqrt(x_shape[0]*x_shape[3]) <= 0.9*size_limit) and dense_solve
+    dense_solve = (np.sqrt(x_shape[0]*x_shape[3]) <= 0.95*size_limit) and dense_solve
 
     if block_res_old < rtol:
         return previous_solution, block_res_old, block_res_old, rhs, norm_rhs, direct_solve_failure
@@ -406,19 +406,11 @@ def tt_infeasible_newton_system(
     status.is_last_iter = status.is_last_iter or (status.is_primal_feasible and status.is_dual_feasible and status.is_central)
 
     if status.aho_direction:
-        if status.is_last_iter:
-            lhs[2, 1] = tt_rank_reduce(tt_scale(0.5, tt_add(tt_IkronM(Z_tt), tt_MkronI(Z_tt))), eps=status.op_tol)
-            lhs[2, 2] = tt_rank_reduce(tt_scale(0.5, tt_add(tt_MkronI(X_tt), tt_IkronM(X_tt))), eps=status.op_tol)
-        else:
-            lhs[2, 1] = tt_psd_rank_reduce(tt_scale(0.5, tt_add(tt_IkronM(Z_tt), tt_MkronI(Z_tt))), eps=status.op_tol)
-            lhs[2, 2] = tt_psd_rank_reduce(tt_scale(0.5, tt_add(tt_MkronI(X_tt), tt_IkronM(X_tt))), eps=status.op_tol)
+        lhs[2, 1] = tt_psd_rank_reduce(tt_scale(0.5, tt_add(tt_IkronM(Z_tt), tt_MkronI(Z_tt))), eps=status.op_tol)
+        lhs[2, 2] = tt_psd_rank_reduce(tt_scale(0.5, tt_add(tt_MkronI(X_tt), tt_IkronM(X_tt))), eps=status.op_tol)
     else:
-        if status.is_last_iter:
-            lhs[2, 1] = tt_rank_reduce(tt_MkronI(Z_tt), eps=status.op_tol)
-            lhs[2, 2] = tt_rank_reduce(tt_IkronM(X_tt), eps=status.op_tol)
-        else:
-            lhs[2, 1] = tt_psd_rank_reduce(tt_MkronI(Z_tt), eps=status.op_tol)
-            lhs[2, 2] = tt_psd_rank_reduce(tt_IkronM(X_tt), eps=status.op_tol)
+        lhs[2, 1] = tt_psd_rank_reduce(tt_MkronI(Z_tt), eps=status.op_tol)
+        lhs[2, 2] = tt_psd_rank_reduce(tt_IkronM(X_tt), eps=status.op_tol)
 
     if not status.is_primal_feasible or status.is_last_iter:
         rhs[0] = primal_feas
@@ -615,25 +607,30 @@ def _ineq_step_size(A_tt, Delta_tt, e_tt, status):
     #row, col = np.unravel_index(i, A.shape)
     #a_val = A[row, col]
     #d_val = D[row, col]
-    #print()
-    #print(a_val, d_val, np.clip(-(1-status.op_tol)*a_val/d_val, a_min=0, a_max=1))
-    #print()
 
     sum_tt = tt_add(A_tt, Delta_tt)
     if status.compl_ineq_mask:
         sum_tt = tt_add(sum_tt, tt_scale(tt_entrywise_sum(A_tt)/status.num_ineq_constraints, status.compl_ineq_mask))
     sum_tt = tt_rank_reduce(sum_tt, status.eps)
     e_tt, _ = tt_min_eig(tt_diag_op(sum_tt, status.eps), x0=e_tt, tol=1e-7, verbose=status.verbose)
-    e_tt_sq = tt_reshape(tt_normalise(tt_fast_hadamard(e_tt, e_tt, status.eps)), (2, 2))
-    min_A_val = np.abs(tt_inner_prod(A_tt, e_tt_sq))
-    min_Delta_val = tt_inner_prod(Delta_tt, e_tt_sq)
-    if min_Delta_val >= -status.eps:
+    if np.max(tt_ranks(e_tt))  == 1:
+        e_tt_sq = tt_reshape(tt_normalise(tt_fast_hadamard(e_tt, e_tt, status.eps)), (2, 2))
+        min_A_val = np.abs(tt_inner_prod(A_tt, e_tt_sq))
+        min_Delta_val = tt_inner_prod(Delta_tt, e_tt_sq)
+        if min_Delta_val >= -status.eps:
+            step_size = 1
+        else:
+            step_size = np.clip(-(1-status.op_tol)*min_A_val/min_Delta_val, a_min=0, a_max=1)
+    else: # min is one of the padded entries
         step_size = 1
-    else:
-        step_size = np.clip(-(1-status.op_tol)*min_A_val/min_Delta_val, a_min=0, a_max=1)
 
+    #print()
+    #print("Actual: ", np.clip(-(1-status.op_tol)*a_val/d_val, a_min=0, a_max=1))
+    #print(a_val, d_val)
+    #print("Mine:", step_size)
+    #print(tt_inner_prod(e_tt_sq, status.compl_ineq_mask))
     #print(min_A_val, min_Delta_val)
-    #print(step_size, tt_inner_prod(e_tt_sq, status.compl_ineq_mask))
+    #print()
     return step_size, e_tt
 
 
@@ -768,7 +765,7 @@ def _ipm_check_convergence(status, finishing_steps, ZX, TX, abs_tol, max_refinem
         finishing_steps = 0
     else:
         finishing_steps -= 1
-        status.boundary_val = 0.01 * (1 - (finishing_steps / max_refinement))
+        status.boundary_val = 0.001 * (1 - (finishing_steps / max_refinement))
         if finishing_steps == 1:
             status.kkt_iterations += 1
             
@@ -806,7 +803,7 @@ def tt_ipm(
     verbose=False
 ):
     dim = len(obj_tt)
-    centrality_tol = gap_tol
+    centrality_tol = gap_tol / dim
     feasibility_tol = 2*gap_tol
     status = IPMStatus(
         len(obj_tt),
@@ -946,22 +943,22 @@ def tt_ipm(
                 status.is_last_iter = True
         else:
             if status.is_last_iter:
-                X_tt = _tt_symmetrise(tt_add(X_tt, tt_scale(x_step_size, Delta_X_tt)), status.op_tol)
+                X_tt = _tt_symmetrise(tt_add(X_tt, tt_scale(x_step_size, Delta_X_tt)), 0.1*status.eta*status.primal_error_normalisation)
             else:
-                X_tt = _tt_psd_symmetrise(tt_add(X_tt, tt_scale(x_step_size, Delta_X_tt)), status.op_tol)
+                X_tt = _tt_psd_symmetrise(tt_add(X_tt, tt_scale(x_step_size, Delta_X_tt)), 0.1*status.eta*status.primal_error_normalisation)
             if status.is_last_iter:
-                Z_tt = _tt_symmetrise(tt_add(Z_tt, tt_scale(z_step_size, Delta_Z_tt)), status.op_tol)
+                Z_tt = _tt_symmetrise(tt_add(Z_tt, tt_scale(z_step_size, Delta_Z_tt)), 0.1*status.eta*status.dual_error_normalisation)
             else:
-                Z_tt = _tt_psd_symmetrise(tt_add(Z_tt, tt_scale(z_step_size, Delta_Z_tt)), status.op_tol)
+                Z_tt = _tt_psd_symmetrise(tt_add(Z_tt, tt_scale(z_step_size, Delta_Z_tt)), 0.1*status.eta*status.dual_error_normalisation)
 
             Y_tt = tt_rank_reduce(tt_add(Y_tt, tt_scale(z_step_size, Delta_Y_tt)), status.eps)
-            Y_tt = tt_reshape(_tt_symmetrise(tt_reshape(tt_sub(Y_tt, tt_fast_matrix_vec_mul(status.lag_map_y, Y_tt, status.eps)), (2, 2)), status.op_tol), (4, ))
+            Y_tt = tt_reshape(_tt_symmetrise(tt_reshape(tt_sub(Y_tt, tt_fast_matrix_vec_mul(status.lag_map_y, Y_tt, status.eps)), (2, 2)), 0.1*status.eta*status.dual_error_normalisation), (4, ))
 
             if status.ineq_status is IneqStatus.ACTIVE:
                 if status.is_last_iter:
-                    T_tt = _tt_symmetrise(tt_add(T_tt, tt_scale(z_step_size, Delta_T_tt)), op_tol)
+                    T_tt = _tt_symmetrise(tt_add(T_tt, tt_scale(z_step_size, Delta_T_tt)), 0.1*status.eta*status.dual_error_normalisation)
                 else:
-                    T_tt = _tt_mask_symmetrise(tt_add(T_tt, tt_scale(z_step_size, Delta_T_tt)), ineq_mask, op_tol)
+                    T_tt = _tt_mask_symmetrise(tt_add(T_tt, tt_scale(z_step_size, Delta_T_tt)), ineq_mask, 0.1*status.eta*status.dual_error_normalisation)
             elif status.ineq_status is IneqStatus.SETTING_INACTIVE:
                 solver = solver_eq
                 lhs = lhs_skeleton.get_submatrix(2, 2)
