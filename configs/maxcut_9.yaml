@@ -1,13 +1,16 @@
-# Common
-dim: !!int 9
-seeds: [9402, 9313, 332, 342, 24] # !!9402, 9313, 332, 342, 24!!
-gap_tol: !!float 3e-4
-verbose: False
-# TT-IPM
-op_tol: !!float 1e-4
-abs_tol: !!float 6e-4
-max_iter: !!int 28
-warm_up: !!int 3
-mals_restarts: !!int 2
-max_refinement:  !!int 5
-epsilonDash: !!float 1
+abs_tol: 0.0006
+dim: 9
+epsilonDash: 1.0
+gap_tol: 0.0003
+mals_restarts: 2
+max_iter: 28
+max_refinement: 5
+op_tol: 0.0001
+seeds:
+- 395
+- 9313
+- 332
+- 342
+- 24
+verbose: false
+warm_up: 3

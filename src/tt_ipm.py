@@ -612,8 +612,9 @@ def _ineq_step_size(A_tt, Delta_tt, e_tt, status):
         sum_tt = tt_add(sum_tt, tt_scale(tt_entrywise_sum(A_tt)/status.num_ineq_constraints, status.compl_ineq_mask))
     sum_tt = tt_rank_reduce(sum_tt, status.eps)
     e_tt, _ = tt_min_eig(tt_diag_op(sum_tt, status.eps), x0=e_tt, tol=1e-7, verbose=status.verbose)
-    if np.max(tt_ranks(e_tt))  == 1:
-        e_tt_sq = tt_reshape(tt_normalise(tt_fast_hadamard(e_tt, e_tt, status.eps)), (2, 2))
+    e_tt_sq = tt_reshape(e_tt, (2, 2))
+    if np.abs(tt_inner_prod(sum_tt, e_tt_sq)) > status.eps:
+        e_tt_sq = tt_normalise(tt_fast_hadamard(e_tt_sq, e_tt_sq, status.eps))
         min_A_val = np.abs(tt_inner_prod(A_tt, e_tt_sq))
         min_Delta_val = tt_inner_prod(Delta_tt, e_tt_sq)
         if min_Delta_val >= -status.eps:
