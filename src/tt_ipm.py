@@ -98,7 +98,6 @@ class LGMRESSolver:
 
         # PETSc solver setup
         self.ksp = PETSc.KSP().create(comm=PETSc.COMM_WORLD)
-        self.ksp.setFromOptions() 
         self.ksp.setType('lgmres')
         opts = PETSc.Options()
         opts.setValue('-ksp_lgmres_augment', outer_k)

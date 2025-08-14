@@ -20,7 +20,7 @@ def tt_obj_matrix(rank, dim):
 
 def create_problem(dim, rank):
     print(f"Creating Problem for dim={dim}, rank={rank}...")
-    scale = max(2**(dim-7), 1)
+    scale = np.sqrt(dim)
     obj_tt = tt_obj_matrix(rank, dim)
     L_tt, bias_tt = tt_diag_constraint_op(dim)
     lag_y = tt_diag_op(tt_sub(tt_one_matrix(dim), tt_identity(dim)))

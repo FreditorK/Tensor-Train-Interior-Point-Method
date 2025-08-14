@@ -1,13 +1,17 @@
 abs_tol: 9e-4
 dim: 9
 epsilonDash: 2.0
-epsilonDashineq: 1.0e-03
+epsilonDashineq: 0.001
 gap_tol: 0.0003
 mals_restarts: 2
 max_iter: 30
 max_refinement: 7
 op_tol: 0.0001
 seeds:
-- 114
-verbose: true
+- 764
+- 493
+- 324
+- 237
+- 9299
+verbose: false
 warm_up: 3

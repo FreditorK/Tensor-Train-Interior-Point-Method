@@ -9,5 +9,9 @@ max_refinement: 7
 op_tol: 0.0001
 seeds:
 - 764
-verbose: true
+- 493
+- 324
+- 325
+- 9299
+verbose: false
 warm_up: 3
