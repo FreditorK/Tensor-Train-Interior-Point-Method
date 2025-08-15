@@ -803,7 +803,7 @@ def tt_ipm(
     verbose=False
 ):
     dim = len(obj_tt)
-    centrality_tol = gap_tol / dim
+    centrality_tol = gap_tol / np.sqrt(dim) # for larger problems we need to be closer
     feasibility_tol = 2*gap_tol
     status = IPMStatus(
         len(obj_tt),
