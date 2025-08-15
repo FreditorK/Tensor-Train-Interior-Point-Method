@@ -2,13 +2,14 @@ import sys
 import os
 
 sys.path.append(os.getcwd() + '/../')
-from src.tt_eigen import *
+from src.tt_als import *
+from src.tt_ops import *
 
 np.random.seed(4)
 np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=6, suppress=True)
 
 matrix_tt_1 = tt_random_gaussian([6, 4, 5, 7, 3], shape=(2, 2))
-matrix_tt_1 = tt_add(tt_scale(0.1, tt_one_matrix(6)), tt_fast_hadammard(matrix_tt_1, matrix_tt_1))
+matrix_tt_1 = tt_add(tt_scale(0.1, tt_one_matrix(6)), tt_fast_hadamard(matrix_tt_1, matrix_tt_1))
 matrix_tt_1 = tt_diag(tt_split_bonds(matrix_tt_1))
 matrix_tt_2 = tt_diag(tt_split_bonds(tt_add(tt_scale(0.05, tt_one_matrix(6)), tt_random_gaussian([6, 4, 5, 3, 4], shape=(2, 2)))))
 

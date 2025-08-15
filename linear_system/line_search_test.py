@@ -14,11 +14,11 @@ from src.tt_als import tt_max_generalised_eigen
 for seed in range(10,  20):
     np.random.seed(seed) # 9
     print("Seed: ", seed)
-    X_tt = tt_random_gaussian([2, 9, 23, 7, 6], shape=(2, 2))
+    X_tt = tt_random_gaussian([2, 9, 23, 7, 6, 4, 8], shape=(2, 2))
     X_tt = tt_fast_mat_mat_mul(tt_transpose(X_tt), X_tt)
     X_tt = tt_add(X_tt, tt_scale(0.01, tt_identity(len(X_tt))))
 
-    s_matrix_tt = tt_random_gaussian([4, 2, 2, 3, 5], shape=(2, 2))
+    s_matrix_tt = tt_random_gaussian([4, 2, 2, 3, 5, 4, 7], shape=(2, 2))
     s_matrix_tt = tt_add(tt_rank_reduce(tt_add(s_matrix_tt, tt_transpose(s_matrix_tt)), eps=0), X_tt)
 
 

@@ -887,8 +887,28 @@ def _step_size_local_solve(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k, A_k
             XDX_k, Delta_k, XDX_k1
         ).reshape(m, m))
         A = scp.sparse.csr_matrix(cached_einsum("lsr,smnS,LSR->lmLrnR", XAX_k, A_k, XAX_k1).reshape(m, m))
+        M = (1/step_size)*A + D
         try:
-            eig_val, solution_now = scp.sparse.linalg.eigsh((1/step_size)*A + D, tol=eps, k=1, ncv=max(int(np.floor(lanczos_discount*m)), min(m, 5)), maxiter=10*m, which="SA", v0=previous_solution)
+            eig_val, solution_now = scp.sparse.linalg.eigsh(M, tol=eps, k=1, ncv=max(int(np.floor(lanczos_discount*m)), min(m, 5)), maxiter=10*m, which="SA", v0=previous_solution)
+            if np.linalg.norm(M @ solution_now - eig_val * solution_now) > eps:
+                sigma = eig_val.squeeze()
+                # factorize (M - sigma*I)
+                M_shift = M - sigma * scp.sparse.eye(M.shape[1], format=M.format)
+                lu = scp.sparse.linalg.splu(M_shift.tocsc())
+                shift_inv_op = scp.sparse.linalg.LinearOperator(M.shape, matvec=lambda x: lu.solve(x))
+
+                # Solve using shift-invert
+                eig_val_shift, solution_now = scp.sparse.linalg.eigsh(
+                    shift_inv_op,
+                    k=1,
+                    which="LM",  # largest magnitude in shift-invert corresponds to eigenvalue near sigma
+                    v0=solution_now,  # use previous solution as initial guess
+                    ncv=max(int(np.floor(lanczos_discount*m)), min(m, 5)),
+                    maxiter=10*m,
+                    tol=eps
+                )
+                # Convert back to original eigenvalue
+                eig_val = sigma + 1 / eig_val_shift
         except Exception as e:
             print(f"\tAttention: {e}")
             eig_val = previous_solution.T @ ((1/step_size)*A + D)  @ previous_solution
@@ -898,7 +918,28 @@ def _step_size_local_solve(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k, A_k
             try:
                 Minv = SpCholInv(A)
                 eig_val, solution_now = scp.sparse.linalg.eigsh(-D, M=A, Minv=Minv, tol=eps, k=1, ncv=max(int(np.floor(lanczos_discount*m)), min(m, 5)), which="LA", maxiter=10*m, v0=previous_solution)
-                step_size = max(0, min(step_size, 1/ eig_val[0]))
+                step_size = max(0, min(1, 1/ eig_val[0]))
+                if np.linalg.norm(((1/step_size)*A + D) @ solution_now - eig_val*solution_now) > eps:
+                    sigma = eig_val.squeeze()
+                    # factorize (M - sigma*I)
+                    M_shift = -D - sigma * A
+                    lu = scp.sparse.linalg.splu(M_shift.tocsc())
+                    def matvec_shift_inv(x):
+                        x = np.ravel(x)  # ensure 1D
+                        return lu.solve(A @ x) 
+                    shift_inv_op = scp.sparse.linalg.LinearOperator(A.shape, matvec=matvec_shift_inv)
+                    eig_val_shift, solution_now = scp.sparse.linalg.eigsh(
+                        shift_inv_op,
+                        k=1,
+                        which='LM',  # largest magnitude corresponds to eigenvalue near sigma
+                        v0=solution_now,
+                        ncv=max(int(np.floor(lanczos_discount*m)), min(m, 5)),
+                        tol=eps,
+                        maxiter=10*m,
+                        mode="buckling"
+                    )
+                    # Convert back to original eigenvalue
+                    eig_val = sigma + 1 / eig_val_shift
             except Exception as e:
                 print(f"\tAttention: {e}")
                 solution_now = previous_solution
@@ -989,7 +1030,7 @@ def tt_max_generalised_eigen(A, Delta, x0=None, kick_rank=None, nswp=10, tol=1e-
     step_size = 1
     lanczos_discount = 0.5
     last = False
-    size_limit = (2**(d/2))**(3/4)
+    size_limit = (2**d)**(3/4)
     local_res = np.inf*np.ones((2, d-1))
     trunc_tol = 0.1*tol/np.sqrt(d)
     for swp in range(nswp):
@@ -1013,7 +1054,7 @@ def tt_max_generalised_eigen(A, Delta, x0=None, kick_rank=None, nswp=10, tol=1e-
                 v = s.reshape(-1, 1) * v
                 r = prune_singular_vals(s, trunc_tol)
                 if not last:
-                    kick = int(np.ceil((kick_rank[k-1] - r) / (swp+1)))
+                    kick = int(max(np.ceil(kick_rank[k-1] - r), 1)) if swp == 0 else 1
                     u, v, r = _add_kick_rank(u[:, :r], v[:r], kick)
                 else:
                     u = u[:, :r]
@@ -1024,15 +1065,9 @@ def tt_max_generalised_eigen(A, Delta, x0=None, kick_rank=None, nswp=10, tol=1e-
 
                 XAX[k] = compute_phi_bck_A(XAX[k + 1], x_cores[k], A[k], x_cores[k])
                 XDX[k] = compute_phi_bck_A(XDX[k + 1], x_cores[k], Delta[k], x_cores[k])
-                norm = np.sqrt(np.linalg.norm(XAX[k]) ** 2 + np.linalg.norm(XDX[k]) ** 2)
-                norm = norm if norm > 0 else 1.0
-                XAX[k] /= norm
-                XDX[k] /= norm
-
             else:
                 x_cores[k] = np.reshape(solution_now, (rx[k], N[k], rx[k + 1]))
 
-        x_cores = tt_normalise(x_cores)
         if last:
             break
         if np.max(local_res[0]) < tol or swp == nswp - 1:
@@ -1063,7 +1098,7 @@ def tt_max_generalised_eigen(A, Delta, x0=None, kick_rank=None, nswp=10, tol=1e-
                 v = s.reshape(-1, 1) * v
                 r = prune_singular_vals(s, trunc_tol)
                 if not last:
-                    kick = int(np.ceil((kick_rank[k] - r) / (swp+1)))
+                    kick = int(max(np.ceil(kick_rank[k] - r), 1)) if swp == 0 else 1
                     u, v, r = _add_kick_rank(u[:, :r], v[:r, :], kick)
                 else:
                     u = u[:, :r]
@@ -1073,14 +1108,9 @@ def tt_max_generalised_eigen(A, Delta, x0=None, kick_rank=None, nswp=10, tol=1e-
                 rx[k + 1] = r
                 XAX[k + 1] = compute_phi_fwd_A(XAX[k], x_cores[k], A[k], x_cores[k])
                 XDX[k + 1] = compute_phi_fwd_A(XDX[k], x_cores[k], Delta[k], x_cores[k])
-                norm = np.sqrt(np.linalg.norm(XAX[k + 1]) ** 2 + np.linalg.norm(XDX[k + 1]) ** 2)
-                norm = norm if np.greater(norm, 0) else 1.0
-                XAX[k + 1] /= norm
-                XDX[k + 1] /= norm
             else:
                 x_cores[k] = np.reshape(solution_now, (rx[k], N[k], rx[k + 1]))
 
-        x_cores = tt_normalise(x_cores)
         if last:
             break
         if np.max(local_res[1]) < tol:
@@ -1093,6 +1123,7 @@ def tt_max_generalised_eigen(A, Delta, x0=None, kick_rank=None, nswp=10, tol=1e-
             print(f'\tLanczos Discount {lanczos_discount:2f}')
             print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
 
+    x_cores = tt_normalise(x_cores)
     max_res  = min(np.max(local_res[0]), np.max(local_res[1]))
     if verbose:
         print("\t -----")
@@ -1145,7 +1176,7 @@ def tt_min_eig(A, x0=None, kick_rank=None, nswp=10, tol=1e-12, return_eig_val=Fa
                 v = s.reshape(-1, 1) * v
                 r = prune_singular_vals(s, trunc_tol)
                 if not last:
-                    kick = int(np.ceil((kick_rank[k-1] - r) / (swp+1)))
+                    kick = int(max(np.ceil(kick_rank[k-1] - r), 1)) if swp == 0 else 1
                     u, v, r = _add_kick_rank(u[:, :r], v[:r], kick)
                 else:
                     u = u[:, :r]
@@ -1153,11 +1184,7 @@ def tt_min_eig(A, x0=None, kick_rank=None, nswp=10, tol=1e-12, return_eig_val=Fa
                 x_cores[k] = np.reshape(u.T, (r, N[k], rx[k + 1]))
                 x_cores[k - 1] = einsum('rdc,cR->rdR', x_cores[k - 1], v.T, optimize=[(0, 1)])
                 rx[k] = r
-
                 XAX[k] = compute_phi_bck_A(XAX[k + 1], x_cores[k], A[k], x_cores[k])
-                norm = np.linalg.norm(XAX[k])
-                norm = norm if norm > 0 else 1.0
-                XAX[k] /= norm
             else:
                 x_cores[k] = np.reshape(solution_now, (rx[k], N[k], rx[k + 1]))
 
@@ -1182,7 +1209,7 @@ def tt_min_eig(A, x0=None, kick_rank=None, nswp=10, tol=1e-12, return_eig_val=Fa
                 v = s.reshape(-1, 1) * v
                 r = prune_singular_vals(s, trunc_tol)
                 if not last:
-                    kick = int(np.ceil((kick_rank[k] - r) / (swp+1)))
+                    kick = int(max(np.ceil(kick_rank[k] - r), 1)) if swp == 0 else 1
                     u, v, r = _add_kick_rank(u[:, :r], v[:r, :], kick)
                 else:
                     u = u[:, :r]
@@ -1191,9 +1218,6 @@ def tt_min_eig(A, x0=None, kick_rank=None, nswp=10, tol=1e-12, return_eig_val=Fa
                 x_cores[k + 1] = einsum('ij,jkl->ikl', v, x_cores[k + 1], optimize=[(0, 1)]).reshape(r, N[k + 1], rx[k + 2])
                 rx[k + 1] = r
                 XAX[k + 1] = compute_phi_fwd_A(XAX[k], x_cores[k], A[k], x_cores[k])
-                norm = np.linalg.norm(XAX[k + 1])
-                norm = norm if np.greater(norm, 0) else 1.0
-                XAX[k + 1] /= norm
             else:
                 x_cores[k] = np.reshape(solution_now, (rx[k], N[k], rx[k + 1]))
 
@@ -1225,9 +1249,28 @@ def tt_min_eig(A, x0=None, kick_rank=None, nswp=10, tol=1e-12, return_eig_val=Fa
 def _eigen_local_solve(previous_solution, XAX_k, A_k, XAX_k1, m, size_limit, eps):
     if previous_solution.shape[0]*previous_solution.shape[-1] <= size_limit:
         previous_solution = previous_solution.reshape(-1, 1)
-        A = cached_einsum("lsr,smnS,LSR->lmLrnR", XAX_k, A_k, XAX_k1).reshape(m, m)
+        A = scp.sparse.csr_matrix(cached_einsum("lsr,smnS,LSR->lmLrnR", XAX_k, A_k, XAX_k1).reshape(m, m))
         try:
             eig_val, solution_now = scp.sparse.linalg.eigsh(A, tol=eps, k=1, which="SA", ncv=max(int(np.floor(0.5*m)), min(m, 5)), v0=previous_solution)
+            if np.linalg.norm(A @ solution_now - eig_val * solution_now) > eps:
+                sigma = eig_val.squeeze()
+                # factorize (M - sigma*I)
+                M_shift = A - sigma * scp.sparse.eye(A.shape[1], format=A.format)
+                lu = scp.sparse.linalg.splu(M_shift.tocsc())
+                shift_inv_op = scp.sparse.linalg.LinearOperator(A.shape, matvec=lambda x: lu.solve(x))
+
+                # Solve using shift-invert
+                eig_val_shift, solution_now = scp.sparse.linalg.eigsh(
+                    shift_inv_op,
+                    k=1,
+                    which="LM",  # largest magnitude in shift-invert corresponds to eigenvalue near sigma
+                    v0=solution_now,  # use previous solution as initial guess
+                    ncv=max(int(np.floor(0.5*m)), min(m, 5)),
+                    maxiter=10*m,
+                    tol=eps
+                )
+                # Convert back to original eigenvalue
+                eig_val = sigma + 1 / eig_val_shift
         except Exception as e:
             print(f"\tAttention: {e}")
             solution_now = previous_solution
