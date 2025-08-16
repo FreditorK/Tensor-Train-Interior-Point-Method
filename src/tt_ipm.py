@@ -20,56 +20,62 @@ from sksparse.cholmod import cholesky as sparse_cholesky
 from opt_einsum import contract_expression
 
 
+def chunk_integer(n, k):
+    base_size = n // k
+    remainder = n % k
+    chunk_sizes = [base_size + 1 if i < remainder else base_size for i in range(k)]
+    indices = np.cumsum([0] + chunk_sizes)
+    return indices
+
+import scipy.linalg as la
+
 class ApproxBlockLZInv:
-    def __init__(self, XAX_k_21, block_A_k_21, XAX_k1_21, nblocks,eps=1e-11):
-        self.nblocks = XAX_k_21.shape[0]
-        self.block_size = block_A_k_21.shape[1] * XAX_k1_21.shape[0]
+    def __init__(self, XAX_k_21, block_A_k_21, XAX_k1_21, indices, eps=1e-11):
+        self.indices = list(zip(indices[:-1], indices[1:]))
+        self.base_size = block_A_k_21.shape[1] * XAX_k1_21.shape[0]
 
-        mats = np.stack([
-            cached_einsum("s,smnS,LSR->mLnR",
-                          XAX_k_21[r, :, r],
-                          block_A_k_21,
-                          XAX_k1_21
-            ).reshape(self.block_size, self.block_size)
-            for r in range(self.nblocks)
-        ])
-
-        eye = scp.sparse.eye(self.block_size, format='csc')
         self.inv_blocks = [
-            sparse_cholesky(scp.sparse.csc_matrix(m) + eps * eye)
-            for m in mats
+            la.cholesky(
+                cached_einsum("lsr,smnS,LSR->lmLrnR",
+                              XAX_k_21[r_i:r_ip1, :, r_i:r_ip1],
+                              block_A_k_21,
+                              XAX_k1_21
+                ).reshape((r_ip1-r_i)*self.base_size, (r_ip1-r_i)*self.base_size)
+                + eps * np.eye((r_ip1-r_i)*self.base_size)
+            )
+            for r_i, r_ip1 in self.indices
         ]
 
     def solve(self, x):
-        x_blocks = x.reshape(self.nblocks, self.block_size)
-        y_blocks = [f.solve_A(xb) for f, xb in zip(self.inv_blocks, x_blocks)]
+        y_blocks = [
+            la.cho_solve((L, True), x[r_i*self.base_size:r_ip1*self.base_size])
+            for L, (r_i, r_ip1) in zip(self.inv_blocks, self.indices)
+        ]
         return np.concatenate(y_blocks)
 
 
 class ApproxBlockKyInv:
-    def __init__(self, XAX_k_00, block_A_k_00, XAX_k1_00, eps=1e-11):
-        self.nblocks = XAX_k_00.shape[0]
-        self.block_size = block_A_k_00.shape[1] * XAX_k1_00.shape[0]
+    def __init__(self, XAX_k_00, block_A_k_00, XAX_k1_00, indices, eps=1e-11):
+        self.indices = list(zip(indices[:-1], indices[1:]))
+        self.base_size = block_A_k_00.shape[1] * XAX_k1_00.shape[0]
 
         self.inv_blocks = [
-            spla.splu(
-                scp.sparse.csc_matrix(
-                    cached_einsum("s,smnS,LSR->mLnR",
-                                  XAX_k_00[r, :, r],
-                                  block_A_k_00,
-                                  XAX_k1_00
-                    ).reshape(self.block_size, self.block_size)
-                ) + eps * scp.sparse.eye(self.block_size, format='csc')
+            la.lu_factor(
+                cached_einsum("lsr,smnS,LSR->lmLrnR",
+                              XAX_k_00[r_i:r_ip1, :, r_i:r_ip1],
+                              block_A_k_00,
+                              XAX_k1_00
+                ).reshape((r_ip1-r_i)*self.base_size, (r_ip1-r_i)*self.base_size)
+                + eps * np.eye((r_ip1-r_i)*self.base_size)
             )
-            for r in range(self.nblocks)
+            for r_i, r_ip1 in self.indices
         ]
 
     def solve(self, x):
-        # Split x into blocks
-        x_blocks = np.split(x, self.nblocks)
-        # Apply each ILU block solver
-        y_blocks = [ilu.solve(xb) for ilu, xb in zip(self.inv_blocks, x_blocks)]
-        # Concatenate back
+        y_blocks = [
+            la.lu_solve(lu, x[r_i*self.base_size:r_ip1*self.base_size])
+            for lu, (r_i, r_ip1) in zip(self.inv_blocks, self.indices)
+        ]
         return np.concatenate(y_blocks)
 
 
@@ -79,13 +85,16 @@ class ApproxUpperTriSchurPrec:
         XAX_k_00, block_A_k_00, XAX_k1_00, 
         XAX_k_21, block_A_k_21, XAX_k1_21,
         XAX_k_01, block_A_k_01, XAX_k1_01,
-        nblocks=4,
+        nblocks,
         eps=1e-11
     ):
         x_shape = (XAX_k_01.shape[-1], block_A_k_01.shape[2], XAX_k1_01.shape[-1])
+        nblocks = min(nblocks, x_shape[0])
+        indices = chunk_integer(x_shape[0], nblocks)
+        print("Indices: ",  [i*np.prod((block_A_k_01.shape[2], XAX_k1_01.shape[-1])) for i in indices], np.prod(x_shape))
         self.m = np.prod(x_shape)
-        self.KyInv = ApproxBlockKyInv(XAX_k_00, block_A_k_00, XAX_k1_00, nblocks, eps)
-        self.LZInv = ApproxBlockLZInv(XAX_k_21, block_A_k_21, XAX_k1_21, nblocks, eps)
+        self.KyInv = ApproxBlockKyInv(XAX_k_00, block_A_k_00, XAX_k1_00, indices, eps)
+        self.LZInv = ApproxBlockLZInv(XAX_k_21, block_A_k_21, XAX_k1_21, indices, eps)
         mL_expr = contract_expression(
             'lsr,smnS,LSR,rnR->lmL', 
             XAX_k_01.shape, block_A_k_01.shape, XAX_k1_01.shape, x_shape, 
@@ -265,7 +274,8 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         schur_prec = ApproxUpperTriSchurPrec(
             XAX_k[0, 0], block_A_k[0, 0], XAX_k1[0, 1], 
             XAX_k[2, 1], block_A_k[2, 1], XAX_k1[2, 1],
-            XAX_k[0, 1], block_A_k[0, 1], XAX_k1[0, 1]
+            XAX_k[0, 1], block_A_k[0, 1], XAX_k1[0, 1],
+            1
         )
         solution_now = large_scale_solver.solve_system(matvec_wrapper, local_rhs.flatten(), (2*m, 2*m), preconditioner=schur_prec)
         large_scale_solver.destroy()
