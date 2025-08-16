@@ -870,6 +870,7 @@ class CGSolver:
         self.A_shell.setPythonContext(self)
         self.A_shell.setUp()
         self.ksp.setOperators(self.A_shell)
+        self.warm_start_vec = np.zeros((shape[0], 1))
 
     def mult(self, _, x, y):
         """Python matrix-vector multiplication."""
@@ -881,7 +882,7 @@ class CGSolver:
 
         # Create PETSc vectors
         b_petsc = PETSc.Vec().createWithArray(rhs_np, comm=PETSc.COMM_WORLD)
-        x_petsc = PETSc.Vec().createWithArray(np.zeros_like(rhs_np), comm=PETSc.COMM_WORLD)
+        x_petsc = PETSc.Vec().createWithArray(self.warm_start_vec, comm=PETSc.COMM_WORLD)
 
         # Solve system
         self.ksp.solve(b_petsc, x_petsc)
@@ -890,6 +891,7 @@ class CGSolver:
         # Clean up
         b_petsc.destroy()
         x_petsc.destroy()
+        self.warm_start_vec = sol
         return sol
 
     def destroy(self):
@@ -899,6 +901,7 @@ class CGSolver:
             self.ksp = None
         del self.matvec_object
         del self.shape
+        del self.warm_start_vec
 
 
 class CgIterInv(scp.sparse.linalg.LinearOperator):
@@ -1019,9 +1022,7 @@ def _step_size_local_solve(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k, A_k
             lanczos_discount = min(0.999, lanczos_discount*1.1)
         if eig_val < 0:
             try:
-                Minv = CgIterInv(A_op, tol=eps)
-                eig_val, solution_now = scp.sparse.linalg.eigsh(D_op, M=A_op, Minv=Minv, tol=eps, k=1, ncv=max(int(np.floor(lanczos_discount*m)), min(m, 5)), which="LA", maxiter=10*m, v0=previous_solution)
-                Minv.destroy()
+                eig_val, solution_now = scp.sparse.linalg.lobpcg(D_op, X=previous_solution, B=A_op, tol=eps, maxiter=10*m)
                 step_size = max(0, min(step_size, 1 / eig_val[0]))
             except Exception as e:
                 print(f"\tAttention: {e}")

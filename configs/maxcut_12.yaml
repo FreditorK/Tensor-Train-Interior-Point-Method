@@ -1,6 +1,6 @@
 # Common
 dim: !!int 12
-seeds: [83, 45, 23, 53, 12] 
+seeds: [80, 45, 23, 53, 12] 
 gap_tol: !!float 3e-4
 verbose: False
 # TT-IPM
