@@ -1,6 +1,7 @@
 import sys
 import os
 import time
+from turtle import xcor
 
 import numpy as np
 
@@ -9,6 +10,7 @@ sys.path.append(os.getcwd() + '/../')
 from src.tt_ops import *
 from opt_einsum import contract as einsum
 from sksparse.cholmod import cholesky as sparse_cholesky
+from petsc4py import PETSc
 
 def _tt_get_block(i, block_matrix_tt):
     b = np.argmax([len(c.shape) for c in block_matrix_tt])
@@ -848,21 +850,71 @@ def tt_rank_reduce_py(train_tt: List[np.ndarray], eps=1e-18):
     return train_tt
 
 
+class CGSolver:
+    def __init__(self, matvec_object, shape, rtol=1e-8, max_iter=300):
+        self.matvec_object = None
+        self.shape = None 
+
+        # PETSc solver setup
+        self.ksp = PETSc.KSP().create(comm=PETSc.COMM_WORLD)
+        self.ksp.setType('cg')  # Use CG solver
+        opts = PETSc.Options()
+        opts.setValue('-ksp_rtol', rtol)
+        opts.setValue('-ksp_max_it', max_iter)
+        self.ksp.setFromOptions()
+        self.matvec_object = matvec_object
+        self.shape = shape
+
+        # Create PETSc shell matrix
+        self.A_shell = PETSc.Mat().createPython(self.shape, comm=PETSc.COMM_WORLD)
+        self.A_shell.setPythonContext(self)
+        self.A_shell.setUp()
+        self.ksp.setOperators(self.A_shell)
+
+    def mult(self, _, x, y):
+        """Python matrix-vector multiplication."""
+        x_np = x.getArray()
+        y_np = self.matvec_object(x_np)
+        y.setArray(y_np)
+
+    def solve_system(self, rhs_np):
+
+        # Create PETSc vectors
+        b_petsc = PETSc.Vec().createWithArray(rhs_np, comm=PETSc.COMM_WORLD)
+        x_petsc = PETSc.Vec().createWithArray(np.zeros_like(rhs_np), comm=PETSc.COMM_WORLD)
+
+        # Solve system
+        self.ksp.solve(b_petsc, x_petsc)
+        sol = x_petsc.getArray()
+
+        # Clean up
+        b_petsc.destroy()
+        x_petsc.destroy()
+        return sol
+
+    def destroy(self):
+        """Clean up PETSc objects."""
+        if hasattr(self, "ksp") and self.ksp:
+            self.ksp.destroy()
+            self.ksp = None
+        del self.matvec_object
+        del self.shape
+
+
 class CgIterInv(scp.sparse.linalg.LinearOperator):
 
     def __init__(self, M, tol=1e-12):
         self.M = M
         self.shape = M.shape
         self.tol = tol
-        self.ifunc = lambda b: scp.sparse.linalg.cg(M, b, maxiter=500, rtol=tol)
+        self.solver = CGSolver(M, self.shape, tol, max_iter=300)
 
     def _matvec(self, x):
-        b, info = self.ifunc(x)
-        if info < 0:
-            raise ValueError("Error in inverting M: function "
-                             "%s did not converge (info = %i)."
-                             % (self.ifunc.__name__, info))
+        b = self.solver.solve_system(x)
         return b
+
+    def destroy(self):
+        self.solver.destroy()
 
 
 class SpCholInv(scp.sparse.linalg.LinearOperator):
@@ -969,6 +1021,7 @@ def _step_size_local_solve(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k, A_k
             try:
                 Minv = CgIterInv(A_op, tol=eps)
                 eig_val, solution_now = scp.sparse.linalg.eigsh(D_op, M=A_op, Minv=Minv, tol=eps, k=1, ncv=max(int(np.floor(lanczos_discount*m)), min(m, 5)), which="LA", maxiter=10*m, v0=previous_solution)
+                Minv.destroy()
                 step_size = max(0, min(step_size, 1 / eig_val[0]))
             except Exception as e:
                 print(f"\tAttention: {e}")
@@ -1009,7 +1062,7 @@ def _add_kick_rank(u, v, r_add=2):
     return u, v, u.shape[-1]
 
 
-def tt_max_generalised_eigen(A, Delta, x0=None, kick_rank=None, nswp=10, tol=1e-12, verbose=False):
+def tt_max_generalised_eigen(A, Delta, x0=None, kick_rank=None, nswp=10, tol=1e-12, size_limit=16, verbose=False):
     if verbose:
         print(f"\nStarting Eigen solve with:\n \t {tol} \n \t sweeps: {nswp}")
         t0 = time.time()
@@ -1030,7 +1083,7 @@ def tt_max_generalised_eigen(A, Delta, x0=None, kick_rank=None, nswp=10, tol=1e-
     step_size = 1
     lanczos_discount = 0.5
     last = False
-    size_limit = (2**d)**(3/4)
+    size_limit = 16
     local_res = np.inf*np.ones((2, d-1))
     trunc_tol = 0.1*tol/np.sqrt(d)
     for swp in range(nswp):
@@ -1140,7 +1193,7 @@ def tt_max_generalised_eigen(A, Delta, x0=None, kick_rank=None, nswp=10, tol=1e-
     return step_size, x_cores
 
 
-def tt_min_eig(A, x0=None, kick_rank=None, nswp=10, tol=1e-12, return_eig_val=False, verbose=False):
+def tt_min_eig(A, x0=None, kick_rank=None, nswp=10, tol=1e-12, size_limit=16, return_eig_val=False, verbose=False):
     if verbose:
         print(f"\nStarting Eigen solve with:\n \t {tol} \n \t sweeps: {nswp}")
         t0 = time.time()
@@ -1158,7 +1211,6 @@ def tt_min_eig(A, x0=None, kick_rank=None, nswp=10, tol=1e-12, return_eig_val=Fa
 
     max_res = 0
     last = False
-    size_limit = (2**(d/2))**(3/4)
     trunc_tol = 0.1*tol/np.sqrt(d)
     for swp in range(nswp):
         max_res = np.inf if swp == 0 else 0

@@ -13,7 +13,7 @@ from scipy.linalg import block_diag
 # --- Problem setup ---
 np.random.seed(42)
 n1, n2 = 30, 30  # sizes of the main blocks
-block_size = 5   # size of diagonal sub-blocks
+block_size = 15   # size of diagonal sub-blocks
 
 # Example blocks
 B1 = np.random.rand(10,10)
@@ -28,8 +28,8 @@ Z_dense = Z_dense @ Z_dense.T + 1e-12*np.eye(n2)
 Z = sp.csr_matrix(Z_dense)
 
 # Off-diagonal blocks
-L = sp.random(n1, n2, density=0.1, format='csr')
-P = sp.random(n2, n1, density=0.1, format='csr')
+L = sp.random(n1, n2, density=0.03, format='csr')
+P = sp.random(n2, n1, density=0.03, format='csr')
 
 # Full system
 A = sp.bmat([[K_y, L],

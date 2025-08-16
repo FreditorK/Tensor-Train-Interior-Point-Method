@@ -79,35 +79,26 @@ class ApproxBlockKyInv:
         return np.concatenate(y_blocks)
 
 
-class ApproxUpperTriSchurPrec:
+class BlockJacPrec:
     def __init__(
         self, 
         XAX_k_00, block_A_k_00, XAX_k1_00, 
         XAX_k_21, block_A_k_21, XAX_k1_21,
-        XAX_k_01, block_A_k_01, XAX_k1_01,
         nblocks,
         eps=1e-11
     ):
-        x_shape = (XAX_k_01.shape[-1], block_A_k_01.shape[2], XAX_k1_01.shape[-1])
-        nblocks = min(nblocks, x_shape[0])
+        x_shape = (XAX_k_00.shape[-1], block_A_k_00.shape[2], XAX_k1_00.shape[-1])
+        nblocks = min(nblocks, XAX_k_00.shape[-1])
         indices = chunk_integer(x_shape[0], nblocks)
-        print("Indices: ",  [i*np.prod((block_A_k_01.shape[2], XAX_k1_01.shape[-1])) for i in indices], np.prod(x_shape))
         self.m = np.prod(x_shape)
         self.KyInv = ApproxBlockKyInv(XAX_k_00, block_A_k_00, XAX_k1_00, indices, eps)
         self.LZInv = ApproxBlockLZInv(XAX_k_21, block_A_k_21, XAX_k1_21, indices, eps)
-        mL_expr = contract_expression(
-            'lsr,smnS,LSR,rnR->lmL', 
-            XAX_k_01.shape, block_A_k_01.shape, XAX_k1_01.shape, x_shape, 
-            optimize="greedy"
-        )
-        self.mL = lambda x_vec: mL_expr(XAX_k_01, block_A_k_01, XAX_k1_01, x_vec.reshape(x_shape)).flatten()
 
     def apply(self, _, x, y):
         x_np = x.getArray()
         x1, x2 = x_np[:self.m], x_np[self.m:]
         y2 = self.LZInv.solve(x2)
-        rhs1 = x1 - self.mL(y2)
-        y1 = self.KyInv.solve(rhs1)
+        y1 = self.KyInv.solve(x1)
         y_np = np.concatenate([y1, y2])
         y.setArray(y_np)
 
@@ -144,7 +135,7 @@ class LGMRESSolver:
         y_np = self.matvec_object.matvec(x_np)
         y.setArray(y_np)
 
-    def solve_system(self, matvec_object, rhs_np, shape, preconditioner=None):
+    def solve_system(self, matvec_object, rhs_np, shape):
         self.matvec_object = matvec_object
         self.shape = shape
 
@@ -153,19 +144,10 @@ class LGMRESSolver:
         self.A_shell.setUp()
         self.ksp.setOperators(self.A_shell)
 
-        # Attach preconditioner if given
-        if preconditioner is not None:
-            pc = self.ksp.getPC()
-            pc.setType(PETSc.PC.Type.PYTHON)
-            pc.setPythonContext(preconditioner)
-
         b_petsc = PETSc.Vec().createWithArray(rhs_np, comm=PETSc.COMM_WORLD)
         x_petsc = PETSc.Vec().createWithArray(np.zeros_like(rhs_np), comm=PETSc.COMM_WORLD)
         self.ksp.solve(b_petsc, x_petsc)
         sol = x_petsc.getArray()
-
-        iter_count = self.ksp.getIterationNumber()
-        print(f"Final iteration count: {iter_count}")
 
         b_petsc.destroy()
         x_petsc.destroy()
@@ -212,8 +194,6 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
 
     if block_res_old < rtol:
         return previous_solution, block_res_old, block_res_old, rhs, norm_rhs, direct_solve_failure
-
-    dense_solve = False
     
     if dense_solve:
         try:
@@ -271,13 +251,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         num_iters = min(m, 100)
         outer_k = max(num_iters // 10, 3)
         large_scale_solver = LGMRESSolver(rtol=rtol, restart=num_iters, outer_k=outer_k)
-        schur_prec = ApproxUpperTriSchurPrec(
-            XAX_k[0, 0], block_A_k[0, 0], XAX_k1[0, 1], 
-            XAX_k[2, 1], block_A_k[2, 1], XAX_k1[2, 1],
-            XAX_k[0, 1], block_A_k[0, 1], XAX_k1[0, 1],
-            1
-        )
-        solution_now = large_scale_solver.solve_system(matvec_wrapper, local_rhs.flatten(), (2*m, 2*m), preconditioner=schur_prec)
+        solution_now = large_scale_solver.solve_system(matvec_wrapper, local_rhs.flatten(), (2*m, 2*m))
         large_scale_solver.destroy()
         solution_now = np.transpose(solution_now.reshape(2, x_shape[0], x_shape[2], x_shape[3]), (1, 0, 2, 3))
 

@@ -1,8 +1,8 @@
 # Common
 dim: !!int 11
-seeds: [48, 14, 937, 23, 22] 
+seeds: [48] 
 gap_tol: !!float 3e-4
-verbose: False
+verbose: True
 # TT-IPM
 op_tol: !!float 1e-4
 abs_tol: !!float 6e-4
