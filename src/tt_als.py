@@ -1053,8 +1053,8 @@ def tt_max_generalised_eigen(A, Delta, x0=None, kick_rank=None, nswp=10, tol=1e-
                 u, s, v = scp.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
                 v = s.reshape(-1, 1) * v
                 r = prune_singular_vals(s, trunc_tol)
-                if not last:
-                    kick = int(max(np.ceil(kick_rank[k-1] - r), 1)) if swp == 0 else 1
+                if swp == 0:
+                    kick = int(max(np.ceil(kick_rank[k-1] - r), 0))
                     u, v, r = _add_kick_rank(u[:, :r], v[:r], kick)
                 else:
                     u = u[:, :r]
@@ -1097,8 +1097,8 @@ def tt_max_generalised_eigen(A, Delta, x0=None, kick_rank=None, nswp=10, tol=1e-
                 u, s, v = scp.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
                 v = s.reshape(-1, 1) * v
                 r = prune_singular_vals(s, trunc_tol)
-                if not last:
-                    kick = int(max(np.ceil(kick_rank[k] - r), 1)) if swp == 0 else 1
+                if swp == 0:
+                    kick = int(max(np.ceil(kick_rank[k] - r), 0))
                     u, v, r = _add_kick_rank(u[:, :r], v[:r, :], kick)
                 else:
                     u = u[:, :r]
@@ -1175,8 +1175,8 @@ def tt_min_eig(A, x0=None, kick_rank=None, nswp=10, tol=1e-12, return_eig_val=Fa
                 u, s, v = scp.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
                 v = s.reshape(-1, 1) * v
                 r = prune_singular_vals(s, trunc_tol)
-                if not last:
-                    kick = int(max(np.ceil(kick_rank[k-1] - r), 1)) if swp == 0 else 1
+                if swp == 0:
+                    kick = int(max(np.ceil(kick_rank[k-1] - r), 0))
                     u, v, r = _add_kick_rank(u[:, :r], v[:r], kick)
                 else:
                     u = u[:, :r]
@@ -1208,8 +1208,8 @@ def tt_min_eig(A, x0=None, kick_rank=None, nswp=10, tol=1e-12, return_eig_val=Fa
                 u, s, v = scp.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
                 v = s.reshape(-1, 1) * v
                 r = prune_singular_vals(s, trunc_tol)
-                if not last:
-                    kick = int(max(np.ceil(kick_rank[k] - r), 1)) if swp == 0 else 1
+                if swp == 0:
+                    kick = int(max(np.ceil(kick_rank[k] - r), 0))
                     u, v, r = _add_kick_rank(u[:, :r], v[:r, :], kick)
                 else:
                     u = u[:, :r]

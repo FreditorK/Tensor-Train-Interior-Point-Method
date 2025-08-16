@@ -15,72 +15,95 @@ import warnings
 warnings.simplefilter("error")
 from petsc4py import PETSc
 import numpy as np
+import scipy.sparse.linalg as spla
+from sksparse.cholmod import cholesky as sparse_cholesky
+from opt_einsum import contract_expression
 
 
-class LSQRSolver:
-    def __init__(self, rtol=1e-8, max_iter=300):
-        """
-        PETSc-based LSQR solver (avoids squaring condition number).
-        """
-        self.matvec_object = None
-        self.shape = None
+class ApproxBlockLZInv:
+    def __init__(self, XAX_k_21, block_A_k_21, XAX_k1_21, nblocks,eps=1e-11):
+        self.nblocks = XAX_k_21.shape[0]
+        self.block_size = block_A_k_21.shape[1] * XAX_k1_21.shape[0]
 
-        # Create KSP solver
-        self.ksp = PETSc.KSP().create(comm=PETSc.COMM_WORLD)
-        self.ksp.setType('lsqr')
+        mats = np.stack([
+            cached_einsum("s,smnS,LSR->mLnR",
+                          XAX_k_21[r, :, r],
+                          block_A_k_21,
+                          XAX_k1_21
+            ).reshape(self.block_size, self.block_size)
+            for r in range(self.nblocks)
+        ])
 
-        # Set convergence criteria
-        opts = PETSc.Options()
-        opts.setValue('-ksp_rtol', rtol)
-        opts.setValue('-ksp_max_it', max_iter)
-        self.ksp.setFromOptions()
+        eye = scp.sparse.eye(self.block_size, format='csc')
+        self.inv_blocks = [
+            sparse_cholesky(scp.sparse.csc_matrix(m) + eps * eye)
+            for m in mats
+        ]
 
-    def mult(self, _, x, y):
-        """ y = A x """
+    def solve(self, x):
+        x_blocks = x.reshape(self.nblocks, self.block_size)
+        y_blocks = [f.solve_A(xb) for f, xb in zip(self.inv_blocks, x_blocks)]
+        return np.concatenate(y_blocks)
+
+
+class ApproxBlockKyInv:
+    def __init__(self, XAX_k_00, block_A_k_00, XAX_k1_00, eps=1e-11):
+        self.nblocks = XAX_k_00.shape[0]
+        self.block_size = block_A_k_00.shape[1] * XAX_k1_00.shape[0]
+
+        self.inv_blocks = [
+            spla.splu(
+                scp.sparse.csc_matrix(
+                    cached_einsum("s,smnS,LSR->mLnR",
+                                  XAX_k_00[r, :, r],
+                                  block_A_k_00,
+                                  XAX_k1_00
+                    ).reshape(self.block_size, self.block_size)
+                ) + eps * scp.sparse.eye(self.block_size, format='csc')
+            )
+            for r in range(self.nblocks)
+        ]
+
+    def solve(self, x):
+        # Split x into blocks
+        x_blocks = np.split(x, self.nblocks)
+        # Apply each ILU block solver
+        y_blocks = [ilu.solve(xb) for ilu, xb in zip(self.inv_blocks, x_blocks)]
+        # Concatenate back
+        return np.concatenate(y_blocks)
+
+
+class ApproxUpperTriSchurPrec:
+    def __init__(
+        self, 
+        XAX_k_00, block_A_k_00, XAX_k1_00, 
+        XAX_k_21, block_A_k_21, XAX_k1_21,
+        XAX_k_01, block_A_k_01, XAX_k1_01,
+        nblocks=4,
+        eps=1e-11
+    ):
+        x_shape = (XAX_k_01.shape[-1], block_A_k_01.shape[2], XAX_k1_01.shape[-1])
+        self.m = np.prod(x_shape)
+        self.KyInv = ApproxBlockKyInv(XAX_k_00, block_A_k_00, XAX_k1_00, nblocks, eps)
+        self.LZInv = ApproxBlockLZInv(XAX_k_21, block_A_k_21, XAX_k1_21, nblocks, eps)
+        mL_expr = contract_expression(
+            'lsr,smnS,LSR,rnR->lmL', 
+            XAX_k_01.shape, block_A_k_01.shape, XAX_k1_01.shape, x_shape, 
+            optimize="greedy"
+        )
+        self.mL = lambda x_vec: mL_expr(XAX_k_01, block_A_k_01, XAX_k1_01, x_vec.reshape(x_shape)).flatten()
+
+    def apply(self, _, x, y):
         x_np = x.getArray()
-        y_np = self.matvec_object.matvec(x_np)
+        x1, x2 = x_np[:self.m], x_np[self.m:]
+        y2 = self.LZInv.solve(x2)
+        rhs1 = x1 - self.mL(y2)
+        y1 = self.KyInv.solve(rhs1)
+        y_np = np.concatenate([y1, y2])
         y.setArray(y_np)
-
-    def multTranspose(self, _, x, y):
-        """ y = A^T x """
-        x_np = x.getArray()
-        y_np = self.matvec_object.rmatvec(x_np)  # Must be implemented by user!
-        y.setArray(y_np)
-
-    def solve_system(self, matvec_object, rhs_np, shape):
-        """
-        Solve min ||Ax - b||_2 using LSQR.
-        """
-        self.matvec_object = matvec_object
-        self.shape = shape
-
-        # Create matrix-free shell matrix
-        self.A_shell = PETSc.Mat().createPython(self.shape, comm=PETSc.COMM_WORLD)
-        self.A_shell.setPythonContext(self)
-        self.A_shell.setUp()
-
-        # Setup solver
-        self.ksp.setOperators(self.A_shell)
-
-        b_petsc = PETSc.Vec().createWithArray(rhs_np, comm=PETSc.COMM_WORLD)
-        x_petsc = PETSc.Vec().createWithArray(np.zeros(self.shape[1]), comm=PETSc.COMM_WORLD)
-
-        self.ksp.solve(b_petsc, x_petsc)
-        sol = x_petsc.getArray().copy()
-
-        b_petsc.destroy()
-        x_petsc.destroy()
-        return sol
-
-    def destroy(self):
-        if hasattr(self, "ksp") and self.ksp:
-            self.ksp.destroy()
-            self.ksp = None
-        del self.matvec_object
-        del self.shape
 
 class LGMRESSolver:
-    def __init__(self, rtol=1e-8, max_iter=500, restart=100, outer_k=10):
+    def __init__(self, rtol=1e-8, max_iter=300, restart=100, outer_k=10):
         """
         Initializes the LGMRES solver.
 
@@ -112,7 +135,7 @@ class LGMRESSolver:
         y_np = self.matvec_object.matvec(x_np)
         y.setArray(y_np)
 
-    def solve_system(self, matvec_object, rhs_np, shape):
+    def solve_system(self, matvec_object, rhs_np, shape, preconditioner=None):
         self.matvec_object = matvec_object
         self.shape = shape
 
@@ -121,10 +144,20 @@ class LGMRESSolver:
         self.A_shell.setUp()
         self.ksp.setOperators(self.A_shell)
 
+        # Attach preconditioner if given
+        if preconditioner is not None:
+            pc = self.ksp.getPC()
+            pc.setType(PETSc.PC.Type.PYTHON)
+            pc.setPythonContext(preconditioner)
+
         b_petsc = PETSc.Vec().createWithArray(rhs_np, comm=PETSc.COMM_WORLD)
         x_petsc = PETSc.Vec().createWithArray(np.zeros_like(rhs_np), comm=PETSc.COMM_WORLD)
         self.ksp.solve(b_petsc, x_petsc)
         sol = x_petsc.getArray()
+
+        iter_count = self.ksp.getIterationNumber()
+        print(f"Final iteration count: {iter_count}")
+
         b_petsc.destroy()
         x_petsc.destroy()
         return sol
@@ -170,6 +203,8 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
 
     if block_res_old < rtol:
         return previous_solution, block_res_old, block_res_old, rhs, norm_rhs, direct_solve_failure
+
+    dense_solve = False
     
     if dense_solve:
         try:
@@ -200,6 +235,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
                 overwrite_b=True
                 ).reshape(x_shape[0], x_shape[2], x_shape[3])
         except Exception as e:
+            print(e)
             tb = traceback.extract_tb(e.__traceback__)
             last = tb[-1]
             print(f"\t⚠️ {type(e).__name__} in {last.filename}, \n\tline {last.lineno}: {last.line.strip()}")
@@ -226,7 +262,12 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         num_iters = min(m, 100)
         outer_k = max(num_iters // 10, 3)
         large_scale_solver = LGMRESSolver(rtol=rtol, restart=num_iters, outer_k=outer_k)
-        solution_now = large_scale_solver.solve_system(matvec_wrapper, local_rhs.flatten(), (2*m, 2*m))
+        schur_prec = ApproxUpperTriSchurPrec(
+            XAX_k[0, 0], block_A_k[0, 0], XAX_k1[0, 1], 
+            XAX_k[2, 1], block_A_k[2, 1], XAX_k1[2, 1],
+            XAX_k[0, 1], block_A_k[0, 1], XAX_k1[0, 1]
+        )
+        solution_now = large_scale_solver.solve_system(matvec_wrapper, local_rhs.flatten(), (2*m, 2*m), preconditioner=schur_prec)
         large_scale_solver.destroy()
         solution_now = np.transpose(solution_now.reshape(2, x_shape[0], x_shape[2], x_shape[3]), (1, 0, 2, 3))
 
