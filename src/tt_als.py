@@ -972,7 +972,7 @@ def _step_size_local_solve(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k, A_k
         if eig_val < 0:
             try:
                 Minv = SpCholInv(A)
-                eig_val, solution_now = scp.sparse.linalg.eigsh(-D, M=A, Minv=Minv, tol=eps, k=1, ncv=max(int(np.floor(lanczos_discount*m)), min(m, 5)), which="LA", maxiter=10*m, v0=previous_solution)
+                eig_val, solution_now = scp.sparse.linalg.eigsh(-D, M=A, Minv=Minv, tol=eps, k=1, ncv=max(int(np.floor(lanczos_discount*m)), min(m, 5)), which="LA", maxiter=10*m, v0=solution_now)
                 step_size = max(0, min(1, 1/ eig_val[0]))
                 if np.linalg.norm(((1/step_size)*A + D) @ solution_now - eig_val*solution_now) > eps:
                     sigma = eig_val.squeeze()
@@ -1015,14 +1015,14 @@ def _step_size_local_solve(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k, A_k
         AD_op = scp.sparse.linalg.LinearOperator((m, m), matvec=lambda x_vec: (mat_vec_A(x_vec) / step_size).__isub__(mat_vec_D(x_vec)))
 
         try:
-            eig_val, solution_now = scp.sparse.linalg.eigsh(AD_op, tol=eps, k=1, ncv=max(int(np.floor(lanczos_discount*m)), min(m, 5)), which="SA", maxiter=10*m, v0=previous_solution)
+            eig_val, solution_now = scp.sparse.linalg.lobpcg(AD_op, X=previous_solution, tol=eps, largest=False, maxiter=10*m)
         except Exception as e:
             eig_val = previous_solution.T @ AD_op(previous_solution)
             solution_now = previous_solution
             lanczos_discount = min(0.999, lanczos_discount*1.1)
         if eig_val < 0:
             try:
-                eig_val, solution_now = scp.sparse.linalg.lobpcg(D_op, X=previous_solution, B=A_op, tol=eps, maxiter=10*m)
+                eig_val, solution_now = scp.sparse.linalg.lobpcg(D_op, X=solution_now, B=A_op, tol=eps, maxiter=10*m)
                 step_size = max(0, min(step_size, 1 / eig_val[0]))
             except Exception as e:
                 print(f"\tAttention: {e}")
@@ -1337,7 +1337,7 @@ def _eigen_local_solve(previous_solution, XAX_k, A_k, XAX_k1, m, size_limit, eps
     mat_vec_A = lambda x_vec: _mat_vec_A(XAX_k, A_k, XAX_k1, x_vec.reshape(*x_shape)).reshape(-1, 1)
     A_op = scp.sparse.linalg.LinearOperator((m, m), matvec=mat_vec_A)
     try:
-        eig_val, solution_now = scp.sparse.linalg.eigsh(A_op, tol=eps, k=1, which="SA", ncv=max(int(np.floor(0.5*m)), min(m, 5)), v0=previous_solution)
+        eig_val, solution_now = scp.sparse.linalg.lobpcg(A_op, X=previous_solution, tol=eps, largest=False, maxiter=10*m)
     except Exception as e:
         print(f"\tAttention: {e}")
         solution_now = previous_solution
