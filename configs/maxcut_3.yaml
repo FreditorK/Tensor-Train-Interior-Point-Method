@@ -1,4 +1,4 @@
-abs_tol: 6e-4
+abs_tol: 0.001
 dim: 3
 epsilonDash: 1.0
 gap_tol: 0.0003

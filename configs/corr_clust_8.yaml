@@ -1,4 +1,4 @@
-abs_tol: 9e-4
+abs_tol: 0.001
 dim: 8
 epsilonDash: 2.0
 epsilonDashineq: 0.001

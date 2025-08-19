@@ -5,7 +5,7 @@ gap_tol: !!float 3e-4
 verbose: False
 # TT-IPM
 op_tol: !!float 1e-4
-abs_tol: !!float 6e-4
+abs_tol: !!float 0.001
 max_iter: !!int 30
 warm_up: !!int 3
 mals_restarts: !!int 2

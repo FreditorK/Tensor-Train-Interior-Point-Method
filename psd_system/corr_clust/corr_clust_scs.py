@@ -57,13 +57,13 @@ if __name__ == "__main__":
                 if args.track_mem:
                     def wrapper():
                         prob = cp.Problem(cp.Maximize(cp.trace(C.T @ X)), constraints)
-                        _ = prob.solve(solver=cp.SCS, eps=1e-5 / config["dim"], verbose=True)
+                        _ = prob.solve(solver=cp.SCS, eps=1e-5 / config["dim"], verbose=True, use_indirect=True)
                         return prob
                     res, prob = memory_usage(proc=wrapper, max_usage=True, retval=True, include_children=True)
                     memory[s_i] = res - start_mem
                 else:
                     prob = cp.Problem(cp.Maximize(cp.trace(C.T @ X)), constraints)
-                    _ = prob.solve(solver=cp.SCS, eps=1e-5 / config["dim"], verbose=True)
+                    _ = prob.solve(solver=cp.SCS, eps=1e-5 / config["dim"], verbose=True, use_indirect=True)
                 # If we get here, break out of the attempt loop (success)
                 break
             except Exception as e:

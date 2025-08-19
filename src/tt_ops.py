@@ -401,63 +401,30 @@ def skewed_probabilities(n, skew=0.0):
     probs = weights / weights.sum()
     return probs
 
-def _null_projector(
-    basis_vectors: np.ndarray,
-    discarded_indices: Set[int],
-    skew
-) -> np.ndarray:
-    dimension = len(basis_vectors)
-    available_indices = sorted(list(set(range(dimension)) - discarded_indices))
-    num_available = len(available_indices)
-
-    if num_available == 0:
-        return np.zeros((dimension, dimension))
-
-    # Start with a projector onto the valid subspace.
-    projector = np.eye(dimension)
-    for i in discarded_indices:
-        projector -= np.outer(basis_vectors[i], basis_vectors[i])
-
-    # Determine how many random pairs to couple.
-    num_couplings = np.random.randint(num_available) if num_available > 0 else 0
-    if num_couplings == 0:
-        return projector
-
-    # Select source and target indices for the random couplings.
-    source_indices = np.random.choice(available_indices, size=num_couplings, replace=False)
-    target_indices = np.random.choice(available_indices, size=num_couplings, replace=True, p=skewed_probabilities(len(available_indices), skew))
-
-    # Add the random couplings. This operation makes the matrix no longer a strict
-    # projection, but a transformation that maps a source vector to a target vector.
-    for i, j in zip(source_indices, target_indices):
-        projector += np.outer(basis_vectors[i], basis_vectors[j] - basis_vectors[i])
-
-    return projector
-
 
 def _diag_projector(
     basis_vectors: np.ndarray,
     discarded_indices: Set[int],
-    skew,
+    probabilities,
     limit=2
 ) -> Tuple[np.ndarray, np.ndarray, Set[int]]:
     dimension = len(basis_vectors)
     num_couplings = np.random.randint(dimension) if dimension > 0 else 0
 
     source_indices = np.random.choice(dimension, size=num_couplings, replace=False)
-    target_indices_1 = np.random.choice(dimension, size=num_couplings, replace=True, p=skewed_probabilities(dimension, skew))
-    target_indices_2 = np.random.choice(dimension, size=num_couplings, replace=True, p=skewed_probabilities(dimension, skew))
+    target_indices_1 = np.random.choice(dimension, size=num_couplings, replace=True, p=probabilities)
+    target_indices_2 = np.random.choice(dimension, size=num_couplings, replace=True, p=probabilities)
 
     # Start with an identity matrix.
-    projector_1 = np.eye(dimension)
-    projector_2 = np.eye(dimension)
+    projector_1 = np.eye(dimension-1)
+    projector_2 = np.eye(dimension-1)
     updated_discarded_indices = discarded_indices.copy()
 
     # Apply transformations and update the discarded set.
     # If a source vector `i` was in the discarded set, it's now mapped to `j`,
     # so `j` effectively takes its place in the discarded set.
     for i, j_1, j_2 in zip(source_indices, target_indices_1, target_indices_2):
-        if i in discarded_indices:
+        if i in discarded_indices and j_1 != 0 and j_2 != 0:
             if len(updated_discarded_indices) <= limit or (j_1 in discarded_indices) or (j_2 in discarded_indices):
                 projector_1 += np.outer(basis_vectors[i], basis_vectors[j_1] - basis_vectors[i])
                 projector_2 += np.outer(basis_vectors[i], basis_vectors[j_2] - basis_vectors[i])
@@ -470,7 +437,7 @@ def _diag_projector(
 
     return projector_1, projector_2, updated_discarded_indices
 
-def _random_projector(basis_vectors: np.ndarray, skew) -> np.ndarray:
+def _random_projector(basis_vectors: np.ndarray, probabilities) -> np.ndarray:
     dimension = len(basis_vectors)
     if dimension == 0:
         return np.array([[]])
@@ -478,16 +445,16 @@ def _random_projector(basis_vectors: np.ndarray, skew) -> np.ndarray:
     num_couplings = np.random.randint(dimension)
     
     source_indices = np.random.choice(dimension, size=num_couplings, replace=False)
-    target_indices = np.random.choice(dimension, size=num_couplings, replace=True, p=skewed_probabilities(dimension, skew))
+    target_indices = np.random.choice(dimension, size=num_couplings, replace=True, p=probabilities)
 
-    projector = np.eye(dimension)
+    projector = np.eye(dimension-1)
     for i, j in zip(source_indices, target_indices):
         projector += np.outer(basis_vectors[i], basis_vectors[j] - basis_vectors[i])
         
     return projector
 
 
-def _bin_rand_tril(dim: int, rank: int, skew=0.0) -> List[np.ndarray]:
+def tt_random_binary_sym(dim: int, rank: int, skew=5.0) -> List[np.ndarray]:
     if rank <= 0:
         return []
         
@@ -495,15 +462,22 @@ def _bin_rand_tril(dim: int, rank: int, skew=0.0) -> List[np.ndarray]:
     random_matrix = np.random.randn(rank, rank)
     q_matrix, _ = np.linalg.qr(random_matrix, mode='reduced')
     basis_vectors = q_matrix.T  # Each row is a basis vector
+    basis_vectors = np.vstack((np.zeros(rank), basis_vectors))
+    probabilities = skewed_probabilities(rank+1, skew)
+    basis_size = rank+1
 
     # 2. Initialize the first core and the set of discarded indices.
-    initial_indices = np.random.choice(rank, size=3, replace=True, p=skewed_probabilities(rank, skew))
-    # Shape: (left_bond, bond_dim, physical_dim) -> (1, 4, dimension)
+    initial_indices = np.random.choice(basis_size, size=3, replace=True, p=probabilities)
+    # Shape: (left_bond, bond_dim, physical_di3m) -> (1, 4, dimension)
     initial_core = np.zeros((1, 4, rank))
-    initial_core[:, [0, 2, 3], :] = basis_vectors[initial_indices]
+    initial_core[:, [0, 1, 2, 3], :] = basis_vectors[[initial_indices[0], initial_indices[1], initial_indices[1], initial_indices[2]]]
     
     # These indices are "used" by the fixed parts of the boundary core.
-    discarded_indices = {initial_indices[0], initial_indices[2]}
+    discarded_indices = set()
+    if initial_indices[0] != 0:
+        discarded_indices.add(initial_indices[0])
+    if initial_indices[2] != 0:
+        discarded_indices.add(initial_indices[2])
     tensor_cores = [initial_core]
 
     if dim <= 1:
@@ -512,64 +486,46 @@ def _bin_rand_tril(dim: int, rank: int, skew=0.0) -> List[np.ndarray]:
     # 3. Generate the intermediate cores in a loop.
     for _ in range(dim - 2):
         core = np.empty((rank, 4, rank))
-        core[:, 1, :] = _null_projector(basis_vectors, discarded_indices, skew)
-        core[:, 0, :], core[:, 3, :], discarded_indices = _diag_projector(basis_vectors, discarded_indices, skew, limit=rank-1)
-        core[:, 2, :] = _random_projector(basis_vectors, skew)
-
+        off_diag = _random_projector(basis_vectors, probabilities)
+        core[:, 1, :] = off_diag
+        core[:, 0, :], core[:, 3, :], discarded_indices = _diag_projector(basis_vectors, discarded_indices, probabilities, limit=rank)
+        core[:, 2, :] = off_diag
         tensor_cores.append(core)
 
     # 4. Generate the final core, ensuring orthogonality to the discarded set.
-    available_indices = sorted(list(set(range(rank)) - discarded_indices))
-    num_available = len(available_indices)
+    available_indices = sorted(list(set(range(basis_size)) - discarded_indices))
 
     # Shape: (physical_dim, bond_dim, right_bond) -> (dimension, 4, 1)
     terminal_core = np.zeros((rank, 4, 1))
-    
-    # Select a random index for the one non-zero slice.
-    final_fixed_index = np.random.choice(rank, p=skewed_probabilities(rank, skew))
 
-    if num_available > 0:
-        # If there are available orthogonal vectors, use them for the other slices.
-        ortho_indices = np.random.choice(available_indices, size=3, replace=True, p=skewed_probabilities(len(available_indices), skew))
-        final_indices = [ortho_indices[0], ortho_indices[1], final_fixed_index, ortho_indices[2]]
-        
-        # Construct the core slices from the chosen basis vectors
-        # basis_vectors[final_indices] has shape (4, dimension). We transpose
-        # it to fit the core's slice shape of (dimension, 4).
-        terminal_core[:, :, 0] = basis_vectors[final_indices].T
-    else:
-        # If no orthogonal vectors are left, only set the one required slice.
-        terminal_core[:, 2, 0] = basis_vectors[final_fixed_index]
+    sorted_indices = sorted(available_indices)
+    ortho_indices = np.random.choice(sorted_indices, size=2, replace=True, p=(probabilities[sorted_indices])/sum(probabilities[sorted_indices]))
+    term_index = np.random.choice(basis_size, size=1, replace=True, p=probabilities)
+    final_indices = [ortho_indices[0], term_index[0], term_index[0], ortho_indices[1]]
+    
+    # Construct the core slices from the chosen basis vectors
+    # basis_vectors[final_indices] has shape (4, dimension). We transpose
+    # it to fit the core's slice shape of (dimension, 4).
+    terminal_core[:, :, 0] = basis_vectors[final_indices].T
 
     tensor_cores.append(terminal_core)
 
     return tensor_cores
 
 
-def tt_random_graph(dim, r, skew=0.0, eps=1e-12):
-    current_graph_tt = []
-    for _ in range(dim-1):
-        binary_numbers = np.random.choice([0, 1], size=3, replace=True, p=skewed_probabilities(2, skew))
-        if np.sum(binary_numbers) == 0:
-            index_to_change = np.random.randint(0, 3)
-            binary_numbers[index_to_change] = 1
-        current_graph_tt.append(np.array([[binary_numbers[0], binary_numbers[1]], [binary_numbers[1], binary_numbers[2]]]).reshape(1, 2, 2, 1))
-
-    current_graph_tt.append(np.array([[0, 1], [1, 0]]).reshape(1, 2, 2, 1))
-    if r == 1:
-        print("===Terminated Graph Sampling===", tt_ranks(current_graph_tt),  flush=True)
-        return current_graph_tt
-    current_rank = 1
-    for rejection_counter in range(1, 1000):
-        tril_r = np.random.randint(r, 2*r+1)
-        tril = _bin_rand_tril(dim, tril_r, np.clip(skew, a_min=0, a_max=5))
-        tril = tt_reshape(tril, (2, 2))
-        graph_tt = tt_rank_reduce(tt_add(tril, tt_transpose(tril)), eps)
-        max_rank = np.max(tt_ranks(graph_tt))
-        if current_rank < max_rank <= r:
-            current_rank = max_rank
-            current_graph_tt = graph_tt
-        if current_rank == r:
-            break
+def tt_random_graph(dim, r, skew=-1.0, eps=1e-12):
+    current_rank = 0
+    for _ in range(1, 1000):
+        graph = tt_random_binary_sym(dim, 2*r, skew=skew)
+        if tt_norm(graph) > 1e-12:
+            graph = tt_rank_reduce(tt_reshape(graph, (2, 2)), 1e-12)
+            max_rank = np.max(tt_ranks(graph))
+            if current_rank <= max_rank <= r:
+                current_rank = max_rank
+                current_graph_tt = graph
+            if current_rank == r:
+                break
+    else:
+        current_graph_tt = [np.array([[0.0, 1.0], [1.0, 0.0]]).reshape(1, 2, 2, 1) for _ in range(dim)]
     print("===Terminated Graph Sampling=== rank: ", tt_ranks(current_graph_tt),  flush=True)
     return current_graph_tt
