@@ -5,13 +5,13 @@ epsilonDashineq: 1.0e-03
 gap_tol: 0.0003
 mals_restarts: 2
 max_iter: 25
-max_refinement: 5
+max_refinement: 10
 op_tol: 0.0001
 seeds:
-- 764
-- 493
-- 324
-- 325
-- 9299
-verbose: false
+- 769
+#- 493
+#- 324
+#- 325
+#- 9299
+verbose: true
 warm_up: 3

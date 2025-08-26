@@ -5,7 +5,7 @@ epsilonDashineq: 1.0e-03
 gap_tol: 0.0003
 mals_restarts: 2
 max_iter: 25
-max_refinement: 6
+max_refinement: 10
 op_tol: 0.0001
 seeds:
 - 764
