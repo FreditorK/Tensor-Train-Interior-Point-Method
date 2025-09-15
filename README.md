@@ -158,7 +158,7 @@ The code depends on several third-party libraries distributed under their own li
 - [CVXPY](https://www.cvxpy.org/) (Apache 2.0)  
 - [PETSc](https://petsc.org/release/) and [petsc4py](https://petsc4py.readthedocs.io/en/stable/) (LGPL)  
 - [SCS](https://github.com/cvxgrp/scs) (MIT)  
-- [SDPA-Python](https://github.com/tsudalab/sdpa-python) (MIT)  
+- [SDPA-Python](https://github.com/sdpa-python/sdpa-python) (MIT)  
 
 Use of these libraries is governed by their respective licenses. The MIT License applies only to the original code in this repository, not to its dependencies.
 
