@@ -146,6 +146,23 @@ TT-IPM/
 - PETSc or sparse CHOLMOD bindings may require system packages (e.g., SuiteSparse). Consult your distro instructions.
 - For long jobs, prefer the shell wrappers so logging and cleanup are handled automatically.
 
+
+## License & Dependencies
+
+This project is released under the [MIT License](LICENSE).
+
+The code depends on several third-party libraries distributed under their own licenses, including:
+
+- [NumPy](https://numpy.org/) (BSD)  
+- [SciPy](https://scipy.org/) (BSD)  
+- [CVXPY](https://www.cvxpy.org/) (Apache 2.0)  
+- [PETSc](https://petsc.org/release/) and [petsc4py](https://petsc4py.readthedocs.io/en/stable/) (LGPL)  
+- [SCS](https://github.com/cvxgrp/scs) (MIT)  
+- [SDPA-Python](https://github.com/tsudalab/sdpa-python) (MIT)  
+
+Use of these libraries is governed by their respective licenses. The MIT License applies only to the original code in this repository, not to its dependencies.
+
+
 ### Citation
 If you use this code in academic work, please cite the corresponding paper (add BibTeX available shortly).
 
