@@ -1,9 +1,12 @@
-# Common
 dim: !!int 11
-seeds: [48] 
+seeds:
+- 48
+#- 23
+#- 235
+#- 35
+#- 14 
 gap_tol: !!float 3e-4
-verbose: True
-# TT-IPM
+verbose: true
 op_tol: !!float 1e-4
 abs_tol: !!float 0.001
 max_iter: !!int 30

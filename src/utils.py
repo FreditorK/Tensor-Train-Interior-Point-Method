@@ -4,9 +4,9 @@ import os
 import sys
 import time
 import yaml
-from memory_profiler import memory_usage
 import re
 import json
+from memory_profiler import memory_usage
 
 sys.path.append(os.getcwd() + '/../../')
 

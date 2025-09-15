@@ -12,7 +12,6 @@ import numpy as np
 cimport numpy as cnp  # This allows Cython to understand NumPy's C-API
 cimport cython
 import scipy as scp
-import time
 from opt_einsum import contract as einsum
 
 cnp.import_array() # Initialize NumPy C-API

@@ -1,10 +1,7 @@
 import sys
 import os
 import time
-
 import numpy as np
-from numpy.lib.index_tricks import r_
-from numpy.linalg import eig
 
 sys.path.append(os.getcwd() + '/../')
 

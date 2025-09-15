@@ -1,17 +1,18 @@
 import sys
 import os
 import time
-
 import numpy as np
 import yaml
 import argparse
+import cvxpy as cp
+
 
 sys.path.append(os.getcwd() + '/../../')
 
 from src.tt_ops import *
 from memory_profiler import memory_usage
-import cvxpy as cp
 from src.utils import print_results_summary
+
 import warnings
 warnings.filterwarnings("ignore", message=".*Python recalculation of primal and/or dual feasibility error failed.*")
 

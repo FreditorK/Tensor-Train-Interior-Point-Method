@@ -1,9 +1,8 @@
-from re import T
 import sys
 import os
-from tkinter import Y
 import numpy as np
 import traceback
+import numpy as np
 
 sys.path.append(os.getcwd() + '/../')
 
@@ -11,14 +10,11 @@ from src.tt_ops import *
 from src.tt_als import cached_einsum, TTBlockMatrix, TTBlockVector, tt_mat_vec_mul, tt_max_generalised_eigen, tt_min_eig, tt_mat_mat_mul,tt_restarted_block_amen
 from dataclasses import dataclass
 from enum import Enum
+from petsc4py import PETSc
+
 import warnings
 warnings.simplefilter("error")
-from petsc4py import PETSc
-import numpy as np
-import scipy.sparse.linalg as spla
-from sksparse.cholmod import cholesky as sparse_cholesky
-from opt_einsum import contract_expression
-import time
+
 
 
 def chunk_integer(n, k):

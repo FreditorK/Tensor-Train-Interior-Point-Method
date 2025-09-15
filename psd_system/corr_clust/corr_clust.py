@@ -1,4 +1,3 @@
-from mmap import ACCESS_COPY
 import sys
 import os
 import numpy as np

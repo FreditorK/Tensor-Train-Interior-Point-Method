@@ -7,14 +7,14 @@ import os
 import sdpap
 import time
 import yaml
-from memory_profiler import memory_usage
 import cvxpy as cp
+from memory_profiler import memory_usage
+
 
 sys.path.append(os.getcwd() + '/../../')
 from maxcut import *
 from src.baselines import *
 from src.utils import print_results_summary 
-import cvxpy as cp
 
 if __name__ == "__main__":
     np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=4, suppress=True)

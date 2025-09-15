@@ -1,9 +1,9 @@
-# https://epubs.siam.org/doi/epdf/10.1137/19M1305045
 import scipy as scp
 import numpy as np
 from collections import deque
 
 def cgal(obj_matrix, constraint_matrices, bias, trace_params, R=1, gap_tol=1e-5, abs_tol=(0.1, 1e-3), num_iter=100, verbose=False):
+    # https://proceedings.mlr.press/v97/yurtsever19a/yurtsever19a.pdf
     feasability_tol = gap_tol
     X = np.zeros_like(obj_matrix)
     bias_norm = np.linalg.norm(bias)
@@ -47,6 +47,7 @@ def cgal(obj_matrix, constraint_matrices, bias, trace_params, R=1, gap_tol=1e-5,
 
 
 def sketchy_cgal(obj_matrix, constraint_matrices, bias, trace_params, R=1, gap_tol=1e-5, abs_tol=(0.1, 1e-3), num_iter=100, verbose=False):
+    # https://epubs.siam.org/doi/epdf/10.1137/19M1305045
     feasability_tol = gap_tol
     bias_norm = np.linalg.norm(bias)
     Omega, S = nystrom_sketch_init(obj_matrix.shape[0], R)
@@ -122,16 +123,6 @@ def sketchy_cgal(obj_matrix, constraint_matrices, bias, trace_params, R=1, gap_t
     duality_gap = np.squeeze(np.trace(obj_matrix @ X) + np.trace(constraint_term @ X) - current_trace_param * min_eig_val)
     duality_gaps.append(duality_gap)
     return X, duality_gaps, {"num_iters": it}
-
-
-def power_method(matrix, num_iter=200):
-    v = np.random.randn(matrix.shape[0], 1)
-    for _ in range(num_iter):
-        v = matrix @ v
-        v = np.divide(v, np.linalg.norm(v))
-    prev_v = v
-    v = matrix @ v
-    return np.divide(v, np.linalg.norm(v)), (prev_v.T @ v).item()
 
 
 def nystrom_sketch_init(n, R):

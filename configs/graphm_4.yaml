@@ -1,17 +1,17 @@
+abs_tol: 0.001
 dim: 4
 epsilonDash: 1.0
-gap_tol: 0.0006
+epsilonDashineq: 0.00000001
+gap_tol: 0.0005
 mals_restarts: 2
-max_iter: 13
-max_refinement: 3
+max_iter: 25
+max_refinement: 5
 op_tol: 0.0001
-abs_tol: 0.001
 seeds:
-- 9428
-- 375
-- 482
-- 434
-- 928
+- 256
+#- 493
+#- 324
+#- 325
+#- 9299
 verbose: true
 warm_up: 3
-epsilonDashineq: !!float 1e-8

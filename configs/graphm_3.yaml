@@ -1,14 +1,17 @@
-# Common
-dim: !!int 3
-seeds: [710]  # !!710, 68, 23, 975, 212!!
-gap_tol: !!float 5e-4
-verbose: True
-# TT-IPM
-op_tol: !!float 1e-4
-abs_tol: !!float 0.001
-max_iter: !!int 15
-warm_up: !!int 3
-mals_restarts: !!int 2
-max_refinement:  !!int 3
-epsilonDash: !!float 1
-epsilonDashineq: !!float 1e-8
+abs_tol: 0.001
+dim: 3
+epsilonDash: 1.0
+epsilonDashineq: 0.00000001
+gap_tol: 0.0005
+mals_restarts: 2
+max_iter: 25
+max_refinement: 5
+op_tol: 0.0001
+seeds:
+- 256
+#- 493
+#- 324
+#- 325
+#- 9299
+verbose: true
+warm_up: 3

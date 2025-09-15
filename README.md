@@ -17,7 +17,7 @@ conda env create -f env.yaml
 conda activate ttipm
 ```
 
-2) (Optional) Build Cython extensions for speed
+2) Build Cython extensions
 ```bash
 python setup.py build_ext --inplace
 ```
@@ -27,12 +27,12 @@ python setup.py build_ext --inplace
 ```bash
 # Usage: ./tt_ipm.sh <problem> <start_dim> <end_dim> <rank> [--track_mem]
 # Examples:
-./tt_ipm.sh maxcut 5 10 1 --track_mem
-./tt_ipm.sh corr_clust 6 11 1
-./tt_ipm.sh graphm 2 4 2
-./tt_ipm.sh max_stable_set 6 10 1
+bash tt_ipm.sh maxcut 5 10 1 --track_mem
+bash tt_ipm.sh corr_clust 6 11 1
+bash tt_ipm.sh graphm 2 4 2
+bash tt_ipm.sh max_stable_set 6 10 1
 ```
-The script auto-activates the environment, fixes thread counts, iterates `configs/<problem>_<dim>.yaml`, and logs to `results/tt_ipm_<problem>_<start>_<end>_<rank>.txt`. Add `--track_mem` to measure peak memory (slightly slower).
+The script auto-activates the environment, fixes thread counts, iterates `configs/<problem>_<dim>.yaml`, and logs to `results/tt_ipm_<problem>_<start>_<end>_<rank>.txt`. Add `--track_mem` to measure peak memory (slightly slower). Note: setting `verbose: true` in configs can also slow runs due to increased logging.
 
 - Baselines (SCS/SDPA/SC-GAL):
 ```bash
@@ -46,13 +46,7 @@ bash sdpa.sh corr_clust 6 11
 bash scgal.sh graphm 2 4
 ```
 
-4) Alternative: run a single config directly with Python
-```bash
-python psd_system/maxcut/maxcut.py --config configs/maxcut_5.yaml --rank 1
-```
-Add `--track_mem` to measure peak memory. Mind that this slows down the solving speed slightly.
-
-5) Results are written as JSON into `results/` automatically after the run. See “Results and plotting” below.
+4) Results are written as JSON into `results/` automatically after the run. See “Results and plotting” below.
 
 ### Running experiments (details)
 Each problem family exposes a `create_problem(dim, rank)` function and a small `__main__` entry that forwards to `run_experiment`. You can also run any single experiment with:
@@ -84,6 +78,10 @@ The configs in `configs/` define problem size and solver hyperparameters. Common
 - **mals_restarts**: number of restarted MALS attempts
 - **epsilonDash, epsilonDashineq**: regularization terms
 
+Defaults and tips:
+- Configs are provided with a single active seed; additional seeds are included but commented out.
+- `verbose: true` is enabled by default to aid inspection; disable for fastest runs.
+
 Example: `configs/maxcut_10.yaml`
 ```yaml
 dim: 10
@@ -109,7 +107,7 @@ After each run, a JSON summary is saved to `results/` with metrics aggregated ov
 
 Post-processing scripts:
 - `produce_table.py`: converts results JSON to LaTeX rows
-- `produce_heatmap.py`: generates heatmap-friendly `.dat` files and LaTeX snippets
+- `produce_heatmap.py`: generates heatmap-friendly LaTeX snippets
 - `produce_scatter.py`: produces scatter plot LaTeX snippets
 
 Typical usage:
@@ -124,7 +122,8 @@ Each script prints the LaTeX code and saves intermediary files if needed.
 - Environment is captured in `env.yaml`. Use the exact versions for artifact reproduction.
 - Randomness is controlled via the `seeds` field. All seeds from a config are run and aggregated.
 - Threading is stabilized in the shell scripts by setting `OMP_NUM_THREADS`, `MKL_NUM_THREADS`, `OPENBLAS_NUM_THREADS`, and `NUMEXPR_NUM_THREADS`.
-- Cython extensions are optional but recommended for performance. Rebuild when changing Python or NumPy.
+- Cython extensions are compiled. Rebuild when changing Python or NumPy.
+- Verbose logging (`verbose: true` in configs) can slow runs and produce large logs; disable unless diagnosing.
 
 ### Repository structure
 ```
@@ -148,7 +147,7 @@ TT-IPM/
 - For long jobs, prefer the shell wrappers so logging and cleanup are handled automatically.
 
 ### Citation
-If you use this code in academic work, please cite the corresponding paper (add BibTeX here once available).
+If you use this code in academic work, please cite the corresponding paper (add BibTeX available shortly).
 
 ### Contact
 For questions or issues, please open a GitHub issue or contact the authors.
