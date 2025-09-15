@@ -13,4 +13,4 @@ max_iter: !!int 30
 warm_up: !!int 3
 mals_restarts: !!int 2
 max_refinement:  !!int 6
-epsilonDash: !!float 1
+lambdaStar: 1.0

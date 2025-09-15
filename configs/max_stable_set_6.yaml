@@ -1,6 +1,6 @@
 abs_tol: 0.001
 dim: 6
-epsilonDash: 2.0
+lambdaStar: 2.0
 gap_tol: 0.0003
 mals_restarts: 2
 max_iter: 20

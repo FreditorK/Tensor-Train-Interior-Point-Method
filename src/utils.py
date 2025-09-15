@@ -262,8 +262,8 @@ def run_and_record(seed, r_i, s_i, rank, config, args, create_problem_fn, memory
             aho_direction=False,
             mals_restarts=config["mals_restarts"],
             max_refinement=config["max_refinement"],
-            epsilonDash=config["epsilonDash"],
-            epsilonDashineq= config["epsilonDashineq"] if "epsilonDashineq" in config else 1
+            lambdaStar=float(config.get("lambdaStar", 1)),
+            lambdaStarIneq=float(config.get("lambdaStarIneq", 1))
         )
     if args.track_mem:
         start_mem = memory_usage(max_usage=True, include_children=True)

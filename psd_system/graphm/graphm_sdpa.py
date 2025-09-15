@@ -13,6 +13,9 @@ from src.tt_ops import *
 from memory_profiler import memory_usage
 from src.utils import print_results_summary
 
+import warnings
+warnings.filterwarnings("ignore", message=".*Python recalculation of primal and/or dual feasibility error failed.*")
+
 if __name__ == "__main__":
     np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=4, suppress=True)
     parser = argparse.ArgumentParser(description="Script with optional memory tracking.")

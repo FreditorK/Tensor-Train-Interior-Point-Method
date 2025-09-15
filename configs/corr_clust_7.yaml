@@ -1,15 +1,14 @@
 abs_tol: 0.001
 dim: 7
-epsilonDash: 2.0
-epsilonDashineq: 1.0e-03
 gap_tol: 0.0003
+lambdaStar: 2.0
+lambdaStarIneq: 0.001
 mals_restarts: 2
 max_iter: 25
 max_refinement: 10
 op_tol: 0.0001
 seeds:
-seeds:
-- 764
+- 12
 #- 493
 #- 324
 #- 325

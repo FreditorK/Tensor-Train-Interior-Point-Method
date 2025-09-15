@@ -668,14 +668,14 @@ def _tt_get_ineq_step_sizes(x_step_size, z_step_size, X_tt, T_tt, Delta_X_tt, De
     return x_step_size, z_step_size
 
 
-def _initialise(ineq_mask, status, dim, epsilonDash, epsilonDashineq):
-    X_tt = tt_scale(epsilonDash, tt_identity(dim))
-    Z_tt = tt_scale(epsilonDash, tt_identity(dim))
+def _initialise(ineq_mask, status, dim, lambdaStar, lambdaStarIneq):
+    X_tt = tt_scale(lambdaStar, tt_identity(dim))
+    Z_tt = tt_scale(lambdaStar, tt_identity(dim))
     Y_tt = tt_reshape(tt_zero_matrix(dim), (4, ))
     T_tt = None
 
     if status.ineq_status is IneqStatus.ACTIVE:
-        T_tt = tt_scale(epsilonDashineq, ineq_mask)
+        T_tt = tt_scale(lambdaStarIneq, ineq_mask)
         # Need to initialise so it stays psd
         x_step_size, _ = tt_max_generalised_eigen(X_tt, ineq_mask, tol=1e-7, verbose=status.verbose)
         X_tt = tt_rank_reduce(tt_add(X_tt, tt_scale(0.1*x_step_size, ineq_mask)), 0.1*status.eta*status.primal_error_normalisation)
@@ -803,8 +803,11 @@ def tt_ipm(
     eps=1e-12,
     mals_restarts=3,
     r_max=1000,
-    epsilonDash=1,
-    epsilonDashineq=1,
+    lambdaStar=1,
+    lambdaStarIneq=1,
+    # Backward-compat deprecated aliases:
+    epsilonDash=None,
+    epsilonDashineq=None,
     verbose=False
 ):
     dim = len(obj_tt)
@@ -882,7 +885,7 @@ def tt_ipm(
     lhs_skeleton[0, 0] = lag_maps["y"]
     status.lag_map_y = lag_maps["y"]
 
-    X_tt, Y_tt, Z_tt, T_tt = _initialise(ineq_mask, status, dim, epsilonDash, epsilonDashineq)
+    X_tt, Y_tt, Z_tt, T_tt = _initialise(ineq_mask, status, dim, lambdaStar, lambdaStarIneq)
 
     iteration = 0
     finishing_steps = max_refinement

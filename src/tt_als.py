@@ -1519,7 +1519,7 @@ def tt_approx_mat_mat_mul(A, D, x0=None, kick_rank=None, nswp=50, tol=1e-6, verb
 
 
 def tt_mat_mat_mul(mat1, mat2, op_tol, eps, verbose=False):
-    if np.max((np.array(tt_ranks(mat1))*np.array(tt_ranks(mat2)))) <= 50:
+    if np.max((np.array(tt_ranks(mat1))*np.array(tt_ranks(mat2)))) <= 40:
         return tt_rank_reduce(tt_fast_mat_mat_mul(mat1, mat2, eps), eps=op_tol)
     return tt_approx_mat_mat_mul(mat1, mat2, tol=op_tol, verbose=verbose)
 
@@ -1653,7 +1653,7 @@ def tt_approx_mat_vec_mul(A, d_vec, x0=None, kick_rank=None, nswp=50, tol=1e-6, 
 
 
 def tt_mat_vec_mul(mat, vec, op_tol, eps, verbose=False):
-    if np.max((np.array(tt_ranks(mat))*np.array(tt_ranks(vec)))) <= 75:
+    if np.max((np.array(tt_ranks(mat))*np.array(tt_ranks(vec)))) <= 80:
         return tt_rank_reduce(tt_fast_matrix_vec_mul(mat, vec, eps), op_tol)
     return tt_approx_mat_vec_mul(mat, vec, tol=op_tol, verbose=verbose)
 
