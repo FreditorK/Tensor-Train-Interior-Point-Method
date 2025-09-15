@@ -27,20 +27,20 @@ python setup.py build_ext --inplace
 ```bash
 # Usage: ./tt_ipm.sh <problem> <start_dim> <end_dim> <rank> [--track_mem]
 # Examples:
-bash tt_ipm.sh maxcut 5 10 1 --track_mem
-bash tt_ipm.sh corr_clust 6 11 1
-bash tt_ipm.sh graphm 2 4 2
-bash tt_ipm.sh max_stable_set 6 10 1
+bash tt_ipm.sh maxcut 5 7 1 --track_mem
+bash tt_ipm.sh corr_clust 6 9 1
+bash tt_ipm.sh graphm 2 3 2
+bash tt_ipm.sh max_stable_set 6 8 1
 ```
 The script auto-activates the environment, fixes thread counts, iterates `configs/<problem>_<dim>.yaml`, and logs to `results/tt_ipm_<problem>_<start>_<end>_<rank>.txt`. Add `--track_mem` to measure peak memory (slightly slower). Note: setting `verbose: true` in configs can also slow runs due to increased logging.
 
 - Baselines (SCS/SDPA/SC-GAL):
 ```bash
 # Usage: ./scs.sh <problem> <start_dim> <end_dim> [--track_mem]
-bash scs.sh maxcut 5 10 --track_mem
+bash scs.sh maxcut 6 9 --track_mem
 
 # Usage: ./sdpa.sh <problem> <start_dim> <end_dim> [--track_mem]
-bash sdpa.sh corr_clust 6 11
+bash sdpa.sh corr_clust 6 9
 
 # Usage: ./scgal.sh <problem> <start_dim> <end_dim> [--track_mem]
 bash scgal.sh graphm 2 4
@@ -71,11 +71,11 @@ The shell wrappers `tt_ipm.sh`, `scs.sh`, `sdpa.sh`, and `scgal.sh` are preferre
 
 ### Configuration files (YAML)
 The configs in `configs/` define problem size and solver hyperparameters. Common fields:
-- **seeds**: list of integer seeds
+- **seeds**: list of integer seeds to generate problem instances
 - **dim**: problem dimension in TT (number of TT cores)
-- **max_iter, warm_up, max_refinement**: IPM/MALS controls
-- **gap_tol, op_tol, abs_tol**: stopping criteria
-- **mals_restarts**: number of restarted MALS attempts
+- **max_iter, warm_up, max_refinement**: maximum number of iterations, number of warm-up iterations with XZ direction, maximum number refinement iterations
+- **gap_tol, op_tol, abs_tol**: relative stopping criteria, delta threshold, absolute error tolerance
+- **mals_restarts**: number of restarted AMEn attempts in solving KKT system
 - **epsilonDash, epsilonDashineq**: regularization terms
 
 Defaults and tips:

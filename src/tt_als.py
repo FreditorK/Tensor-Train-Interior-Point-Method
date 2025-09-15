@@ -15,7 +15,7 @@ def _tt_get_block(i, block_matrix_tt):
 
 class TTBlockVector:
     def __init__(self):
-        self._data = {}  # maps row index -> list
+        self._data = {}
 
     def __setitem__(self, index, value):
         if not isinstance(value, list):
@@ -98,10 +98,8 @@ class TTBlockMatrix:
             self._aliases[key1] = key2
 
     def __getitem__(self, key):
-        # Access by (row, col)
         if isinstance(key, tuple) and len(key) == 2:
             return self._data.setdefault(key, [])
-        # Access by just list_index → return view object
         elif isinstance(key, int):
             return TTBlockMatrixView(self._data, self._aliases, self._transposes, key)
         else:
@@ -822,7 +820,6 @@ def tt_rl_orthogonalise_py(train_tt: List[np.ndarray]):
     return train_tt
 
 def tt_rank_reduce_py(train_tt: List[np.ndarray], eps=1e-18):
-    """ Might reduce TT-rank """
     dim = len(train_tt)
     ranks = np.array([1] + tt_ranks(train_tt) + [1])
     if dim == 1 or np.all(ranks==1):
@@ -852,8 +849,6 @@ class SpCholInv(scp.sparse.linalg.LinearOperator):
         M = M.tocsc()
         self.shape = M.shape
         self.dtype = M.dtype
-
-        # CHOLMOD needs symmetric matrix
         self.factor = sparse_cholesky(M)
 
     def _matvec(self, x):
@@ -892,11 +887,9 @@ def _step_size_local_solve(
             eig_val, solution_now = scp.sparse.linalg.eigsh(M, tol=eps, k=1, ncv=max(int(np.floor(0.5*m)), min(m, 5)), maxiter=10*m, which="SA", v0=previous_solution)
             if np.linalg.norm(M @ solution_now - eig_val * solution_now) > eps:
                 sigma = eig_val.squeeze()
-                # factorize (M - sigma*I)
                 M_shift = M - sigma * scp.sparse.eye(M.shape[1], format=M.format)
                 lu = scp.sparse.linalg.splu(M_shift.tocsc())
                 shift_inv_op = scp.sparse.linalg.LinearOperator(M.shape, matvec=lambda x: lu.solve(x))
-
                 # Solve using shift-invert
                 eig_val_shift, solution_now = scp.sparse.linalg.eigsh(
                     shift_inv_op,
@@ -971,14 +964,14 @@ def _step_size_local_solve(
 
 def _add_kick_rank(u, v, r_add=2):
     old_r = u.shape[-1]
-    uk = np.random.randn(u.shape[0], r_add)  # rx_k x N_k x rz_k+1
+    uk = np.random.randn(u.shape[0], r_add)
     u, Rmat = scp.linalg.qr(np.concatenate((u, uk), 1), check_finite=False, mode="economic", overwrite_a=True)
     v = Rmat[:, :old_r] @ v
     return u, v, u.shape[-1]
 
 def _add_kick_rank_rev(u, v, r_add=2):
     old_r = v.shape[0]
-    uk = np.random.randn(r_add, v.shape[-1])  # rx_k x N_k x rz_k+1
+    uk = np.random.randn(r_add, v.shape[-1])
     Rmat, v = scp.linalg.rq(np.concatenate((v, uk), 0), check_finite=False, mode="economic", overwrite_a=True)
     u = u @ Rmat[:old_r]
     return u, v, v.shape[0]
@@ -998,11 +991,9 @@ def _step_size_local_solve_last(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k
             eig_val, solution_now = scp.sparse.linalg.eigsh(M, tol=eps, k=1, ncv=max(int(np.floor(0.5*m)), min(m, 5)), maxiter=10*m, which="SA", v0=previous_solution)
             if np.linalg.norm(M @ solution_now - eig_val * solution_now) > eps:
                 sigma = eig_val.squeeze()
-                # factorize (M - sigma*I)
                 M_shift = M - sigma * scp.sparse.eye(M.shape[1], format=M.format)
                 lu = scp.sparse.linalg.splu(M_shift.tocsc())
                 shift_inv_op = scp.sparse.linalg.LinearOperator(M.shape, matvec=lambda x: lu.solve(x))
-
                 # Solve using shift-invert
                 eig_val_shift, solution_now = scp.sparse.linalg.eigsh(
                     shift_inv_op,
@@ -1033,7 +1024,6 @@ def _step_size_local_solve_last(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k
     else:
         x_shape = previous_solution.shape
         previous_solution = previous_solution.reshape(-1, 1)
-        # 'lsr,smnk,LSR,rnR-> lmkLS' 'ks'
         _mat_vec_A = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k.shape, A_k.shape, XAX_k1.shape, x_shape, optimize="greedy")
         mat_vec_A = lambda x_vec: _mat_vec_A(XAX_k, A_k, XAX_k1, x_vec.reshape(*x_shape)).reshape(-1, 1).__iadd__(1e-12*x_vec.reshape(-1, 1)) # regularisation term for convergence
         A_op = scp.sparse.linalg.LinearOperator((m, m), matvec=mat_vec_A)
@@ -1070,15 +1060,11 @@ def tt_max_generalised_eigen(A, Delta, x0=None, nswp=10, tol=1e-8, size_limit = 
     else:
         x_cores = x0
 
-    #print("--------________")
-    #print(np.min(np.linalg.eigvalsh(tt_matrix_to_matrix(A))))
-    #print()
-
     d = len(x_cores)
     rx = np.array([1] + tt_ranks(x_cores) + [1])
     N = np.array([c.shape[1] for c in x_cores])
 
-    XAX = [np.ones((1, 1, 1))] + [None] * (d - 1) + [np.ones((1, 1, 1))]  # size is rk x Rk x rk
+    XAX = [np.ones((1, 1, 1))] + [None] * (d - 1) + [np.ones((1, 1, 1))]
     XDX = [np.ones((1, 1, 1))] + [None] * (d - 1) + [np.ones((1, 1, 1))]
 
     step_size = 1
@@ -1261,11 +1247,9 @@ def _eigen_local_solve_last(previous_solution, XAX_k, A_k, XAX_k1, m, size_limit
             eig_val, solution_now = scp.sparse.linalg.eigsh(A, tol=eps, k=1, which="SA", ncv=max(int(np.floor(0.5*m)), min(m, 5)), v0=previous_solution)
             if np.linalg.norm(A @ solution_now - eig_val * solution_now) > eps:
                 sigma = eig_val.squeeze()
-                # factorize (M - sigma*I)
                 M_shift = A - sigma * scp.sparse.eye(A.shape[1], format=A.format)
                 lu = scp.sparse.linalg.splu(M_shift.tocsc())
                 shift_inv_op = scp.sparse.linalg.LinearOperator(A.shape, matvec=lambda x: lu.solve(x))
-
                 # Solve using shift-invert
                 eig_val_shift, solution_now = scp.sparse.linalg.eigsh(
                     shift_inv_op,

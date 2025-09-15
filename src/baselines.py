@@ -57,8 +57,8 @@ def sketchy_cgal(obj_matrix, constraint_matrices, bias, trace_params, R=1, gap_t
     lag_mul_2 = 1
     alpha_0 = 4 * np.sum([np.linalg.norm(A) for A in constraint_matrices]) * trace_params[1] ** 2
     duality_gaps = deque(maxlen=10)
-    stagnation_window = 100  # You can make this a parameter if you wish
-    stagnation_tol = 1e-6   # You can make this a parameter if you wish
+    stagnation_window = 100 
+    stagnation_tol = 1e-6   
     p = 0
     current_trace = 0
     ncv = 20

@@ -420,9 +420,7 @@ def _diag_projector(
     projector_2 = np.eye(dimension-1)
     updated_discarded_indices = discarded_indices.copy()
 
-    # Apply transformations and update the discarded set.
-    # If a source vector `i` was in the discarded set, it's now mapped to `j`,
-    # so `j` effectively takes its place in the discarded set.
+    # Apply transformations and update the discarded set
     for i, j_1, j_2 in zip(source_indices, target_indices_1, target_indices_2):
         if i in discarded_indices and j_1 != 0 and j_2 != 0:
             if len(updated_discarded_indices) <= limit or (j_1 in discarded_indices) or (j_2 in discarded_indices):
@@ -468,11 +466,9 @@ def tt_random_binary_sym(dim: int, rank: int, skew=5.0) -> List[np.ndarray]:
 
     # 2. Initialize the first core and the set of discarded indices.
     initial_indices = np.random.choice(basis_size, size=3, replace=True, p=probabilities)
-    # Shape: (left_bond, bond_dim, physical_di3m) -> (1, 4, dimension)
     initial_core = np.zeros((1, 4, rank))
     initial_core[:, [0, 1, 2, 3], :] = basis_vectors[[initial_indices[0], initial_indices[1], initial_indices[1], initial_indices[2]]]
     
-    # These indices are "used" by the fixed parts of the boundary core.
     discarded_indices = set()
     if initial_indices[0] != 0:
         discarded_indices.add(initial_indices[0])
@@ -494,20 +490,13 @@ def tt_random_binary_sym(dim: int, rank: int, skew=5.0) -> List[np.ndarray]:
 
     # 4. Generate the final core, ensuring orthogonality to the discarded set.
     available_indices = sorted(list(set(range(basis_size)) - discarded_indices))
-
-    # Shape: (physical_dim, bond_dim, right_bond) -> (dimension, 4, 1)
     terminal_core = np.zeros((rank, 4, 1))
 
     sorted_indices = sorted(available_indices)
     ortho_indices = np.random.choice(sorted_indices, size=2, replace=True, p=(probabilities[sorted_indices])/sum(probabilities[sorted_indices]))
     term_index = np.random.choice(basis_size, size=1, replace=True, p=probabilities)
     final_indices = [ortho_indices[0], term_index[0], term_index[0], ortho_indices[1]]
-    
-    # Construct the core slices from the chosen basis vectors
-    # basis_vectors[final_indices] has shape (4, dimension). We transpose
-    # it to fit the core's slice shape of (dimension, 4).
     terminal_core[:, :, 0] = basis_vectors[final_indices].T
-
     tensor_cores.append(terminal_core)
 
     return tensor_cores

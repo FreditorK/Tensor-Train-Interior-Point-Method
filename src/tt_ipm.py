@@ -3,6 +3,7 @@ import os
 import numpy as np
 import traceback
 import numpy as np
+import scipy.linalg as la
 
 sys.path.append(os.getcwd() + '/../')
 
@@ -24,7 +25,6 @@ def chunk_integer(n, k):
     indices = np.cumsum([0] + chunk_sizes)
     return indices
 
-import scipy.linalg as la
 
 class ApproxBlockLZInv:
     def __init__(self, XAX_k_21, block_A_k_21, XAX_k1_21, indices, eps=1e-11):
@@ -412,12 +412,10 @@ def tt_infeasible_newton_system(
         status
 ):
     rhs = TTBlockVector()
-    # Check primal feasibility and compute residual
     primal_feas = tt_compute_primal_feasibility(lin_op_tt, bias_tt, X_tt, status)
     status.primal_error = np.divide(tt_norm(primal_feas), status.primal_error_normalisation)
     status.is_primal_feasible = np.less(status.primal_error, status.feasibility_tol)
 
-    # Check dual feasibility and compute residual
     dual_feas = tt_compute_dual_feasibility(obj_tt, lin_op_tt_adj, Z_tt, Y_tt, T_tt, status)
     status.dual_error = np.divide(tt_norm(dual_feas), status.dual_error_normalisation)
     status.is_dual_feasible = np.less(status.dual_error, (1 + (status.ineq_status is IneqStatus.ACTIVE))*status.feasibility_tol)
@@ -797,14 +795,14 @@ def tt_ipm(
     ineq_mask=None,
     max_iter=100,
     max_refinement=5,
-    warm_up=3, #8
+    warm_up=3,
     gap_tol=1e-4,
     aho_direction=True,
     op_tol=1e-5,
     abs_tol=8e-4,
     eps=1e-12,
     mals_restarts=3,
-    r_max=1000, # 750 for anythin but graphm rank 2-3 experiments
+    r_max=1000,
     epsilonDash=1,
     epsilonDashineq=1,
     verbose=False
@@ -846,24 +844,24 @@ def tt_ipm(
     solver_ineq = lambda lhs, rhs, x0, nwsp, restriction, termination_tol: tt_restarted_block_amen(
         lhs,
         rhs,
-        rank_restriction=restriction, # max(4*dim + dim + 4, 25)
+        rank_restriction=restriction,
         x0=x0,
         local_solver=_ipm_local_solver_ineq,
         op_tol=op_tol,
         termination_tol=termination_tol,
-        num_restarts=mals_restarts, # 3
+        num_restarts=mals_restarts,
         inner_m=nwsp,
         verbose=verbose
     )
     solver_eq = lambda lhs, rhs, x0, nwsp, restriction, termination_tol: tt_restarted_block_amen(
         lhs,
         rhs,
-        rank_restriction=restriction, # max(3*dim + dim + 3, 25)
+        rank_restriction=restriction,
         x0=x0,
         local_solver=_ipm_local_solver,
         op_tol=op_tol,
         termination_tol=termination_tol,
-        num_restarts=mals_restarts, # 3
+        num_restarts=mals_restarts, 
         inner_m=nwsp,
         verbose=verbose
     )
@@ -880,7 +878,7 @@ def tt_ipm(
     # KKT-system prep
     lin_op_tt_adj = tt_transpose(lin_op_tt)
     lhs_skeleton[0, 1] = tt_scale(-1, lin_op_tt)
-    lhs_skeleton.add_alias((0, 1), (1, 0), is_transpose=True) #lhs_skeleton[1, 0] = tt_scale(-1, lin_op_tt_adj)
+    lhs_skeleton.add_alias((0, 1), (1, 0), is_transpose=True)
     lhs_skeleton[0, 0] = lag_maps["y"]
     status.lag_map_y = lag_maps["y"]
 

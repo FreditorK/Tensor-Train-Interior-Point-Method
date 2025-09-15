@@ -67,8 +67,6 @@ def run_experiment(create_problem_fn):
             ranksX, ranksY, ranksZ, ranksT, config_path
         )
         new_seed = seed
-        
-        """
         while (feas_err > 1e-3) or (slack > 1e-3):
             print(f"Seed {new_seed} is pathological (feasibility error: {feas_err:.2e}, slackness: {slack:.2e}). Suggesting a new seed.")
             new_seed = np.random.randint(0, 2**10)
@@ -87,9 +85,7 @@ def run_experiment(create_problem_fn):
                 ranksX, ranksY, ranksZ, ranksT, config_path
             )
             print(f"Rerun with new seed {new_seed} complete. Feasibility error: {feas_err:.2e}, Slackness: {slack:.2e}")
-        """
 
-    # Pass ranksT only if it was ever used
     print_results_summary(
         config, args,
         runtimes, problem_creation_times, num_iters,
