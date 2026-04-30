@@ -164,7 +164,18 @@ Use of these libraries is governed by their respective licenses. The MIT License
 
 
 ### Citation
-If you use this code in academic work, please cite the corresponding paper (add BibTeX available shortly).
+If you use this code in academic work, please cite the corresponding paper:
+```
+@misc{kelbel2025inexacttensortrainprimaldualinteriorpoint,
+      title={An Inexact Tensor-Train Primal-Dual Interior-Point Method for Semidefinite Programs}, 
+      author={Frederik Kelbel and Sergey Dolgov and Dante Kalise and Alessandra Russo},
+      year={2025},
+      eprint={2509.11890},
+      archivePrefix={arXiv},
+      primaryClass={math.OC},
+      url={https://arxiv.org/abs/2509.11890}, 
+}
+```
 
 ### Contact
 For questions or issues, please open a GitHub issue or contact the authors.
