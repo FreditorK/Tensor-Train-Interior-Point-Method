@@ -1,10 +1,10 @@
 dim: !!int 11
 seeds:
 - 48
-#- 23
-#- 235
-#- 35
-#- 14 
+- 23
+- 235
+- 35
+- 14 
 gap_tol: !!float 3e-4
 verbose: true
 op_tol: !!float 1e-4

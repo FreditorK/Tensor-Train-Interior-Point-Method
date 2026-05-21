@@ -2,10 +2,10 @@
 dim: !!int 6
 seeds: 
 - 73 
-#- 54
-#- 624
-#- 7
-#- 9
+- 54
+- 624
+- 7
+- 9
 gap_tol: !!float 3e-4
 verbose: true
 # TT-IPM
