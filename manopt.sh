@@ -1,24 +1,47 @@
 #!/bin/bash
 
+set -u
+
+usage() {
+    echo "Usage: bash manopt.sh <problem> <start_dim> <end_dim> <rank> [--track_mem]"
+}
+
+if [ "$#" -lt 4 ] || [ "$#" -gt 5 ]; then
+    usage
+    exit 1
+fi
+
+PROBLEM=$1
+START_DIM=$2
+END_DIM=$3
+RANK=$4
+TRACK_MEM=""
+
+if [ "$#" -eq 5 ]; then
+    if [ "$5" != "--track_mem" ]; then
+        usage
+        exit 1
+    fi
+    TRACK_MEM="--track_mem"
+fi
+
+if ! [[ "$START_DIM" =~ ^[0-9]+$ && "$END_DIM" =~ ^[0-9]+$ && "$RANK" =~ ^[0-9]+$ ]]; then
+    echo "❌ start_dim, end_dim, and rank must be positive integers."
+    exit 1
+fi
+if [ "$RANK" -lt 1 ] || [ "$START_DIM" -lt 1 ] || [ "$END_DIM" -lt "$START_DIM" ]; then
+    echo "❌ Invalid range/rank: require start_dim >= 1, end_dim >= start_dim, rank >= 1."
+    exit 1
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-echo "Running: $1_manopt"
-# ---------------------------
-# Parameters
-# ---------------------------
+echo "Running: ${PROBLEM}_manopt (rank=${RANK})"
 BASE_TIMEOUT=6400  # 2h
-START_DIM=$2
-END_DIM=$3
-
-# ---------------------------
-# Delete log file if it exists
-# ---------------------------
 mkdir -p results
-LOGFILE="results/manopt_$1_${START_DIM}_${END_DIM}.txt"
-if [ -f "$LOGFILE" ]; then
-    rm "$LOGFILE"
-fi
+LOGFILE="results/manopt_${PROBLEM}_${START_DIM}_${END_DIM}_${RANK}.txt"
+rm -f "$LOGFILE"
 
 # ---------------------------
 # Activate conda environment if not already activated
@@ -64,25 +87,22 @@ trap 'echo -e "\n⚠️ Script resumed (was suspended). Memory may not have been
 # ---------------------------
 exec > >(tee -a "$LOGFILE") 2>&1
 
-echo "==== $1 MANOPT Batch Run Started at $(date) ===="
+echo "==== ${PROBLEM} MANOPT Batch Run Started at $(date) ===="
 
-cd psd_system/$1
+cd "psd_system/${PROBLEM}"
 
 # ---------------------------
 # Loop through configs
 # ---------------------------
-for arg in "$@"; do
-    if [ "$arg" == "--track_mem" ]; then
-        TRACK_MEM="--track_mem"
-    fi
-done
-
 for dim in $(seq $START_DIM $END_DIM); do
-    CONFIG="configs/$1_${dim}.yaml"
+    CONFIG="configs/${PROBLEM}_${dim}.yaml"
     echo -e "\n▶ Running dim=$dim with config=$CONFIG at $(date)"
     CURRENT_TIMEOUT=$((BASE_TIMEOUT * dim))
-
-    timeout "$CURRENT_TIMEOUT" python $1_manopt.py --config "$CONFIG" $TRACK_MEM
+    cmd=(python "${PROBLEM}_manopt.py" --config "$CONFIG" --rank "$RANK")
+    if [ -n "$TRACK_MEM" ]; then
+        cmd+=("$TRACK_MEM")
+    fi
+    timeout "$CURRENT_TIMEOUT" "${cmd[@]}"
     status=$?
 
     if [ $status -eq 124 ]; then

@@ -1,21 +1,16 @@
-import numpy as np
 import argparse
 import os
 import sys
-import os
-import sdpap
 import time
+
+import numpy as np
 import yaml
-import cvxpy as cp
 from memory_profiler import memory_usage
 
 sys.path.append(os.getcwd() + '/../../')
 from corr_clust import *
-from src.baselines import *
-from src.utils import print_results_summary 
-
-import warnings
-warnings.filterwarnings("ignore", message=".*Python recalculation of primal and/or dual feasibility error failed.*")
+from src.utils import print_results_summary
+from psd_system.direct_conic import sdpa_row_from_entries, solve_sdpa_psd_max
 
 
 if __name__ == "__main__":
@@ -23,6 +18,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Script with optional memory tracking.")
     parser.add_argument("--track_mem", action="store_true", help="Enable memory tracking from a certain point.")
     parser.add_argument("--config", type=str, required=True, help="Path to the YAML configuration file")
+    parser.add_argument("--rank", type=int, default=1, help="TT-rank used for graph generation")
     args = parser.parse_args()
     with open(os.getcwd() + '/../../' + args.config, "r") as file:
         config = yaml.safe_load(file)
@@ -35,38 +31,64 @@ if __name__ == "__main__":
     feasibility_errors = np.zeros(num_seeds)
     dual_feasibility_errors = np.zeros(num_seeds)
     num_failed_seeds = 0
-    # num_iters = np.zeros(num_seeds)  # If available
 
     for s_i, seed in enumerate(config["seeds"]):
-        tried_new_seed = False
-        for attempt in range(3):  # At most two tries: original and one new random seed
-            if attempt == 0:
-                current_seed = seed
-            else:
-                current_seed = np.random.randint(0, 10000)
+        for attempt in range(3):
+            current_seed = seed if attempt == 0 else np.random.randint(0, 10000)
+            if attempt > 0:
                 print(f"Trying with new random seed: {current_seed}")
             np.random.seed(current_seed)
+
             t1 = time.time()
-            C, ineq_A = tt_obj_matrix_and_ineq_mask(1, config["dim"])
+            C, ineq_A = tt_obj_matrix_and_ineq_mask(args.rank, config["dim"])
             C = tt_matrix_to_matrix(C)
             ineq_A = np.round(tt_matrix_to_matrix(ineq_A), decimals=1)
             t2 = time.time()
             if args.track_mem:
                 start_mem = memory_usage(max_usage=True, include_children=True)
-            X = cp.Variable(C.shape, symmetric=True)
-            constraints = [X >> 0, cp.diag(X) == 1, cp.multiply(ineq_A, X) >= 0]
+
+            n = C.shape[0]
+            eq_rows = [sdpa_row_from_entries(n, [(i, i, 1.0)]) for i in range(n)]
+            eq_rhs = np.ones(n)
+
+            ineq_entries = [
+                (i, j, ineq_A[i, j])
+                for i in range(n)
+                for j in range(n)
+                if abs(ineq_A[i, j]) > 1e-12
+            ]
+            ineq_rows = [sdpa_row_from_entries(n, [entry]) for entry in ineq_entries]
+            ineq_rhs = np.zeros(len(ineq_rows))
+
+            option = {
+                "epsilonDash": 1e-6 / (2 ** config["dim"]),
+                "epsilonStar": 1e-5 / (2 ** config["dim"]),
+                "print": "display",
+            }
+
             try:
                 if args.track_mem:
                     def wrapper():
-                        prob = cp.Problem(cp.Maximize(cp.trace(C.T @ X)), constraints)
-                        _ = prob.solve(solver=cp.SDPA, epsilonDash=1e-6 / 2**config["dim"], epsilonStar=1e-5 / 2**config["dim"], verbose=True, gammaStar=0.75, domainMethod="basis")
-                        return prob
-                    res, prob = memory_usage(proc=wrapper, max_usage=True, retval=True, include_children=True)
-                    memory[s_i] = res - start_mem
+                        return solve_sdpa_psd_max(
+                            C,
+                            eq_rows,
+                            eq_rhs,
+                            ineq_rows=ineq_rows,
+                            ineq_rhs=ineq_rhs,
+                            option=option,
+                        )
+
+                    res_mem, sol = memory_usage(proc=wrapper, max_usage=True, retval=True, include_children=True)
+                    memory[s_i] = res_mem - start_mem
                 else:
-                    prob = cp.Problem(cp.Maximize(cp.trace(C.T @ X)), constraints)
-                    _ = prob.solve(solver=cp.SDPA, epsilonDash=1e-6 / 2**config["dim"], epsilonStar=1e-5 / 2**config["dim"], verbose=True, gammaStar=0.75, domainMethod="basis")
-                # If we get here, break out of the attempt loop (success)
+                    sol = solve_sdpa_psd_max(
+                        C,
+                        eq_rows,
+                        eq_rhs,
+                        ineq_rows=ineq_rows,
+                        ineq_rhs=ineq_rhs,
+                        option=option,
+                    )
                 break
             except Exception as e:
                 print(e)
@@ -76,39 +98,43 @@ if __name__ == "__main__":
                     print(f"Failed to solve problem with new random seed {current_seed}")
                     num_failed_seeds += 1
         else:
-            # Only runs if both attempts failed
             continue
-        X_val = X.value
-        Z = constraints[0].dual_value
-        y = constraints[1].dual_value
+
+        X_val = sol["x_matrix"]
+        Z = sol["z_matrix"]
+
         t3 = time.time()
         problem_creation_times[s_i] = t2 - t1
         runtimes[s_i] = t3 - t2
         complementary_slackness[s_i] = np.abs(np.trace(X_val @ Z))
-        feasibility_errors[s_i] = np.abs(np.linalg.norm(np.diag(X_val) - 1) ** 2)
-        data, chain, inverse_data = prob.get_problem_data(cp.SDPA)
-        soln = chain.solve_via_data(prob, data)
-        dual_feas_sq = ((data["c"].flatten() - (data["A"].T @ np.concatenate([soln["eq_dual"], soln["ineq_dual"]], axis=0)).flatten()))**2
-        dual_feas_diag_sq = dual_feas_sq[[sum(range(i)) for i in range(2**config["dim"])]]
-        for idx, i in enumerate([[sum(range(i)) for i in range(2**config["dim"])]]):
-            dual_feas_sq -= 0.5*dual_feas_diag_sq[idx]
-        # SDPA only stores the lower tri bits of symmetric variables, to make it fair we adjust the error
-        dual_feasibility_errors[s_i] = np.abs(np.sum(2*dual_feas_sq))
-        # num_iters[s_i] = ...  # If available
 
-    # Prepare dummy arrays for missing metrics to match the signature
+        diag_err = np.linalg.norm(np.diag(X_val) - 1.0) ** 2
+        ineq_vals = ineq_A * X_val
+        ineq_violation = np.minimum(ineq_vals, 0.0)
+        feasibility_errors[s_i] = diag_err + np.sum(ineq_violation ** 2)
+
+        y_full = np.concatenate([sol["y_eq"], sol["y_ineq"]])
+        dual_residual = sol["c"] - sol["A"].T @ y_full - Z.reshape(-1, order="F")
+        dual_feasibility_errors[s_i] = np.sum(dual_residual ** 2)
+
     num_iters = np.zeros(num_seeds)
     ranksX = np.zeros((1, num_seeds, 1))
     ranksY = np.zeros((1, num_seeds, 1))
     ranksZ = np.zeros((1, num_seeds, 1))
 
     print(f"Number of failed seeds: {num_failed_seeds}")
-    # Print summary (adapt as needed)
     print_results_summary(
-        config, args,
-        runtimes.reshape(1, -1), problem_creation_times.reshape(1, -1), num_iters.reshape(1, -1),
-        feasibility_errors.reshape(1, -1), dual_feasibility_errors.reshape(1, -1), complementary_slackness.reshape(1, -1),
-        ranksX, ranksY, ranksZ,
+        config,
+        args,
+        runtimes.reshape(1, -1),
+        problem_creation_times.reshape(1, -1),
+        num_iters.reshape(1, -1),
+        feasibility_errors.reshape(1, -1),
+        dual_feasibility_errors.reshape(1, -1),
+        complementary_slackness.reshape(1, -1),
+        ranksX,
+        ranksY,
+        ranksZ,
         ranksT=None,
-        memory=memory.reshape(1, -1) if args.track_mem else None
+        memory=memory.reshape(1, -1) if args.track_mem else None,
     )

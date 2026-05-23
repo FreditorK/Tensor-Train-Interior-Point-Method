@@ -34,17 +34,21 @@ bash tt_ipm.sh max_stable_set 6 8 1
 ```
 The script auto-activates the environment, fixes thread counts, iterates `configs/<problem>_<dim>.yaml`, and logs to `results/tt_ipm_<problem>_<start>_<end>_<rank>.txt`. Add `--track_mem` to measure peak memory (slightly slower). Note: setting `verbose: true` in configs can also slow runs due to increased logging.
 
-- Baselines (SCS/SDPA/SC-GAL):
+- Baselines (SCS/SDPA/SC-GAL/MANOPT):
 ```bash
-# Usage: ./scs.sh <problem> <start_dim> <end_dim> [--track_mem]
-bash scs.sh maxcut 6 9 --track_mem
+# Usage: ./scs.sh <problem> <start_dim> <end_dim> <rank> [--track_mem]
+bash scs.sh maxcut 6 9 2 --track_mem
 
-# Usage: ./sdpa.sh <problem> <start_dim> <end_dim> [--track_mem]
-bash sdpa.sh corr_clust 6 9
+# Usage: ./sdpa.sh <problem> <start_dim> <end_dim> <rank> [--track_mem]
+bash sdpa.sh corr_clust 6 9 2
 
-# Usage: ./scgal.sh <problem> <start_dim> <end_dim> [--track_mem]
-bash scgal.sh graphm 2 4
+# Usage: ./scgal.sh <problem> <start_dim> <end_dim> <rank> [--track_mem]
+bash scgal.sh maxcut 6 8 2
+
+# Usage: ./manopt.sh <problem> <start_dim> <end_dim> <rank> [--track_mem]
+bash manopt.sh maxcut 6 8 2
 ```
+All five shell wrappers require `<rank>`. They pass it as `--rank` to the Python entrypoints, which generate the input TT graph/objective at that rank.
 
 4) Results are written as JSON into `results/` automatically after the run. See “Results and plotting” below.
 
@@ -67,7 +71,10 @@ python psd_system/graphm/graphm.py --config configs/graphm_3.yaml --rank 2
 python psd_system/max_stable_set/max_stable_set.py --config configs/max_stable_set_7.yaml --rank 1
 ```
 
-The shell wrappers `tt_ipm.sh`, `scs.sh`, `sdpa.sh`, and `scgal.sh` are preferred for batch sweeps across dimensions.
+The shell wrappers `tt_ipm.sh`, `scs.sh`, `sdpa.sh`, `scgal.sh`, and `manopt.sh` are preferred for batch sweeps across dimensions. They all use the same CLI form:
+```bash
+bash <runner>.sh <problem> <start_dim> <end_dim> <rank> [--track_mem]
+```
 
 ### Configuration files (YAML)
 The configs in `configs/` define problem size and solver hyperparameters. Common fields:

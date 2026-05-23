@@ -18,6 +18,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Script with optional memory tracking.")
     parser.add_argument("--track_mem", action="store_true", help="Enable memory tracking from a certain point.")
     parser.add_argument("--config", type=str, required=True, help="Path to the YAML configuration file")
+    parser.add_argument("--rank", type=int, default=1, help="TT-rank used for graph generation")
     args = parser.parse_args()
     with open(os.getcwd() + '/../../' + args.config, "r") as file:
         config = yaml.safe_load(file)
@@ -42,7 +43,7 @@ if __name__ == "__main__":
             np.random.seed(current_seed)
             t1 = time.time()
             trace_param = 2 ** config["dim"]
-            C = tt_matrix_to_matrix(tt_obj_matrix(1, config["dim"]))
+            C = tt_matrix_to_matrix(tt_obj_matrix(args.rank, config["dim"]))
             C *= trace_param / np.linalg.norm(C)
             t2 = time.time()
             constraint_matrices = [np.outer(column, column) for column in np.eye(C.shape[0])]
