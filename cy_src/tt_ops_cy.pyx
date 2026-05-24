@@ -159,22 +159,38 @@ cpdef tt_rl_orthogonalise(list train_tt):
     return train_tt
 
 @cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.inline
+cdef int _pruned_rank(cnp.ndarray[cnp.double_t, ndim=1] s, double eps):
+    cdef Py_ssize_t i
+    cdef int first_under = -1
+    cdef double tail = 0.0
+    cdef double eps2 = eps * eps
+
+    for i in range(s.shape[0] - 1, -1, -1):
+        tail += s[i] * s[i]
+        if tail < eps2:
+            first_under = <int>i
+        else:
+            break
+    if first_under >= 0:
+        return first_under if first_under > 0 else 1
+    return <int>s.shape[0] if tail > eps2 else 1
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.inline
+cdef double _tail_sq(cnp.ndarray[cnp.double_t, ndim=1] s, int start):
+    cdef Py_ssize_t i
+    cdef double tail = 0.0
+
+    for i in range(s.shape[0] - 1, start - 1, -1):
+        tail += s[i] * s[i]
+    return tail
+
+@cython.boundscheck(False)
 cpdef int prune_singular_vals(cnp.ndarray[cnp.double_t, ndim=1] s, double eps):
-    cdef double norm_s = np.linalg.norm(s)
-    cdef cnp.ndarray[cnp.double_t, ndim=1] sc
-    cdef int R
-
-    if norm_s == 0.0:
-        return 1
-
-    sc = np.cumsum(np.abs(s[::-1]) ** 2)[::-1]
-
-    R = np.argmax(sc < eps ** 2)
-    R = max(R, 1)
-    if sc[-1] > eps ** 2:
-        R = s.size
-
-    return R
+    return _pruned_rank(s, eps)
 
 @cython.boundscheck(False)
 cpdef list tt_rank_reduce(list train_tt, double eps=1e-18):
@@ -275,7 +291,6 @@ cpdef list tt_psd_rank_reduce(list train_tt, double eps=1e-18):
     cdef int idx, next_rank, s_len
     cdef tuple idx_shape, next_idx_shape
     cdef cnp.ndarray u, s, v_t
-    cdef cnp.ndarray sc
     cdef double factor
     cdef cnp.ndarray I
     cdef cnp.ndarray reshaped_core, reshaped_next
@@ -296,17 +311,11 @@ cpdef list tt_psd_rank_reduce(list train_tt, double eps=1e-18):
             lapack_driver="gesvd"
         )
 
-        # Squared singular values in descending order
-        sc = np.cumsum(np.abs(s[::-1]) ** 2)[::-1]
         s_len = s.shape[0]
-
-        next_rank = np.argmax(sc < eps ** 2)
-        next_rank = max(next_rank, 1)
-        if sc[-1] > eps ** 2:
-            next_rank = s_len
+        next_rank = _pruned_rank(s, eps)
 
         if next_rank < s_len:
-            sum_eps_sq += sc[next_rank]
+            sum_eps_sq += _tail_sq(s, next_rank)
 
         train_tt[idx] = u[:, :next_rank].reshape(rank, *idx_shape[1:-1], next_rank)
 
@@ -342,7 +351,6 @@ cpdef list tt_mask_rank_reduce(list train_tt, list mask_tt, double eps=1e-18):
     cdef int idx, next_rank, s_len
     cdef tuple idx_shape, next_idx_shape
     cdef cnp.ndarray u, s, v_t
-    cdef cnp.ndarray sc
     cdef double factor
     cdef cnp.ndarray reshaped_core, reshaped_next
 
@@ -362,17 +370,11 @@ cpdef list tt_mask_rank_reduce(list train_tt, list mask_tt, double eps=1e-18):
             lapack_driver="gesvd"
         )
 
-        # Squared singular values in descending order
-        sc = np.cumsum(np.abs(s[::-1]) ** 2)[::-1]
         s_len = s.shape[0]
-
-        next_rank = np.argmax(sc < eps ** 2)
-        next_rank = max(next_rank, 1)
-        if sc[-1] > eps ** 2:
-            next_rank = s_len
+        next_rank = _pruned_rank(s, eps)
 
         if next_rank < s_len:
-            sum_eps_sq += sc[next_rank]
+            sum_eps_sq += _tail_sq(s, next_rank)
 
         train_tt[idx] = u[:, :next_rank].reshape(rank, *idx_shape[1:-1], next_rank)
 

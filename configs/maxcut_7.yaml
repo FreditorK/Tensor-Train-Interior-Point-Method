@@ -1,7 +1,6 @@
 abs_tol: 0.001
 dim: 7
 gap_tol: 0.0003
-lambdaStar: 1.0
 mals_restarts: 2
 max_iter: 24
 max_refinement: 5

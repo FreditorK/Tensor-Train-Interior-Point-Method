@@ -612,12 +612,16 @@ def tt_random_binary_sym(dim: int, rank: int, skew=5.0) -> List[np.ndarray]:
     return tensor_cores
 
 
-def tt_random_graph(dim, r, skew=-1.0, eps=1e-12):
+def tt_random_graph(dim, r, skew=-1.0, eps=1e-12, self_loops=False):
     current_rank = 0
     for _ in range(1, 1000):
         graph = tt_random_binary_sym(dim, 2*r, skew=skew)
         if tt_norm(graph) > 1e-12:
             graph = tt_rank_reduce(tt_reshape(graph, (2, 2)), 1e-12)
+            if not self_loops:
+                diag_graph = tt_diag(tt_diagonal(graph), eps)
+                if tt_norm(diag_graph) > eps:
+                    graph = tt_rank_reduce(tt_sub(graph, diag_graph), eps)
             max_rank = np.max(tt_ranks(graph))
             if current_rank <= max_rank <= r:
                 current_rank = max_rank

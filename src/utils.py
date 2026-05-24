@@ -54,6 +54,8 @@ def run_experiment(create_problem_fn):
             ranksT = np.zeros((num_ranks, num_seeds, dim - 1))
 
     used_seeds = set(config["seeds"])
+    retry_pathological = bool(config.get("retry_pathological_seeds", False))
+    post_tol = max(1e-3, 2.0 * float(config.get("abs_tol", 1e-3)))
 
     rank = args.rank
     r_i = 0
@@ -67,7 +69,9 @@ def run_experiment(create_problem_fn):
             ranksX, ranksY, ranksZ, ranksT, config_path
         )
         new_seed = seed
-        while (feas_err > 1e-3) or (slack > 1e-3):
+        if not retry_pathological and ((feas_err > post_tol) or (slack > post_tol)):
+            raise RuntimeError(f"Seed {seed} failed post-check: feasibility={feas_err:.2e}, slackness={slack:.2e}.")
+        while retry_pathological and ((feas_err > post_tol) or (slack > post_tol)):
             print(f"Seed {new_seed} is pathological (feasibility error: {feas_err:.2e}, slackness: {slack:.2e}). Suggesting a new seed.")
             new_seed = np.random.randint(0, 2**10)
             while new_seed in used_seeds:

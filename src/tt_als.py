@@ -79,7 +79,10 @@ class TTBlockVectorView:
     def block_local_product(self, Xb_k, Xb_kp1, nrmsc, shape):
         result = np.zeros(shape, dtype=np.float64)
         for i in self._data.keys():
-            result[:, i] += cached_einsum('br,bnB,BR->rnR', Xb_k[i], nrmsc * self._data[i][self._list_index], Xb_kp1[i])
+            core = self._data[i][self._list_index]
+            if not (np.isscalar(nrmsc) and nrmsc == 1):
+                core = nrmsc * core
+            result[:, i] += cached_einsum('br,bnB,BR->rnR', Xb_k[i], core, Xb_kp1[i])
         return result
 
 
@@ -266,11 +269,15 @@ def compute_phi_fwd_rhs(Phi_now, core_rhs, core):
 
 
 
-def truncated_svd(matrix, trunc_rank):
+def truncated_svd(matrix, trunc_rank, min_rank=0):
     u, s, v = scp.linalg.svd(matrix, full_matrices=False, check_finite=False, overwrite_a=True)
-    u = u[:, :trunc_rank]
-    s = s[:trunc_rank]
-    v = v[:trunc_rank]
+    tol = np.finfo(s.dtype).eps * max(matrix.shape) * s[0] if s.size else 0
+    rank = min(trunc_rank, s.size)
+    if rank > min_rank:
+        rank = max(min_rank, np.count_nonzero(s[:rank] > tol))
+    u = u[:, :rank]
+    s = s[:rank]
+    v = v[:rank]
     return u, s.reshape(-1, 1) * v
 
 
@@ -337,13 +344,13 @@ def _bck_sweep(
                 solution_now = np.reshape((u[:, :r_start] @ v[:r_start]).T, (rx[k], block_size, N[k], rx[k + 1]))
                 res = block_A_k.block_local_product(XAX[k], XAX[k + 1], solution_now) - rhs
                 r = r_start
-                for r in range(r_start - 1, 0, -1):
+                for cand in range(r_start - 1, 0, -1):
                     res -= block_A_k.block_local_product(XAX[k], XAX[k + 1],
-                                                np.reshape((u[:, None, r] @ v[None, r, :]).T,
+                                                np.reshape((u[:, None, cand] @ v[None, cand, :]).T,
                                                            (rx[k], block_size, N[k], rx[k + 1])))
                     if np.linalg.norm(res) / norm_rhs > trunc_lim:
                         break
-                r += 1
+                    r = cand
                 u = np.reshape(u[:, :r].T, (r, N[k], rx[k + 1]))
                 v = v[:r].T.reshape(rx[k], block_size, r)
                 if amen and not last:
@@ -353,12 +360,14 @@ def _bck_sweep(
                     resxz = rhsxz.__isub__(Axz)
                     kr = min(kick_rank, rz[k] * block_size, N[k] * rx[k + 1])
                     uz, _ = truncated_svd(np.reshape(resxz, (rz[k] * block_size, N[k] * rx[k + 1])).T, kr)
-                    uz = uz.T.reshape(kr, N[k], rx[k + 1])
-                    u = np.concatenate((np.reshape(u, (r, N[k], rx[k + 1])), uz), axis=0)
-                    u, R = scp.linalg.qr(u.reshape(-1, N[k]*rx[k+1]).T, mode="economic", check_finite=False, overwrite_a=True)
-                    u = u.T.reshape(-1, N[k], rx[k+1])
-                    v = einsum("Rdk, kr -> Rdr", v, R.T[:v.shape[-1]], optimize=[(0, 1)])
-                    r = u.shape[0]
+                    q = uz.shape[1]
+                    if q:
+                        uz = uz.T.reshape(q, N[k], rx[k + 1])
+                        u = np.concatenate((np.reshape(u, (r, N[k], rx[k + 1])), uz), axis=0)
+                        u, R = scp.linalg.qr(u.reshape(-1, N[k]*rx[k+1]).T, mode="economic", check_finite=False, overwrite_a=True)
+                        u = u.T.reshape(-1, N[k], rx[k+1])
+                        v = einsum("Rdk, kr -> Rdr", v, R.T[:v.shape[-1]], optimize=[(0, 1)])
+                        r = u.shape[0]
 
             else:
                 r = min(prune_singular_vals(s, eps), r_max)
@@ -375,9 +384,10 @@ def _bck_sweep(
 
             if amen and not last:
                 kr = min(kick_rank, *resz.shape)
-                uz, vz = truncated_svd(resz, kr)
-                uz = uz.T.reshape(kr, N[k], rz[k + 1])
-                vz = np.reshape(vz.T, (rz[k], block_size, kr))
+                uz, vz = truncated_svd(resz, kr, min_rank=1)
+                q = uz.shape[1]
+                uz = uz.T.reshape(q, N[k], rz[k + 1])
+                vz = np.reshape(vz.T, (rz[k], block_size, q))
                 z_cores[k] = uz
                 z_cores[k - 1] = einsum('rdc,cbR->rbdR', z_cores[k - 1], vz, optimize=[(0, 1)]) / scales
                 rz[k] = uz.shape[0]
@@ -465,27 +475,28 @@ def _fwd_sweep(
                 solution_now = einsum("rbR, Rdk -> rbdk", u[:, :, :r_start], v[:r_start], optimize=[(0, 1)])
                 res = block_A_k.block_local_product(XAX[k], XAX[k + 1], np.transpose(solution_now, (0, 2, 1, 3))) - rhs
                 r = r_start
-                for r in range(r_start - 1, 0, -1):
-                    res -= block_A_k.block_local_product(XAX[k], XAX[k + 1], einsum("rbR, Rdk -> rdbk", u[:, :, None, r], v[None, r], optimize=[(0, 1)]))
+                for cand in range(r_start - 1, 0, -1):
+                    res -= block_A_k.block_local_product(XAX[k], XAX[k + 1], einsum("rbR, Rdk -> rdbk", u[:, :, None, cand], v[None, cand], optimize=[(0, 1)]))
                     if np.linalg.norm(res) / norm_rhs > trunc_lim:
                         break
-                r += 1
+                    r = cand
+                u = u[:, :, :r]
+                v = v[:r]
                 if amen:
                     # amen enhancement
-                    Axz = block_A_k.rcompressed_block_local_product(XAX[k], ZAX[k + 1], einsum("rbR, Rdk -> rdbk", u[:, :, :r], v[:r], optimize=[(0, 1)]), shape=(rx[k], block_size, N[k], rz[k + 1]))
+                    Axz = block_A_k.rcompressed_block_local_product(XAX[k], ZAX[k + 1], einsum("rbR, Rdk -> rdbk", u, v, optimize=[(0, 1)]), shape=(rx[k], block_size, N[k], rz[k + 1]))
                     rhsxz = block_b_k.block_local_product(Xb[k], Zb[k + 1], 1, (rx[k], block_size, N[k], rz[k + 1]))
                     resxz = np.transpose(rhsxz.__isub__(Axz), (0, 2, 1, 3))
                     kr = min(kick_rank, rx[k] * N[k], block_size * rz[k + 1])
                     uz, _ = truncated_svd(np.reshape(resxz, (rx[k] * N[k], block_size * rz[k + 1])), kr)
-                    uz = np.reshape(uz, (rx[k], N[k], kr))
-                    u = np.concatenate((u[:, :, :r], uz), axis=-1)
-                    u, R = scp.linalg.qr(u.reshape(rx[k]*N[k], -1), mode="economic", check_finite=False, overwrite_a=True)
-                    u = u.reshape(rx[k], N[k], -1)
-                    v = einsum("rR, Rdk -> rdk", R[:, :r], v[:r], optimize=[(0, 1)])
-                    r = v.shape[0]
-                else:
-                    u = u[:, :, :r]
-                    v = v[:r]
+                    q = uz.shape[1]
+                    if q:
+                        uz = np.reshape(uz, (rx[k], N[k], q))
+                        u = np.concatenate((u, uz), axis=-1)
+                        u, R = scp.linalg.qr(u.reshape(rx[k]*N[k], -1), mode="economic", check_finite=False, overwrite_a=True)
+                        u = u.reshape(rx[k], N[k], -1)
+                        v = einsum("rR, Rdk -> rdk", R[:, :r], v, optimize=[(0, 1)])
+                        r = v.shape[0]
             else:
                 r = min(prune_singular_vals(s, eps), r_max)
                 u = u[:, :, :r]
@@ -502,9 +513,10 @@ def _fwd_sweep(
 
             if amen and not last:
                 kr = min(kick_rank, *resz.shape)
-                uz, vz = truncated_svd(resz, kr)
-                uz = np.reshape(uz, (rz[k], N[k], kr))
-                vz = np.reshape(vz, (kr, block_size, rz[k + 1]))
+                uz, vz = truncated_svd(resz, kr, min_rank=1)
+                q = uz.shape[1]
+                uz = np.reshape(uz, (rz[k], N[k], q))
+                vz = np.reshape(vz, (q, block_size, rz[k + 1]))
                 z_cores[k] = uz
                 z_cores[k + 1] = einsum("rbR, Rdk -> rbdk", vz, z_cores[k + 1], optimize=[(0, 1)]) / scales
                 rz[k + 1] = uz.shape[-1]
@@ -960,7 +972,8 @@ def _step_size_local_solve(
         u, s, v = scp.linalg.svd(solution_now.reshape(np.prod(prev_sol_shape[:2]), np.prod(prev_sol_shape[2:])).T, full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
         v = s.reshape(-1, 1) * v
         r = min(prune_singular_vals(s, trunc_tol), max_rank)
-        solution1, solution2, r = _add_kick_rank_rev(v[:r].T, u[:, :r].T, 4)
+        solution1, solution2 = v[:r].T, u[:, :r].T
+        solution1, solution2, r = _add_kick_rank_rev(solution1, solution2, _eigen_kick_rank(solution1, solution2, max_rank))
         solution2 = solution2.reshape(r, prev_sol_shape[2], prev_sol_shape[3])
         solution1 = solution1.reshape(prev_sol_shape[0], prev_sol_shape[1], r)
     else:
@@ -968,7 +981,7 @@ def _step_size_local_solve(
         r = min(prune_singular_vals(s, trunc_tol), max_rank)
         solution1 = solution1[:, :r]
         solution2 = s.reshape(-1, 1)[:r] * solution2[:r]
-        solution1, solution2, r = _add_kick_rank(solution1, solution2, 4)
+        solution1, solution2, r = _add_kick_rank(solution1, solution2, _eigen_kick_rank(solution1, solution2, max_rank))
         solution1 = solution1.reshape(prev_sol_shape[0], prev_sol_shape[1], r)
         solution2 = solution2.reshape(r, prev_sol_shape[2], prev_sol_shape[3])
     return solution1, solution2, step_size, old_res
@@ -976,6 +989,9 @@ def _step_size_local_solve(
 
 def _add_kick_rank(u, v, r_add=2):
     old_r = u.shape[-1]
+    r_add = min(r_add, max(0, u.shape[0] - old_r), max(0, v.shape[1] - old_r))
+    if r_add <= 0:
+        return u, v, old_r
     uk = np.random.randn(u.shape[0], r_add)
     u, Rmat = scp.linalg.qr(np.concatenate((u, uk), 1), check_finite=False, mode="economic", overwrite_a=True)
     v = Rmat[:, :old_r] @ v
@@ -983,10 +999,17 @@ def _add_kick_rank(u, v, r_add=2):
 
 def _add_kick_rank_rev(u, v, r_add=2):
     old_r = v.shape[0]
+    r_add = min(r_add, max(0, u.shape[0] - old_r), max(0, v.shape[1] - old_r))
+    if r_add <= 0:
+        return u, v, old_r
     uk = np.random.randn(r_add, v.shape[-1])
     Rmat, v = scp.linalg.rq(np.concatenate((v, uk), 0), check_finite=False, mode="economic", overwrite_a=True)
     u = u @ Rmat[:old_r]
     return u, v, v.shape[0]
+
+
+def _eigen_kick_rank(u, v, max_rank, requested=4):
+    return min(requested, max(0, min(max_rank, u.shape[0], v.shape[1]) - v.shape[0]))
 
 
 def _step_size_local_solve_last(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k, A_k, XAX_k1, dense_solve, step_size, eps):
@@ -1060,6 +1083,7 @@ def _step_size_local_solve_last(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k
 
         eig_val = previous_solution.T @ AD_op(previous_solution)
         old_res = np.linalg.norm(AD_op(previous_solution).__isub__(eig_val * previous_solution))
+    solution_now /= max(np.linalg.norm(solution_now), 1e-300)
     return solution_now.reshape(-1, 1), step_size, old_res
 
 
@@ -1231,11 +1255,13 @@ def _eigen_local_solve(
             eig_val = previous_solution.T @ A_op(previous_solution)
             lanczos_discount = min(0.999, lanczos_discount*1.1)
         old_res = np.linalg.norm(eig_val * previous_solution - A_op(previous_solution))
+    solution_now /= max(np.linalg.norm(solution_now), 1e-300)
     if bwd:
         u, s, v = scp.linalg.svd(solution_now.reshape(np.prod(prev_sol_shape[:2]), np.prod(prev_sol_shape[2:])).T, full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
         v = s.reshape(-1, 1) * v
         r = min(prune_singular_vals(s, trunc_tol), max_rank)
-        solution1, solution2, r = _add_kick_rank_rev(v[:r].T, u[:, :r].T, 4)
+        solution1, solution2 = v[:r].T, u[:, :r].T
+        solution1, solution2, r = _add_kick_rank_rev(solution1, solution2, _eigen_kick_rank(solution1, solution2, max_rank))
         solution2 = solution2.reshape(r, prev_sol_shape[2], prev_sol_shape[3])
         solution1 = solution1.reshape(prev_sol_shape[0], prev_sol_shape[1], r)
     else:
@@ -1243,7 +1269,7 @@ def _eigen_local_solve(
         r = min(prune_singular_vals(s, trunc_tol), max_rank)
         solution1 = solution1[:, :r]
         solution2 = s.reshape(-1, 1)[:r] * solution2[:r]
-        solution1, solution2, r = _add_kick_rank(solution1, solution2, 4)
+        solution1, solution2, r = _add_kick_rank(solution1, solution2, _eigen_kick_rank(solution1, solution2, max_rank))
         solution1 = solution1.reshape(prev_sol_shape[0], prev_sol_shape[1], r)
         solution2 = solution2.reshape(r, prev_sol_shape[2], prev_sol_shape[3])
     lanczos_discount = max(0.1, lanczos_discount*0.999)
@@ -1278,6 +1304,7 @@ def _eigen_local_solve_last(previous_solution, XAX_k, A_k, XAX_k1, m, size_limit
             solution_now = previous_solution
             eig_val = previous_solution.T @ A @ previous_solution
         old_res = np.linalg.norm(eig_val * previous_solution - A @ previous_solution)
+        solution_now /= max(np.linalg.norm(solution_now), 1e-300)
         return solution_now, old_res
 
     x_shape = previous_solution.shape
@@ -1293,6 +1320,7 @@ def _eigen_local_solve_last(previous_solution, XAX_k, A_k, XAX_k1, m, size_limit
         eig_val = previous_solution.T @ A_op(previous_solution)
 
     old_res = np.linalg.norm(eig_val * previous_solution - A_op(previous_solution))
+    solution_now /= max(np.linalg.norm(solution_now), 1e-300)
     return solution_now.reshape(-1, 1), old_res
 
 
