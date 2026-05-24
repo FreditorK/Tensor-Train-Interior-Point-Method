@@ -2,7 +2,6 @@ import sys
 import os
 import numpy as np
 import traceback
-import numpy as np
 import scipy.linalg as la
 
 sys.path.append(os.getcwd() + '/../')
@@ -15,6 +14,21 @@ from petsc4py import PETSc
 
 import warnings
 warnings.simplefilter("error")
+
+
+_DENSE_FALLBACK_EXCEPTIONS = (la.LinAlgWarning, la.LinAlgError, np.linalg.LinAlgError)
+
+
+def _print_unexpected_dense_failure(e):
+    if isinstance(e, _DENSE_FALLBACK_EXCEPTIONS):
+        return
+    print(e)
+    last = traceback.extract_tb(e.__traceback__)[-1]
+    print(f"\t{type(e).__name__} in {last.filename},\n\tline {last.lineno}: {last.line.strip()}")
+
+
+def _expected_newton_fallback(e):
+    return isinstance(e, RuntimeError) and "Number of restarts exhausted" in str(e)
 
 
 
@@ -115,6 +129,7 @@ class LGMRESSolver:
         """
         self.matvec_object = None
         self.shape = None
+        self.x_buffer = None
 
         # PETSc solver setup
         self.ksp = PETSc.KSP().create(comm=PETSc.COMM_WORLD)
@@ -128,13 +143,15 @@ class LGMRESSolver:
         self.ksp.setFromOptions() 
 
     def mult(self, _, x, y):
-        x_np = x.getArray()
-        y_np = self.matvec_object.matvec(x_np)
-        y.setArray(y_np)
+        np.copyto(self.x_buffer, x.array_r)
+        y_np = self.matvec_object.matvec(self.x_buffer)
+        y.array_w[:] = y_np
 
     def solve_system(self, matvec_object, rhs_np, shape):
+        rhs_np = np.ascontiguousarray(rhs_np, dtype=np.float64)
         self.matvec_object = matvec_object
         self.shape = shape
+        self.x_buffer = np.empty(shape[1], dtype=rhs_np.dtype)
 
         self.A_shell = PETSc.Mat().createPython(self.shape, comm=PETSc.COMM_WORLD)
         self.A_shell.setPythonContext(self)
@@ -143,19 +160,25 @@ class LGMRESSolver:
 
         b_petsc = PETSc.Vec().createWithArray(rhs_np, comm=PETSc.COMM_WORLD)
         x_petsc = PETSc.Vec().createWithArray(np.zeros_like(rhs_np), comm=PETSc.COMM_WORLD)
-        self.ksp.solve(b_petsc, x_petsc)
-        sol = x_petsc.getArray()
-
-        b_petsc.destroy()
-        x_petsc.destroy()
+        try:
+            self.ksp.solve(b_petsc, x_petsc)
+            sol = x_petsc.getArray().copy()
+        finally:
+            b_petsc.destroy()
+            x_petsc.destroy()
         return sol
 
     def destroy(self, _=None):
         if hasattr(self, "ksp") and self.ksp:
+            self.ksp.setOperators(None)
+            self.ksp.reset()
             self.ksp.destroy()
             self.ksp = None
-        del self.matvec_object
-        del self.shape
+        if hasattr(self, "A_shell") and self.A_shell:
+            self.A_shell = None
+        self.matvec_object = None
+        self.shape = None
+        self.x_buffer = None
 
 
 class IneqStatus(Enum):
@@ -221,10 +244,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
                 overwrite_b=True
                 ).reshape(x_shape[0], x_shape[2], x_shape[3])
         except Exception as e:
-            print(e)
-            tb = traceback.extract_tb(e.__traceback__)
-            last = tb[-1]
-            print(f"\t⚠️ {type(e).__name__} in {last.filename}, \n\tline {last.lineno}: {last.line.strip()}")
+            _print_unexpected_dense_failure(e)
             direct_solve_failure = True
 
     if not dense_solve or direct_solve_failure:
@@ -248,8 +268,10 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         num_iters = min(m, 100)
         outer_k = max(num_iters // 10, 3)
         large_scale_solver = LGMRESSolver(rtol=rtol, restart=num_iters, outer_k=outer_k)
-        solution_now = large_scale_solver.solve_system(matvec_wrapper, local_rhs.flatten(), (2*m, 2*m))
-        large_scale_solver.destroy()
+        try:
+            solution_now = large_scale_solver.solve_system(matvec_wrapper, local_rhs.flatten(), (2*m, 2*m))
+        finally:
+            large_scale_solver.destroy()
         solution_now = np.transpose(solution_now.reshape(2, x_shape[0], x_shape[2], x_shape[3]), (1, 0, 2, 3))
 
         if use_prev_sol:
@@ -321,9 +343,7 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
                 ).reshape(x_shape[0], x_shape[2], x_shape[3])
 
         except Exception as e:
-            tb = traceback.extract_tb(e.__traceback__)
-            last = tb[-1]
-            print(f"\t⚠️ {type(e).__name__} in {last.filename},\n\tline {last.lineno}: {last.line.strip()}")
+            _print_unexpected_dense_failure(e)
             direct_solve_failure = True
 
     if not dense_solve or direct_solve_failure:
@@ -349,8 +369,10 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
         num_iters = min(m, 100)
         outer_k = max(num_iters // 10, 3)
         large_scale_solver = LGMRESSolver(rtol=rtol, restart=num_iters, outer_k=outer_k)
-        solution_now = large_scale_solver.solve_system(matvec_wrapper, local_rhs.flatten(), (3*m, 3*m))
-        large_scale_solver.destroy()
+        try:
+            solution_now = large_scale_solver.solve_system(matvec_wrapper, local_rhs.flatten(), (3*m, 3*m))
+        finally:
+            large_scale_solver.destroy()
         solution_now = np.transpose(solution_now.reshape(3, x_shape[0], x_shape[2], x_shape[3]),
                                     (1, 0, 2, 3)) 
         
@@ -607,9 +629,11 @@ def _tt_ipm_newton_step(
         else:
             status.sigma = 0
     except Exception as e:
-        print(f"\n\t⚠️ Attention: {e}")
-        print("\n\t==> Full traceback (most recent call last):")
-        traceback.print_exc(file=sys.stdout)
+        status.mals_delta0 = None
+        if not _expected_newton_fallback(e):
+            print(f"\n\tAttention: {e}")
+            print("\n\t==> Full traceback (most recent call last):")
+            traceback.print_exc(file=sys.stdout)
         return 0, 0, None, None, None, None, status
 
     return x_step_size, z_step_size, Delta_X_tt, Delta_Y_tt, Delta_Z_tt, Delta_T_tt, status
@@ -716,6 +740,156 @@ def _initialise(ineq_mask, status, dim, lambdaStar, lambdaStarIneq):
 
 
 @dataclass(frozen=True)
+class PreprocessInfo:
+    norms_before: dict
+    norms_after: dict
+    ranks_before: dict
+    ranks_after: dict
+    condition: dict
+    objective_offset: float
+    constraint_scale: float
+    psd_scale: float
+    y_offset_tt: list
+    objective_projected: bool
+
+
+def _check_tt(name, train_tt, dim, shape=None):
+    if train_tt is None:
+        return
+    if not isinstance(train_tt, list) or len(train_tt) != dim:
+        raise ValueError(f"{name} must be a TT list of length {dim}.")
+    for i, core in enumerate(train_tt):
+        if not np.all(np.isfinite(core)):
+            raise ValueError(f"{name}[{i}] contains non-finite data.")
+        if shape is not None and tuple(core.shape[1:-1]) != tuple(shape):
+            raise ValueError(f"{name}[{i}] has physical shape {core.shape[1:-1]}, expected {shape}.")
+        if i and train_tt[i - 1].shape[-1] != core.shape[0]:
+            raise ValueError(f"{name} has incompatible TT ranks at bond {i}.")
+    if train_tt[0].shape[0] != 1 or train_tt[-1].shape[-1] != 1:
+        raise ValueError(f"{name} must have boundary TT ranks equal to one.")
+
+
+def _scale_tol(train_tt, op_tol, eps):
+    return max(eps, op_tol * max(1.0, tt_norm(train_tt)))
+
+
+def _sym_round_vec(matrix_vec_tt, op_tol, eps):
+    matrix_tt = tt_reshape(matrix_vec_tt, (2, 2))
+    tol = _scale_tol(matrix_tt, op_tol, eps)
+    return tt_reshape(_tt_symmetrise(matrix_tt, tol), (4,))
+
+
+def _validate_problem_data(lag_maps, obj_tt, lin_op_tt, bias_tt, ineq_mask):
+    dim = len(obj_tt)
+    _check_tt("obj_tt", obj_tt, dim, (4,))
+    _check_tt("lin_op_tt", lin_op_tt, dim, (4, 4))
+    _check_tt("bias_tt", bias_tt, dim, (4,))
+    for key, value in lag_maps.items():
+        _check_tt(f"lag_maps[{key}]", value, dim, (4, 4))
+    if ineq_mask is not None:
+        _check_tt("ineq_mask", ineq_mask, dim, (2, 2))
+
+
+def _canonicalize_data(lag_maps, obj_tt, lin_op_tt, bias_tt, ineq_mask, op_tol, eps):
+    if ineq_mask is not None:
+        ineq_mask = _tt_symmetrise(ineq_mask, _scale_tol(ineq_mask, op_tol, eps))
+
+    obj_tt = _sym_round_vec(obj_tt, op_tol, eps)
+    bias_tt = _sym_round_vec(bias_tt, op_tol, eps)
+    lag_maps = {k: tt_skew_zero_op(v, _scale_tol(v, op_tol, eps)) for k, v in lag_maps.items()}
+    lin_op_tt = tt_rank_reduce(lin_op_tt, _scale_tol(lin_op_tt, op_tol, eps))
+    return lag_maps, obj_tt, lin_op_tt, bias_tt, ineq_mask
+
+
+def _project_objective(obj_tt, lin_op_tt, bias_tt, op_tol, eps):
+    dim = len(obj_tt)
+    diag_tt = tt_reshape(tt_diag(tt_diagonal(tt_reshape(obj_tt, (2, 2))), eps), (4,))
+    zero_y = tt_reshape(tt_zero_matrix(dim), (4,))
+    diag_norm = tt_norm(diag_tt)
+    if diag_norm <= eps:
+        return obj_tt, zero_y, 0.0, False
+
+    projected = tt_rank_reduce(
+        tt_fast_matrix_vec_mul(tt_transpose(lin_op_tt), diag_tt, eps),
+        _scale_tol(diag_tt, op_tol, eps)
+    )
+    rel_err = tt_norm(tt_sub(projected, diag_tt)) / max(diag_norm, eps)
+    if rel_err > 1e-8:
+        return obj_tt, zero_y, 0.0, False
+
+    obj_tt = tt_rank_reduce(tt_sub(obj_tt, projected), _scale_tol(obj_tt, op_tol, eps))
+    return obj_tt, diag_tt, float(tt_inner_prod(bias_tt, diag_tt)), True
+
+
+def _equilibrate_data(obj_tt, lin_op_tt, bias_tt, op_tol, eps):
+    a_norm = max(tt_norm(lin_op_tt), eps)
+    b_norm = max(tt_norm(bias_tt), eps)
+    c_norm = max(tt_norm(obj_tt), eps)
+    dy = float(np.clip(c_norm / a_norm, 1e-3, 1e3))
+    p2 = float(np.clip(b_norm / a_norm, 1e-3, 1e3))
+
+    obj_tt = tt_scale(p2, obj_tt)
+    lin_op_tt = tt_scale(dy * p2, lin_op_tt)
+    bias_tt = tt_scale(dy, bias_tt)
+    condition = {
+        "lin_op_norm": a_norm,
+        "bias_norm": b_norm,
+        "objective_norm": c_norm,
+        "bias_to_operator": b_norm / a_norm,
+        "objective_to_operator": c_norm / a_norm,
+    }
+    return obj_tt, lin_op_tt, bias_tt, dy, np.sqrt(p2), condition
+
+
+def _auto_initial_scales(preprocess, dim, ineq_active, lambdaStar, lambdaStarIneq):
+    if lambdaStar is None:
+        n_sqrt = np.sqrt(2 ** dim)
+        b = max(preprocess.norms_after["bias"], 1.0)
+        c = max(preprocess.norms_after["objective"], 1.0)
+        lambdaStar = float(np.clip(np.sqrt(b * c) / n_sqrt, 1e-6, 1e6))
+    if lambdaStarIneq is None:
+        mask = max(preprocess.norms_after.get("ineq_mask", 1.0), 1.0)
+        c = max(preprocess.norms_after["objective"], 1.0)
+        lambdaStarIneq = float(np.clip(c / mask, 1e-8, 1e6)) if ineq_active else 1.0
+    return lambdaStar, lambdaStarIneq
+
+
+def _preprocess_problem_data(lag_maps, obj_tt, lin_op_tt, bias_tt, ineq_mask, op_tol, eps):
+    _validate_problem_data(lag_maps, obj_tt, lin_op_tt, bias_tt, ineq_mask)
+    names = ("objective", "operator", "bias", "ineq_mask")
+    tensors_before = (obj_tt, lin_op_tt, bias_tt, ineq_mask)
+    norms_before = {n: (tt_norm(t) if t is not None else 0.0) for n, t in zip(names, tensors_before)}
+    ranks_before = {n: (tt_ranks(t) if t is not None else []) for n, t in zip(names, tensors_before)}
+
+    lag_maps, obj_tt, lin_op_tt, bias_tt, ineq_mask = _canonicalize_data(
+        lag_maps, obj_tt, lin_op_tt, bias_tt, ineq_mask, op_tol, eps
+    )
+    obj_tt, y_offset, objective_offset, projected = _project_objective(obj_tt, lin_op_tt, bias_tt, op_tol, eps)
+    obj_tt, lin_op_tt, bias_tt, dy, p, condition = _equilibrate_data(obj_tt, lin_op_tt, bias_tt, op_tol, eps)
+
+    tensors_after = (obj_tt, lin_op_tt, bias_tt, ineq_mask)
+    norms_after = {n: (tt_norm(t) if t is not None else 0.0) for n, t in zip(names, tensors_after)}
+    ranks_after = {n: (tt_ranks(t) if t is not None else []) for n, t in zip(names, tensors_after)}
+    return lag_maps, obj_tt, lin_op_tt, bias_tt, ineq_mask, PreprocessInfo(
+        norms_before, norms_after, ranks_before, ranks_after, condition,
+        objective_offset, dy, p, y_offset, projected
+    )
+
+
+def _unscale_output(X_tt, Y_tt, T_tt, Z_tt, status):
+    p2 = status.preprocess.psd_scale ** 2
+    X_tt = tt_rank_reduce(tt_scale(p2, X_tt), status.rounding.primal_iterate(status))
+    Z_tt = tt_rank_reduce(tt_scale(1.0 / p2, Z_tt), status.rounding.dual_iterate(status))
+    Y_tt = tt_rank_reduce(
+        tt_add(tt_scale(status.preprocess.constraint_scale, Y_tt), status.preprocess.y_offset_tt),
+        status.rounding.dual_iterate(status)
+    )
+    if T_tt is not None:
+        T_tt = tt_rank_reduce(tt_scale(1.0 / p2, T_tt), status.rounding.dual_iterate(status))
+    return X_tt, Y_tt, T_tt, Z_tt
+
+
+@dataclass(frozen=True)
 class RoundingPolicy:
     eta_floor: float
     residual_factor: float = 0.01
@@ -788,6 +962,7 @@ class IPMStatus:
     kkt_iterations = 7
     centrl_error_normalisation: float = 1.0
     eta = 1e-3
+    preprocess: PreprocessInfo = None
 
 
 def _ipm_format_output(X_tt, Y_tt, T_tt, Z_tt, iteration, status):
@@ -869,10 +1044,9 @@ def tt_ipm(
     eps=1e-12,
     mals_restarts=3,
     r_max=1000,
-    lambdaStar=1,
-    lambdaStarIneq=1,
+    lambdaStar=None,
+    lambdaStarIneq=None,
     eta_floor=None,
-    # Backward-compat deprecated aliases:
     epsilonDash=None,
     epsilonDashineq=None,
     verbose=False
@@ -902,10 +1076,12 @@ def tt_ipm(
         r_max,
         RoundingPolicy(op_tol if eta_floor is None else eta_floor)
     )
-    lag_maps = {key: tt_rank_reduce(value, eps=eps) for key, value in lag_maps.items()}
-    obj_tt = tt_rank_reduce(obj_tt, eps=eps)
-    lin_op_tt = tt_rank_reduce(lin_op_tt, eps=eps)
-    bias_tt = tt_rank_reduce(bias_tt, eps=eps)
+    lag_maps, obj_tt, lin_op_tt, bias_tt, ineq_mask, status.preprocess = _preprocess_problem_data(
+        lag_maps, obj_tt, lin_op_tt, bias_tt, ineq_mask, op_tol, eps
+    )
+    lambdaStar, lambdaStarIneq = _auto_initial_scales(
+        status.preprocess, dim, status.ineq_status is IneqStatus.ACTIVE, lambdaStar, lambdaStarIneq
+    )
 
     status.primal_error_normalisation = 1 + tt_norm(bias_tt)
     status.dual_error_normalisation = 1 + tt_norm(obj_tt)
@@ -966,7 +1142,8 @@ def tt_ipm(
         iteration += 1
         status.aho_direction = (iteration > warm_up)
         if max_iter - max_refinement == iteration - 1 and not status.is_last_iter:
-            print("============================================\n Maximum #iterations reached!\n============================================")
+            if status.verbose:
+                print("\nEntering final refinement phase.")
             status.is_last_iter = True
         ZX = tt_inner_prod(Z_tt, X_tt)
         TX = tt_inner_prod(X_tt, T_tt) + status.ineq_boundary_val*tt_entrywise_sum(T_tt) if status.ineq_status is IneqStatus.ACTIVE else 0
@@ -1083,4 +1260,5 @@ def tt_ipm(
         prev_errors['dual'] = status.dual_error
         prev_errors['centrality'] = status.centrality_error
 
+    X_tt, Y_tt, T_tt, Z_tt = _unscale_output(X_tt, Y_tt, T_tt, Z_tt, status)
     return _ipm_format_output(X_tt, Y_tt, T_tt, Z_tt, iteration, status)

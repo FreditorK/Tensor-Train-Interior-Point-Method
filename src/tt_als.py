@@ -690,7 +690,7 @@ def _default_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, prev
             x = scp.sparse.linalg.spsolve(B_sparse, rhs_reshaped)
             solution_now = x.reshape(*x_shape).transpose(1, 0, 2, 3)
         except Exception as e:
-            print(f"\tAttention: {e}")
+            _print_attention(e)
             direct_solve_failure = True
 
     if not dense_solve or direct_solve_failure:
@@ -855,6 +855,18 @@ class SpCholInv(scp.sparse.linalg.LinearOperator):
         return self.factor.solve_A(x)
 
 
+def _eigsh_v0(x):
+    x = np.asarray(x).reshape(-1)
+    scale = np.linalg.norm(x, ord=np.inf)
+    return None if (not np.isfinite(scale) or scale == 0) else x / scale
+
+
+def _print_attention(e):
+    quiet = (scp.sparse.linalg.ArpackError, scp.linalg.LinAlgWarning, scp.linalg.LinAlgError, np.linalg.LinAlgError)
+    if not isinstance(e, quiet):
+        print(f"\tAttention: {e}")
+
+
 def _step_size_local_solve(
     previous_solution1, 
     previous_solution2, 
@@ -884,7 +896,7 @@ def _step_size_local_solve(
         A = 0.5*(A + A.T)
         M = (1/step_size)*A + D
         try:
-            eig_val, solution_now = scp.sparse.linalg.eigsh(M, tol=eps, k=1, ncv=max(int(np.floor(0.5*m)), min(m, 5)), maxiter=10*m, which="SA", v0=previous_solution)
+            eig_val, solution_now = scp.sparse.linalg.eigsh(M, tol=eps, k=1, ncv=max(int(np.floor(0.5*m)), min(m, 5)), maxiter=10*m, which="SA", v0=_eigsh_v0(previous_solution))
             if np.linalg.norm(M @ solution_now - eig_val * solution_now) > eps:
                 sigma = eig_val.squeeze()
                 M_shift = M - sigma * scp.sparse.eye(M.shape[1], format=M.format)
@@ -895,7 +907,7 @@ def _step_size_local_solve(
                     shift_inv_op,
                     k=1,
                     which="LM",  # largest magnitude in shift-invert corresponds to eigenvalue near sigma
-                    v0=solution_now,  # use previous solution as initial guess
+                    v0=_eigsh_v0(solution_now),  # use previous solution as initial guess
                     ncv=max(int(np.floor(0.5*m)), min(m, 5)),
                     maxiter=10*m,
                     tol=eps
@@ -903,16 +915,16 @@ def _step_size_local_solve(
                 # Convert back to original eigenvalue
                 eig_val = sigma + 1 / eig_val_shift
         except Exception as e:
-            print(f"\tAttention: {e}")
+            _print_attention(e)
             eig_val = previous_solution.T @ (M @ previous_solution)
             solution_now = previous_solution
         solution_now /= np.linalg.norm(solution_now)
         if eig_val < 0:
             try:
-                eig_val, solution_now = scp.sparse.linalg.eigsh(-D, M=A, tol=eps, k=1, ncv=max(int(np.floor(0.5*m)), min(m, 5)), which="LA", maxiter=10*m, v0=solution_now)
+                eig_val, solution_now = scp.sparse.linalg.eigsh(-D, M=A, tol=eps, k=1, ncv=max(int(np.floor(0.5*m)), min(m, 5)), which="LA", maxiter=10*m, v0=_eigsh_v0(solution_now))
                 step_size = max(0, min(step_size, 1/ eig_val[0]))
             except Exception as e:
-                print(f"\tAttention: {e}")
+                _print_attention(e)
                 solution_now = previous_solution
                 step_size *= (1-eps)
 
@@ -937,7 +949,7 @@ def _step_size_local_solve(
                 eig_val, solution_now = scp.sparse.linalg.lobpcg(D_op, solution_now, B=A_op, tol=eps, maxiter=100)
                 step_size = max(0, min(step_size, 1 / eig_val[0]))
             except Exception as e:
-                print(f"\tAttention: {e}")
+                _print_attention(e)
                 solution_now = previous_solution
                 step_size *= (1-eps)
 
@@ -988,7 +1000,7 @@ def _step_size_local_solve_last(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k
         A = scp.sparse.csr_matrix(cached_einsum("lsr,smnS,LSR->lmLrnR", XAX_k, A_k, XAX_k1).reshape(m, m))
         M = (1/step_size)*A + D
         try:
-            eig_val, solution_now = scp.sparse.linalg.eigsh(M, tol=eps, k=1, ncv=max(int(np.floor(0.5*m)), min(m, 5)), maxiter=10*m, which="SA", v0=previous_solution)
+            eig_val, solution_now = scp.sparse.linalg.eigsh(M, tol=eps, k=1, ncv=max(int(np.floor(0.5*m)), min(m, 5)), maxiter=10*m, which="SA", v0=_eigsh_v0(previous_solution))
             if np.linalg.norm(M @ solution_now - eig_val * solution_now) > eps:
                 sigma = eig_val.squeeze()
                 M_shift = M - sigma * scp.sparse.eye(M.shape[1], format=M.format)
@@ -999,7 +1011,7 @@ def _step_size_local_solve_last(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k
                     shift_inv_op,
                     k=1,
                     which="LM",  # largest magnitude in shift-invert corresponds to eigenvalue near sigma
-                    v0=solution_now,  # use previous solution as initial guess
+                    v0=_eigsh_v0(solution_now),  # use previous solution as initial guess
                     ncv=max(int(np.floor(0.5*m)), min(m, 5)),
                     maxiter=10*m,
                     tol=eps
@@ -1007,15 +1019,15 @@ def _step_size_local_solve_last(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k
                 # Convert back to original eigenvalue
                 eig_val = sigma + 1 / eig_val_shift
         except Exception as e:
-            print(f"\tAttention: {e}")
+            _print_attention(e)
             eig_val = previous_solution.T @ ((1/step_size)*A + D)  @ previous_solution
             solution_now = previous_solution
         if eig_val < 0:
             try:
-                eig_val, solution_now = scp.sparse.linalg.eigsh(-D, M=A, tol=eps, k=1, ncv=max(int(np.floor(0.5*m)), min(m, 5)), which="LA", maxiter=10*m, v0=solution_now)
+                eig_val, solution_now = scp.sparse.linalg.eigsh(-D, M=A, tol=eps, k=1, ncv=max(int(np.floor(0.5*m)), min(m, 5)), which="LA", maxiter=10*m, v0=_eigsh_v0(solution_now))
                 step_size = max(0, min(step_size, 1/ eig_val[0]))
             except Exception as e:
-                print(f"\tAttention: {e}")
+                _print_attention(e)
                 solution_now = previous_solution
                 step_size *= (1-eps)
 
@@ -1042,7 +1054,7 @@ def _step_size_local_solve_last(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k
                 eig_val, solution_now = scp.sparse.linalg.lobpcg(D_op, X=solution_now, B=A_op, tol=eps, maxiter=10*m)
                 step_size = max(0, min(step_size, 1 / eig_val[0]))
             except Exception as e:
-                print(f"\tAttention: {e}")
+                _print_attention(e)
                 solution_now = previous_solution
                 step_size *= (1-eps)
 
@@ -1174,7 +1186,6 @@ def tt_max_generalised_eigen(A, Delta, x0=None, nswp=10, tol=1e-8, size_limit = 
         print('\t Time per sweep: ', (time.time() - t0) / (swp + 1), flush=True)
 
     if max_res > tol:
-        print('\t Target Residual not reached!', flush=True)
         step_size *= (tol/max_res)
     return step_size, x_cores
 
@@ -1201,9 +1212,9 @@ def _eigen_local_solve(
         A = scp.sparse.csr_matrix(cached_einsum("lsr, smnk, kptS, LSR->lmpLrntR", XAX_k, A_k, A_kp1, XAX_k2).reshape(m, m))
         A = 0.5*(A.T + A)
         try:
-            eig_val, solution_now = scp.sparse.linalg.eigsh(A, tol=eps, k=1, which="SA", ncv=max(int(np.floor(lanczos_discount*m)), min(m, 5)), v0=previous_solution)
+            eig_val, solution_now = scp.sparse.linalg.eigsh(A, tol=eps, k=1, which="SA", ncv=max(int(np.floor(lanczos_discount*m)), min(m, 5)), v0=_eigsh_v0(previous_solution))
         except Exception as e:
-            print(f"\tAttention: {e}")
+            _print_attention(e)
             solution_now = previous_solution
             eig_val = previous_solution.T @ A @ previous_solution
             lanczos_discount = min(0.999, lanczos_discount*1.1)
@@ -1215,7 +1226,7 @@ def _eigen_local_solve(
         try:
             eig_val, solution_now = scp.sparse.linalg.lobpcg(A_op, X=previous_solution, tol=eps, largest=False, maxiter=10*m)
         except Exception as e:
-            print(f"\tAttention: {e}")
+            _print_attention(e)
             solution_now = previous_solution
             eig_val = previous_solution.T @ A_op(previous_solution)
             lanczos_discount = min(0.999, lanczos_discount*1.1)
@@ -1244,7 +1255,7 @@ def _eigen_local_solve_last(previous_solution, XAX_k, A_k, XAX_k1, m, size_limit
         previous_solution = previous_solution.reshape(-1, 1)
         A = scp.sparse.csr_matrix(cached_einsum("lsr,smnS,LSR->lmLrnR", XAX_k, A_k, XAX_k1).reshape(m, m))
         try:
-            eig_val, solution_now = scp.sparse.linalg.eigsh(A, tol=eps, k=1, which="SA", ncv=max(int(np.floor(0.5*m)), min(m, 5)), v0=previous_solution)
+            eig_val, solution_now = scp.sparse.linalg.eigsh(A, tol=eps, k=1, which="SA", ncv=max(int(np.floor(0.5*m)), min(m, 5)), v0=_eigsh_v0(previous_solution))
             if np.linalg.norm(A @ solution_now - eig_val * solution_now) > eps:
                 sigma = eig_val.squeeze()
                 M_shift = A - sigma * scp.sparse.eye(A.shape[1], format=A.format)
@@ -1255,7 +1266,7 @@ def _eigen_local_solve_last(previous_solution, XAX_k, A_k, XAX_k1, m, size_limit
                     shift_inv_op,
                     k=1,
                     which="LM",  # largest magnitude in shift-invert corresponds to eigenvalue near sigma
-                    v0=solution_now,  # use previous solution as initial guess
+                    v0=_eigsh_v0(solution_now),  # use previous solution as initial guess
                     ncv=max(int(np.floor(0.5*m)), min(m, 5)),
                     maxiter=10*m,
                     tol=eps
@@ -1263,7 +1274,7 @@ def _eigen_local_solve_last(previous_solution, XAX_k, A_k, XAX_k1, m, size_limit
                 # Convert back to original eigenvalue
                 eig_val = sigma + 1 / eig_val_shift
         except Exception as e:
-            print(f"\tAttention: {e}")
+            _print_attention(e)
             solution_now = previous_solution
             eig_val = previous_solution.T @ A @ previous_solution
         old_res = np.linalg.norm(eig_val * previous_solution - A @ previous_solution)
@@ -1277,7 +1288,7 @@ def _eigen_local_solve_last(previous_solution, XAX_k, A_k, XAX_k1, m, size_limit
     try:
         eig_val, solution_now = scp.sparse.linalg.lobpcg(A_op, X=previous_solution, tol=eps, largest=False, maxiter=10*m)
     except Exception as e:
-        print(f"\tAttention: {e}")
+        _print_attention(e)
         solution_now = previous_solution
         eig_val = previous_solution.T @ A_op(previous_solution)
 

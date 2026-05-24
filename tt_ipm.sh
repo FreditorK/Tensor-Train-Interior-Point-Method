@@ -72,6 +72,10 @@ export OMP_NUM_THREADS=16
 export MKL_NUM_THREADS=16
 export OPENBLAS_NUM_THREADS=16
 export NUMEXPR_NUM_THREADS=16
+export UCX_LOG_LEVEL=error
+export OMPI_MCA_btl=self
+export OMPI_MCA_pml=ob1
+export OMPI_MCA_if=^linux_ipv6,posix_ipv4
 
 # Cleanup on exit or interrupt
 cleanup() {
@@ -86,7 +90,7 @@ trap 'echo -e "\n⚠️ Script resumed (was suspended). Memory may not have been
 # ---------------------------
 # Logging setup
 # ---------------------------
-exec > >(tee -a "$LOGFILE") 2>&1
+exec > >(sed -u -E '/(opal_ifinit: socket\(\) failed|pmix_ifinit: socket\(\) failed|UCX  WARN  getifaddrs error)/d' | tee -a "$LOGFILE") 2>&1
 
 echo "==== ${PROBLEM} TT-IPM Batch Run Started at $(date) ===="
 

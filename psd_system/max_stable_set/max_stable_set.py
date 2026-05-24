@@ -32,13 +32,12 @@ def tt_obj_matrix(dim):
 
 def create_problem(dim, rank):
     print("Creating Problem...")
-    scale = np.sqrt(dim)
     G = tt_rank_reduce(tt_random_graph(dim, rank))
     obj_tt = tt_obj_matrix(dim)
     L_tt, bias_tt = tt_tr_constraint(dim)
     L_tt = tt_rank_reduce(tt_add(L_tt, tt_G_entrywise_mask_op(G)))
     lag_y = tt_rank_reduce(tt_diag_op(tt_sub(tt_one_matrix(dim), tt_add(G, bias_tt))))
-    return tt_reshape(tt_normalise(obj_tt, radius=scale), (4,)), L_tt, tt_reshape(tt_normalise(bias_tt, radius=scale), (4,)), lag_y
+    return tt_reshape(obj_tt, (4,)), L_tt, tt_reshape(bias_tt, (4,)), lag_y
 
 if __name__ == "__main__":
     run_experiment(create_problem)
