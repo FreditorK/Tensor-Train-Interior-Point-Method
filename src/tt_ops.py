@@ -1,11 +1,14 @@
 import scipy as scp
 import numpy as np
 from typing import *
+from dataclasses import dataclass
 
 from cy_src.tt_ops_cy import *
 from cy_src.tt_ops_cy import (
-    tt_identity, tt_zero_matrix, tt_one_matrix, tt_transpose, tt_ranks, tt_scale, tt_rank_reduce, tt_psd_rank_reduce, tt_mask_rank_reduce, tt_add, tt_fast_matrix_vec_mul, tt_fast_hadamard, tt_inner_prod, tt_normalise, tt_random_gaussian,
-    tt_swap_all, tt_rl_orthogonalise, prune_singular_vals, tt_fast_mat_mat_mul
+    tt_identity, tt_zero_matrix, tt_one_matrix, tt_transpose, tt_ranks, tt_scale, tt_add,
+    tt_fast_matrix_vec_mul, tt_fast_hadamard, tt_inner_prod, tt_normalise, tt_random_gaussian,
+    tt_swap_all, tt_rl_orthogonalise, prune_singular_vals, tt_fast_mat_mat_mul,
+    tt_rank_reduce as _tt_rank_reduce_fast,
 )
 from cy_src.lgmres_cy import MatVecWrapper, IneqMatVecWrapper
 from functools import reduce
@@ -110,7 +113,8 @@ def tt_rank_reduce_py(train_tt: List[np.ndarray], eps=1e-18):
     eps = (eps / np.sqrt(dim - 1))
     train_tt = tt_rl_orthogonalise(train_tt)
     rank = 1
-    for idx, tt_core in enumerate(train_tt[:-1]):
+    for idx in range(dim - 1):
+        tt_core = train_tt[idx]
         idx_shape = tt_core.shape
         next_idx_shape = train_tt[idx + 1].shape
         u, s, v_t = scp.linalg.svd(
@@ -127,6 +131,112 @@ def tt_rank_reduce_py(train_tt: List[np.ndarray], eps=1e-18):
         ).reshape(next_rank, *next_idx_shape[1:-1], -1)
         rank = next_rank
     return train_tt
+
+
+@dataclass(frozen=True)
+class TTRoundingInfo:
+    requested: float
+    truncation_error: float
+    shift: float = 0.0
+    accepted: bool = True
+    ranks_before: tuple = ()
+    ranks_after: tuple = ()
+
+
+def _tt_copy(train_tt):
+    return [np.array(core, copy=True) for core in train_tt]
+
+
+def _rank_cost(ranks):
+    return int(np.sum(ranks)) if len(ranks) else 0
+
+
+def _tt_rank_reduce_with_error(train_tt: List[np.ndarray], eps=1e-18):
+    dim = len(train_tt)
+    ranks_before = tuple(tt_ranks(train_tt))
+    if dim == 1 or _rank_cost(ranks_before) == 0:
+        info = TTRoundingInfo(eps, 0.0, ranks_before=ranks_before, ranks_after=ranks_before)
+        return train_tt, info
+
+    local_eps = eps / np.sqrt(dim - 1)
+    train_tt = tt_rl_orthogonalise(train_tt)
+    rank = 1
+    err_sq = 0.0
+    for idx in range(dim - 1):
+        tt_core = train_tt[idx]
+        idx_shape = tt_core.shape
+        next_idx_shape = train_tt[idx + 1].shape
+        u, s, v_t = scp.linalg.svd(
+            tt_core.reshape(rank * np.prod(idx_shape[1:-1], dtype=int), -1),
+            full_matrices=False,
+            check_finite=False,
+            overwrite_a=True,
+            lapack_driver="gesvd"
+        )
+        next_rank = prune_singular_vals(s, local_eps)
+        if next_rank < s.size:
+            err_sq += np.sum(s[next_rank:] ** 2)
+        train_tt[idx] = u[:, :next_rank].reshape(rank, *idx_shape[1:-1], next_rank)
+        train_tt[idx + 1] = (
+            s[:next_rank].reshape(-1, 1) * v_t[:next_rank, :] @ train_tt[idx + 1].reshape(v_t.shape[-1], -1)
+        ).reshape(next_rank, *next_idx_shape[1:-1], -1)
+        rank = next_rank
+
+    ranks_after = tuple(tt_ranks(train_tt))
+    info = TTRoundingInfo(
+        eps,
+        float(np.sqrt(err_sq)),
+        accepted=True,
+        ranks_before=ranks_before,
+        ranks_after=ranks_after,
+    )
+    return train_tt, info
+
+
+def tt_rank_reduce(train_tt: List[np.ndarray], eps=1e-18, return_info=False):
+    if not return_info:
+        return _tt_rank_reduce_fast(train_tt, eps)
+    return _tt_rank_reduce_with_error(train_tt, eps)
+
+
+def _identity_shift_like(train_tt):
+    core = np.eye(train_tt[0].shape[1]).reshape(1, *train_tt[0].shape[1:-1], 1)
+    return [core] * len(train_tt)
+
+
+def _shifted_rank_reduce(train_tt, shift_tt, eps, return_info=False):
+    ranks_before = tuple(tt_ranks(train_tt))
+    shift_norm = tt_norm(shift_tt)
+    round_eps = eps / (1.0 + shift_norm)
+    rounded, info = _tt_rank_reduce_with_error(_tt_copy(train_tt), round_eps)
+
+    if info.truncation_error <= 0:
+        result = rounded
+        out = TTRoundingInfo(eps, 0.0, ranks_before=ranks_before, ranks_after=tuple(tt_ranks(result)))
+        return (result, out) if return_info else result
+
+    shifted = tt_add(rounded, [info.truncation_error * core for core in shift_tt])
+    ranks_shifted = tuple(tt_ranks(shifted))
+    accepted = _rank_cost(ranks_shifted) <= _rank_cost(ranks_before)
+    result = shifted if accepted else _tt_copy(train_tt)
+    ranks_after = tuple(tt_ranks(result))
+    out = TTRoundingInfo(
+        eps,
+        info.truncation_error,
+        shift=info.truncation_error,
+        accepted=accepted,
+        ranks_before=ranks_before,
+        ranks_after=ranks_after,
+    )
+    return (result, out) if return_info else result
+
+
+def tt_psd_rank_reduce(train_tt: List[np.ndarray], eps=1e-18, return_info=False):
+    return _shifted_rank_reduce(train_tt, _identity_shift_like(train_tt), eps, return_info)
+
+
+def tt_mask_rank_reduce(train_tt: List[np.ndarray], mask_tt: List[np.ndarray], eps=1e-18, return_info=False):
+    return _shifted_rank_reduce(train_tt, mask_tt, eps, return_info)
 
 
 def tt_rank_retraction(train_tt: List[np.ndarray], upper_ranks: List[int]):

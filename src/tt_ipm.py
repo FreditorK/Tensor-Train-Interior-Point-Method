@@ -374,27 +374,38 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
 
 
 def tt_compute_primal_feasibility(lin_op_tt, bias_tt, X_tt, status):
-    primal_feas = tt_rank_reduce(tt_sub(tt_mat_vec_mul(lin_op_tt, tt_reshape(X_tt, (4,)), 0.01*status.eta*status.primal_error_normalisation, status.eps), bias_tt),
-                   0.01*status.eta*status.primal_error_normalisation)  # primal feasibility
+    tol = status.rounding.primal_residual(status)
+    primal_feas = tt_rank_reduce(
+        tt_sub(tt_mat_vec_mul(lin_op_tt, tt_reshape(X_tt, (4,)), tol, status.eps), bias_tt),
+        tol
+    )
     return primal_feas
 
 
 def tt_compute_dual_feasibility(obj_tt, lin_op_tt_adj, Z_tt, Y_tt, T_tt, status):
-    dual_feas = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(lin_op_tt_adj, Y_tt, status.eps),
-                                      tt_rank_reduce(tt_add(tt_reshape(Z_tt, (4,)), obj_tt), status.eps)),
-                               status.eps if status.ineq_status is IneqStatus.ACTIVE else 0.01*status.eta*status.dual_error_normalisation)
+    tol = status.rounding.dual_residual(status)
+    dual_feas = tt_rank_reduce(
+        tt_sub(
+            tt_fast_matrix_vec_mul(lin_op_tt_adj, Y_tt, tol),
+            tt_rank_reduce(tt_add(tt_reshape(Z_tt, (4,)), obj_tt), tol)
+        ),
+        tol
+    )
     if status.ineq_status is IneqStatus.ACTIVE and T_tt is not None:
-        dual_feas = tt_rank_reduce(tt_sub(dual_feas, tt_reshape(T_tt, (4,))), 0.01*status.eta*status.dual_error_normalisation)
+        dual_feas = tt_rank_reduce(tt_sub(dual_feas, tt_reshape(T_tt, (4,))), tol)
 
     return dual_feas
 
 
 def tt_compute_centrality(X_tt, Z_tt, status):
+    tol = status.rounding.centrality_residual(status)
     if status.aho_direction:
-        centrality_feas = tt_reshape(tt_scale(-1, _tt_symmetrise(tt_mat_mat_mul(X_tt, Z_tt, 0.01*status.eta*status.centrl_error_normalisation, status.eps),
-                                                        0.01*status.eta*status.centrl_error_normalisation)), (4,))
+        centrality_feas = tt_reshape(
+            tt_scale(-1, _tt_symmetrise(tt_mat_mat_mul(X_tt, Z_tt, tol, status.eps), tol)),
+            (4,)
+        )
     else:
-        centrality_feas = tt_reshape(tt_scale(-1, tt_mat_mat_mul(Z_tt, X_tt, 0.01*status.eta*status.centrl_error_normalisation, status.eps)), (4,))
+        centrality_feas = tt_reshape(tt_scale(-1, tt_mat_mat_mul(Z_tt, X_tt, tol, status.eps)), (4,))
     return centrality_feas
 
 
@@ -423,11 +434,17 @@ def tt_infeasible_newton_system(
     status.is_last_iter = status.is_last_iter or (status.is_primal_feasible and status.is_dual_feasible and status.is_central)
 
     if status.aho_direction:
-        lhs[2, 1] = tt_psd_rank_reduce(tt_scale(0.5, tt_add(tt_IkronM(Z_tt), tt_MkronI(Z_tt))), eps=0.1*status.eta*status.dual_error_normalisation)
-        lhs[2, 2] = tt_psd_rank_reduce(tt_scale(0.5, tt_add(tt_MkronI(X_tt), tt_IkronM(X_tt))), eps=0.1*status.eta*status.primal_error_normalisation)
+        lhs[2, 1] = tt_psd_rank_reduce(
+            tt_scale(0.5, tt_add(tt_IkronM(Z_tt), tt_MkronI(Z_tt))),
+            eps=status.rounding.kkt_dual(status)
+        )
+        lhs[2, 2] = tt_psd_rank_reduce(
+            tt_scale(0.5, tt_add(tt_MkronI(X_tt), tt_IkronM(X_tt))),
+            eps=status.rounding.kkt_primal(status)
+        )
     else:
-        lhs[2, 1] = tt_psd_rank_reduce(tt_MkronI(Z_tt), eps=0.1*status.eta*status.dual_error_normalisation)
-        lhs[2, 2] = tt_psd_rank_reduce(tt_IkronM(X_tt), eps=0.1*status.eta*status.primal_error_normalisation)
+        lhs[2, 1] = tt_psd_rank_reduce(tt_MkronI(Z_tt), eps=status.rounding.kkt_dual(status))
+        lhs[2, 2] = tt_psd_rank_reduce(tt_IkronM(X_tt), eps=status.rounding.kkt_primal(status))
 
     if not status.is_primal_feasible or status.is_last_iter:
         rhs[0] = primal_feas
@@ -439,11 +456,20 @@ def tt_infeasible_newton_system(
         rhs[2] = tt_compute_centrality(X_tt, Z_tt, status)
 
     if status.ineq_status is IneqStatus.ACTIVE:
-        lhs[3, 1] =  tt_diag_op(T_tt, 0.1*status.eta*status.dual_error_normalisation)
-        masked_X_tt = tt_rank_reduce(tt_add(tt_scale(status.ineq_boundary_val, ineq_mask), tt_fast_hadamard(ineq_mask, X_tt, status.eps)), eps=status.eps)
-        lhs[3, 3] = tt_rank_reduce(tt_add(status.lag_map_t, tt_diag_op(masked_X_tt, status.eps)), eps=0.1*status.eta*status.dual_error_normalisation)
+        lhs[3, 1] = tt_diag_op(T_tt, status.rounding.kkt_dual(status))
+        masked_X_tt = tt_rank_reduce(
+            tt_add(tt_scale(status.ineq_boundary_val, ineq_mask), tt_fast_hadamard(ineq_mask, X_tt, status.eps)),
+            eps=status.eps
+        )
+        lhs[3, 3] = tt_rank_reduce(
+            tt_add(status.lag_map_t, tt_diag_op(masked_X_tt, status.eps)),
+            eps=status.rounding.kkt_dual(status)
+        )
         if not status.is_central or status.is_last_iter:
-            rhs[3] = tt_rank_reduce(tt_reshape(tt_scale(-1, tt_fast_hadamard(masked_X_tt, T_tt, status.eps)), (4, )), eps=0.01*status.eta*status.centrl_error_normalisation)
+            rhs[3] = tt_rank_reduce(
+                tt_reshape(tt_scale(-1, tt_fast_hadamard(masked_X_tt, T_tt, status.eps)), (4, )),
+                eps=status.rounding.centrality_residual(status)
+            )
     return lhs, rhs, status
 
 def _tt_symmetrise(matrix_tt, err_bound):
@@ -519,7 +545,7 @@ def _tt_ipm_newton_step(
                     rhs_vec_tt[3]  = tt_rank_reduce(tt_add(
                             tt_scale(status.sigma * status.mu, tt_reshape(ineq_mask, (4,))),
                             rhs_vec_tt.get_row(3),
-                            ), 0.1*status.eta*status.centrl_error_normalisation
+                            ), status.rounding.centrality_residual(status)
                             )
             else:
                 mu_aff = (
@@ -541,15 +567,18 @@ def _tt_ipm_newton_step(
                             Delta_XZ_term
                         )
                     ),
-                    0.1*status.eta*status.centrl_error_normalisation
-                ) if status.sigma > 1e-4 else tt_rank_reduce(tt_add(rhs_vec_tt.get_row(2), Delta_XZ_term), 0.1*status.eta*status.centrl_error_normalisation)
+                    status.rounding.centrality_residual(status)
+                ) if status.sigma > 1e-4 else tt_rank_reduce(
+                    tt_add(rhs_vec_tt.get_row(2), Delta_XZ_term),
+                    status.rounding.centrality_residual(status)
+                )
             else:
                 rhs_vec_tt[2] = tt_rank_reduce(
                     tt_add(
                         tt_scale(status.sigma * status.mu, tt_reshape(tt_identity(len(X_tt)), (4,))),
                         rhs_vec_tt.get_row(2)
                     ),
-                    0.1*status.eta*status.centrl_error_normalisation
+                    status.rounding.centrality_residual(status)
                 ) if status.sigma > 1e-4 else rhs_vec_tt.get_row(2)
 
             Delta_tt_cc, _ = solver(lhs_matrix_tt, rhs_vec_tt, status.mals_delta0, status.kkt_iterations + status.is_last_iter, status.mals_rank_restriction, status.eta)
@@ -678,9 +707,45 @@ def _initialise(ineq_mask, status, dim, lambdaStar, lambdaStarIneq):
         T_tt = tt_scale(lambdaStarIneq, ineq_mask)
         # Need to initialise so it stays psd
         x_step_size, _ = tt_max_generalised_eigen(X_tt, ineq_mask, tol=1e-7, verbose=status.verbose)
-        X_tt = tt_rank_reduce(tt_add(X_tt, tt_scale(0.1*x_step_size, ineq_mask)), 0.1*status.eta*status.primal_error_normalisation)
+        X_tt = tt_rank_reduce(
+            tt_add(X_tt, tt_scale(0.1*x_step_size, ineq_mask)),
+            status.rounding.primal_iterate(status)
+        )
 
     return X_tt, Y_tt, Z_tt, T_tt
+
+
+@dataclass(frozen=True)
+class RoundingPolicy:
+    eta_floor: float
+    residual_factor: float = 0.01
+    iterate_factor: float = 0.1
+    kkt_factor: float = 0.25
+
+    def _kkt_split(self, status):
+        return np.sqrt(4 if status.ineq_status is IneqStatus.ACTIVE else 3)
+
+    def primal_residual(self, status):
+        return self.residual_factor * status.eta * status.primal_error_normalisation
+
+    def dual_residual(self, status):
+        return self.residual_factor * status.eta * status.dual_error_normalisation
+
+    def centrality_residual(self, status):
+        return self.residual_factor * status.eta * status.centrl_error_normalisation
+
+    def primal_iterate(self, status):
+        return self.iterate_factor * status.eta * status.primal_error_normalisation
+
+    def dual_iterate(self, status):
+        return self.iterate_factor * status.eta * status.dual_error_normalisation
+
+    def kkt_primal(self, status):
+        return self.kkt_factor * status.eta * status.primal_error_normalisation / self._kkt_split(status)
+
+    def kkt_dual(self, status):
+        return self.kkt_factor * status.eta * status.dual_error_normalisation / self._kkt_split(status)
+
 
 @dataclass
 class IPMStatus:
@@ -706,6 +771,7 @@ class IPMStatus:
     primal_error_normalisation: float
     dual_error_normalisation: float
     mals_rank_restriction: int
+    rounding: RoundingPolicy
 
     boundary_val: float = 1e-10
     ineq_boundary_val: float = 0.01
@@ -805,6 +871,7 @@ def tt_ipm(
     r_max=1000,
     lambdaStar=1,
     lambdaStarIneq=1,
+    eta_floor=None,
     # Backward-compat deprecated aliases:
     epsilonDash=None,
     epsilonDashineq=None,
@@ -832,7 +899,8 @@ def tt_ipm(
         verbose,
         1,
         1,
-        r_max
+        r_max,
+        RoundingPolicy(op_tol if eta_floor is None else eta_floor)
     )
     lag_maps = {key: tt_rank_reduce(value, eps=eps) for key, value in lag_maps.items()}
     obj_tt = tt_rank_reduce(obj_tt, eps=eps)
@@ -854,7 +922,8 @@ def tt_ipm(
         termination_tol=termination_tol,
         num_restarts=mals_restarts,
         inner_m=nwsp,
-        verbose=verbose
+        verbose=verbose,
+        strict_forcing=True
     )
     solver_eq = lambda lhs, rhs, x0, nwsp, restriction, termination_tol: tt_restarted_block_amen(
         lhs,
@@ -866,7 +935,8 @@ def tt_ipm(
         termination_tol=termination_tol,
         num_restarts=mals_restarts, 
         inner_m=nwsp,
-        verbose=verbose
+        verbose=verbose,
+        strict_forcing=True
     )
     if status.ineq_status is IneqStatus.ACTIVE:
         solver = solver_ineq
@@ -904,7 +974,7 @@ def tt_ipm(
         status.centrl_error_normalisation = 1 + abs(tt_inner_prod(obj_tt, tt_reshape(X_tt, (4, ))))
         status.centrality_error = status.mu / status.centrl_error_normalisation
         status.is_central = np.less(status.centrality_error, centrality_tol)
-        status.eta = max(min(status.eta, 2*status.mu), status.op_tol)
+        status.eta = max(min(status.eta, 2*status.mu), status.rounding.eta_floor)
 
         lhs_matrix_tt, rhs_vec_tt, status = tt_infeasible_newton_system(
             lhs,
@@ -951,22 +1021,50 @@ def tt_ipm(
                 status.is_last_iter = True
         else:
             if finishing_steps <= 1:
-                X_tt = _tt_symmetrise(tt_add(X_tt, tt_scale(x_step_size, Delta_X_tt)), 0.1*status.eta*status.primal_error_normalisation)
+                X_tt = _tt_symmetrise(
+                    tt_add(X_tt, tt_scale(x_step_size, Delta_X_tt)),
+                    status.rounding.primal_iterate(status)
+                )
             else:
-                X_tt = _tt_psd_symmetrise(tt_add(X_tt, tt_scale(x_step_size, Delta_X_tt)), 0.1*status.eta*status.primal_error_normalisation)
+                X_tt = _tt_psd_symmetrise(
+                    tt_add(X_tt, tt_scale(x_step_size, Delta_X_tt)),
+                    status.rounding.primal_iterate(status)
+                )
             if finishing_steps <= 1:
-                Z_tt = _tt_symmetrise(tt_add(Z_tt, tt_scale(z_step_size, Delta_Z_tt)), 0.1*status.eta*status.dual_error_normalisation)
+                Z_tt = _tt_symmetrise(
+                    tt_add(Z_tt, tt_scale(z_step_size, Delta_Z_tt)),
+                    status.rounding.dual_iterate(status)
+                )
             else:
-                Z_tt = _tt_psd_symmetrise(tt_add(Z_tt, tt_scale(z_step_size, Delta_Z_tt)), 0.1*status.eta*status.dual_error_normalisation)
+                Z_tt = _tt_psd_symmetrise(
+                    tt_add(Z_tt, tt_scale(z_step_size, Delta_Z_tt)),
+                    status.rounding.dual_iterate(status)
+                )
 
-            Y_tt = tt_rank_reduce(tt_add(Y_tt, tt_scale(z_step_size, Delta_Y_tt)), status.eps)
-            Y_tt = tt_reshape(_tt_symmetrise(tt_reshape(tt_sub(Y_tt, tt_fast_matrix_vec_mul(status.lag_map_y, Y_tt, status.eps)), (2, 2)), 0.1*status.eta*status.dual_error_normalisation), (4, ))
+            Y_tt = tt_rank_reduce(
+                tt_add(Y_tt, tt_scale(z_step_size, Delta_Y_tt)),
+                status.rounding.dual_iterate(status)
+            )
+            Y_tt = tt_reshape(
+                _tt_symmetrise(
+                    tt_reshape(tt_sub(Y_tt, tt_fast_matrix_vec_mul(status.lag_map_y, Y_tt, status.eps)), (2, 2)),
+                    status.rounding.dual_iterate(status)
+                ),
+                (4, )
+            )
 
             if status.ineq_status is IneqStatus.ACTIVE:
                 if finishing_steps <= 1:
-                    T_tt = _tt_symmetrise(tt_add(T_tt, tt_scale(z_step_size, Delta_T_tt)), 0.1*status.eta*status.dual_error_normalisation)
+                    T_tt = _tt_symmetrise(
+                        tt_add(T_tt, tt_scale(z_step_size, Delta_T_tt)),
+                        status.rounding.dual_iterate(status)
+                    )
                 else:
-                    T_tt = _tt_mask_symmetrise(tt_add(T_tt, tt_scale(z_step_size, Delta_T_tt)), ineq_mask, 0.1*status.eta*status.dual_error_normalisation)
+                    T_tt = _tt_mask_symmetrise(
+                        tt_add(T_tt, tt_scale(z_step_size, Delta_T_tt)),
+                        ineq_mask,
+                        status.rounding.dual_iterate(status)
+                    )
             elif status.ineq_status is IneqStatus.SETTING_INACTIVE:
                 solver = solver_eq
                 lhs = lhs_skeleton.get_submatrix(2, 2)

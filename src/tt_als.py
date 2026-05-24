@@ -734,7 +734,8 @@ def tt_restarted_block_amen(
     inner_m=10,
     x0=None,
     local_solver=None,
-    verbose=False
+    verbose=False,
+    strict_forcing=False
 ):
     if x0 is not None:
         dim = len(x0)
@@ -762,10 +763,9 @@ def tt_restarted_block_amen(
     if orig_rhs_norm < 0.5*op_tol:
         raise RuntimeError(f"\n\tAbsolute tolerance already reached: {orig_rhs_norm:4f} < {op_tol:4f}")
 
-    # === First ALS solve ===
     x_cores, res = solve_als(rhs, rank_restriction, x0, inner_m, 2)
 
-    if res < termination_tol:
+    if res < termination_tol and not strict_forcing:
         if verbose:
             print(f"\n\tTerminated on local criterion, Relative Error < {termination_tol:4f}")
         return x_cores, res
@@ -776,7 +776,7 @@ def tt_restarted_block_amen(
         if verbose:
             print(f"\n\tTerminated on global criterion, Relative Error = {rhs_norm / orig_rhs_norm:.3e}")
         return x_cores, res
-    elif rhs_norm < orig_rhs_norm:
+    elif rhs_norm < orig_rhs_norm and not strict_forcing:
         if verbose:
             print(f"\n\tTerminated on leniency, Relative Error = {rhs_norm / orig_rhs_norm:.3e}")
         return x_cores, res
@@ -799,7 +799,7 @@ def tt_restarted_block_amen(
             if verbose:
                 print(f"\n\tTerminated on global criterion, Relative Error = {rhs_norm / orig_rhs_norm:.3e}")
             return x_cores, res
-        elif rhs_norm < orig_rhs_norm:
+        elif rhs_norm < orig_rhs_norm and not strict_forcing:
             if verbose:
                 print(f"\n\tTerminated on leniency, Relative Error = {rhs_norm / orig_rhs_norm:.3e}")
             return x_cores, res
@@ -1656,4 +1656,3 @@ def tt_mat_vec_mul(mat, vec, op_tol, eps, verbose=False):
     if np.max((np.array(tt_ranks(mat))*np.array(tt_ranks(vec)))) <= 80:
         return tt_rank_reduce(tt_fast_matrix_vec_mul(mat, vec, eps), op_tol)
     return tt_approx_mat_vec_mul(mat, vec, tol=op_tol, verbose=verbose)
-
