@@ -48,7 +48,9 @@ bash scgal.sh maxcut 6 8 2
 # Usage: ./manopt.sh <problem> <start_dim> <end_dim> <rank> [--track_mem]
 bash manopt.sh maxcut 6 8 2
 ```
-All five shell wrappers require `<rank>`. They pass it as `--rank` to the Python entrypoints, which generate the input TT graph/objective at that rank.
+All five shell wrappers require `<rank>`. They pass it as `--rank` to the Python entrypoints, which generate the input TT graph/objective at that rank. The wrappers activate `ttipm` by default; set `TTIPM_CONDA_ENV=<env-name>` to override.
+
+Note: the Python 3.14 environment does not include `sdpa-python`, because `sdpa-python==0.2.2` currently publishes no CPython 3.14 wheel and no source distribution. Use an older environment with a compatible `sdpa-python` wheel for `sdpa.sh` until upstream publishes Python 3.14 wheels.
 
 4) Results are written as JSON into `results/` automatically after the run. See “Results and plotting” below.
 
@@ -165,7 +167,7 @@ The code depends on several third-party libraries distributed under their own li
 - [CVXPY](https://www.cvxpy.org/) (Apache 2.0)  
 - [PETSc](https://petsc.org/release/) and [petsc4py](https://petsc4py.readthedocs.io/en/stable/) (LGPL)  
 - [SCS](https://github.com/cvxgrp/scs) (MIT)  
-- [SDPA-Python](https://github.com/sdpa-python/sdpa-python) (MIT)  
+- [SDPA-Python](https://github.com/sdpa-python/sdpa-python) (MIT; optional, not currently available for CPython 3.14)
 
 Use of these libraries is governed by their respective licenses. The MIT License applies only to the original code in this repository, not to its dependencies.
 

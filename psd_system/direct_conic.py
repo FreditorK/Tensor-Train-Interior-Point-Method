@@ -1,9 +1,19 @@
 import numpy as np
 import scipy.sparse as sp
 import scs
-import sdpap
 
 _SQRT2 = np.sqrt(2.0)
+
+
+def _require_sdpap():
+    try:
+        import sdpap
+    except ImportError as exc:
+        raise ImportError(
+            "SDPA baseline requires sdpa-python. It is not available for CPython 3.14 yet; "
+            "use an environment with a compatible sdpa-python wheel for sdpa.sh until upstream publishes cp314 wheels."
+        ) from exc
+    return sdpap
 
 
 def _tril_index(i, j, n):
@@ -129,6 +139,7 @@ def sdpa_row_from_entries(size, entries):
 
 
 def solve_sdpa_psd_max(c_matrix, eq_rows, eq_rhs, ineq_rows=None, ineq_rhs=None, option=None):
+    sdpap = _require_sdpap()
     size = c_matrix.shape[0]
     nvar = size * size
     eq_rows = eq_rows or []

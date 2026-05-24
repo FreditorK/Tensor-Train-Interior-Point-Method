@@ -60,8 +60,9 @@ else
 fi
 
 # Now activate environment
-if [ "$CONDA_DEFAULT_ENV" != "ttipm" ]; then
-    conda activate ttipm
+ENV_NAME="${TTIPM_CONDA_ENV:-ttipm}"
+if [ "${CONDA_DEFAULT_ENV:-}" != "$ENV_NAME" ]; then
+    conda activate "$ENV_NAME"
 fi
 
 # ---------------------------

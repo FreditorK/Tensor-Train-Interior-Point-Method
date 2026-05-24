@@ -1,7 +1,6 @@
 from setuptools import setup, Extension
 from Cython.Build import cythonize
 import numpy as np
-from multiprocessing import cpu_count
 import scipy
 import os
 
@@ -10,7 +9,7 @@ scipy_include = os.path.join(scipy_include, '..', 'scipy')
 
 common_args = {
     'include_dirs': [np.get_include(), scipy_include],
-    'libraries': ['openblas'],
+    'libraries': ['blas'],
     'extra_compile_args': [
         "-O3", "-march=native", "-flto=16", "-fopenmp",
         "-funroll-loops", "-ftree-vectorize", "-fprefetch-loop-arrays",
@@ -23,8 +22,7 @@ common_args = {
         ('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION'),
         ('CYTHON_FAST_PYCCALL', '1'),
         ('CYTHON_USE_TYPE_SLOTS', '1'),
-        ('CYTHON_USE_PYTYPE_LOOKUP', '1'),
-        ('CYTHON_USE_DICT_VERSIONS', '1')
+        ('CYTHON_USE_PYTYPE_LOOKUP', '1')
     ]
 }
 
@@ -36,7 +34,7 @@ extensions = [
 setup(
     ext_modules=cythonize(
         extensions,
-        nthreads=cpu_count(),
+        force=True,
         language_level=3
     ),
     zip_safe=False,
