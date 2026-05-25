@@ -1,15 +1,16 @@
-dim: !!int 9
-seeds: 
-- 42
-#- 592
-#- 83 
-#- 75
-#- 124
-gap_tol: !!float 3e-4
+abs_tol: 0.001
+dim: 9
+gap_tol: 0.0003
+lambdaStar: 2.0
+mals_restarts: 2
+max_iter: 25
+max_refinement: 5
+op_tol: 0.0001
+seeds:
+- 876
+- 343
+- 424
+- 434
+- 88
 verbose: true
-op_tol: !!float 1e-4
-abs_tol: !!float 0.001
-max_iter: !!int 25
-warm_up: !!int 3
-mals_restarts: !!int 2
-max_refinement:  !!int 5
+warm_up: 3

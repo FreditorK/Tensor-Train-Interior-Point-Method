@@ -220,6 +220,9 @@ def create_problem(n, max_rank):
         "t": tt_diag_op(lag_map_t)
     }
 
+    scale = max(2**(2*n + 1 - 7), 1)
+    eq_bias_tt = tt_normalise(eq_bias_tt, radius=scale)
+
     # IX
     padding_op = tt_padding_op(2 * n)
     padding_op_bias = [E(1, 1)] + tt_identity(2 * n)
@@ -227,7 +230,7 @@ def create_problem(n, max_rank):
     L_op_tt = tt_rank_reduce(tt_add(L_op_tt, padding_op), 1e-12)
     eq_bias_tt = tt_rank_reduce(tt_add(eq_bias_tt, padding_op_bias))
     
-    return C_tt, L_op_tt, eq_bias_tt, ineq_mask, lag_maps
+    return tt_normalise(C_tt, radius=scale), L_op_tt, eq_bias_tt, ineq_mask, lag_maps
 
 if __name__ == "__main__":
     run_experiment(create_problem)

@@ -15,3 +15,4 @@ max_iter: !!int 26
 warm_up: !!int 3
 mals_restarts: !!int 2
 max_refinement:  !!int 5
+lambdaStar: 1.0

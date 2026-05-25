@@ -20,10 +20,11 @@ def tt_obj_matrix(rank, dim):
 
 def create_problem(dim, rank):
     print(f"Creating Problem for dim={dim}, rank={rank}...")
+    scale = np.sqrt(dim)
     obj_tt = tt_obj_matrix(rank, dim)
     L_tt, bias_tt = tt_diag_constraint_op(dim)
     lag_y = tt_diag_op(tt_sub(tt_one_matrix(dim), tt_identity(dim)))
-    return tt_reshape(obj_tt, (4,)), L_tt, tt_reshape(bias_tt, (4,)), lag_y
+    return tt_reshape(tt_normalise(obj_tt, radius=scale), (4,)), L_tt, tt_reshape(tt_normalise(bias_tt, radius=scale), (4,)), lag_y
 
 
 if __name__ == "__main__":

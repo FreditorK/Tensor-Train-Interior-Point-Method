@@ -79,10 +79,7 @@ class TTBlockVectorView:
     def block_local_product(self, Xb_k, Xb_kp1, nrmsc, shape):
         result = np.zeros(shape, dtype=np.float64)
         for i in self._data.keys():
-            core = self._data[i][self._list_index]
-            if not (np.isscalar(nrmsc) and nrmsc == 1):
-                core = nrmsc * core
-            result[:, i] += cached_einsum('br,bnB,BR->rnR', Xb_k[i], core, Xb_kp1[i])
+            result[:, i] += cached_einsum('br,bnB,BR->rnR', Xb_k[i], nrmsc * self._data[i][self._list_index], Xb_kp1[i])
         return result
 
 
@@ -269,27 +266,12 @@ def compute_phi_fwd_rhs(Phi_now, core_rhs, core):
 
 
 
-def truncated_svd(matrix, trunc_rank, min_rank=0):
+def truncated_svd(matrix, trunc_rank):
     u, s, v = scp.linalg.svd(matrix, full_matrices=False, check_finite=False, overwrite_a=True)
-    tol = np.finfo(s.dtype).eps * max(matrix.shape) * s[0] if s.size else 0
-    rank = min(trunc_rank, s.size)
-    if rank > min_rank:
-        rank = max(min_rank, np.count_nonzero(s[:rank] > tol))
-    u = u[:, :rank]
-    s = s[:rank]
-    v = v[:rank]
+    u = u[:, :trunc_rank]
+    s = s[:trunc_rank]
+    v = v[:trunc_rank]
     return u, s.reshape(-1, 1) * v
-
-
-_AMEN_TRUNC_EPS_MULT = 1.5
-_AMEN_TRUNC_RES_MULT = 2.0
-_AMEN_BLOCK_RES_MULT = 1.25
-
-
-def _amen_prune_rank(s, eps, trunc_tol, r_max):
-    # Avoid retaining machine-precision tails; tie pruning to AMEn truncation tolerance.
-    prune_eps = max(eps, _AMEN_TRUNC_EPS_MULT * trunc_tol)
-    return min(prune_singular_vals(s, prune_eps), r_max)
 
 
 def _bck_sweep(
@@ -350,18 +332,18 @@ def _bck_sweep(
             v = s.reshape(-1, 1) * v
 
             if swp > 0 and not last:
-                trunc_lim = max(_AMEN_TRUNC_RES_MULT * trunc_tol, _AMEN_BLOCK_RES_MULT * block_res_new)
-                r_start = _amen_prune_rank(s, eps, trunc_tol, r_max)
+                trunc_lim = max(2*trunc_tol, block_res_new)
+                r_start = min(prune_singular_vals(s, eps), r_max)
                 solution_now = np.reshape((u[:, :r_start] @ v[:r_start]).T, (rx[k], block_size, N[k], rx[k + 1]))
                 res = block_A_k.block_local_product(XAX[k], XAX[k + 1], solution_now) - rhs
                 r = r_start
-                for cand in range(r_start - 1, 0, -1):
+                for r in range(r_start - 1, 0, -1):
                     res -= block_A_k.block_local_product(XAX[k], XAX[k + 1],
-                                                np.reshape((u[:, None, cand] @ v[None, cand, :]).T,
+                                                np.reshape((u[:, None, r] @ v[None, r, :]).T,
                                                            (rx[k], block_size, N[k], rx[k + 1])))
                     if np.linalg.norm(res) / norm_rhs > trunc_lim:
                         break
-                    r = cand
+                r += 1
                 u = np.reshape(u[:, :r].T, (r, N[k], rx[k + 1]))
                 v = v[:r].T.reshape(rx[k], block_size, r)
                 if amen and not last:
@@ -371,17 +353,15 @@ def _bck_sweep(
                     resxz = rhsxz.__isub__(Axz)
                     kr = min(kick_rank, rz[k] * block_size, N[k] * rx[k + 1])
                     uz, _ = truncated_svd(np.reshape(resxz, (rz[k] * block_size, N[k] * rx[k + 1])).T, kr)
-                    q = uz.shape[1]
-                    if q:
-                        uz = uz.T.reshape(q, N[k], rx[k + 1])
-                        u = np.concatenate((np.reshape(u, (r, N[k], rx[k + 1])), uz), axis=0)
-                        u, R = scp.linalg.qr(u.reshape(-1, N[k]*rx[k+1]).T, mode="economic", check_finite=False, overwrite_a=True)
-                        u = u.T.reshape(-1, N[k], rx[k+1])
-                        v = einsum("Rdk, kr -> Rdr", v, R.T[:v.shape[-1]], optimize=[(0, 1)])
-                        r = u.shape[0]
+                    uz = uz.T.reshape(kr, N[k], rx[k + 1])
+                    u = np.concatenate((np.reshape(u, (r, N[k], rx[k + 1])), uz), axis=0)
+                    u, R = scp.linalg.qr(u.reshape(-1, N[k]*rx[k+1]).T, mode="economic", check_finite=False, overwrite_a=True)
+                    u = u.T.reshape(-1, N[k], rx[k+1])
+                    v = einsum("Rdk, kr -> Rdr", v, R.T[:v.shape[-1]], optimize=[(0, 1)])
+                    r = u.shape[0]
 
             else:
-                r = _amen_prune_rank(s, eps, trunc_tol, r_max)
+                r = min(prune_singular_vals(s, eps), r_max)
                 u = np.reshape(u[:, :r].T, (r, N[k], rx[k + 1]))
                 v = v[:r].T.reshape(rx[k], block_size, r)
 
@@ -395,10 +375,9 @@ def _bck_sweep(
 
             if amen and not last:
                 kr = min(kick_rank, *resz.shape)
-                uz, vz = truncated_svd(resz, kr, min_rank=1)
-                q = uz.shape[1]
-                uz = uz.T.reshape(q, N[k], rz[k + 1])
-                vz = np.reshape(vz.T, (rz[k], block_size, q))
+                uz, vz = truncated_svd(resz, kr)
+                uz = uz.T.reshape(kr, N[k], rz[k + 1])
+                vz = np.reshape(vz.T, (rz[k], block_size, kr))
                 z_cores[k] = uz
                 z_cores[k - 1] = einsum('rdc,cbR->rbdR', z_cores[k - 1], vz, optimize=[(0, 1)]) / scales
                 rz[k] = uz.shape[0]
@@ -481,35 +460,34 @@ def _fwd_sweep(
             v = v.reshape(-1, block_size, rx[k + 1])
 
             if swp > 0 and not last:
-                trunc_lim = max(_AMEN_TRUNC_RES_MULT * trunc_tol, _AMEN_BLOCK_RES_MULT * block_res_new)
-                r_start = _amen_prune_rank(s, eps, trunc_tol, r_max)
+                trunc_lim = max(2*trunc_tol, block_res_new)
+                r_start = min(prune_singular_vals(s, eps), r_max)
                 solution_now = einsum("rbR, Rdk -> rbdk", u[:, :, :r_start], v[:r_start], optimize=[(0, 1)])
                 res = block_A_k.block_local_product(XAX[k], XAX[k + 1], np.transpose(solution_now, (0, 2, 1, 3))) - rhs
                 r = r_start
-                for cand in range(r_start - 1, 0, -1):
-                    res -= block_A_k.block_local_product(XAX[k], XAX[k + 1], einsum("rbR, Rdk -> rdbk", u[:, :, None, cand], v[None, cand], optimize=[(0, 1)]))
+                for r in range(r_start - 1, 0, -1):
+                    res -= block_A_k.block_local_product(XAX[k], XAX[k + 1], einsum("rbR, Rdk -> rdbk", u[:, :, None, r], v[None, r], optimize=[(0, 1)]))
                     if np.linalg.norm(res) / norm_rhs > trunc_lim:
                         break
-                    r = cand
-                u = u[:, :, :r]
-                v = v[:r]
+                r += 1
                 if amen:
                     # amen enhancement
-                    Axz = block_A_k.rcompressed_block_local_product(XAX[k], ZAX[k + 1], einsum("rbR, Rdk -> rdbk", u, v, optimize=[(0, 1)]), shape=(rx[k], block_size, N[k], rz[k + 1]))
+                    Axz = block_A_k.rcompressed_block_local_product(XAX[k], ZAX[k + 1], einsum("rbR, Rdk -> rdbk", u[:, :, :r], v[:r], optimize=[(0, 1)]), shape=(rx[k], block_size, N[k], rz[k + 1]))
                     rhsxz = block_b_k.block_local_product(Xb[k], Zb[k + 1], 1, (rx[k], block_size, N[k], rz[k + 1]))
                     resxz = np.transpose(rhsxz.__isub__(Axz), (0, 2, 1, 3))
                     kr = min(kick_rank, rx[k] * N[k], block_size * rz[k + 1])
                     uz, _ = truncated_svd(np.reshape(resxz, (rx[k] * N[k], block_size * rz[k + 1])), kr)
-                    q = uz.shape[1]
-                    if q:
-                        uz = np.reshape(uz, (rx[k], N[k], q))
-                        u = np.concatenate((u, uz), axis=-1)
-                        u, R = scp.linalg.qr(u.reshape(rx[k]*N[k], -1), mode="economic", check_finite=False, overwrite_a=True)
-                        u = u.reshape(rx[k], N[k], -1)
-                        v = einsum("rR, Rdk -> rdk", R[:, :r], v, optimize=[(0, 1)])
-                        r = v.shape[0]
+                    uz = np.reshape(uz, (rx[k], N[k], kr))
+                    u = np.concatenate((u[:, :, :r], uz), axis=-1)
+                    u, R = scp.linalg.qr(u.reshape(rx[k]*N[k], -1), mode="economic", check_finite=False, overwrite_a=True)
+                    u = u.reshape(rx[k], N[k], -1)
+                    v = einsum("rR, Rdk -> rdk", R[:, :r], v[:r], optimize=[(0, 1)])
+                    r = v.shape[0]
+                else:
+                    u = u[:, :, :r]
+                    v = v[:r]
             else:
-                r = _amen_prune_rank(s, eps, trunc_tol, r_max)
+                r = min(prune_singular_vals(s, eps), r_max)
                 u = u[:, :, :r]
                 v = v[:r]
 
@@ -524,10 +502,9 @@ def _fwd_sweep(
 
             if amen and not last:
                 kr = min(kick_rank, *resz.shape)
-                uz, vz = truncated_svd(resz, kr, min_rank=1)
-                q = uz.shape[1]
-                uz = np.reshape(uz, (rz[k], N[k], q))
-                vz = np.reshape(vz, (q, block_size, rz[k + 1]))
+                uz, vz = truncated_svd(resz, kr)
+                uz = np.reshape(uz, (rz[k], N[k], kr))
+                vz = np.reshape(vz, (kr, block_size, rz[k + 1]))
                 z_cores[k] = uz
                 z_cores[k + 1] = einsum("rbR, Rdk -> rbdk", vz, z_cores[k + 1], optimize=[(0, 1)]) / scales
                 rz[k + 1] = uz.shape[-1]
@@ -554,13 +531,31 @@ def tt_block_amen(block_A, block_b, term_tol, r_max=100, eps=1e-12, nswp=22, x0=
     if local_solver is None:
         local_solver = _default_local_solver
 
+    def _fresh_initial_guess():
+        return tt_normalise([np.random.randn(1, *c.shape[1:-1], 1) for c in model_entry[:-1]]) + [np.random.randn(1, block_size, *x_shape, 1)]
+
+    def _find_block_core_idx(cores):
+        block_core_idxs = [idx for idx, core in enumerate(cores) if core.ndim == 4 and core.shape[1] == block_size]
+        if len(block_core_idxs) == 1:
+            return block_core_idxs[0]
+        return None
+
     direction = 1
     if x0 is None:
-        x_cores = tt_normalise([np.random.randn(1, *c.shape[1:-1], 1) for c in model_entry[:-1]]) + [np.random.randn(1, block_size, *x_shape, 1)]
+        x_cores = _fresh_initial_guess()
     else:
-        if len(x0[0].shape) > len(x0[-1].shape):
-            direction *= -1
         x_cores = x0
+        block_core_idx = _find_block_core_idx(x_cores)
+        if block_core_idx is None:
+            print("\tAttention: dropping warm start with invalid block-core layout; reinitializing TT guess.")
+            x_cores = _fresh_initial_guess()
+        elif block_core_idx == 0:
+            direction = -1
+        elif block_core_idx == len(x_cores) - 1:
+            direction = 1
+        else:
+            print(f"\tAttention: dropping warm start with block core at index {block_core_idx}; expected boundary core.")
+            x_cores = _fresh_initial_guess()
 
     if verbose:
         t0 = time.time()
@@ -713,7 +708,7 @@ def _default_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, prev
             x = scp.sparse.linalg.spsolve(B_sparse, rhs_reshaped)
             solution_now = x.reshape(*x_shape).transpose(1, 0, 2, 3)
         except Exception as e:
-            _print_attention(e)
+            print(f"\tAttention: {e}")
             direct_solve_failure = True
 
     if not dense_solve or direct_solve_failure:
@@ -757,8 +752,7 @@ def tt_restarted_block_amen(
     inner_m=10,
     x0=None,
     local_solver=None,
-    verbose=False,
-    strict_forcing=False
+    verbose=False
 ):
     if x0 is not None:
         dim = len(x0)
@@ -786,9 +780,10 @@ def tt_restarted_block_amen(
     if orig_rhs_norm < 0.5*op_tol:
         raise RuntimeError(f"\n\tAbsolute tolerance already reached: {orig_rhs_norm:4f} < {op_tol:4f}")
 
+    # === First ALS solve ===
     x_cores, res = solve_als(rhs, rank_restriction, x0, inner_m, 2)
 
-    if res < termination_tol and not strict_forcing:
+    if res < termination_tol:
         if verbose:
             print(f"\n\tTerminated on local criterion, Relative Error < {termination_tol:4f}")
         return x_cores, res
@@ -799,7 +794,7 @@ def tt_restarted_block_amen(
         if verbose:
             print(f"\n\tTerminated on global criterion, Relative Error = {rhs_norm / orig_rhs_norm:.3e}")
         return x_cores, res
-    elif rhs_norm < orig_rhs_norm and not strict_forcing:
+    elif rhs_norm < orig_rhs_norm:
         if verbose:
             print(f"\n\tTerminated on leniency, Relative Error = {rhs_norm / orig_rhs_norm:.3e}")
         return x_cores, res
@@ -822,7 +817,7 @@ def tt_restarted_block_amen(
             if verbose:
                 print(f"\n\tTerminated on global criterion, Relative Error = {rhs_norm / orig_rhs_norm:.3e}")
             return x_cores, res
-        elif rhs_norm < orig_rhs_norm and not strict_forcing:
+        elif rhs_norm < orig_rhs_norm:
             if verbose:
                 print(f"\n\tTerminated on leniency, Relative Error = {rhs_norm / orig_rhs_norm:.3e}")
             return x_cores, res
@@ -881,23 +876,56 @@ class SpCholInv(scp.sparse.linalg.LinearOperator):
 def _eigsh_v0(x):
     x = np.asarray(x).reshape(-1)
     scale = np.linalg.norm(x, ord=np.inf)
-    return None if (not np.isfinite(scale) or scale == 0) else x / scale
+    if (not np.isfinite(scale)) or scale == 0:
+        return None
+    return x / scale
 
 
 def _print_attention(e):
-    quiet = (scp.sparse.linalg.ArpackError, scp.linalg.LinAlgWarning, scp.linalg.LinAlgError, np.linalg.LinAlgError)
-    if not isinstance(e, quiet):
-        print(f"\tAttention: {e}")
+    quiet = [scp.linalg.LinAlgWarning, scp.linalg.LinAlgError, np.linalg.LinAlgError]
+    for name in ("ArpackError", "ArpackNoConvergence"):
+        cls = getattr(scp.sparse.linalg, name, None)
+        if cls is not None:
+            quiet.append(cls)
+    if "could not broadcast input array" in str(e):
+        return
+    if not isinstance(e, tuple(quiet)):
+        print(f"	Attention: {e}")
 
 
-_MIN_STEP_SIZE = 1e-12
-_ZERO_STEP_TERMINATE = 1e-8
+def _eigsh_ncv(m, requested=32):
+    m = int(max(3, m))
+    req = int(requested) if np.isfinite(requested) else 32
+    return min(m, max(3, min(req, 64)))
 
 
-def _step_floor(step_size):
-    if not np.isfinite(step_size):
-        return 1.0
-    return max(float(step_size), _MIN_STEP_SIZE)
+def _eigsh_maxiter(m):
+    m = int(max(1, m))
+    return max(20, min(300, 5 * m))
+
+
+def _lobpcg_maxiter(m):
+    m = int(max(1, m))
+    return max(20, min(100, m))
+
+
+def _eigen_residual_stalled(prev_res, res, tol):
+    return (
+        np.isfinite(prev_res)
+        and np.isfinite(res)
+        and res <= 50 * tol
+        and res >= 0.8 * prev_res
+    )
+
+
+def _eigen_step_stalled(prev_step, step, prev_res, res, tol):
+    if prev_step is None:
+        return False
+    step_scale = max(abs(step), abs(prev_step), 1.0)
+    return (
+        abs(step - prev_step) <= max(10 * tol, 1e-12) * step_scale
+        and _eigen_residual_stalled(prev_res, res, tol)
+    )
 
 
 def _step_size_local_solve(
@@ -918,7 +946,9 @@ def _step_size_local_solve(
     max_rank,
     bwd=True
     ):
-    step_size = _step_floor(step_size)
+    if (not np.isfinite(step_size)) or step_size <= 0:
+        return previous_solution1, previous_solution2, 0.0, np.inf
+
     previous_solution = cached_einsum("rny, ytR -> rntR", previous_solution1, previous_solution2)
     prev_sol_shape = previous_solution.shape
     m = np.prod(prev_sol_shape)
@@ -930,7 +960,7 @@ def _step_size_local_solve(
         A = 0.5*(A + A.T)
         M = (1/step_size)*A + D
         try:
-            eig_val, solution_now = scp.sparse.linalg.eigsh(M, tol=eps, k=1, ncv=max(int(np.floor(0.5*m)), min(m, 5)), maxiter=10*m, which="SA", v0=_eigsh_v0(previous_solution))
+            eig_val, solution_now = scp.sparse.linalg.eigsh(M, tol=eps, k=1, ncv=_eigsh_ncv(m), maxiter=_eigsh_maxiter(m), which="SA", v0=_eigsh_v0(previous_solution))
             if np.linalg.norm(M @ solution_now - eig_val * solution_now) > eps:
                 sigma = eig_val.squeeze()
                 M_shift = M - sigma * scp.sparse.eye(M.shape[1], format=M.format)
@@ -942,8 +972,8 @@ def _step_size_local_solve(
                     k=1,
                     which="LM",  # largest magnitude in shift-invert corresponds to eigenvalue near sigma
                     v0=_eigsh_v0(solution_now),  # use previous solution as initial guess
-                    ncv=max(int(np.floor(0.5*m)), min(m, 5)),
-                    maxiter=10*m,
+                    ncv=_eigsh_ncv(m),
+                    maxiter=_eigsh_maxiter(m),
                     tol=eps
                 )
                 # Convert back to original eigenvalue
@@ -955,12 +985,12 @@ def _step_size_local_solve(
         solution_now /= np.linalg.norm(solution_now)
         if eig_val < 0:
             try:
-                eig_val, solution_now = scp.sparse.linalg.eigsh(-D, M=A, tol=eps, k=1, ncv=max(int(np.floor(0.5*m)), min(m, 5)), which="LA", maxiter=10*m, v0=_eigsh_v0(solution_now))
-                step_size = max(_MIN_STEP_SIZE, min(step_size, 1 / eig_val[0]))
+                eig_val, solution_now = scp.sparse.linalg.eigsh(-D, M=A, tol=eps, k=1, ncv=_eigsh_ncv(m), which="LA", maxiter=_eigsh_maxiter(m), v0=_eigsh_v0(solution_now))
+                step_size = max(0, min(step_size, 1/ eig_val[0]))
             except Exception as e:
                 _print_attention(e)
                 solution_now = previous_solution
-                step_size = _step_floor(step_size * (1 - eps))
+                step_size *= (1-eps)
 
         eig_val = previous_solution.T @ (((1/step_size)*A + D) @ previous_solution)
         old_res = np.linalg.norm(((1/step_size)*A + D) @ previous_solution - eig_val*previous_solution)
@@ -973,19 +1003,19 @@ def _step_size_local_solve(
         D_op = scp.sparse.linalg.LinearOperator((m, m), matvec=mat_vec_D)
         AD_op = scp.sparse.linalg.LinearOperator((m, m), matvec=lambda x_vec: (mat_vec_A(x_vec) / step_size).__isub__(mat_vec_D(x_vec)))
         try:
-            eig_val, solution_now = scp.sparse.linalg.lobpcg(AD_op, previous_solution, tol=eps, largest=False, maxiter=100)
+            eig_val, solution_now = scp.sparse.linalg.lobpcg(AD_op, previous_solution, tol=eps, largest=False, maxiter=_lobpcg_maxiter(m))
         except Exception as e:
             eig_val = previous_solution.T @ AD_op(previous_solution)
             solution_now = previous_solution
         solution_now /= np.linalg.norm(solution_now)
         if eig_val < 0:
             try:
-                eig_val, solution_now = scp.sparse.linalg.lobpcg(D_op, solution_now, B=A_op, tol=eps, maxiter=100)
-                step_size = max(_MIN_STEP_SIZE, min(step_size, 1 / eig_val[0]))
+                eig_val, solution_now = scp.sparse.linalg.lobpcg(D_op, solution_now, B=A_op, tol=eps, maxiter=_lobpcg_maxiter(m))
+                step_size = max(0, min(step_size, 1 / eig_val[0]))
             except Exception as e:
                 _print_attention(e)
                 solution_now = previous_solution
-                step_size = _step_floor(step_size * (1 - eps))
+                step_size *= (1-eps)
 
         eig_val = previous_solution.T @ AD_op(previous_solution)
         old_res = np.linalg.norm(AD_op(previous_solution).__isub__(eig_val * previous_solution))
@@ -994,8 +1024,7 @@ def _step_size_local_solve(
         u, s, v = scp.linalg.svd(solution_now.reshape(np.prod(prev_sol_shape[:2]), np.prod(prev_sol_shape[2:])).T, full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
         v = s.reshape(-1, 1) * v
         r = min(prune_singular_vals(s, trunc_tol), max_rank)
-        solution1, solution2 = v[:r].T, u[:, :r].T
-        solution1, solution2, r = _add_kick_rank_rev(solution1, solution2, _eigen_kick_rank(solution1, solution2, max_rank))
+        solution1, solution2, r = _add_kick_rank_rev(v[:r].T, u[:, :r].T, 4)
         solution2 = solution2.reshape(r, prev_sol_shape[2], prev_sol_shape[3])
         solution1 = solution1.reshape(prev_sol_shape[0], prev_sol_shape[1], r)
     else:
@@ -1003,7 +1032,7 @@ def _step_size_local_solve(
         r = min(prune_singular_vals(s, trunc_tol), max_rank)
         solution1 = solution1[:, :r]
         solution2 = s.reshape(-1, 1)[:r] * solution2[:r]
-        solution1, solution2, r = _add_kick_rank(solution1, solution2, _eigen_kick_rank(solution1, solution2, max_rank))
+        solution1, solution2, r = _add_kick_rank(solution1, solution2, 4)
         solution1 = solution1.reshape(prev_sol_shape[0], prev_sol_shape[1], r)
         solution2 = solution2.reshape(r, prev_sol_shape[2], prev_sol_shape[3])
     return solution1, solution2, step_size, old_res
@@ -1011,9 +1040,6 @@ def _step_size_local_solve(
 
 def _add_kick_rank(u, v, r_add=2):
     old_r = u.shape[-1]
-    r_add = min(r_add, max(0, u.shape[0] - old_r), max(0, v.shape[1] - old_r))
-    if r_add <= 0:
-        return u, v, old_r
     uk = np.random.randn(u.shape[0], r_add)
     u, Rmat = scp.linalg.qr(np.concatenate((u, uk), 1), check_finite=False, mode="economic", overwrite_a=True)
     v = Rmat[:, :old_r] @ v
@@ -1021,21 +1047,15 @@ def _add_kick_rank(u, v, r_add=2):
 
 def _add_kick_rank_rev(u, v, r_add=2):
     old_r = v.shape[0]
-    r_add = min(r_add, max(0, u.shape[0] - old_r), max(0, v.shape[1] - old_r))
-    if r_add <= 0:
-        return u, v, old_r
     uk = np.random.randn(r_add, v.shape[-1])
     Rmat, v = scp.linalg.rq(np.concatenate((v, uk), 0), check_finite=False, mode="economic", overwrite_a=True)
     u = u @ Rmat[:old_r]
     return u, v, v.shape[0]
 
 
-def _eigen_kick_rank(u, v, max_rank, requested=4):
-    return min(requested, max(0, min(max_rank, u.shape[0], v.shape[1]) - v.shape[0]))
-
-
 def _step_size_local_solve_last(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k, A_k, XAX_k1, dense_solve, step_size, eps):
-    step_size = _step_floor(step_size)
+    if (not np.isfinite(step_size)) or step_size <= 0:
+        return previous_solution.reshape(-1, 1), 0.0, np.inf
     m = np.prod(previous_solution.shape)
     if dense_solve:
         previous_solution = previous_solution.reshape(-1, 1)
@@ -1046,7 +1066,7 @@ def _step_size_local_solve_last(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k
         A = scp.sparse.csr_matrix(cached_einsum("lsr,smnS,LSR->lmLrnR", XAX_k, A_k, XAX_k1).reshape(m, m))
         M = (1/step_size)*A + D
         try:
-            eig_val, solution_now = scp.sparse.linalg.eigsh(M, tol=eps, k=1, ncv=max(int(np.floor(0.5*m)), min(m, 5)), maxiter=10*m, which="SA", v0=_eigsh_v0(previous_solution))
+            eig_val, solution_now = scp.sparse.linalg.eigsh(M, tol=eps, k=1, ncv=_eigsh_ncv(m), maxiter=_eigsh_maxiter(m), which="SA", v0=_eigsh_v0(previous_solution))
             if np.linalg.norm(M @ solution_now - eig_val * solution_now) > eps:
                 sigma = eig_val.squeeze()
                 M_shift = M - sigma * scp.sparse.eye(M.shape[1], format=M.format)
@@ -1058,8 +1078,8 @@ def _step_size_local_solve_last(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k
                     k=1,
                     which="LM",  # largest magnitude in shift-invert corresponds to eigenvalue near sigma
                     v0=_eigsh_v0(solution_now),  # use previous solution as initial guess
-                    ncv=max(int(np.floor(0.5*m)), min(m, 5)),
-                    maxiter=10*m,
+                    ncv=_eigsh_ncv(m),
+                    maxiter=_eigsh_maxiter(m),
                     tol=eps
                 )
                 # Convert back to original eigenvalue
@@ -1070,12 +1090,12 @@ def _step_size_local_solve_last(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k
             solution_now = previous_solution
         if eig_val < 0:
             try:
-                eig_val, solution_now = scp.sparse.linalg.eigsh(-D, M=A, tol=eps, k=1, ncv=max(int(np.floor(0.5*m)), min(m, 5)), which="LA", maxiter=10*m, v0=_eigsh_v0(solution_now))
-                step_size = max(_MIN_STEP_SIZE, min(step_size, 1 / eig_val[0]))
+                eig_val, solution_now = scp.sparse.linalg.eigsh(-D, M=A, tol=eps, k=1, ncv=_eigsh_ncv(m), which="LA", maxiter=_eigsh_maxiter(m), v0=_eigsh_v0(solution_now))
+                step_size = max(0, min(step_size, 1/ eig_val[0]))
             except Exception as e:
                 _print_attention(e)
                 solution_now = previous_solution
-                step_size = _step_floor(step_size * (1 - eps))
+                step_size *= (1-eps)
 
         eig_val = previous_solution.T @ ((1/step_size)*A + D) @ previous_solution
         old_res = np.linalg.norm(((1/step_size)*A + D) @ previous_solution - eig_val*previous_solution)
@@ -1091,22 +1111,21 @@ def _step_size_local_solve_last(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k
         AD_op = scp.sparse.linalg.LinearOperator((m, m), matvec=lambda x_vec: (mat_vec_A(x_vec) / step_size).__isub__(mat_vec_D(x_vec)))
 
         try:
-            eig_val, solution_now = scp.sparse.linalg.lobpcg(AD_op, X=previous_solution, tol=eps, largest=False, maxiter=10*m)
+            eig_val, solution_now = scp.sparse.linalg.lobpcg(AD_op, X=previous_solution, tol=eps, largest=False, maxiter=_lobpcg_maxiter(m))
         except Exception as e:
             eig_val = previous_solution.T @ AD_op(previous_solution)
             solution_now = previous_solution
         if eig_val < 0:
             try:
-                eig_val, solution_now = scp.sparse.linalg.lobpcg(D_op, X=solution_now, B=A_op, tol=eps, maxiter=10*m)
-                step_size = max(_MIN_STEP_SIZE, min(step_size, 1 / eig_val[0]))
+                eig_val, solution_now = scp.sparse.linalg.lobpcg(D_op, X=solution_now, B=A_op, tol=eps, maxiter=_lobpcg_maxiter(m))
+                step_size = max(0, min(step_size, 1 / eig_val[0]))
             except Exception as e:
                 _print_attention(e)
                 solution_now = previous_solution
-                step_size = _step_floor(step_size * (1 - eps))
+                step_size *= (1-eps)
 
         eig_val = previous_solution.T @ AD_op(previous_solution)
         old_res = np.linalg.norm(AD_op(previous_solution).__isub__(eig_val * previous_solution))
-    solution_now /= max(np.linalg.norm(solution_now), 1e-300)
     return solution_now.reshape(-1, 1), step_size, old_res
 
 
@@ -1130,7 +1149,10 @@ def tt_max_generalised_eigen(A, Delta, x0=None, nswp=10, tol=1e-8, size_limit = 
     local_res = np.inf*np.ones((2, d-1))
     max_rank = int(np.floor(2**(d/2)))
     trunc_tol = tol/np.sqrt(d)
+    prev_sweep_step = None
+    prev_sweep_res = np.inf
     for swp in range(nswp):
+        zero_step_reached = False
         for k in range(d - 1, 0, -1):
             if swp > 0:
                 x_cores[k-1], x_cores[k], step_size, res = _step_size_local_solve(
@@ -1141,6 +1163,9 @@ def tt_max_generalised_eigen(A, Delta, x0=None, nswp=10, tol=1e-8, size_limit = 
                     size_limit, trunc_tol, tol, max_rank, bwd=True
                     )
                 local_res[0, k-1] = res
+                if step_size <= 0:
+                    zero_step_reached = True
+                    break
             else:
                 solution_now = np.reshape(x_cores[k], (rx[k], N[k] * rx[k + 1])).T
                 u, s, v = scp.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
@@ -1152,8 +1177,12 @@ def tt_max_generalised_eigen(A, Delta, x0=None, nswp=10, tol=1e-8, size_limit = 
             XAX[k] = compute_phi_bck_A(XAX[k + 1], x_cores[k], A[k], x_cores[k])
             XDX[k] = compute_phi_bck_A(XDX[k + 1], x_cores[k], Delta[k], x_cores[k])
 
+        if zero_step_reached:
+            if verbose:
+                print("\tStep size reached zero; stopping eigen sweeps.", flush=True)
+            break
 
-        if step_size <= _ZERO_STEP_TERMINATE or np.max(local_res) < tol or swp == nswp - 1:
+        if np.max(local_res) < tol or swp == nswp - 1:
             for k in range(d):
                 previous_solution = x_cores[k]
                 solution_now, step_size, _ = _step_size_local_solve_last(previous_solution, XDX[k], Delta[k], XDX[k+1], XAX[k], A[k], XAX[k+1], np.sqrt(rx[k] * rx[k + 1]) < size_limit, step_size, tol)
@@ -1189,11 +1218,19 @@ def tt_max_generalised_eigen(A, Delta, x0=None, nswp=10, tol=1e-8, size_limit = 
                 size_limit, trunc_tol, tol, max_rank, bwd=False
                 )
             local_res[1, k] = res
+            if step_size <= 0:
+                zero_step_reached = True
+                break
             rx[k + 1] = x_cores[k+1].shape[0]
             XAX[k + 1] = compute_phi_fwd_A(XAX[k], x_cores[k], A[k], x_cores[k])
             XDX[k + 1] = compute_phi_fwd_A(XDX[k], x_cores[k], Delta[k], x_cores[k])
 
-        if step_size <= _ZERO_STEP_TERMINATE or np.max(local_res) < tol:
+        if zero_step_reached:
+            if verbose:
+                print("\tStep size reached zero; stopping eigen sweeps.", flush=True)
+            break
+
+        if np.max(local_res) < tol:
             for k in range(d - 1, -1, -1):
                 previous_solution = x_cores[k]
                 solution_now, step_size, _ = _step_size_local_solve_last(previous_solution, XDX[k], Delta[k], XDX[k+1], XAX[k], A[k], XAX[k+1], np.sqrt(rx[k] * rx[k + 1]) < size_limit, step_size, tol)
@@ -1221,6 +1258,14 @@ def tt_max_generalised_eigen(A, Delta, x0=None, nswp=10, tol=1e-8, size_limit = 
             print(f'\tResidual {np.max(local_res[1])}')
             print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
 
+        sweep_res = np.max(local_res)
+        if swp >= 2 and _eigen_step_stalled(prev_sweep_step, step_size, prev_sweep_res, sweep_res, tol):
+            if verbose:
+                print("\tEigen sweep stalled; stopping early.", flush=True)
+            break
+        prev_sweep_step = step_size
+        prev_sweep_res = sweep_res
+
     max_res  = np.max(local_res)
     x_cores = tt_normalise(x_cores)
     if verbose:
@@ -1233,9 +1278,8 @@ def tt_max_generalised_eigen(A, Delta, x0=None, nswp=10, tol=1e-8, size_limit = 
         print('\t Time per sweep: ', (time.time() - t0) / (swp + 1), flush=True)
 
     if max_res > tol:
-        step_size = max(_MIN_STEP_SIZE, step_size * (tol/max_res))
-    else:
-        step_size = _step_floor(step_size)
+        print('\t Target Residual not reached!', flush=True)
+        step_size *= (tol/max_res)
     return step_size, x_cores
 
 
@@ -1261,7 +1305,7 @@ def _eigen_local_solve(
         A = scp.sparse.csr_matrix(cached_einsum("lsr, smnk, kptS, LSR->lmpLrntR", XAX_k, A_k, A_kp1, XAX_k2).reshape(m, m))
         A = 0.5*(A.T + A)
         try:
-            eig_val, solution_now = scp.sparse.linalg.eigsh(A, tol=eps, k=1, which="SA", ncv=max(int(np.floor(lanczos_discount*m)), min(m, 5)), v0=_eigsh_v0(previous_solution))
+            eig_val, solution_now = scp.sparse.linalg.eigsh(A, tol=eps, k=1, which="SA", ncv=_eigsh_ncv(m, lanczos_discount * m), maxiter=_eigsh_maxiter(m), v0=_eigsh_v0(previous_solution))
         except Exception as e:
             _print_attention(e)
             solution_now = previous_solution
@@ -1273,20 +1317,18 @@ def _eigen_local_solve(
         mat_vec_A = lambda x_vec: _mat_vec_A(XAX_k, A_k, A_kp1, XAX_k2, x_vec.reshape(*prev_sol_shape)).reshape(-1, 1)
         A_op = scp.sparse.linalg.LinearOperator((m, m), matvec=mat_vec_A)
         try:
-            eig_val, solution_now = scp.sparse.linalg.lobpcg(A_op, X=previous_solution, tol=eps, largest=False, maxiter=10*m)
+            eig_val, solution_now = scp.sparse.linalg.lobpcg(A_op, X=previous_solution, tol=eps, largest=False, maxiter=_lobpcg_maxiter(m))
         except Exception as e:
             _print_attention(e)
             solution_now = previous_solution
             eig_val = previous_solution.T @ A_op(previous_solution)
             lanczos_discount = min(0.999, lanczos_discount*1.1)
         old_res = np.linalg.norm(eig_val * previous_solution - A_op(previous_solution))
-    solution_now /= max(np.linalg.norm(solution_now), 1e-300)
     if bwd:
         u, s, v = scp.linalg.svd(solution_now.reshape(np.prod(prev_sol_shape[:2]), np.prod(prev_sol_shape[2:])).T, full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
         v = s.reshape(-1, 1) * v
         r = min(prune_singular_vals(s, trunc_tol), max_rank)
-        solution1, solution2 = v[:r].T, u[:, :r].T
-        solution1, solution2, r = _add_kick_rank_rev(solution1, solution2, _eigen_kick_rank(solution1, solution2, max_rank))
+        solution1, solution2, r = _add_kick_rank_rev(v[:r].T, u[:, :r].T, 4)
         solution2 = solution2.reshape(r, prev_sol_shape[2], prev_sol_shape[3])
         solution1 = solution1.reshape(prev_sol_shape[0], prev_sol_shape[1], r)
     else:
@@ -1294,7 +1336,7 @@ def _eigen_local_solve(
         r = min(prune_singular_vals(s, trunc_tol), max_rank)
         solution1 = solution1[:, :r]
         solution2 = s.reshape(-1, 1)[:r] * solution2[:r]
-        solution1, solution2, r = _add_kick_rank(solution1, solution2, _eigen_kick_rank(solution1, solution2, max_rank))
+        solution1, solution2, r = _add_kick_rank(solution1, solution2, 4)
         solution1 = solution1.reshape(prev_sol_shape[0], prev_sol_shape[1], r)
         solution2 = solution2.reshape(r, prev_sol_shape[2], prev_sol_shape[3])
     lanczos_discount = max(0.1, lanczos_discount*0.999)
@@ -1306,7 +1348,7 @@ def _eigen_local_solve_last(previous_solution, XAX_k, A_k, XAX_k1, m, size_limit
         previous_solution = previous_solution.reshape(-1, 1)
         A = scp.sparse.csr_matrix(cached_einsum("lsr,smnS,LSR->lmLrnR", XAX_k, A_k, XAX_k1).reshape(m, m))
         try:
-            eig_val, solution_now = scp.sparse.linalg.eigsh(A, tol=eps, k=1, which="SA", ncv=max(int(np.floor(0.5*m)), min(m, 5)), v0=_eigsh_v0(previous_solution))
+            eig_val, solution_now = scp.sparse.linalg.eigsh(A, tol=eps, k=1, which="SA", ncv=_eigsh_ncv(m), maxiter=_eigsh_maxiter(m), v0=_eigsh_v0(previous_solution))
             if np.linalg.norm(A @ solution_now - eig_val * solution_now) > eps:
                 sigma = eig_val.squeeze()
                 M_shift = A - sigma * scp.sparse.eye(A.shape[1], format=A.format)
@@ -1318,8 +1360,8 @@ def _eigen_local_solve_last(previous_solution, XAX_k, A_k, XAX_k1, m, size_limit
                     k=1,
                     which="LM",  # largest magnitude in shift-invert corresponds to eigenvalue near sigma
                     v0=_eigsh_v0(solution_now),  # use previous solution as initial guess
-                    ncv=max(int(np.floor(0.5*m)), min(m, 5)),
-                    maxiter=10*m,
+                    ncv=_eigsh_ncv(m),
+                    maxiter=_eigsh_maxiter(m),
                     tol=eps
                 )
                 # Convert back to original eigenvalue
@@ -1329,7 +1371,6 @@ def _eigen_local_solve_last(previous_solution, XAX_k, A_k, XAX_k1, m, size_limit
             solution_now = previous_solution
             eig_val = previous_solution.T @ A @ previous_solution
         old_res = np.linalg.norm(eig_val * previous_solution - A @ previous_solution)
-        solution_now /= max(np.linalg.norm(solution_now), 1e-300)
         return solution_now, old_res
 
     x_shape = previous_solution.shape
@@ -1338,14 +1379,13 @@ def _eigen_local_solve_last(previous_solution, XAX_k, A_k, XAX_k1, m, size_limit
     mat_vec_A = lambda x_vec: _mat_vec_A(XAX_k, A_k, XAX_k1, x_vec.reshape(*x_shape)).reshape(-1, 1)
     A_op = scp.sparse.linalg.LinearOperator((m, m), matvec=mat_vec_A)
     try:
-        eig_val, solution_now = scp.sparse.linalg.lobpcg(A_op, X=previous_solution, tol=eps, largest=False, maxiter=10*m)
+        eig_val, solution_now = scp.sparse.linalg.lobpcg(A_op, X=previous_solution, tol=eps, largest=False, maxiter=_lobpcg_maxiter(m))
     except Exception as e:
         _print_attention(e)
         solution_now = previous_solution
         eig_val = previous_solution.T @ A_op(previous_solution)
 
     old_res = np.linalg.norm(eig_val * previous_solution - A_op(previous_solution))
-    solution_now /= max(np.linalg.norm(solution_now), 1e-300)
     return solution_now.reshape(-1, 1), old_res
 
 
@@ -1366,6 +1406,7 @@ def tt_min_eig(A, x0=None, nswp=10, tol=1e-8, size_limit=64, return_eig_val=Fals
     max_rank = int(np.floor(2**(d/2)))
     trunc_tol = 0.1*tol/np.sqrt(d)
     lanczos_discount = 0.5
+    prev_sweep_res = np.inf
     for swp in range(nswp):
         max_res = np.inf if swp == 0 else 0
         for k in range(d - 1, 0, -1):
@@ -1437,6 +1478,11 @@ def tt_min_eig(A, x0=None, nswp=10, tol=1e-8, size_limit=64, return_eig_val=Fals
             print(f'\tResidual {max_res}')
             print(f'\tLanczos Discount {lanczos_discount:2f}')
             print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
+        if swp >= 2 and _eigen_residual_stalled(prev_sweep_res, max_res, tol):
+            if verbose:
+                print("\tEigen sweep stalled; stopping early.", flush=True)
+            break
+        prev_sweep_res = max_res
 
     if verbose:
         print("\t -----")
@@ -1720,3 +1766,4 @@ def tt_mat_vec_mul(mat, vec, op_tol, eps, verbose=False):
     if np.max((np.array(tt_ranks(mat))*np.array(tt_ranks(vec)))) <= 80:
         return tt_rank_reduce(tt_fast_matrix_vec_mul(mat, vec, eps), op_tol)
     return tt_approx_mat_vec_mul(mat, vec, tol=op_tol, verbose=verbose)
+

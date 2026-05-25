@@ -54,9 +54,6 @@ def run_experiment(create_problem_fn):
             ranksT = np.zeros((num_ranks, num_seeds, dim - 1))
 
     used_seeds = set(config["seeds"])
-    retry_pathological = bool(config.get("retry_pathological_seeds", False))
-    strict_post_check = bool(config.get("strict_post_check", False))
-    post_tol = max(1e-3, 2.0 * float(config.get("abs_tol", 1e-3)))
 
     rank = args.rank
     r_i = 0
@@ -70,12 +67,7 @@ def run_experiment(create_problem_fn):
             ranksX, ranksY, ranksZ, ranksT, config_path
         )
         new_seed = seed
-        if not retry_pathological and ((feas_err > post_tol) or (slack > post_tol)):
-            msg = f"Seed {seed} failed post-check: feasibility={feas_err:.2e}, slackness={slack:.2e}."
-            if strict_post_check:
-                raise RuntimeError(msg)
-            print(f"WARNING: {msg} Continuing because strict_post_check=false.")
-        while retry_pathological and ((feas_err > post_tol) or (slack > post_tol)):
+        while (feas_err > 1e-3) or (slack > 1e-3):
             print(f"Seed {new_seed} is pathological (feasibility error: {feas_err:.2e}, slackness: {slack:.2e}). Suggesting a new seed.")
             new_seed = np.random.randint(0, 2**10)
             while new_seed in used_seeds:
@@ -130,26 +122,33 @@ def print_results_summary(config, args, runtimes, problem_creation_times,
                           num_iters, feasibility_errors, dual_feasibility_errors, complementary_slackness,
                           ranksX, ranksY, ranksZ, ranksT=None, memory=None):
     """
-    Prints a formatted summary of the experimental results, including means
-    and standard deviations for performance metrics and tensor ranks in a 'mean ± std' format.
+    Prints a formatted summary of the experimental results, including mean ± std
+    metrics and runtime distribution statistics (median, IQR, worst-case).
     """
     print("\n" + "=" * 80)
     print(f"{'FINAL RESULTS SUMMARY':^80}")
     print("=" * 80)
     seeds = config["seeds"]
-    print(f"Values are reported as Mean ± Standard Deviation over all seeds {seeds}.\n")
+    print(f"Most metrics are reported as Mean ± Standard Deviation over all seeds {seeds}.\n")
     r_i = 0
 
     # --- Calculate Means for Metrics ---
-    mean_runtime = np.mean(runtimes[r_i, :])
+    runtime_samples = np.asarray(runtimes[r_i, :], dtype=np.float64).ravel()
+    mean_runtime = np.mean(runtime_samples)
     mean_creation_time = np.mean(problem_creation_times[r_i, :])
     mean_iters = np.mean(num_iters[r_i, :])
     mean_feasibility = np.mean(feasibility_errors[r_i, :])
     mean_dual_feasibility = np.mean(dual_feasibility_errors[r_i, :])
     mean_slackness = np.mean(complementary_slackness[r_i, :])
 
+    # --- Runtime Distribution Metrics ---
+    worst_runtime = np.max(runtime_samples)
+    median_runtime = np.median(runtime_samples)
+    q1_runtime, q3_runtime = np.percentile(runtime_samples, [25, 75])
+    iqr_runtime = q3_runtime - q1_runtime
+
     # --- Calculate Standard Deviations for Metrics ---
-    std_runtime = np.std(runtimes[r_i, :])
+    std_runtime = np.std(runtime_samples)
     std_creation_time = np.std(problem_creation_times[r_i, :])
     std_iters = np.std(num_iters[r_i, :])
     std_feasibility = np.std(feasibility_errors[r_i, :])
@@ -157,9 +156,11 @@ def print_results_summary(config, args, runtimes, problem_creation_times,
     std_slackness = np.std(complementary_slackness[r_i, :])
 
     # --- Print Table for the Current Rank ---
-    print(f"  {'Metric':<28} | {'Value (Mean ± Std)':>25}")
+    print(f"  {'Metric':<28} | {'Value':>25}")
     print(f"  {'-' * 28} | {'-' * 25}")
     print(f"  {'Solution Time (s)':<28} | {f'{mean_runtime:.3f} ± {std_runtime:.3f}':>25}")
+    print(f"  {'Runtime Median [IQR] (s)':<28} | {f'{median_runtime:.3f} [{iqr_runtime:.3f}]':>25}")
+    print(f"  {'Worst Runtime (s)':<28} | {f'{worst_runtime:.3f}':>25}")
     print(f"  {'Problem Creation (s)':<28} | {f'{mean_creation_time:.3f} ± {std_creation_time:.3f}':>25}")
     print(f"  {'Iterations':<28} | {f'{mean_iters:.1f} ± {std_iters:.1f}':>25}")
     print(f"  {'Feasibility Error':<28} | {f'{mean_feasibility:.2e} ± {std_feasibility:.2e}':>25}")
@@ -167,9 +168,16 @@ def print_results_summary(config, args, runtimes, problem_creation_times,
     print(f"  {'Duality Gap':<28} | {f'{mean_slackness:.2e} ± {std_slackness:.2e}':>25}")
 
     if args.track_mem and memory is not None:
-        mean_mem = np.mean(memory[r_i, :])
-        std_mem = np.std(memory[r_i, :])
+        memory_samples = np.asarray(memory[r_i, :], dtype=np.float64).ravel()
+        mean_mem = np.mean(memory_samples)
+        std_mem = np.std(memory_samples)
+        worst_mem = np.max(memory_samples)
+        median_mem = np.median(memory_samples)
+        q1_mem, q3_mem = np.percentile(memory_samples, [25, 75])
+        iqr_mem = q3_mem - q1_mem
         print(f"  {'Peak Memory (MB)':<28} | {f'{mean_mem:.3f} ± {std_mem:.3f}':>25}")
+        print(f"  {'Memory Median [IQR] (MB)':<28} | {f'{median_mem:.3f} [{iqr_mem:.3f}]':>25}")
+        print(f"  {'Worst Memory (MB)':<28} | {f'{worst_mem:.3f}':>25}")
 
     # --- Calculate and Print Rank Statistics ---
     print(f"  {'-' * 28} | {'-' * 25}")
@@ -270,7 +278,8 @@ def run_and_record(seed, r_i, s_i, rank, config, args, create_problem_fn, memory
             aho_direction=False,
             mals_restarts=config["mals_restarts"],
             max_refinement=config["max_refinement"],
-            eta_floor=float(config.get("eta_floor", config.get("delta_min", config["op_tol"])))
+            lambdaStar=float(config.get("lambdaStar", 1)),
+            lambdaStarIneq=float(config.get("lambdaStarIneq", 1))
         )
     if args.track_mem:
         start_mem = memory_usage(max_usage=True, include_children=True)

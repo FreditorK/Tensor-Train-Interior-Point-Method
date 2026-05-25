@@ -1,15 +1,18 @@
-abs_tol: 0.001
-dim: 6
-gap_tol: 0.0003
-mals_restarts: 2
-max_iter: 22
-max_refinement: 5
-op_tol: 0.0001
-seeds:
-- 138
-- 553
-- 111
-- 342
-- 736
+# Common
+dim: !!int 6
+seeds: 
+- 73 
+- 54
+- 624
+- 7
+- 9
+gap_tol: !!float 3e-4
 verbose: true
-warm_up: 3
+# TT-IPM
+op_tol: !!float 1e-4
+abs_tol: !!float 0.001
+max_iter: !!int 22
+warm_up: !!int 3
+mals_restarts: !!int 2
+max_refinement:  !!int 5
+lambdaStar: 1.0
