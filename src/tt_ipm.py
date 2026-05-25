@@ -17,6 +17,9 @@ warnings.simplefilter("error")
 
 
 _DENSE_FALLBACK_EXCEPTIONS = (la.LinAlgWarning, la.LinAlgError, np.linalg.LinAlgError)
+_REG_SHIFT_INIT = 1e-11
+_REG_SHIFT_MAX = 1e-4
+_REG_SHIFT_GROWTH = 10.0
 
 
 def _print_unexpected_dense_failure(e):
@@ -32,6 +35,43 @@ def _expected_newton_fallback(e):
         "Number of restarts exhausted" in str(e)
         or "Absolute tolerance already reached" in str(e)
     )
+
+
+def _feasibility_ratio(status):
+    primal_tol = max(status.feasibility_tol, status.eps)
+    dual_tol = max((1 + (status.ineq_status is IneqStatus.ACTIVE)) * status.feasibility_tol, status.eps)
+    return max(status.primal_error / primal_tol, status.dual_error / dual_tol)
+
+
+def _sigma_floor_from_feasibility(status):
+    """Keep complementarity reduction conservative until feasibility is under control."""
+    ratio = _feasibility_ratio(status)
+    if ratio > 50:
+        return 0.95
+    if ratio > 10:
+        return 0.90
+    if ratio > 3:
+        return 0.80
+    if ratio > 1:
+        return 0.65
+    return 0.0
+
+
+def _escalate_regularization(status, reason):
+    if status.reg_shift >= status.reg_shift_max:
+        return False
+    new_shift = min(status.reg_shift_max, max(status.reg_shift * _REG_SHIFT_GROWTH, _REG_SHIFT_INIT))
+    if new_shift <= status.reg_shift:
+        return False
+    status.reg_shift = new_shift
+    status.reg_retry_count += 1
+    status.mals_delta0 = None
+    if status.verbose:
+        print(
+            f"\nRegularization increased to {status.reg_shift:.1e} after {reason}; retrying Newton step.",
+            flush=True
+        )
+    return True
 
 def chunk_integer(n, k):
     base_size = n // k
@@ -200,7 +240,7 @@ def forward_backward_sub(L, b, overwrite_b=False):
     x = scp.linalg.solve_triangular(L.T, y, lower=False, check_finite=False, overwrite_b=True)
     return x
 
-def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous_solution, size_limit, dense_solve=True, rtol=1e-5):
+def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous_solution, size_limit, dense_solve=True, rtol=1e-5, reg_shift=_REG_SHIFT_INIT):
     x_shape = previous_solution.shape
     m = x_shape[0] * x_shape[2] * x_shape[3]
     rhs = np.empty_like(previous_solution)
@@ -223,10 +263,14 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
             mR_d = rhs[:, 1].reshape(m, 1)
             mR_c = rhs[:, 2].reshape(m, 1)
             L_X_I_inv = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[2, 2], block_A_k[2, 2], XAX_k1[2, 2]).reshape(m, m)
+            if reg_shift > 0:
+                L_X_I_inv.flat[::L_X_I_inv.shape[1] + 1] += reg_shift
             L_X_I_inv *= inv_I.reshape(1, -1)
             mL_eq = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[0, 1], block_A_k[0, 1], XAX_k1[0, 1]).reshape(m, m)
+            L_L_Z_local = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[2, 1], block_A_k[2, 1], XAX_k1[2, 1]).reshape(m, m)
+            L_L_Z_local.flat[::L_L_Z_local.shape[1] + 1] += reg_shift
             L_L_Z = scp.linalg.cholesky(
-                cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[2, 1], block_A_k[2, 1], XAX_k1[2, 1]).reshape(m, m),
+                L_L_Z_local,
                 check_finite=False, lower=True, overwrite_a=True
             )
             b = mR_p - mL_eq @ forward_backward_sub(L_L_Z, mR_c - L_X_I_inv @ mR_d, overwrite_b=True)
@@ -234,7 +278,6 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
             np.matmul(A, mL_eq.T, out=A)
             np.matmul(mL_eq, A, out=A)
             A += cached_einsum('lsr,smnS,LSR->lmLrnR',XAX_k[0, 0], block_A_k[0, 0], XAX_k1[0, 0]).reshape(m, m)
-            A.flat[::A.shape[1] + 1] += 1e-11
             solution_now = np.empty(x_shape)
             solution_now[:, 0] = scp.linalg.solve(A, b, check_finite=False, overwrite_a=True, overwrite_b=True, assume_a="gen").reshape(x_shape[0], x_shape[2], x_shape[3])
             solution_now[:, 2] = (
@@ -289,7 +332,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
 
     return solution_now, block_res_old, min(block_res_old, block_res_new), rhs, norm_rhs, direct_solve_failure
 
-def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous_solution, size_limit, dense_solve=True, rtol=1e-5):
+def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous_solution, size_limit, dense_solve=True, rtol=1e-5, reg_shift=_REG_SHIFT_INIT):
     x_shape = previous_solution.shape
     m = x_shape[0] * x_shape[2] * x_shape[3]
     rhs = np.empty_like(previous_solution)
@@ -309,23 +352,27 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
             
     if dense_solve:
         try:
+            L_L_Z_local = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[2, 1], block_A_k[2, 1], XAX_k1[2, 1]).reshape(m, m)
+            L_L_Z_local.flat[::L_L_Z_local.shape[1] + 1] += reg_shift
             L_L_Z = scp.linalg.cholesky(
-                cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[2, 1], block_A_k[2, 1], XAX_k1[2, 1]).reshape(m, m),
-                check_finite=False, lower=True,  overwrite_a=True
+                L_L_Z_local,
+                check_finite=False, lower=True, overwrite_a=True
             )
             mR_p = rhs[:, 0].reshape(m, 1)
             mR_d = rhs[:, 1].reshape(m, 1)
             mR_c = rhs[:, 2].reshape(m, 1)
             mR_t = rhs[:, 3].reshape(m, 1)
             L_L_Z_inv_mR_c = forward_backward_sub(L_L_Z, rhs[:, 2].reshape(m, 1))
-            L_L_Z_inv_L_X = forward_backward_sub(L_L_Z, cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[2, 2], block_A_k[2, 2], XAX_k1[2, 2]).reshape(m, m), overwrite_b=True)
+            L_X_local = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[2, 2], block_A_k[2, 2], XAX_k1[2, 2]).reshape(m, m)
+            if reg_shift > 0:
+                L_X_local.flat[::L_X_local.shape[1] + 1] += reg_shift
+            L_L_Z_inv_L_X = forward_backward_sub(L_L_Z, L_X_local, overwrite_b=True)
             mL_eq = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[0, 1], block_A_k[0, 1], XAX_k1[0, 1]).reshape(m, m)
             T_op = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[3, 1], block_A_k[3, 1], XAX_k1[3, 1]).reshape(m, m)
             u = mR_p - mL_eq @ (L_L_Z_inv_mR_c - (L_L_Z_inv_L_X * inv_I.reshape(1, -1)) @ mR_d)
             v = mR_t - T_op @ (L_L_Z_inv_mR_c - (L_L_Z_inv_L_X * inv_I.reshape(1, -1)) @ mR_d)
             A = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[0, 0], block_A_k[0, 0],XAX_k1[0, 0]).reshape(m, m).__iadd__(mL_eq @ (L_L_Z_inv_L_X * inv_I.reshape(1, -1)) @ mL_eq.T)
             D = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[3, 3], block_A_k[3, 3], XAX_k1[3, 3]).reshape(m, m).__iadd__(T_op @ L_L_Z_inv_L_X)
-            D.flat[::D.shape[1] + 1] += 1e-11
             np.matmul(T_op, L_L_Z_inv_L_X * inv_I.reshape(1, -1), out=T_op)
             np.matmul(T_op, mL_eq.T, out=T_op)
             np.matmul(mL_eq, L_L_Z_inv_L_X, out=mL_eq)
@@ -566,7 +613,7 @@ def _tt_ipm_newton_step(
                     + x_step_size * tt_inner_prod(Delta_X_tt, T_tt)
                 )
                 e = max(1, 3 * min(x_step_size, z_step_size) ** 2)
-                status.sigma = min(0.99, max(mu_aff/(ZX + TX), 0)**e)
+                status.sigma = max(_sigma_floor_from_feasibility(status), min(0.99, max(mu_aff/(ZX + TX), 0)**e))
                 if status.sigma > 1e-4:
                     rhs_vec_tt[3]  = tt_rank_reduce(tt_add(
                             tt_scale(status.sigma * status.mu, tt_reshape(ineq_mask, (4,))),
@@ -580,7 +627,7 @@ def _tt_ipm_newton_step(
                     + x_step_size * tt_inner_prod(Delta_X_tt, Z_tt)
                 )
                 e = max(1, 3*min(x_step_size, z_step_size)**2)
-                status.sigma = min(0.99, max(mu_aff/ZX, 0) ** e)
+                status.sigma = max(_sigma_floor_from_feasibility(status), min(0.99, max(mu_aff/ZX, 0) ** e))
 
 
             if DXZ > 0.1*status.centrality_tol:
@@ -982,6 +1029,9 @@ class IPMStatus:
     eta = 1e-3
     preprocess: PreprocessInfo = None
     converged: bool = False
+    reg_shift: float = 0.0
+    reg_shift_max: float = _REG_SHIFT_MAX
+    reg_retry_count: int = 0
 
 
 def _ipm_format_output(X_tt, Y_tt, T_tt, Z_tt, iteration, status):
@@ -1119,12 +1169,18 @@ def tt_ipm(
 
     lhs_skeleton = TTBlockMatrix()
     lhs_skeleton[1, 2] = tt_reshape(tt_identity(2 * dim), (4, 4))
+    def _local_solver_eq(*ls_args, **ls_kwargs):
+        return _ipm_local_solver(*ls_args, **ls_kwargs, reg_shift=status.reg_shift)
+
+    def _local_solver_ineq(*ls_args, **ls_kwargs):
+        return _ipm_local_solver_ineq(*ls_args, **ls_kwargs, reg_shift=status.reg_shift)
+
     solver_ineq = lambda lhs, rhs, x0, nwsp, restriction, termination_tol, strict_forcing=True: tt_restarted_block_amen(
         lhs,
         rhs,
         rank_restriction=restriction,
         x0=x0,
-        local_solver=_ipm_local_solver_ineq,
+        local_solver=_local_solver_ineq,
         op_tol=op_tol,
         termination_tol=termination_tol,
         num_restarts=mals_restarts,
@@ -1137,7 +1193,7 @@ def tt_ipm(
         rhs,
         rank_restriction=restriction,
         x0=x0,
-        local_solver=_ipm_local_solver,
+        local_solver=_local_solver_eq,
         op_tol=op_tol,
         termination_tol=termination_tol,
         num_restarts=mals_restarts, 
@@ -1229,7 +1285,10 @@ def tt_ipm(
             solver
         )
 
-        if (Delta_X_tt is None and Delta_Z_tt is None) or (x_step_size < 1e-5 and z_step_size < 1e-5):
+        tiny_or_failed_newton = (Delta_X_tt is None and Delta_Z_tt is None) or (x_step_size < 1e-5 and z_step_size < 1e-5)
+        if tiny_or_failed_newton:
+            if _escalate_regularization(status, "tiny or failed Newton update"):
+                continue
             if abs(ZX) + abs(TX) < abs_tol and status.primal_error < abs_tol and status.dual_error < abs_tol:
                 status.converged = True
                 break

@@ -1,0 +1,9 @@
+universe = vanilla
+executable = /vol/bitbucket/fjk20/projects/Tensor-Train-Interior-Point-Method/build_cython.sh
+initialdir = /vol/bitbucket/fjk20/projects/Tensor-Train-Interior-Point-Method
+getenv = True
+requirements = regexp("^cedar[0-9][0-9]", TARGET.Machine)
+output = /vol/bitbucket/fjk20/projects/Tensor-Train-Interior-Point-Method/logs/$(Cluster)_$(Process).build.out
+error  = /vol/bitbucket/fjk20/projects/Tensor-Train-Interior-Point-Method/logs/$(Cluster)_$(Process).build.err
+log    = /vol/bitbucket/fjk20/projects/Tensor-Train-Interior-Point-Method/logs/$(Cluster)_$(Process).build.condor.log
+queue
