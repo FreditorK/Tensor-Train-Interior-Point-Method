@@ -608,7 +608,15 @@ def _tt_ipm_newton_step(
                 ) if status.sigma > 1e-4 else rhs_vec_tt.get_row(2)
 
             try:
-                Delta_tt_cc, _ = solver(lhs_matrix_tt, rhs_vec_tt, status.mals_delta0, status.kkt_iterations + status.is_last_iter, status.mals_rank_restriction, status.eta, False)
+                Delta_tt_cc, _ = solver(
+                    lhs_matrix_tt,
+                    rhs_vec_tt,
+                    status.mals_delta0,
+                    status.kkt_iterations + status.is_last_iter,
+                    status.mals_rank_restriction,
+                    status.eta,
+                    False
+                )
             except RuntimeError as e:
                 if not _expected_newton_fallback(e):
                     raise
@@ -1014,7 +1022,7 @@ def _ipm_ready_for_refinement(status):
     return (
         status.is_primal_feasible
         and status.is_dual_feasible
-        and status.centrality_error < status.centrality_tol
+        and status.is_central
     )
 
 

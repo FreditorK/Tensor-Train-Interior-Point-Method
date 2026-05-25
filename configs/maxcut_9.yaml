@@ -10,6 +10,5 @@ seeds:
 - 9313
 - 332
 - 342
-- 24
 verbose: true
 warm_up: 3
