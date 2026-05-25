@@ -494,6 +494,85 @@ def _tt_get_block(i, block_matrix_tt):
     b = np.argmax([len(c.shape) for c in block_matrix_tt])
     return block_matrix_tt[:b] + [block_matrix_tt[b][:, i]] + block_matrix_tt[b+1:]
 
+
+def _tt_copy(train_tt):
+    return [np.array(core, copy=True) for core in train_tt]
+
+
+def _tt_scale_nondestructive(train_tt, scale):
+    if train_tt is None or np.isclose(scale, 1.0):
+        return train_tt
+    return tt_scale(scale, _tt_copy(train_tt))
+
+
+def _tt_rhs_row_norm(rhs_vec_tt, row_index):
+    rhs_row = rhs_vec_tt.get_row(row_index)
+    if rhs_row is None:
+        return 0.0
+    row_norm = tt_norm(rhs_row)
+    return float(row_norm) if np.isfinite(row_norm) else 0.0
+
+
+def _tt_kkt_row_scales(rhs_vec_tt, status):
+    eps = max(status.op_tol, 1e-12)
+    feas_norm = max(_tt_rhs_row_norm(rhs_vec_tt, 0), _tt_rhs_row_norm(rhs_vec_tt, 1))
+    cent_norm = max(_tt_rhs_row_norm(rhs_vec_tt, 2), _tt_rhs_row_norm(rhs_vec_tt, 3))
+
+    row_scales = {}
+    if feas_norm > eps:
+        feas_scale = float(np.clip(1.0 / max(feas_norm, eps), 1e-6, 1e6))
+        row_scales[0] = feas_scale
+        row_scales[1] = feas_scale
+    if cent_norm > eps:
+        cent_scale = float(np.clip(1.0 / max(cent_norm, eps), 1e-6, 1e6))
+        if 0 in row_scales:
+            # Keep feasibility equations at least as important as centrality.
+            cent_scale = min(cent_scale, row_scales[0])
+        row_scales[2] = cent_scale
+        row_scales[3] = cent_scale
+
+    return row_scales
+
+
+def _tt_effective_row_scale(lhs_matrix_tt, key, row_scales):
+    row_index = key[0]
+    scale = row_scales.get(row_index, 1.0)
+    if key in lhs_matrix_tt._transposes:
+        coupled_row, _ = lhs_matrix_tt._transposes[key]
+        if coupled_row in row_scales:
+            scale = np.sqrt(scale * row_scales[coupled_row])
+    if key in lhs_matrix_tt._aliases:
+        coupled_row, _ = lhs_matrix_tt._aliases[key]
+        if coupled_row in row_scales:
+            scale = np.sqrt(scale * row_scales[coupled_row])
+    return float(scale)
+
+
+def _tt_build_row_scaled_kkt(lhs_matrix_tt, rhs_vec_tt, status):
+    row_scales = _tt_kkt_row_scales(rhs_vec_tt, status)
+    if not row_scales:
+        return lhs_matrix_tt, rhs_vec_tt
+
+    lhs_scaled = TTBlockMatrix()
+    lhs_scaled._aliases = dict(lhs_matrix_tt._aliases)
+    lhs_scaled._transposes = dict(lhs_matrix_tt._transposes)
+    for key, block in lhs_matrix_tt._data.items():
+        scale = _tt_effective_row_scale(lhs_matrix_tt, key, row_scales)
+        lhs_scaled[key] = _tt_scale_nondestructive(block, scale)
+
+    rhs_scaled = TTBlockVector()
+    for row_index in rhs_vec_tt.keys():
+        scale = row_scales.get(row_index, 1.0)
+        rhs_scaled[row_index] = _tt_scale_nondestructive(rhs_vec_tt.get_row(row_index), scale)
+
+    if status.verbose:
+        feas_scale = row_scales.get(0, row_scales.get(1, 1.0))
+        cent_scale = row_scales.get(2, row_scales.get(3, 1.0))
+        print(f"KKT row scaling: feas={feas_scale:.2e}, cent={cent_scale:.2e}", flush=True)
+
+    return lhs_scaled, rhs_scaled
+
+
 def _tt_ipm_newton_step(
         lhs_matrix_tt,
         rhs_vec_tt,
@@ -510,7 +589,8 @@ def _tt_ipm_newton_step(
         # Predictor
         if status.verbose:
             print("\n--- Predictor  step ---", flush=True)
-        Delta_tt, _ = solver(lhs_matrix_tt, rhs_vec_tt, status.mals_delta0, status.kkt_iterations + status.is_last_iter, status.mals_rank_restriction, status.eta)
+        lhs_pred_tt, rhs_pred_tt = _tt_build_row_scaled_kkt(lhs_matrix_tt, rhs_vec_tt, status)
+        Delta_tt, _ = solver(lhs_pred_tt, rhs_pred_tt, status.mals_delta0, status.kkt_iterations + status.is_last_iter, status.mals_rank_restriction, status.eta)
         status.mals_delta0 = Delta_tt
         Delta_X_tt = _tt_symmetrise(tt_reshape(_tt_get_block(1, Delta_tt), (2, 2)), status.eps)
         Delta_Z_tt = _tt_symmetrise(tt_reshape(_tt_get_block(2, Delta_tt), (2, 2)), status.eps)
@@ -586,7 +666,8 @@ def _tt_ipm_newton_step(
                     0.1*status.eta*status.centrl_error_normalisation
                 ) if status.sigma > 1e-4 else rhs_vec_tt.get_row(2)
 
-            Delta_tt_cc, _ = solver(lhs_matrix_tt, rhs_vec_tt, status.mals_delta0, status.kkt_iterations + status.is_last_iter, status.mals_rank_restriction, status.eta)
+            lhs_cc_tt, rhs_cc_tt = _tt_build_row_scaled_kkt(lhs_matrix_tt, rhs_vec_tt, status)
+            Delta_tt_cc, _ = solver(lhs_cc_tt, rhs_cc_tt, status.mals_delta0, status.kkt_iterations + status.is_last_iter, status.mals_rank_restriction, status.eta)
             status.mals_delta0 = Delta_tt_cc
             Delta_X_tt_cc = _tt_symmetrise(tt_reshape(_tt_get_block(1, Delta_tt_cc), (2, 2)), status.eps)
             Delta_Z_tt_cc = _tt_symmetrise(tt_reshape(_tt_get_block(2, Delta_tt_cc), (2, 2)), status.eps)
