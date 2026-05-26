@@ -1,0 +1,32 @@
+Running: maxcut_scs (rank=4)
+==== maxcut SCS Batch Run Started at Tue 26 May 13:36:27 BST 2026 ====
+
+▶ Running dim=10 with config=configs/maxcut_10.yaml at Tue 26 May 13:36:27 BST 2026
+===Terminated Graph Sampling=== rank:  [2, 4, 4, 4, 4, 2, 1, 1, 1]
+------------------------------------------------------------------
+	       SCS v3.2.9 - Splitting Conic Solver
+	(c) Brendan O'Donoghue, Stanford University, 2012
+------------------------------------------------------------------
+problem:  variables n: 524800, constraints m: 525824
+cones: 	  z: primal zero / dual free vars: 1024
+	  s: psd vars: 524800, ssize: 1
+settings: eps_abs: 1.0e-06, eps_rel: 1.0e-06, eps_infeas: 1.0e-07
+	  alpha: 1.50, scale: 1.00e-01, adaptive_scale: 1
+	  max_iters: 100000, normalize: 1, rho_x: 1.00e-06
+	  acceleration_lookback: 10, acceleration_interval: 10
+lin-sys:  sparse-indirect-scs
+	  nnz(A): 525824, nnz(P): 0
+------------------------------------------------------------------
+ iter | pri res | dua res |   gap   |   obj   |  scale  | time (s)
+------------------------------------------------------------------
+     0| 4.47e+01  3.72e+01  2.00e+05 -1.19e+05  1.00e-01  5.58e-01 
+   250| 5.79e-03  1.11e-01  3.78e-01 -1.95e+04  3.21e+01  1.15e+02 
+   450| 9.47e-08  6.81e-06  4.47e-04 -1.95e+04  1.07e+02  2.72e+02 
+------------------------------------------------------------------
+status:  solved
+timings: total: 2.72e+02s = setup: 2.04e-01s + solve: 2.72e+02s
+	 lin-sys: 1.07e+01s, cones: 2.58e+02s, accel: 7.22e-01s
+------------------------------------------------------------------
+objective = -19488.000672
+------------------------------------------------------------------
+===Terminated Graph Sampling=== rank:  [2, 3, 3, 4, 4, 4, 2, 1, 1]

@@ -190,12 +190,9 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
     norm_rhs = max(np.linalg.norm(rhs), 1e-10)
     inv_I = np.divide(1, cached_einsum('lsr,smnS,LSR->lmL', XAX_k[1, 2], block_A_k[1, 2], XAX_k1[1, 2]))
     block_res_old = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution).__isub__(rhs)) / norm_rhs
+    dense_solve = (np.sqrt(x_shape[0]*x_shape[3]) <= size_limit) and dense_solve and (block_res_old >= rtol)
     direct_solve_failure = not dense_solve
-    dense_solve = (np.sqrt(x_shape[0]*x_shape[3]) <= size_limit) and dense_solve
 
-    if block_res_old < rtol:
-        return previous_solution, block_res_old, block_res_old, rhs, norm_rhs, direct_solve_failure
-    
     if dense_solve:
         try:
             mR_p = rhs[:, 0].reshape(m, 1)
@@ -295,12 +292,9 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
     inv_I = np.divide(1, cached_einsum('lsr,smnS,LSR->lmL', XAX_k[1, 2], block_A_k[1, 2], XAX_k1[1, 2]))
     norm_rhs = max(np.linalg.norm(rhs), 1e-10)
     block_res_old = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution).__isub__(rhs)) / norm_rhs
+    dense_solve = (np.sqrt(x_shape[0]*x_shape[3]) <= 0.95*size_limit) and dense_solve and (block_res_old >= rtol)
     direct_solve_failure = not dense_solve
-    dense_solve = (np.sqrt(x_shape[0]*x_shape[3]) <= 0.95*size_limit) and dense_solve
 
-    if block_res_old < rtol:
-        return previous_solution, block_res_old, block_res_old, rhs, norm_rhs, direct_solve_failure
-            
     if dense_solve:
         try:
             L_L_Z = scp.linalg.cholesky(
@@ -548,8 +542,9 @@ def _tt_effective_row_scale(lhs_matrix_tt, key, row_scales):
     return float(scale)
 
 
-def _tt_build_row_scaled_kkt(lhs_matrix_tt, rhs_vec_tt, status):
-    row_scales = _tt_kkt_row_scales(rhs_vec_tt, status)
+def _tt_build_row_scaled_kkt(lhs_matrix_tt, rhs_vec_tt, status, row_scales=None):
+    if row_scales is None:
+        row_scales = _tt_kkt_row_scales(rhs_vec_tt, status)
     if not row_scales:
         return lhs_matrix_tt, rhs_vec_tt
 
@@ -589,7 +584,8 @@ def _tt_ipm_newton_step(
         # Predictor
         if status.verbose:
             print("\n--- Predictor  step ---", flush=True)
-        lhs_pred_tt, rhs_pred_tt = _tt_build_row_scaled_kkt(lhs_matrix_tt, rhs_vec_tt, status)
+        row_scales = _tt_kkt_row_scales(rhs_vec_tt, status)
+        lhs_pred_tt, rhs_pred_tt = _tt_build_row_scaled_kkt(lhs_matrix_tt, rhs_vec_tt, status, row_scales=row_scales)
         Delta_tt, _ = solver(lhs_pred_tt, rhs_pred_tt, status.mals_delta0, status.kkt_iterations + status.is_last_iter, status.mals_rank_restriction, status.eta)
         status.mals_delta0 = Delta_tt
         Delta_X_tt = _tt_symmetrise(tt_reshape(_tt_get_block(1, Delta_tt), (2, 2)), status.eps)
@@ -666,7 +662,7 @@ def _tt_ipm_newton_step(
                     0.1*status.eta*status.centrl_error_normalisation
                 ) if status.sigma > 1e-4 else rhs_vec_tt.get_row(2)
 
-            lhs_cc_tt, rhs_cc_tt = _tt_build_row_scaled_kkt(lhs_matrix_tt, rhs_vec_tt, status)
+            lhs_cc_tt, rhs_cc_tt = _tt_build_row_scaled_kkt(lhs_matrix_tt, rhs_vec_tt, status, row_scales=row_scales)
             Delta_tt_cc, _ = solver(lhs_cc_tt, rhs_cc_tt, status.mals_delta0, status.kkt_iterations + status.is_last_iter, status.mals_rank_restriction, status.eta)
             status.mals_delta0 = Delta_tt_cc
             Delta_X_tt_cc = _tt_symmetrise(tt_reshape(_tt_get_block(1, Delta_tt_cc), (2, 2)), status.eps)

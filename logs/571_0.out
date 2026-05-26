@@ -1,0 +1,87 @@
+Running: maxcut_scs (rank=5)
+==== maxcut SCS Batch Run Started at Tue 26 May 13:42:04 BST 2026 ====
+
+▶ Running dim=10 with config=configs/maxcut_10.yaml at Tue 26 May 13:42:04 BST 2026
+===Terminated Graph Sampling=== rank:  [3, 4, 5, 5, 3, 2, 1, 1, 1]
+------------------------------------------------------------------
+	       SCS v3.2.9 - Splitting Conic Solver
+	(c) Brendan O'Donoghue, Stanford University, 2012
+------------------------------------------------------------------
+problem:  variables n: 524800, constraints m: 525824
+cones: 	  z: primal zero / dual free vars: 1024
+	  s: psd vars: 524800, ssize: 1
+settings: eps_abs: 1.0e-06, eps_rel: 1.0e-06, eps_infeas: 1.0e-07
+	  alpha: 1.50, scale: 1.00e-01, adaptive_scale: 1
+	  max_iters: 100000, normalize: 1, rho_x: 1.00e-06
+	  acceleration_lookback: 10, acceleration_interval: 10
+lin-sys:  sparse-indirect-scs
+	  nnz(A): 525824, nnz(P): 0
+------------------------------------------------------------------
+ iter | pri res | dua res |   gap   |   obj   |  scale  | time (s)
+------------------------------------------------------------------
+     0| 5.01e+01  1.32e+02  2.25e+06 -1.32e+06  1.00e-01  5.82e-01 
+   250| 2.37e-02  3.78e-02  8.87e+00 -2.03e+05  9.26e+01  1.29e+02 
+   500| 3.65e-05  7.38e-04  1.29e-05 -2.03e+05  3.77e+02  2.52e+02 
+   550| 2.46e-08  1.20e-06  5.09e-04 -2.03e+05  3.77e+02  2.73e+02 
+------------------------------------------------------------------
+status:  solved
+timings: total: 2.73e+02s = setup: 1.87e-01s + solve: 2.73e+02s
+	 lin-sys: 1.13e+01s, cones: 2.58e+02s, accel: 7.22e-01s
+------------------------------------------------------------------
+objective = -202752.000261
+------------------------------------------------------------------
+===Terminated Graph Sampling=== rank:  [3, 5, 3, 2, 1, 1, 1, 1, 1]
+------------------------------------------------------------------
+	       SCS v3.2.9 - Splitting Conic Solver
+	(c) Brendan O'Donoghue, Stanford University, 2012
+------------------------------------------------------------------
+problem:  variables n: 524800, constraints m: 525824
+cones: 	  z: primal zero / dual free vars: 1024
+	  s: psd vars: 524800, ssize: 1
+settings: eps_abs: 1.0e-06, eps_rel: 1.0e-06, eps_infeas: 1.0e-07
+	  alpha: 1.50, scale: 1.00e-01, adaptive_scale: 1
+	  max_iters: 100000, normalize: 1, rho_x: 1.00e-06
+	  acceleration_lookback: 10, acceleration_interval: 10
+lin-sys:  sparse-indirect-scs
+	  nnz(A): 525824, nnz(P): 0
+------------------------------------------------------------------
+ iter | pri res | dua res |   gap   |   obj   |  scale  | time (s)
+------------------------------------------------------------------
+     0| 3.61e+01  2.04e+01  7.31e+04 -4.35e+04  1.00e-01  4.70e-01 
+   250| 4.56e-02  9.72e-03  3.70e+00 -5.89e+03  7.61e+00  9.11e+01 
+   500| 2.33e-06  1.43e-05  5.18e-05 -5.89e+03  4.07e+01  1.90e+02 
+------------------------------------------------------------------
+status:  solved
+timings: total: 1.90e+02s = setup: 2.01e-01s + solve: 1.89e+02s
+	 lin-sys: 1.02e+01s, cones: 1.76e+02s, accel: 5.94e-01s
+------------------------------------------------------------------
+objective = -5887.999617
+------------------------------------------------------------------
+===Terminated Graph Sampling=== rank:  [3, 4, 5, 4, 3, 2, 1, 1, 1]
+------------------------------------------------------------------
+	       SCS v3.2.9 - Splitting Conic Solver
+	(c) Brendan O'Donoghue, Stanford University, 2012
+------------------------------------------------------------------
+problem:  variables n: 524800, constraints m: 525824
+cones: 	  z: primal zero / dual free vars: 1024
+	  s: psd vars: 524800, ssize: 1
+settings: eps_abs: 1.0e-06, eps_rel: 1.0e-06, eps_infeas: 1.0e-07
+	  alpha: 1.50, scale: 1.00e-01, adaptive_scale: 1
+	  max_iters: 100000, normalize: 1, rho_x: 1.00e-06
+	  acceleration_lookback: 10, acceleration_interval: 10
+lin-sys:  sparse-indirect-scs
+	  nnz(A): 525824, nnz(P): 0
+------------------------------------------------------------------
+ iter | pri res | dua res |   gap   |   obj   |  scale  | time (s)
+------------------------------------------------------------------
+     0| 5.30e+01  6.81e+01  3.73e+05 -2.22e+05  1.00e-01  7.50e-01 
+   250| 1.12e-02  1.05e-01  2.68e-01 -3.52e+04  7.82e+01  1.02e+02 
+   425| 2.26e-06  4.86e-05  1.10e-05 -3.52e+04  7.82e+01  1.66e+02 
+------------------------------------------------------------------
+status:  solved
+timings: total: 1.66e+02s = setup: 1.95e-01s + solve: 1.66e+02s
+	 lin-sys: 8.58e+00s, cones: 1.55e+02s, accel: 5.49e-01s
+------------------------------------------------------------------
+objective = -35231.996978
+------------------------------------------------------------------
+===Terminated Graph Sampling=== rank:  [3, 4, 5, 3, 2, 1, 1, 1, 1]

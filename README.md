@@ -164,7 +164,6 @@ The code depends on several third-party libraries distributed under their own li
 
 - [NumPy](https://numpy.org/) (BSD)  
 - [SciPy](https://scipy.org/) (BSD)  
-- [CVXPY](https://www.cvxpy.org/) (Apache 2.0)  
 - [PETSc](https://petsc.org/release/) and [petsc4py](https://petsc4py.readthedocs.io/en/stable/) (LGPL)  
 - [SCS](https://github.com/cvxgrp/scs) (MIT)  
 - [SDPA-Python](https://github.com/sdpa-python/sdpa-python) (MIT; optional, not currently available for CPython 3.14)
