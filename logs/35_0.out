@@ -1,0 +1,37 @@
+Running: maxcut_sdpa (rank=1)
+==== maxcut SDPA Batch Run Started at Wed 27 May 14:00:27 BST 2026 ====
+
+▶ Running dim=7 with config=configs/maxcut_7.yaml at Wed 27 May 14:00:27 BST 2026
+===Terminated Graph Sampling=== rank:  [1, 1, 1, 1, 1, 1]
+sdpa-python (sdpap) is unavailable in this environment; falling back to the SCS backend for sdpa baseline runs.
+===Terminated Graph Sampling=== rank:  [1, 1, 1, 1, 1, 1]
+===Terminated Graph Sampling=== rank:  [1, 1, 1, 1, 1, 1]
+===Terminated Graph Sampling=== rank:  [1, 1, 1, 1, 1, 1]
+===Terminated Graph Sampling=== rank:  [1, 1, 1, 1, 1, 1]
+Number of failed seeds: 0
+
+================================================================================
+                             FINAL RESULTS SUMMARY                              
+================================================================================
+Most metrics are reported as Mean ± Standard Deviation over all seeds [23, 34, 513, 5345, 84].
+
+  Metric                       |                     Value
+  ---------------------------- | -------------------------
+  Solution Time (s)            |             0.630 ± 0.413
+  Runtime Median [IQR] (s)     |             0.485 [0.858]
+  Worst Runtime (s)            |                     1.146
+  Problem Creation (s)         |             0.017 ± 0.013
+  Iterations                   |                 0.0 ± 0.0
+  Feasibility Error            |       2.09e-18 ± 3.33e-18
+  Dual Feasibility Error       |       8.84e-09 ± 1.08e-08
+  Duality Gap                  |       8.86e-06 ± 1.04e-05
+  ---------------------------- | -------------------------
+  Rank Statistics                                        
+    Ranks X                 : [0.0±0.0]
+    Ranks Y                 : [0.0±0.0]
+    Ranks Z                 : [0.0±0.0]
+
+================================================================================
+✅ Completed dim=7 successfully
+
+==== All runs completed at Wed 27 May 14:00:34 BST 2026 ====

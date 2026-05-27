@@ -1,0 +1,40 @@
+Running: maxcut_sdpa (rank=1)
+==== maxcut SDPA Batch Run Started at Wed 27 May 14:01:26 BST 2026 ====
+
+▶ Running dim=6 with config=configs/maxcut_6.yaml at Wed 27 May 14:01:26 BST 2026
+===Terminated Graph Sampling=== rank:  [1, 1, 1, 1, 1]
+sdpa-python (sdpap) is unavailable in this environment; falling back to the SCS backend for sdpa baseline runs.
+===Terminated Graph Sampling=== rank:  [1, 1, 1, 1, 1]
+===Terminated Graph Sampling=== rank:  [1, 1, 1, 1, 1]
+===Terminated Graph Sampling=== rank:  [1, 1, 1, 1, 1]
+===Terminated Graph Sampling=== rank:  [1, 1, 1, 1, 1]
+Number of failed seeds: 0
+
+================================================================================
+                             FINAL RESULTS SUMMARY                              
+================================================================================
+Most metrics are reported as Mean ± Standard Deviation over all seeds [73, 54, 624, 7, 9].
+
+  Metric                       |                     Value
+  ---------------------------- | -------------------------
+  Solution Time (s)            |             0.775 ± 0.997
+  Runtime Median [IQR] (s)     |             0.356 [0.131]
+  Worst Runtime (s)            |                     2.762
+  Problem Creation (s)         |             0.011 ± 0.009
+  Iterations                   |                 0.0 ± 0.0
+  Feasibility Error            |       8.83e-18 ± 1.74e-17
+  Dual Feasibility Error       |       1.10e-11 ± 1.76e-11
+  Duality Gap                  |       2.79e-05 ± 3.23e-05
+  Peak Memory (MB)             |           97.364 ± 52.252
+  Memory Median [IQR] (MB)     |            71.168 [0.305]
+  Worst Memory (MB)            |                   201.867
+  ---------------------------- | -------------------------
+  Rank Statistics                                        
+    Ranks X                 : [0.0±0.0]
+    Ranks Y                 : [0.0±0.0]
+    Ranks Z                 : [0.0±0.0]
+
+================================================================================
+✅ Completed dim=6 successfully
+
+==== All runs completed at Wed 27 May 14:01:34 BST 2026 ====

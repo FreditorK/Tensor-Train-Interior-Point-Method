@@ -1,0 +1,33 @@
+013 (575.000.000) 05/26 13:27:28 Job was released.
+	via condor_release (by user fjk20)
+...
+001 (575.000.000) 05/26 15:45:10 Job executing on host: <146.169.52.30:9618?addrs=146.169.52.30-9618+[2a0c-5bc0-40-11c4-a4ad-32-cce8-a8b7]-9618&noUDP&sock=56337_637e_4>
+...
+006 (575.000.000) 05/26 15:45:18 Image size of job updated: 4
+	6  -  MemoryUsage of job (MB)
+	5308  -  ResidentSetSize of job (KB)
+...
+006 (575.000.000) 05/26 15:50:18 Image size of job updated: 12151092
+	2631  -  MemoryUsage of job (MB)
+	2693440  -  ResidentSetSize of job (KB)
+...
+006 (575.000.000) 05/26 16:10:20 Image size of job updated: 12151092
+	2759  -  MemoryUsage of job (MB)
+	2824768  -  ResidentSetSize of job (KB)
+...
+006 (575.000.000) 05/26 16:20:21 Image size of job updated: 12461428
+	2759  -  MemoryUsage of job (MB)
+	2824768  -  ResidentSetSize of job (KB)
+...
+006 (575.000.000) 05/26 16:25:21 Image size of job updated: 12461428
+	2948  -  MemoryUsage of job (MB)
+	3017872  -  ResidentSetSize of job (KB)
+...
+006 (575.000.000) 05/26 16:40:22 Image size of job updated: 12461428
+	3076  -  MemoryUsage of job (MB)
+	3148944  -  ResidentSetSize of job (KB)
+...
+006 (575.000.000) 05/27 02:51:25 Image size of job updated: 12461428
+	3084  -  MemoryUsage of job (MB)
+	3157472  -  ResidentSetSize of job (KB)
+...

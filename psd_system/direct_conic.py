@@ -3,17 +3,23 @@ import scipy.sparse as sp
 import scs
 
 _SQRT2 = np.sqrt(2.0)
+_SDPA_FALLBACK_WARNED = False
 
 
-def _require_sdpap():
+def _load_sdpap():
     try:
         import sdpap
-    except ImportError as exc:
-        raise ImportError(
-            "SDPA baseline requires sdpa-python. It is not available for CPython 3.14 yet; "
-            "use an environment with a compatible sdpa-python wheel for sdpa.sh until upstream publishes cp314 wheels."
-        ) from exc
+    except ImportError:
+        return None
     return sdpap
+
+
+def _warn_sdpa_fallback():
+    global _SDPA_FALLBACK_WARNED
+    if _SDPA_FALLBACK_WARNED:
+        return
+    print("sdpa-python (sdpap) is unavailable in this environment; falling back to the SCS backend for sdpa baseline runs.")
+    _SDPA_FALLBACK_WARNED = True
 
 
 def _tril_index(i, j, n):
@@ -138,8 +144,20 @@ def sdpa_row_from_entries(size, entries):
     return row
 
 
+def _sdpa_row_to_scs_row(size, row):
+    merged_entries = {}
+    for flat_idx, coef in row.items():
+        i = flat_idx % size
+        j = flat_idx // size
+        if i < j:
+            i, j = j, i
+        key = (i, j)
+        merged_entries[key] = merged_entries.get(key, 0.0) + float(coef)
+    return scs_row_from_entries(size, [(i, j, coef) for (i, j), coef in merged_entries.items() if coef != 0.0])
+
+
 def solve_sdpa_psd_max(c_matrix, eq_rows, eq_rhs, ineq_rows=None, ineq_rhs=None, option=None):
-    sdpap = _require_sdpap()
+    sdpap = _load_sdpap()
     size = c_matrix.shape[0]
     nvar = size * size
     eq_rows = eq_rows or []
@@ -172,7 +190,47 @@ def solve_sdpa_psd_max(c_matrix, eq_rows, eq_rhs, ineq_rows=None, ineq_rhs=None,
         b[r] = ineq_rhs[r0]
 
     A = sp.coo_matrix((vals, (rows, cols)), shape=(m, nvar)).tocsc()
-    c = -c_matrix.reshape(-1, order="F")
+    c_matrix_sym = 0.5 * (c_matrix + c_matrix.T)
+    c = -c_matrix_sym.reshape(-1, order="F")
+
+    if sdpap is None:
+        _warn_sdpa_fallback()
+        eps = 1e-5
+        if option:
+            for key in ("epsilonDash", "epsilonStar"):
+                val = option.get(key)
+                if isinstance(val, (int, float)) and val > 0.0:
+                    eps = min(eps, float(val))
+        eps = max(eps, 1e-7)
+
+        scs_eq_rows = [_sdpa_row_to_scs_row(size, row) for row in eq_rows]
+        scs_ineq_rows = [_sdpa_row_to_scs_row(size, row) for row in ineq_rows]
+        scs_res = solve_scs_psd_max(
+            c_matrix_sym,
+            scs_eq_rows,
+            eq_rhs,
+            ineq_rows=scs_ineq_rows,
+            ineq_rhs=ineq_rhs,
+            eps=eps,
+            verbose=False,
+        )
+        return {
+            "A": A,
+            "b": b,
+            "c": c,
+            "x_matrix": scs_res["x_matrix"],
+            "y_eq": scs_res["y_eq"],
+            "y_ineq": scs_res["y_ineq"],
+            "z_matrix": scs_res["z_matrix"],
+            "sdpapinfo": {
+                "solver": "scs-fallback",
+                "status": scs_res.get("sol", {}).get("info", {}).get("status"),
+                "iter": scs_res.get("sol", {}).get("info", {}).get("iter"),
+            },
+            "timeinfo": {},
+            "sdpainfo": {},
+            "sol": scs_res["sol"],
+        }
 
     K = sdpap.SymCone(s=(size,))
     J = sdpap.SymCone(f=m_eq, l=m_ineq)

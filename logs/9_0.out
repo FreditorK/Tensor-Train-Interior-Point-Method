@@ -1,0 +1,86 @@
+Running: maxcut_sdpa (rank=4)
+==== maxcut SDPA Batch Run Started at Wed 27 May 13:41:27 BST 2026 ====
+
+▶ Running dim=6 with config=configs/maxcut_6.yaml at Wed 27 May 13:41:27 BST 2026
+===Terminated Graph Sampling=== rank:  [3, 3, 4, 3, 2]
+SDPA baseline requires sdpa-python. It is not available for CPython 3.14 yet; use an environment with a compatible sdpa-python wheel for sdpa.sh until upstream publishes cp314 wheels.
+Failed to solve problem with config seed 73, trying a new random seed...
+Trying with new random seed: 320
+===Terminated Graph Sampling=== rank:  [3, 4, 3, 3, 2]
+SDPA baseline requires sdpa-python. It is not available for CPython 3.14 yet; use an environment with a compatible sdpa-python wheel for sdpa.sh until upstream publishes cp314 wheels.
+Failed to solve problem with new random seed 320
+Trying with new random seed: 9636
+===Terminated Graph Sampling=== rank:  [3, 4, 4, 3, 3]
+SDPA baseline requires sdpa-python. It is not available for CPython 3.14 yet; use an environment with a compatible sdpa-python wheel for sdpa.sh until upstream publishes cp314 wheels.
+Failed to solve problem with new random seed 9636
+===Terminated Graph Sampling=== rank:  [3, 4, 4, 3, 3]
+SDPA baseline requires sdpa-python. It is not available for CPython 3.14 yet; use an environment with a compatible sdpa-python wheel for sdpa.sh until upstream publishes cp314 wheels.
+Failed to solve problem with config seed 54, trying a new random seed...
+Trying with new random seed: 2494
+===Terminated Graph Sampling=== rank:  [3, 4, 3, 3, 2]
+SDPA baseline requires sdpa-python. It is not available for CPython 3.14 yet; use an environment with a compatible sdpa-python wheel for sdpa.sh until upstream publishes cp314 wheels.
+Failed to solve problem with new random seed 2494
+Trying with new random seed: 1186
+===Terminated Graph Sampling=== rank:  [2, 4, 4, 3, 2]
+SDPA baseline requires sdpa-python. It is not available for CPython 3.14 yet; use an environment with a compatible sdpa-python wheel for sdpa.sh until upstream publishes cp314 wheels.
+Failed to solve problem with new random seed 1186
+===Terminated Graph Sampling=== rank:  [3, 4, 2, 2, 2]
+SDPA baseline requires sdpa-python. It is not available for CPython 3.14 yet; use an environment with a compatible sdpa-python wheel for sdpa.sh until upstream publishes cp314 wheels.
+Failed to solve problem with config seed 624, trying a new random seed...
+Trying with new random seed: 1818
+===Terminated Graph Sampling=== rank:  [3, 3, 4, 3, 3]
+SDPA baseline requires sdpa-python. It is not available for CPython 3.14 yet; use an environment with a compatible sdpa-python wheel for sdpa.sh until upstream publishes cp314 wheels.
+Failed to solve problem with new random seed 1818
+Trying with new random seed: 5955
+===Terminated Graph Sampling=== rank:  [3, 4, 3, 2, 2]
+SDPA baseline requires sdpa-python. It is not available for CPython 3.14 yet; use an environment with a compatible sdpa-python wheel for sdpa.sh until upstream publishes cp314 wheels.
+Failed to solve problem with new random seed 5955
+===Terminated Graph Sampling=== rank:  [3, 4, 4, 3, 2]
+SDPA baseline requires sdpa-python. It is not available for CPython 3.14 yet; use an environment with a compatible sdpa-python wheel for sdpa.sh until upstream publishes cp314 wheels.
+Failed to solve problem with config seed 7, trying a new random seed...
+Trying with new random seed: 4069
+===Terminated Graph Sampling=== rank:  [2, 4, 4, 3, 3]
+SDPA baseline requires sdpa-python. It is not available for CPython 3.14 yet; use an environment with a compatible sdpa-python wheel for sdpa.sh until upstream publishes cp314 wheels.
+Failed to solve problem with new random seed 4069
+Trying with new random seed: 5513
+===Terminated Graph Sampling=== rank:  [2, 3, 4, 3, 2]
+SDPA baseline requires sdpa-python. It is not available for CPython 3.14 yet; use an environment with a compatible sdpa-python wheel for sdpa.sh until upstream publishes cp314 wheels.
+Failed to solve problem with new random seed 5513
+===Terminated Graph Sampling=== rank:  [3, 4, 2, 2, 1]
+SDPA baseline requires sdpa-python. It is not available for CPython 3.14 yet; use an environment with a compatible sdpa-python wheel for sdpa.sh until upstream publishes cp314 wheels.
+Failed to solve problem with config seed 9, trying a new random seed...
+Trying with new random seed: 9926
+===Terminated Graph Sampling=== rank:  [2, 4, 4, 2, 1]
+SDPA baseline requires sdpa-python. It is not available for CPython 3.14 yet; use an environment with a compatible sdpa-python wheel for sdpa.sh until upstream publishes cp314 wheels.
+Failed to solve problem with new random seed 9926
+Trying with new random seed: 2067
+===Terminated Graph Sampling=== rank:  [2, 4, 4, 4, 2]
+SDPA baseline requires sdpa-python. It is not available for CPython 3.14 yet; use an environment with a compatible sdpa-python wheel for sdpa.sh until upstream publishes cp314 wheels.
+Failed to solve problem with new random seed 2067
+Number of failed seeds: 10
+
+================================================================================
+                             FINAL RESULTS SUMMARY                              
+================================================================================
+Most metrics are reported as Mean ± Standard Deviation over all seeds [73, 54, 624, 7, 9].
+
+  Metric                       |                     Value
+  ---------------------------- | -------------------------
+  Solution Time (s)            |             0.000 ± 0.000
+  Runtime Median [IQR] (s)     |             0.000 [0.000]
+  Worst Runtime (s)            |                     0.000
+  Problem Creation (s)         |             0.000 ± 0.000
+  Iterations                   |                 0.0 ± 0.0
+  Feasibility Error            |       0.00e+00 ± 0.00e+00
+  Dual Feasibility Error       |       0.00e+00 ± 0.00e+00
+  Duality Gap                  |       0.00e+00 ± 0.00e+00
+  ---------------------------- | -------------------------
+  Rank Statistics                                        
+    Ranks X                 : [0.0±0.0]
+    Ranks Y                 : [0.0±0.0]
+    Ranks Z                 : [0.0±0.0]
+
+================================================================================
+✅ Completed dim=6 successfully
+
+==== All runs completed at Wed 27 May 13:41:32 BST 2026 ====

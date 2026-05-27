@@ -1,0 +1,33 @@
+013 (565.000.000) 05/26 13:27:28 Job was released.
+	via condor_release (by user fjk20)
+...
+001 (565.000.000) 05/26 13:29:23 Job executing on host: <146.169.52.29:9618?addrs=146.169.52.29-9618+[2a0c-5bc0-40-11c4-ba61-f457-337d-215b]-9618&noUDP&sock=47106_5190_4>
+...
+006 (565.000.000) 05/26 13:29:32 Image size of job updated: 60176
+	35  -  MemoryUsage of job (MB)
+	35388  -  ResidentSetSize of job (KB)
+...
+006 (565.000.000) 05/26 13:34:33 Image size of job updated: 9768288
+	431  -  MemoryUsage of job (MB)
+	441160  -  ResidentSetSize of job (KB)
+...
+006 (565.000.000) 05/26 13:44:34 Image size of job updated: 9783624
+	453  -  MemoryUsage of job (MB)
+	463772  -  ResidentSetSize of job (KB)
+...
+005 (565.000.000) 05/26 13:59:27 Job terminated.
+	(1) Normal termination (return value 0)
+		Usr 0 00:44:10, Sys 0 00:07:17  -  Run Remote Usage
+		Usr 0 00:00:00, Sys 0 00:00:00  -  Run Local Usage
+		Usr 0 00:44:10, Sys 0 00:07:17  -  Total Remote Usage
+		Usr 0 00:00:00, Sys 0 00:00:00  -  Total Local Usage
+	0  -  Run Bytes Sent By Job
+	0  -  Run Bytes Received By Job
+	0  -  Total Bytes Sent By Job
+	0  -  Total Bytes Received By Job
+	Partitionable Resources :    Usage  Request Allocated 
+	   Cpus                 :     1.81        1        16 
+	   Disk (KB)            :     4           4  14529192 
+	   Gpus                 :                           0 
+	   Memory (MB)          :   453           1     31636 
+...
