@@ -68,33 +68,17 @@ if __name__ == "__main__":
             np.random.seed(current_seed)
 
             if args.track_mem:
-                # Baseline before building data so tracked memory includes matrices/constraints too.
+                # Baseline before setup so peak delta includes objective/constraint build and solve.
                 start_mem = memory_usage(max_usage=True, include_children=True)
 
-            t1 = time.time()
-            C, ineq_A = tt_obj_matrix_and_ineq_mask(args.rank, config["dim"])
-            C = tt_matrix_to_matrix(C)
-            ineq_A = np.round(tt_matrix_to_matrix(ineq_A), decimals=1)
-            eq_rows, eq_rhs, ineq_rows, ineq_rhs = _build_constraints_scs(ineq_A)
-            t2 = time.time()
-
-
             try:
-                if args.track_mem:
-                    def wrapper():
-                        return solve_scs_psd_max(
-                            C,
-                            eq_rows,
-                            eq_rhs,
-                            ineq_rows=ineq_rows,
-                            ineq_rhs=ineq_rhs,
-                            eps=1e-5 / config["dim"],
-                            verbose=True,
-                        )
-
-                    res, result = memory_usage(proc=wrapper, max_usage=True, retval=True, include_children=True)
-                    memory[s_i] = res - start_mem
-                else:
+                def build_and_solve():
+                    t1 = time.time()
+                    C, ineq_A = tt_obj_matrix_and_ineq_mask(args.rank, config["dim"])
+                    C = tt_matrix_to_matrix(C)
+                    ineq_A = np.round(tt_matrix_to_matrix(ineq_A), decimals=1)
+                    eq_rows, eq_rhs, ineq_rows, ineq_rhs = _build_constraints_scs(ineq_A)
+                    t2 = time.time()
                     result = solve_scs_psd_max(
                         C,
                         eq_rows,
@@ -104,6 +88,21 @@ if __name__ == "__main__":
                         eps=1e-5 / config["dim"],
                         verbose=True,
                     )
+                    t3 = time.time()
+                    return C, ineq_A, result, t2 - t1, t3 - t2
+
+                if args.track_mem:
+                    peak_mem, payload = memory_usage(
+                        proc=build_and_solve,
+                        max_usage=True,
+                        retval=True,
+                        include_children=True,
+                    )
+                    memory[s_i] = peak_mem - start_mem
+                else:
+                    payload = build_and_solve()
+
+                C, ineq_A, result, problem_creation_time, runtime = payload
                 break
             except Exception as e:
                 print(e)
@@ -117,10 +116,9 @@ if __name__ == "__main__":
 
         X_val = result["x_matrix"]
         Z = result["z_matrix"]
-        t3 = time.time()
 
-        problem_creation_times[s_i] = t2 - t1
-        runtimes[s_i] = t3 - t2
+        problem_creation_times[s_i] = problem_creation_time
+        runtimes[s_i] = runtime
         complementary_slackness[s_i] = np.abs(np.trace(X_val @ Z))
         feasibility_errors[s_i] = _feasibility_error(X_val, ineq_A)
 

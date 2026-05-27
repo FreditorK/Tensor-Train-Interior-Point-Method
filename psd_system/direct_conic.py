@@ -1,25 +1,78 @@
 import numpy as np
 import scipy.sparse as sp
-import scs
 
 _SQRT2 = np.sqrt(2.0)
-_SDPA_FALLBACK_WARNED = False
 
 
-def _load_sdpap():
+def _require_sdpap():
     try:
+        import scipy
+
+        if not hasattr(scipy, "ix_"):
+            scipy.ix_ = np.ix_
         import sdpap
-    except ImportError:
-        return None
+    except ImportError as exc:
+        raise ImportError(
+            "SDPA baseline requires sdpa-python (sdpap). Install sdpa-python in "
+            "this environment, or run sdpa.sh from an environment where sdpap is available."
+        ) from exc
     return sdpap
 
 
-def _warn_sdpa_fallback():
-    global _SDPA_FALLBACK_WARNED
-    if _SDPA_FALLBACK_WARNED:
-        return
-    print("sdpa-python (sdpap) is unavailable in this environment; falling back to the SCS backend for sdpa baseline runs.")
-    _SDPA_FALLBACK_WARNED = True
+def _sdpa_info_value(result, keys, default=np.nan):
+    info = result.get("sdpapinfo", {})
+    if isinstance(info, dict):
+        for key in keys:
+            if key in info:
+                try:
+                    return float(info[key])
+                except Exception:
+                    pass
+    return default
+
+
+def sdpa_phase(result):
+    info = result.get("sdpapinfo", {})
+    if isinstance(info, dict):
+        return str(info.get("phase", info.get("SDPA.phase", info.get("phasevalue", "")))).strip()
+    return ""
+
+
+def require_sdpa_optimal(result):
+    phase = sdpa_phase(result)
+    if phase != "pdOPT":
+        raise RuntimeError(f"SDPA did not converge to pdOPT (phase={phase or 'unknown'})")
+
+
+def sdpa_dual_error(result):
+    value = _sdpa_info_value(result, ("dualError", "dual_error", "err_d"))
+    if np.isfinite(value):
+        return value ** 2
+    y_full = np.concatenate([result["y_eq"], result["y_ineq"]])
+    dual_res = result["c"] - result["A"].T @ y_full - result["z_matrix"].reshape(-1, order="F")
+    return float(np.sum(np.asarray(dual_res).reshape(-1) ** 2))
+
+
+def sdpa_duality_gap(result):
+    value = _sdpa_info_value(result, ("dualityGap", "duality_gap", "gap"))
+    if np.isfinite(value):
+        return value
+    return float(abs(np.trace(result["x_matrix"] @ result["z_matrix"])))
+
+
+def sdpa_solver_options(config, gamma_star=None, domain_method="basis", range_method=None):
+    option = {
+        "print": "display",
+        "epsilonDash": float(config.get("sdpa_feas_tol", config.get("sdpa_gap_tol", 1e-5))),
+        "epsilonStar": float(config.get("sdpa_gap_tol", 1e-5)),
+    }
+    if gamma_star is not None:
+        option["gammaStar"] = gamma_star
+    if domain_method is not None:
+        option["domainMethod"] = domain_method
+    if range_method is not None:
+        option["rangeMethod"] = range_method
+    return option
 
 
 def _tril_index(i, j, n):
@@ -60,6 +113,8 @@ def scs_row_from_entries(size, entries):
 
 
 def solve_scs_psd_max(c_matrix, eq_rows, eq_rhs, ineq_rows=None, ineq_rhs=None, eps=1e-5, verbose=True):
+    import scs
+
     size = c_matrix.shape[0]
     nvar = size * (size + 1) // 2
     eq_rows = eq_rows or []
@@ -144,20 +199,8 @@ def sdpa_row_from_entries(size, entries):
     return row
 
 
-def _sdpa_row_to_scs_row(size, row):
-    merged_entries = {}
-    for flat_idx, coef in row.items():
-        i = flat_idx % size
-        j = flat_idx // size
-        if i < j:
-            i, j = j, i
-        key = (i, j)
-        merged_entries[key] = merged_entries.get(key, 0.0) + float(coef)
-    return scs_row_from_entries(size, [(i, j, coef) for (i, j), coef in merged_entries.items() if coef != 0.0])
-
-
 def solve_sdpa_psd_max(c_matrix, eq_rows, eq_rhs, ineq_rows=None, ineq_rhs=None, option=None):
-    sdpap = _load_sdpap()
+    sdpap = _require_sdpap()
     size = c_matrix.shape[0]
     nvar = size * size
     eq_rows = eq_rows or []
@@ -190,55 +233,15 @@ def solve_sdpa_psd_max(c_matrix, eq_rows, eq_rhs, ineq_rows=None, ineq_rhs=None,
         b[r] = ineq_rhs[r0]
 
     A = sp.coo_matrix((vals, (rows, cols)), shape=(m, nvar)).tocsc()
-    c_matrix_sym = 0.5 * (c_matrix + c_matrix.T)
-    c = -c_matrix_sym.reshape(-1, order="F")
-
-    if sdpap is None:
-        _warn_sdpa_fallback()
-        eps = 1e-5
-        if option:
-            for key in ("epsilonDash", "epsilonStar"):
-                val = option.get(key)
-                if isinstance(val, (int, float)) and val > 0.0:
-                    eps = min(eps, float(val))
-        eps = max(eps, 1e-7)
-
-        scs_eq_rows = [_sdpa_row_to_scs_row(size, row) for row in eq_rows]
-        scs_ineq_rows = [_sdpa_row_to_scs_row(size, row) for row in ineq_rows]
-        scs_res = solve_scs_psd_max(
-            c_matrix_sym,
-            scs_eq_rows,
-            eq_rhs,
-            ineq_rows=scs_ineq_rows,
-            ineq_rhs=ineq_rhs,
-            eps=eps,
-            verbose=False,
-        )
-        return {
-            "A": A,
-            "b": b,
-            "c": c,
-            "x_matrix": scs_res["x_matrix"],
-            "y_eq": scs_res["y_eq"],
-            "y_ineq": scs_res["y_ineq"],
-            "z_matrix": scs_res["z_matrix"],
-            "sdpapinfo": {
-                "solver": "scs-fallback",
-                "status": scs_res.get("sol", {}).get("info", {}).get("status"),
-                "iter": scs_res.get("sol", {}).get("info", {}).get("iter"),
-            },
-            "timeinfo": {},
-            "sdpainfo": {},
-            "sol": scs_res["sol"],
-        }
+    c = -c_matrix.reshape(-1, order="F")
 
     K = sdpap.SymCone(s=(size,))
     J = sdpap.SymCone(f=m_eq, l=m_ineq)
 
     sdpa_option = {
         "print": "display",
-        "epsilonDash": 1e-8,
-        "epsilonStar": 1e-7,
+        "epsilonDash": 1e-5,
+        "epsilonStar": 1e-5,
         "domainMethod": "none",
         "rangeMethod": "none",
     }

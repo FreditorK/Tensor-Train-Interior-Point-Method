@@ -11,7 +11,7 @@ from memory_profiler import memory_usage
 sys.path.append(os.getcwd() + '/../../')
 
 from src.tt_ops import *
-from psd_system.direct_conic import sdpa_row_from_entries, solve_sdpa_psd_max
+from psd_system.direct_conic import require_sdpa_optimal, sdpa_dual_error, sdpa_duality_gap, sdpa_row_from_entries, sdpa_solver_options, solve_sdpa_psd_max
 from src.utils import print_results_summary
 
 import warnings
@@ -55,12 +55,12 @@ if __name__ == "__main__":
         config = yaml.safe_load(file)
 
     num_seeds = len(config["seeds"])
-    problem_creation_times = np.zeros(num_seeds)
-    runtimes = np.zeros(num_seeds)
-    memory = np.zeros(num_seeds)
-    complementary_slackness = np.zeros(num_seeds)
-    feasibility_errors = np.zeros(num_seeds)
-    dual_feasibility_errors = np.zeros(num_seeds)
+    problem_creation_times = np.full(num_seeds, np.nan)
+    runtimes = np.full(num_seeds, np.nan)
+    memory = np.full(num_seeds, np.nan)
+    complementary_slackness = np.full(num_seeds, np.nan)
+    feasibility_errors = np.full(num_seeds, np.nan)
+    dual_feasibility_errors = np.full(num_seeds, np.nan)
     num_failed_seeds = 0
 
     for s_i, seed in enumerate(config["seeds"]):
@@ -73,34 +73,35 @@ if __name__ == "__main__":
             np.random.seed(current_seed)
 
             if args.track_mem:
-                # Baseline before building data so tracked memory includes matrices/constraints too.
+                # Baseline before setup so peak delta includes objective/constraint build and solve.
                 start_mem = memory_usage(max_usage=True, include_children=True)
 
-            t1 = time.time()
-            G = tt_rank_reduce(tt_random_graph(config["dim"], args.rank))
-            adj_matrix = np.round(tt_matrix_to_matrix(G), decimals=1)
-            J = np.ones_like(adj_matrix)
-            eq_rows, eq_rhs, adj_constraint_count = _build_constraints_sdpa(adj_matrix)
-            option = {
-                "print": "display",
-                "epsilonDash": 1e-6 / (2 ** config["dim"]),
-                "epsilonStar": 1e-5 / (2 ** config["dim"]),
-                "gammaStar": 0.8,
-                "domainMethod": "basis",
-            }
-            t2 = time.time()
-
-
             try:
-                if args.track_mem:
-                    def wrapper():
-                        return solve_sdpa_psd_max(J, eq_rows, eq_rhs, option=option)
-
-                    res, result = memory_usage(proc=wrapper, max_usage=True, retval=True, include_children=True)
-                    memory[s_i] = res - start_mem
-                else:
+                def build_and_solve():
+                    t1 = time.time()
+                    G = tt_rank_reduce(tt_random_graph(config["dim"], args.rank))
+                    adj_matrix = np.round(tt_matrix_to_matrix(G), decimals=1)
+                    J = np.ones_like(adj_matrix)
+                    eq_rows, eq_rhs, adj_constraint_count = _build_constraints_sdpa(adj_matrix)
+                    option = sdpa_solver_options(config, gamma_star=0.8, domain_method="basis")
+                    t2 = time.time()
                     result = solve_sdpa_psd_max(J, eq_rows, eq_rhs, option=option)
+                    require_sdpa_optimal(result)
+                    t3 = time.time()
+                    return adj_matrix, J, adj_constraint_count, result, t2 - t1, t3 - t2
 
+                if args.track_mem:
+                    peak_mem, payload = memory_usage(
+                        proc=build_and_solve,
+                        max_usage=True,
+                        retval=True,
+                        include_children=True,
+                    )
+                    memory[s_i] = peak_mem - start_mem
+                else:
+                    payload = build_and_solve()
+
+                adj_matrix, J, adj_constraint_count, result, problem_creation_time, runtime = payload
                 break
             except Exception as e:
                 print(e)
@@ -114,30 +115,12 @@ if __name__ == "__main__":
 
         X_val = result["x_matrix"]
         Z = result["z_matrix"]
-        y_eq = result["y_eq"]
-        y_adj = y_eq[:adj_constraint_count]
-        y_trace = y_eq[adj_constraint_count] if y_eq.size > adj_constraint_count else 0.0
-        t3 = time.time()
-
-        problem_creation_times[s_i] = t2 - t1
-        runtimes[s_i] = t3 - t2
-        complementary_slackness[s_i] = np.abs(np.trace(X_val @ Z))
+        problem_creation_times[s_i] = problem_creation_time
+        runtimes[s_i] = runtime
+        complementary_slackness[s_i] = sdpa_duality_gap(result)
         feasibility_errors[s_i] = _feasibility_error(X_val, adj_matrix)
 
-        adj_dual_mat = np.zeros_like(adj_matrix, dtype=float)
-        idx = 0
-        for i in range(adj_matrix.shape[0]):
-            for j in range(i, adj_matrix.shape[1]):
-                coef = float(adj_matrix[i, j])
-                if coef != 0.0:
-                    val = coef * y_adj[idx]
-                    adj_dual_mat[i, j] += val
-                    if i != j:
-                        adj_dual_mat[j, i] += val
-                    idx += 1
-
-        dual_feas = Z + J - y_trace * np.eye(adj_matrix.shape[0]) - adj_dual_mat
-        dual_feasibility_errors[s_i] = np.sum(dual_feas ** 2)
+        dual_feasibility_errors[s_i] = sdpa_dual_error(result)
 
     num_iters = np.zeros(num_seeds)
     ranksX = np.zeros((1, num_seeds, 1))

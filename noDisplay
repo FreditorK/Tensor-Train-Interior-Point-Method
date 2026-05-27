@@ -1,0 +1,144 @@
+SDPA start at [Wed May 27 15:46:08 2026]
+NumThreads  is set as 24
+Schur computation : DENSE 
+Converted to SDPA internal data / Starting SDPA main loop
+   mu      thetaP  thetaD  objP      objD      alphaP  alphaD  beta 
+ 0 1.0e+04 1.0e+00 1.0e+00 -0.00e+00 +1.00e+02 1.0e+00 9.1e-01 2.00e-01
+ 1 1.4e+03 0.0e+00 9.1e-02 +1.39e+02 +1.00e+01 1.0e+00 1.0e+00 2.00e-01
+ 2 1.6e+02 0.0e+00 1.8e-17 +1.65e+02 +1.00e+00 1.0e+00 1.0e+00 1.00e-01
+ 3 1.6e+01 0.0e+00 0.0e+00 +1.74e+01 +1.00e+00 1.0e+00 9.0e+01 1.00e-01
+ 4 1.6e+00 0.0e+00 0.0e+00 +2.64e+00 +1.00e+00 1.0e+00 1.0e+00 1.00e-01
+ 5 1.6e-01 0.0e+00 1.1e-18 +1.16e+00 +1.00e+00 1.0e+00 9.0e+01 1.00e-01
+ 6 1.6e-02 8.2e-19 9.9e-17 +1.02e+00 +1.00e+00 1.0e+00 1.0e+00 1.00e-01
+ 7 1.6e-03 7.6e-19 1.1e-18 +1.00e+00 +1.00e+00 1.0e+00 9.0e+01 1.00e-01
+ 8 1.6e-04 7.5e-20 9.9e-17 +1.00e+00 +1.00e+00 1.0e+00 1.0e+00 1.00e-01
+ 9 1.6e-05 2.3e-19 1.1e-18 +1.00e+00 +1.00e+00 1.0e+00 9.0e+01 1.00e-01
+10 1.6e-06 6.8e-19 9.9e-17 +1.00e+00 +1.00e+00 1.0e+00 1.0e+00 1.00e-01
+11 1.6e-07 1.5e-19 0.0e+00 +1.00e+00 +1.00e+00 9.0e-01 9.0e-01 1.00e-01
+
+phase.value  = pdFEAS    
+   Iteration = 11
+          mu = +1.6399389999999993e-07
+relative gap = +1.6399388656831492e-07
+        gap  = +1.6399390001531344e-07
+     digits  = +6.7851723414592131e+00
+objValPrimal = +1.0000001639939000e+00
+objValDual   = +1.0000000000000000e+00
+p.feas.error = +1.5313508653410496e-17
+d.feas.error = +0.0000000000000000e+00
+total time   = 0.004622
+  main loop time = 0.004622
+      total time = 0.004622
+file  check time = 0.000000
+file change time = 0.000000
+file   read time = 0.000000
+Converting optimal solution to CLP format
+SDPA end at [Wed May 27 15:46:08 2026]
+SDPA start at [Wed May 27 16:34:07 2026]
+NumThreads  is set as 24
+Schur computation : DENSE 
+Converted to SDPA internal data / Starting SDPA main loop
+   mu      thetaP  thetaD  objP      objD      alphaP  alphaD  beta 
+ 0 1.0e+04 1.0e+00 1.0e+00 -0.00e+00 +1.00e+02 1.0e+00 9.1e-01 2.00e-01
+ 1 1.4e+03 0.0e+00 9.1e-02 +1.39e+02 +1.00e+01 1.0e+00 1.0e+00 2.00e-01
+ 2 1.6e+02 0.0e+00 1.8e-17 +1.65e+02 +1.00e+00 1.0e+00 1.0e+00 1.00e-01
+ 3 1.6e+01 0.0e+00 0.0e+00 +1.74e+01 +1.00e+00 1.0e+00 9.0e+01 1.00e-01
+ 4 1.6e+00 0.0e+00 0.0e+00 +2.64e+00 +1.00e+00 1.0e+00 1.0e+00 1.00e-01
+ 5 1.6e-01 0.0e+00 1.1e-18 +1.16e+00 +1.00e+00 1.0e+00 9.0e+01 1.00e-01
+ 6 1.6e-02 8.2e-19 9.9e-17 +1.02e+00 +1.00e+00 1.0e+00 1.0e+00 1.00e-01
+ 7 1.6e-03 7.6e-19 1.1e-18 +1.00e+00 +1.00e+00 1.0e+00 9.0e+01 1.00e-01
+ 8 1.6e-04 7.5e-20 9.9e-17 +1.00e+00 +1.00e+00 1.0e+00 1.0e+00 1.00e-01
+ 9 1.6e-05 2.3e-19 1.1e-18 +1.00e+00 +1.00e+00 1.0e+00 9.0e+01 1.00e-01
+10 1.6e-06 6.8e-19 9.9e-17 +1.00e+00 +1.00e+00 1.0e+00 1.0e+00 1.00e-01
+11 1.6e-07 1.5e-19 0.0e+00 +1.00e+00 +1.00e+00 9.0e-01 9.0e-01 1.00e-01
+
+phase.value  = pdFEAS    
+   Iteration = 11
+          mu = +1.6399389999999993e-07
+relative gap = +1.6399388656831492e-07
+        gap  = +1.6399390001531344e-07
+     digits  = +6.7851723414592131e+00
+objValPrimal = +1.0000001639939000e+00
+objValDual   = +1.0000000000000000e+00
+p.feas.error = +1.5313508653410496e-17
+d.feas.error = +0.0000000000000000e+00
+total time   = 0.000349
+  main loop time = 0.000349
+      total time = 0.000349
+file  check time = 0.000000
+file change time = 0.000000
+file   read time = 0.000000
+Converting optimal solution to CLP format
+SDPA end at [Wed May 27 16:34:07 2026]
+SDPA start at [Wed May 27 16:34:26 2026]
+NumThreads  is set as 24
+Schur computation : DENSE 
+Converted to SDPA internal data / Starting SDPA main loop
+   mu      thetaP  thetaD  objP      objD      alphaP  alphaD  beta 
+ 0 1.0e+04 1.0e+00 1.0e+00 -0.00e+00 +1.00e+02 1.0e+00 9.1e-01 2.00e-01
+ 1 1.4e+03 0.0e+00 9.1e-02 +1.39e+02 +1.00e+01 1.0e+00 1.0e+00 2.00e-01
+ 2 1.6e+02 0.0e+00 1.8e-17 +1.65e+02 +1.00e+00 1.0e+00 1.0e+00 1.00e-01
+ 3 1.6e+01 0.0e+00 0.0e+00 +1.74e+01 +1.00e+00 1.0e+00 9.0e+01 1.00e-01
+ 4 1.6e+00 0.0e+00 0.0e+00 +2.64e+00 +1.00e+00 1.0e+00 1.0e+00 1.00e-01
+ 5 1.6e-01 0.0e+00 1.1e-18 +1.16e+00 +1.00e+00 1.0e+00 9.0e+01 1.00e-01
+ 6 1.6e-02 8.2e-19 9.9e-17 +1.02e+00 +1.00e+00 1.0e+00 1.0e+00 1.00e-01
+ 7 1.6e-03 7.6e-19 1.1e-18 +1.00e+00 +1.00e+00 1.0e+00 9.0e+01 1.00e-01
+ 8 1.6e-04 7.5e-20 9.9e-17 +1.00e+00 +1.00e+00 1.0e+00 1.0e+00 1.00e-01
+ 9 1.6e-05 2.3e-19 1.1e-18 +1.00e+00 +1.00e+00 1.0e+00 9.0e+01 1.00e-01
+10 1.6e-06 6.8e-19 9.9e-17 +1.00e+00 +1.00e+00 1.0e+00 1.0e+00 1.00e-01
+11 1.6e-07 1.5e-19 0.0e+00 +1.00e+00 +1.00e+00 9.0e-01 9.0e-01 1.00e-01
+
+phase.value  = pdFEAS    
+   Iteration = 11
+          mu = +1.6399389999999993e-07
+relative gap = +1.6399388656831492e-07
+        gap  = +1.6399390001531344e-07
+     digits  = +6.7851723414592131e+00
+objValPrimal = +1.0000001639939000e+00
+objValDual   = +1.0000000000000000e+00
+p.feas.error = +1.5313508653410496e-17
+d.feas.error = +0.0000000000000000e+00
+total time   = 0.000354
+  main loop time = 0.000353
+      total time = 0.000354
+file  check time = 0.000000
+file change time = 0.000001
+file   read time = 0.000000
+Converting optimal solution to CLP format
+SDPA end at [Wed May 27 16:34:26 2026]
+SDPA start at [Wed May 27 16:36:29 2026]
+NumThreads  is set as 24
+Schur computation : DENSE 
+Converted to SDPA internal data / Starting SDPA main loop
+   mu      thetaP  thetaD  objP      objD      alphaP  alphaD  beta 
+ 0 1.0e+04 1.0e+00 1.0e+00 -0.00e+00 +1.00e+02 1.0e+00 9.1e-01 2.00e-01
+ 1 1.4e+03 0.0e+00 9.1e-02 +1.39e+02 +1.00e+01 1.0e+00 1.0e+00 2.00e-01
+ 2 1.6e+02 0.0e+00 1.8e-17 +1.65e+02 +1.00e+00 1.0e+00 1.0e+00 1.00e-01
+ 3 1.6e+01 0.0e+00 0.0e+00 +1.74e+01 +1.00e+00 1.0e+00 9.0e+01 1.00e-01
+ 4 1.6e+00 0.0e+00 0.0e+00 +2.64e+00 +1.00e+00 1.0e+00 1.0e+00 1.00e-01
+ 5 1.6e-01 0.0e+00 1.1e-18 +1.16e+00 +1.00e+00 1.0e+00 9.0e+01 1.00e-01
+ 6 1.6e-02 8.2e-19 9.9e-17 +1.02e+00 +1.00e+00 1.0e+00 1.0e+00 1.00e-01
+ 7 1.6e-03 7.6e-19 1.1e-18 +1.00e+00 +1.00e+00 1.0e+00 9.0e+01 1.00e-01
+ 8 1.6e-04 7.5e-20 9.9e-17 +1.00e+00 +1.00e+00 1.0e+00 1.0e+00 1.00e-01
+ 9 1.6e-05 2.3e-19 1.1e-18 +1.00e+00 +1.00e+00 1.0e+00 9.0e+01 1.00e-01
+10 1.6e-06 6.8e-19 9.9e-17 +1.00e+00 +1.00e+00 1.0e+00 1.0e+00 1.00e-01
+11 1.6e-07 1.5e-19 0.0e+00 +1.00e+00 +1.00e+00 9.0e-01 9.0e-01 1.00e-01
+
+phase.value  = pdFEAS    
+   Iteration = 11
+          mu = +1.6399389999999993e-07
+relative gap = +1.6399388656831492e-07
+        gap  = +1.6399390001531344e-07
+     digits  = +6.7851723414592131e+00
+objValPrimal = +1.0000001639939000e+00
+objValDual   = +1.0000000000000000e+00
+p.feas.error = +1.5313508653410496e-17
+d.feas.error = +0.0000000000000000e+00
+total time   = 0.000355
+  main loop time = 0.000354
+      total time = 0.000355
+file  check time = 0.000000
+file change time = 0.000001
+file   read time = 0.000000
+Converting optimal solution to CLP format
+SDPA end at [Wed May 27 16:36:29 2026]

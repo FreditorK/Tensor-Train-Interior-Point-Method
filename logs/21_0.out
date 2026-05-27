@@ -1,9 +1,0 @@
-Running: maxcut_manopt (rank=1)
-==== maxcut MANOPT Batch Run Started at Wed 27 May 13:45:27 BST 2026 ====
-
-▶ Running dim=7 with config=configs/maxcut_7.yaml at Wed 27 May 13:45:27 BST 2026
-usage: maxcut_manopt.py [-h] [--track_mem] --config CONFIG
-maxcut_manopt.py: error: unrecognized arguments: --rank 1
-❌ Error occurred for dim=7 (exit code 2)
-
-==== All runs completed at Wed 27 May 13:45:30 BST 2026 ====

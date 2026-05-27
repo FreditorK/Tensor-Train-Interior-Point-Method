@@ -5,8 +5,6 @@ import numpy as np
 sys.path.append(os.getcwd() + '/../../')
 
 from src.tt_ops import *
-from src.utils import run_experiment
-
 
 def tt_diag_constraint_op(dim):
     identity = tt_identity(dim)
@@ -28,4 +26,6 @@ def create_problem(dim, rank):
 
 
 if __name__ == "__main__":
+    from src.utils import run_experiment
+
     run_experiment(create_problem)

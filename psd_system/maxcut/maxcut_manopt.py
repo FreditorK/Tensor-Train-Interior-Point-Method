@@ -88,25 +88,15 @@ def _solve_with_pymanopt(C, config):
     )
 
 
-def _solve_with_optional_mem(C, config, track_mem):
-    if not track_mem:
-        return (*_solve_with_pymanopt(C, config), 0.0)
-    start_mem = memory_usage(max_usage=True, include_children=True)
-    max_mem, result = memory_usage(
-        proc=lambda: _solve_with_pymanopt(C, config),
-        max_usage=True,
-        retval=True,
-        include_children=True,
-    )
-    return (*result, max_mem - start_mem)
-
-
 if __name__ == "__main__":
     np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=4, suppress=True)
     parser = argparse.ArgumentParser(description="Riemannian MaxCut baseline with optional memory tracking.")
     parser.add_argument("--track_mem", action="store_true", help="Enable memory tracking from a certain point.")
     parser.add_argument("--config", type=str, required=True, help="Path to the YAML configuration file")
+    parser.add_argument("--rank", type=int, default=1, help="Graph/objective TT rank")
     args = parser.parse_args()
+    if args.rank < 1:
+        raise ValueError("--rank must be a positive integer")
 
     try:
         import pymanopt  # noqa: F401
@@ -135,11 +125,31 @@ if __name__ == "__main__":
                 print(f"Trying with new random seed: {current_seed}")
 
             np.random.seed(current_seed)
-            t1 = time.time()
-            C = tt_matrix_to_matrix(tt_obj_matrix(1, config["dim"]))
-            t2 = time.time()
+
+            if args.track_mem:
+                # Baseline before setup so peak delta includes objective build and solve.
+                start_mem = memory_usage(max_usage=True, include_children=True)
 
             try:
+                def build_and_solve():
+                    t1 = time.time()
+                    C = tt_matrix_to_matrix(tt_obj_matrix(args.rank, config["dim"]))
+                    t2 = time.time()
+                    result = _solve_with_pymanopt(C, config)
+                    t3 = time.time()
+                    return (*result, t2 - t1, t3 - t2)
+
+                if args.track_mem:
+                    peak_mem, payload = memory_usage(
+                        proc=build_and_solve,
+                        max_usage=True,
+                        retval=True,
+                        include_children=True,
+                    )
+                    memory[s_i] = peak_mem - start_mem
+                else:
+                    payload = build_and_solve()
+
                 (
                     stationarity_err,
                     duality_gap,
@@ -147,9 +157,9 @@ if __name__ == "__main__":
                     dual_psd_violation,
                     iters,
                     rank,
-                    mem_delta,
-                ) = _solve_with_optional_mem(C, config, args.track_mem)
-                memory[s_i] = mem_delta
+                    problem_creation_time,
+                    runtime,
+                ) = payload
                 break
             except Exception as err:
                 print(err)
@@ -161,9 +171,8 @@ if __name__ == "__main__":
         else:
             continue
 
-        t3 = time.time()
-        problem_creation_times[s_i] = t2 - t1
-        runtimes[s_i] = t3 - t2
+        problem_creation_times[s_i] = problem_creation_time
+        runtimes[s_i] = runtime
         primal_feasibility_errors[s_i] = primal_feas_err
         dual_psd_violations[s_i] = dual_psd_violation
         duality_gaps[s_i] = duality_gap

@@ -51,30 +51,16 @@ if __name__ == "__main__":
             np.random.seed(current_seed)
 
             if args.track_mem:
-                # Baseline before building data so tracked memory includes matrices/constraints too.
+                # Baseline before setup so peak delta includes objective/constraint build and solve.
                 start_mem = memory_usage(max_usage=True, include_children=True)
 
-            t1 = time.time()
-            C = tt_matrix_to_matrix(tt_obj_matrix(args.rank, config["dim"]))
-            n = C.shape[0]
-            eq_rows, eq_rhs = _diag_eq_rows_scs(n)
-            t2 = time.time()
-
-
             try:
-                if args.track_mem:
-                    def wrapper():
-                        return solve_scs_psd_max(
-                            C,
-                            eq_rows,
-                            eq_rhs,
-                            eps=1e-5 / config["dim"],
-                            verbose=True,
-                        )
-
-                    res, result = memory_usage(proc=wrapper, max_usage=True, retval=True, include_children=True)
-                    memory[s_i] = res - start_mem
-                else:
+                def build_and_solve():
+                    t1 = time.time()
+                    C = tt_matrix_to_matrix(tt_obj_matrix(args.rank, config["dim"]))
+                    n = C.shape[0]
+                    eq_rows, eq_rhs = _diag_eq_rows_scs(n)
+                    t2 = time.time()
                     result = solve_scs_psd_max(
                         C,
                         eq_rows,
@@ -82,6 +68,21 @@ if __name__ == "__main__":
                         eps=1e-5 / config["dim"],
                         verbose=True,
                     )
+                    t3 = time.time()
+                    return C, result, t2 - t1, t3 - t2
+
+                if args.track_mem:
+                    peak_mem, payload = memory_usage(
+                        proc=build_and_solve,
+                        max_usage=True,
+                        retval=True,
+                        include_children=True,
+                    )
+                    memory[s_i] = peak_mem - start_mem
+                else:
+                    payload = build_and_solve()
+
+                C, result, problem_creation_time, runtime = payload
                 break
             except Exception as e:
                 print(e)
@@ -96,10 +97,9 @@ if __name__ == "__main__":
         X_val = result["x_matrix"]
         Z = result["z_matrix"]
         y = result["y_eq"]
-        t3 = time.time()
 
-        problem_creation_times[s_i] = t2 - t1
-        runtimes[s_i] = t3 - t2
+        problem_creation_times[s_i] = problem_creation_time
+        runtimes[s_i] = runtime
         complementary_slackness[s_i] = np.abs(np.trace(X_val @ Z))
         feasibility_errors[s_i] = np.linalg.norm(np.diag(X_val) - 1) ** 2
         dual_feas = Z + C - np.diag(y)

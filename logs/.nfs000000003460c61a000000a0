@@ -1,0 +1,51 @@
+000 (086.000.000) 05/27 15:04:05 Job submitted from host: <146.169.53.163:9618?addrs=146.169.53.163-9618+[2a0c-5bc0-40-11c4-bfe1-f11c-7057-2b0]-9618&noUDP&sock=54125_2400_3>
+...
+001 (086.000.000) 05/27 15:04:30 Job executing on host: <146.169.52.189:9618?addrs=146.169.52.189-9618+[2a0c-5bc0-40-11c4-427a-4d80-fd82-153d]-9618&noUDP&sock=54162_8501_4>
+...
+006 (086.000.000) 05/27 15:04:39 Image size of job updated: 4
+	5  -  MemoryUsage of job (MB)
+	4960  -  ResidentSetSize of job (KB)
+...
+006 (086.000.000) 05/27 15:09:40 Image size of job updated: 24182032
+	482  -  MemoryUsage of job (MB)
+	493504  -  ResidentSetSize of job (KB)
+...
+006 (086.000.000) 05/27 15:29:43 Image size of job updated: 24200136
+	505  -  MemoryUsage of job (MB)
+	516632  -  ResidentSetSize of job (KB)
+...
+006 (086.000.000) 05/27 15:44:45 Image size of job updated: 24200136
+	505  -  MemoryUsage of job (MB)
+	516704  -  ResidentSetSize of job (KB)
+...
+006 (086.000.000) 05/27 15:59:46 Image size of job updated: 24200136
+	803  -  MemoryUsage of job (MB)
+	822184  -  ResidentSetSize of job (KB)
+...
+006 (086.000.000) 05/27 16:04:46 Image size of job updated: 24200136
+	875  -  MemoryUsage of job (MB)
+	895900  -  ResidentSetSize of job (KB)
+...
+006 (086.000.000) 05/27 16:09:46 Image size of job updated: 24200136
+	907  -  MemoryUsage of job (MB)
+	928540  -  ResidentSetSize of job (KB)
+...
+010 (086.000.000) 05/27 16:27:48 Job was suspended.
+	Number of processes actually suspended: 7
+...
+011 (086.000.000) 05/27 16:33:53 Job was unsuspended.
+...
+004 (086.000.000) 05/27 16:34:53 Job was evicted.
+	(0) Job was not checkpointed.
+		Usr 0 18:01:32, Sys 0 00:32:36  -  Run Remote Usage
+		Usr 0 00:00:00, Sys 0 00:00:00  -  Run Local Usage
+	0  -  Run Bytes Sent By Job
+	0  -  Run Bytes Received By Job
+	Partitionable Resources :    Usage  Request Allocated Assigned
+	   Cpus                 :    10.60        1        16 
+	   Disk (KB)            :     4           4  12942508 
+	   Gpus                 :     0.01                  1 "CUDA0"
+	   Memory (MB)          :   907           1     15777 
+...
+001 (086.000.000) 05/27 16:35:29 Job executing on host: <146.169.52.193:9618?addrs=146.169.52.193-9618+[2a0c-5bc0-40-11c4-ef4b-2171-bdaf-5323]-9618&noUDP&sock=54870_260f_4>
+...

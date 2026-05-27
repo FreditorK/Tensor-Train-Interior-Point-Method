@@ -8,24 +8,6 @@ cdef extern from "numpy/arrayobject.h":
     # Define NPY_NO_DEPRECATED_API for compatibility with numpy
     ctypedef void npy_no_deprecated_api
 
-
-cdef extern from "cblas.h" nogil:
-    # --- Enums for Layout and Transpose ---
-    ctypedef enum CBLAS_LAYOUT:
-        CblasRowMajor=101
-        CblasColMajor=102
-
-    ctypedef enum CBLAS_TRANSPOSE:
-        CblasNoTrans=111
-        CblasTrans=112
-        CblasConjTrans=113
-
-    void cblas_dgemm(const CBLAS_LAYOUT Layout, const CBLAS_TRANSPOSE TransA,
-                     const CBLAS_TRANSPOSE TransB, const int M, const int N,
-                     const int K, const double alpha, const double* A,
-                     const int lda, const double* B, const int ldb,
-                     const double beta, double* C, const int ldc)
-
 import numpy as np
 cimport numpy as cnp
 cimport cython
@@ -59,12 +41,12 @@ cdef void cy_dgemm(
         double beta=0.0
 ) noexcept nogil:
     cdef int M = A.shape[0]
-    cdef int lda = A.shape[1]
-    cdef int ldb = B.shape[1]
-    cdef int ldc = C.shape[1]
-    cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, M, ldb, lda,
-                alpha, &A[0, 0], lda, &B[0, 0], ldb,
-                beta, &C[0, 0], ldc)
+    cdef int K = A.shape[1]
+    cdef int N = B.shape[1]
+    cdef char trans = 78  # ord("N")
+    # Row-major C = A B is equivalent to column-major C.T = B.T A.T.
+    blas.dgemm(&trans, &trans, &N, &M, &K, &alpha,
+               <double*>&B[0, 0], &N, <double*>&A[0, 0], &K, &beta, &C[0, 0], &N)
 
 
 @cython.boundscheck(False)

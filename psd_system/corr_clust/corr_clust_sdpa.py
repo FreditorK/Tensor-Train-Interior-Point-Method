@@ -10,7 +10,7 @@ from memory_profiler import memory_usage
 
 sys.path.append(os.getcwd() + '/../../')
 from corr_clust import *
-from psd_system.direct_conic import sdpa_row_from_entries, solve_sdpa_psd_max
+from psd_system.direct_conic import require_sdpa_optimal, sdpa_dual_error, sdpa_duality_gap, sdpa_row_from_entries, sdpa_solver_options, solve_sdpa_psd_max
 from src.utils import print_results_summary
 
 import warnings
@@ -42,20 +42,6 @@ def _feasibility_error(X, ineq_A):
     return diag_err + np.sum(ineq_violation ** 2)
 
 
-def _sdpa_dual_error(result):
-    info = result.get("sdpapinfo", {})
-    if isinstance(info, dict):
-        for key in ("dualError", "dual_error", "err_d"):
-            if key in info:
-                try:
-                    return float(info[key]) ** 2
-                except Exception:
-                    pass
-    y_full = np.concatenate([result["y_eq"], result["y_ineq"]])
-    dual_res = result["c"] - result["A"].T @ y_full - result["z_matrix"].reshape(-1, order="F")
-    return float(np.sum(np.asarray(dual_res).reshape(-1) ** 2))
-
-
 if __name__ == "__main__":
     np.set_printoptions(linewidth=np.inf, threshold=np.inf, precision=4, suppress=True)
     parser = argparse.ArgumentParser(description="Script with optional memory tracking.")
@@ -67,12 +53,12 @@ if __name__ == "__main__":
         config = yaml.safe_load(file)
 
     num_seeds = len(config["seeds"])
-    problem_creation_times = np.zeros(num_seeds)
-    runtimes = np.zeros(num_seeds)
-    memory = np.zeros(num_seeds)
-    complementary_slackness = np.zeros(num_seeds)
-    feasibility_errors = np.zeros(num_seeds)
-    dual_feasibility_errors = np.zeros(num_seeds)
+    problem_creation_times = np.full(num_seeds, np.nan)
+    runtimes = np.full(num_seeds, np.nan)
+    memory = np.full(num_seeds, np.nan)
+    complementary_slackness = np.full(num_seeds, np.nan)
+    feasibility_errors = np.full(num_seeds, np.nan)
+    dual_feasibility_errors = np.full(num_seeds, np.nan)
     num_failed_seeds = 0
 
     for s_i, seed in enumerate(config["seeds"]):
@@ -85,39 +71,18 @@ if __name__ == "__main__":
             np.random.seed(current_seed)
 
             if args.track_mem:
-                # Baseline before building data so tracked memory includes matrices/constraints too.
+                # Baseline before setup so peak delta includes objective/constraint build and solve.
                 start_mem = memory_usage(max_usage=True, include_children=True)
 
-            t1 = time.time()
-            C, ineq_A = tt_obj_matrix_and_ineq_mask(args.rank, config["dim"])
-            C = tt_matrix_to_matrix(C)
-            ineq_A = np.round(tt_matrix_to_matrix(ineq_A), decimals=1)
-            eq_rows, eq_rhs, ineq_rows, ineq_rhs = _build_constraints_sdpa(ineq_A)
-            option = {
-                "print": "display",
-                "epsilonDash": 1e-6 / (2 ** config["dim"]),
-                "epsilonStar": 1e-5 / (2 ** config["dim"]),
-                "gammaStar": 0.75,
-                "domainMethod": "basis",
-            }
-            t2 = time.time()
-
-
             try:
-                if args.track_mem:
-                    def wrapper():
-                        return solve_sdpa_psd_max(
-                            C,
-                            eq_rows,
-                            eq_rhs,
-                            ineq_rows=ineq_rows,
-                            ineq_rhs=ineq_rhs,
-                            option=option,
-                        )
-
-                    res, result = memory_usage(proc=wrapper, max_usage=True, retval=True, include_children=True)
-                    memory[s_i] = res - start_mem
-                else:
+                def build_and_solve():
+                    t1 = time.time()
+                    C, ineq_A = tt_obj_matrix_and_ineq_mask(args.rank, config["dim"])
+                    C = tt_matrix_to_matrix(C)
+                    ineq_A = np.round(tt_matrix_to_matrix(ineq_A), decimals=1)
+                    eq_rows, eq_rhs, ineq_rows, ineq_rhs = _build_constraints_sdpa(ineq_A)
+                    option = sdpa_solver_options(config, gamma_star=0.75, domain_method="basis")
+                    t2 = time.time()
                     result = solve_sdpa_psd_max(
                         C,
                         eq_rows,
@@ -126,6 +91,22 @@ if __name__ == "__main__":
                         ineq_rhs=ineq_rhs,
                         option=option,
                     )
+                    require_sdpa_optimal(result)
+                    t3 = time.time()
+                    return C, ineq_A, result, t2 - t1, t3 - t2
+
+                if args.track_mem:
+                    peak_mem, payload = memory_usage(
+                        proc=build_and_solve,
+                        max_usage=True,
+                        retval=True,
+                        include_children=True,
+                    )
+                    memory[s_i] = peak_mem - start_mem
+                else:
+                    payload = build_and_solve()
+
+                C, ineq_A, result, problem_creation_time, runtime = payload
                 break
             except Exception as e:
                 print(e)
@@ -139,13 +120,12 @@ if __name__ == "__main__":
 
         X_val = result["x_matrix"]
         Z = result["z_matrix"]
-        t3 = time.time()
 
-        problem_creation_times[s_i] = t2 - t1
-        runtimes[s_i] = t3 - t2
-        complementary_slackness[s_i] = np.abs(np.trace(X_val @ Z))
+        problem_creation_times[s_i] = problem_creation_time
+        runtimes[s_i] = runtime
+        complementary_slackness[s_i] = sdpa_duality_gap(result)
         feasibility_errors[s_i] = _feasibility_error(X_val, ineq_A)
-        dual_feasibility_errors[s_i] = _sdpa_dual_error(result)
+        dual_feasibility_errors[s_i] = sdpa_dual_error(result)
 
     num_iters = np.zeros(num_seeds)
     ranksX = np.zeros((1, num_seeds, 1))

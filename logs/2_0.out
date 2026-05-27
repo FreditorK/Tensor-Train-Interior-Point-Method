@@ -1,5 +1,0 @@
-Running: maxcut_scs (rank=2)
-==== maxcut SCS Batch Run Started at Wed 27 May 13:35:26 BST 2026 ====
-
-▶ Running dim=11 with config=configs/maxcut_11.yaml at Wed 27 May 13:35:26 BST 2026
-===Terminated Graph Sampling=== rank:  [2, 2, 2, 2, 2, 2, 2, 2, 2, 2]

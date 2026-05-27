@@ -10,9 +10,6 @@ from memory_profiler import memory_usage
 
 sys.path.append(os.getcwd() + '/../../')
 
-from src.tt_ops import *
-from src.tt_ipm import IneqStatus, tt_ipm
-
 def run_experiment(create_problem_fn):
 
     np.set_printoptions(linewidth=1000000, threshold=10000, precision=4, suppress=True)
@@ -129,31 +126,31 @@ def print_results_summary(config, args, runtimes, problem_creation_times,
     print(f"{'FINAL RESULTS SUMMARY':^80}")
     print("=" * 80)
     seeds = config["seeds"]
-    print(f"Most metrics are reported as Mean ± Standard Deviation over all seeds {seeds}.\n")
+    print(f"Most metrics are reported as Mean ± Standard Deviation over successful seeds {seeds}.\n")
     r_i = 0
 
     # --- Calculate Means for Metrics ---
     runtime_samples = np.asarray(runtimes[r_i, :], dtype=np.float64).ravel()
-    mean_runtime = np.mean(runtime_samples)
-    mean_creation_time = np.mean(problem_creation_times[r_i, :])
-    mean_iters = np.mean(num_iters[r_i, :])
-    mean_feasibility = np.mean(feasibility_errors[r_i, :])
-    mean_dual_feasibility = np.mean(dual_feasibility_errors[r_i, :])
-    mean_slackness = np.mean(complementary_slackness[r_i, :])
+    mean_runtime = np.nanmean(runtime_samples)
+    mean_creation_time = np.nanmean(problem_creation_times[r_i, :])
+    mean_iters = np.nanmean(num_iters[r_i, :])
+    mean_feasibility = np.nanmean(feasibility_errors[r_i, :])
+    mean_dual_feasibility = np.nanmean(dual_feasibility_errors[r_i, :])
+    mean_slackness = np.nanmean(complementary_slackness[r_i, :])
 
     # --- Runtime Distribution Metrics ---
-    worst_runtime = np.max(runtime_samples)
-    median_runtime = np.median(runtime_samples)
-    q1_runtime, q3_runtime = np.percentile(runtime_samples, [25, 75])
+    worst_runtime = np.nanmax(runtime_samples)
+    median_runtime = np.nanmedian(runtime_samples)
+    q1_runtime, q3_runtime = np.nanpercentile(runtime_samples, [25, 75])
     iqr_runtime = q3_runtime - q1_runtime
 
     # --- Calculate Standard Deviations for Metrics ---
-    std_runtime = np.std(runtime_samples)
-    std_creation_time = np.std(problem_creation_times[r_i, :])
-    std_iters = np.std(num_iters[r_i, :])
-    std_feasibility = np.std(feasibility_errors[r_i, :])
-    std_dual_feasibility = np.std(dual_feasibility_errors[r_i, :])
-    std_slackness = np.std(complementary_slackness[r_i, :])
+    std_runtime = np.nanstd(runtime_samples)
+    std_creation_time = np.nanstd(problem_creation_times[r_i, :])
+    std_iters = np.nanstd(num_iters[r_i, :])
+    std_feasibility = np.nanstd(feasibility_errors[r_i, :])
+    std_dual_feasibility = np.nanstd(dual_feasibility_errors[r_i, :])
+    std_slackness = np.nanstd(complementary_slackness[r_i, :])
 
     # --- Print Table for the Current Rank ---
     print(f"  {'Metric':<28} | {'Value':>25}")
@@ -169,11 +166,11 @@ def print_results_summary(config, args, runtimes, problem_creation_times,
 
     if args.track_mem and memory is not None:
         memory_samples = np.asarray(memory[r_i, :], dtype=np.float64).ravel()
-        mean_mem = np.mean(memory_samples)
-        std_mem = np.std(memory_samples)
-        worst_mem = np.max(memory_samples)
-        median_mem = np.median(memory_samples)
-        q1_mem, q3_mem = np.percentile(memory_samples, [25, 75])
+        mean_mem = np.nanmean(memory_samples)
+        std_mem = np.nanstd(memory_samples)
+        worst_mem = np.nanmax(memory_samples)
+        median_mem = np.nanmedian(memory_samples)
+        q1_mem, q3_mem = np.nanpercentile(memory_samples, [25, 75])
         iqr_mem = q3_mem - q1_mem
         print(f"  {'Peak Memory (MB)':<28} | {f'{mean_mem:.3f} ± {std_mem:.3f}':>25}")
         print(f"  {'Memory Median [IQR] (MB)':<28} | {f'{median_mem:.3f} [{iqr_mem:.3f}]':>25}")
@@ -184,24 +181,24 @@ def print_results_summary(config, args, runtimes, problem_creation_times,
     print(f"  {'Rank Statistics':<55}")
 
     # Ranks for X
-    avg_ranks_X = np.mean(ranksX[r_i, :, :], axis=0)
-    std_ranks_X = np.std(ranksX[r_i, :, :], axis=0)
+    avg_ranks_X = np.nanmean(ranksX[r_i, :, :], axis=0)
+    std_ranks_X = np.nanstd(ranksX[r_i, :, :], axis=0)
     print(f"  {'  Ranks X':<26}: {format_ranks_with_std(avg_ranks_X, std_ranks_X)}")
 
     # Ranks for Y
-    avg_ranks_Y = np.mean(ranksY[r_i, :, :], axis=0)
-    std_ranks_Y = np.std(ranksY[r_i, :, :], axis=0)
+    avg_ranks_Y = np.nanmean(ranksY[r_i, :, :], axis=0)
+    std_ranks_Y = np.nanstd(ranksY[r_i, :, :], axis=0)
     print(f"  {'  Ranks Y':<26}: {format_ranks_with_std(avg_ranks_Y, std_ranks_Y)}")
 
     # Ranks for Z
-    avg_ranks_Z = np.mean(ranksZ[r_i, :, :], axis=0)
-    std_ranks_Z = np.std(ranksZ[r_i, :, :], axis=0)
+    avg_ranks_Z = np.nanmean(ranksZ[r_i, :, :], axis=0)
+    std_ranks_Z = np.nanstd(ranksZ[r_i, :, :], axis=0)
     print(f"  {'  Ranks Z':<26}: {format_ranks_with_std(avg_ranks_Z, std_ranks_Z)}")
 
     # Ranks for T (if provided)
     if ranksT is not None:
-        avg_ranks_T = np.mean(ranksT[r_i, :, :], axis=0)
-        std_ranks_T = np.std(ranksT[r_i, :, :], axis=0)
+        avg_ranks_T = np.nanmean(ranksT[r_i, :, :], axis=0)
+        std_ranks_T = np.nanstd(ranksT[r_i, :, :], axis=0)
         print(f"  {'  Ranks T':<26}: {format_ranks_with_std(avg_ranks_T, std_ranks_T)}")
 
     print("")  # Add a newline for spacing between rank blocks
@@ -249,6 +246,17 @@ def run_and_record(seed, r_i, s_i, rank, config, args, create_problem_fn, memory
                    problem_creation_times, runtimes, complementary_slackness, 
                    feasibility_errors, dual_feasibility_errors, num_iters, 
                    ranksX, ranksY, ranksZ, ranksT, config_path):
+    from src.tt_ipm import IneqStatus, tt_ipm
+    from src.tt_ops import (
+        tt_add,
+        tt_fast_matrix_vec_mul,
+        tt_inner_prod,
+        tt_rank_reduce,
+        tt_reshape,
+        tt_sub,
+        tt_transpose,
+    )
+
     np.random.seed(seed)
     t1 = time.time()
     problem = create_problem_fn(config["dim"], rank)

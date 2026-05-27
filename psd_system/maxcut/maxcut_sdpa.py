@@ -11,7 +11,7 @@ from memory_profiler import memory_usage
 
 sys.path.append(os.getcwd() + '/../../')
 from maxcut import *
-from psd_system.direct_conic import sdpa_row_from_entries, solve_sdpa_psd_max
+from psd_system.direct_conic import require_sdpa_optimal, sdpa_dual_error, sdpa_duality_gap, sdpa_row_from_entries, sdpa_solver_options, solve_sdpa_psd_max
 from src.utils import print_results_summary
 
 import warnings
@@ -36,12 +36,12 @@ if __name__ == "__main__":
         config = yaml.safe_load(file)
 
     num_seeds = len(config["seeds"])
-    problem_creation_times = np.zeros(num_seeds)
-    runtimes = np.zeros(num_seeds)
-    memory = np.zeros(num_seeds)
-    complementary_slackness = np.zeros(num_seeds)
-    feasibility_errors = np.zeros(num_seeds)
-    dual_feasibility_errors = np.zeros(num_seeds)
+    problem_creation_times = np.full(num_seeds, np.nan)
+    runtimes = np.full(num_seeds, np.nan)
+    memory = np.full(num_seeds, np.nan)
+    complementary_slackness = np.full(num_seeds, np.nan)
+    feasibility_errors = np.full(num_seeds, np.nan)
+    dual_feasibility_errors = np.full(num_seeds, np.nan)
     num_failed_seeds = 0
 
     for s_i, seed in enumerate(config["seeds"]):
@@ -54,32 +54,34 @@ if __name__ == "__main__":
             np.random.seed(current_seed)
 
             if args.track_mem:
-                # Baseline before building data so tracked memory includes matrices/constraints too.
+                # Baseline before setup so peak delta includes objective/constraint build and solve.
                 start_mem = memory_usage(max_usage=True, include_children=True)
 
-            t1 = time.time()
-            C = tt_matrix_to_matrix(tt_obj_matrix(args.rank, config["dim"]))
-            n = C.shape[0]
-            eq_rows, eq_rhs = _diag_eq_rows_sdpa(n)
-            option = {
-                "print": "display",
-                "epsilonDash": 1e-6 / (2 ** config["dim"]),
-                "epsilonStar": 1e-5 / (2 ** config["dim"]),
-                "gammaStar": 0.9,
-                "domainMethod": "basis",
-            }
-            t2 = time.time()
-
-
             try:
-                if args.track_mem:
-                    def wrapper():
-                        return solve_sdpa_psd_max(C, eq_rows, eq_rhs, option=option)
-
-                    res, result = memory_usage(proc=wrapper, max_usage=True, retval=True, include_children=True)
-                    memory[s_i] = res - start_mem
-                else:
+                def build_and_solve():
+                    t1 = time.time()
+                    C = tt_matrix_to_matrix(tt_obj_matrix(args.rank, config["dim"]))
+                    n = C.shape[0]
+                    eq_rows, eq_rhs = _diag_eq_rows_sdpa(n)
+                    option = sdpa_solver_options(config, gamma_star=0.9, domain_method="basis")
+                    t2 = time.time()
                     result = solve_sdpa_psd_max(C, eq_rows, eq_rhs, option=option)
+                    require_sdpa_optimal(result)
+                    t3 = time.time()
+                    return C, result, t2 - t1, t3 - t2
+
+                if args.track_mem:
+                    peak_mem, payload = memory_usage(
+                        proc=build_and_solve,
+                        max_usage=True,
+                        retval=True,
+                        include_children=True,
+                    )
+                    memory[s_i] = peak_mem - start_mem
+                else:
+                    payload = build_and_solve()
+
+                C, result, problem_creation_time, runtime = payload
                 break
             except Exception as e:
                 print(e)
@@ -93,15 +95,11 @@ if __name__ == "__main__":
 
         X_val = result["x_matrix"]
         Z = result["z_matrix"]
-        y = result["y_eq"]
-        t3 = time.time()
-
-        problem_creation_times[s_i] = t2 - t1
-        runtimes[s_i] = t3 - t2
-        complementary_slackness[s_i] = np.abs(np.trace(X_val @ Z))
+        problem_creation_times[s_i] = problem_creation_time
+        runtimes[s_i] = runtime
+        complementary_slackness[s_i] = sdpa_duality_gap(result)
         feasibility_errors[s_i] = np.linalg.norm(np.diag(X_val) - 1) ** 2
-        dual_feas = Z + C - np.diag(y)
-        dual_feasibility_errors[s_i] = np.sum(dual_feas ** 2)
+        dual_feasibility_errors[s_i] = sdpa_dual_error(result)
 
     num_iters = np.zeros(num_seeds)
     ranksX = np.zeros((1, num_seeds, 1))
