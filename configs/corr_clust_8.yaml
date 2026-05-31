@@ -1,8 +1,8 @@
 abs_tol: 0.001
 dim: 8
+gap_tol: 0.0003
 lambdaStar: 2.0
 lambdaStarIneq: 0.001
-gap_tol: 0.0003
 mals_restarts: 2
 max_iter: 25
 max_refinement: 10
@@ -12,6 +12,6 @@ seeds:
 - 493
 - 324
 - 325
-- 9299
+- 971
 verbose: true
 warm_up: 3

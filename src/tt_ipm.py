@@ -175,6 +175,25 @@ class IneqStatus(Enum):
     def __str__(self):
         return self.name.lower().replace('_', ' ')
 
+def _regularized_cholesky(matrix, lower=True):
+    try:
+        return scp.linalg.cholesky(matrix, check_finite=False, lower=lower, overwrite_a=True)
+    except (scp.linalg.LinAlgError, np.linalg.LinAlgError):
+        pass
+
+    sym_matrix = 0.5 * (matrix + matrix.T)
+    diag_scale = max(float(np.max(np.abs(np.diag(sym_matrix)))), 1.0)
+    last_error = None
+    for jitter in (1e-12, 1e-10, 1e-8):
+        shifted = sym_matrix.copy()
+        shifted.flat[::shifted.shape[0] + 1] += jitter * diag_scale
+        try:
+            return scp.linalg.cholesky(shifted, check_finite=False, lower=lower, overwrite_a=True)
+        except (scp.linalg.LinAlgError, np.linalg.LinAlgError) as exc:
+            last_error = exc
+    raise last_error
+
+
 def forward_backward_sub(L, b, overwrite_b=False):
     y = scp.linalg.solve_triangular(L, b, lower=True, check_finite=False, overwrite_b=overwrite_b)
     x = scp.linalg.solve_triangular(L.T, y, lower=False, check_finite=False, overwrite_b=True)
@@ -201,9 +220,9 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
             L_X_I_inv = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[2, 2], block_A_k[2, 2], XAX_k1[2, 2]).reshape(m, m)
             L_X_I_inv *= inv_I.reshape(1, -1)
             mL_eq = cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[0, 1], block_A_k[0, 1], XAX_k1[0, 1]).reshape(m, m)
-            L_L_Z = scp.linalg.cholesky(
+            L_L_Z = _regularized_cholesky(
                 cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[2, 1], block_A_k[2, 1], XAX_k1[2, 1]).reshape(m, m),
-                check_finite=False, lower=True, overwrite_a=True
+                lower=True
             )
             b = mR_p - mL_eq @ forward_backward_sub(L_L_Z, mR_c - L_X_I_inv @ mR_d, overwrite_b=True)
             A = forward_backward_sub(L_L_Z, L_X_I_inv, overwrite_b=True)
@@ -221,8 +240,9 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
                 mR_c - cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[2, 2], block_A_k[2, 2], XAX_k1[2, 2], solution_now[:, 2]).reshape(-1, 1), 
                 overwrite_b=True
                 ).reshape(x_shape[0], x_shape[2], x_shape[3])
+        except (scp.linalg.LinAlgError, np.linalg.LinAlgError):
+            direct_solve_failure = True
         except Exception as e:
-            print(e)
             tb = traceback.extract_tb(e.__traceback__)
             last = tb[-1]
             print(f"\t⚠️ {type(e).__name__} in {last.filename}, \n\tline {last.lineno}: {last.line.strip()}")
@@ -297,9 +317,9 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
 
     if dense_solve:
         try:
-            L_L_Z = scp.linalg.cholesky(
+            L_L_Z = _regularized_cholesky(
                 cached_einsum('lsr,smnS,LSR->lmLrnR', XAX_k[2, 1], block_A_k[2, 1], XAX_k1[2, 1]).reshape(m, m),
-                check_finite=False, lower=True,  overwrite_a=True
+                lower=True
             )
             mR_p = rhs[:, 0].reshape(m, 1)
             mR_d = rhs[:, 1].reshape(m, 1)
@@ -333,6 +353,8 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
                 overwrite_b=True
                 ).reshape(x_shape[0], x_shape[2], x_shape[3])
 
+        except (scp.linalg.LinAlgError, np.linalg.LinAlgError):
+            direct_solve_failure = True
         except Exception as e:
             tb = traceback.extract_tb(e.__traceback__)
             last = tb[-1]
@@ -401,28 +423,104 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
     return solution_now, block_res_old, min(block_res_old, block_res_new), rhs, norm_rhs, direct_solve_failure
 
 
+
+@dataclass
+class RoundingController:
+    residual_factor: float = 0.01
+    operator_factor: float = 0.1
+    update_factor: float = 0.1
+    update_budget_growth: float = 1.25
+
+    def _scaled(self, factor, status, normalisation):
+        return factor * status.eta * normalisation
+
+    def residual_primal(self, status):
+        return self._scaled(self.residual_factor, status, status.primal_error_normalisation)
+
+    def residual_dual(self, status):
+        return self._scaled(self.residual_factor, status, status.dual_error_normalisation)
+
+    def residual_centrality(self, status):
+        return self._scaled(self.residual_factor, status, status.centrl_error_normalisation)
+
+    def operator_primal(self, status):
+        return self._scaled(self.operator_factor, status, status.primal_error_normalisation)
+
+    def operator_dual(self, status):
+        return self._scaled(self.operator_factor, status, status.dual_error_normalisation)
+
+    def operator_centrality(self, status):
+        return self._scaled(self.operator_factor, status, status.centrl_error_normalisation)
+
+    def update_primal_base(self, status):
+        return self._scaled(self.update_factor, status, status.primal_error_normalisation)
+
+    def update_dual_base(self, status):
+        return self._scaled(self.update_factor, status, status.dual_error_normalisation)
+
+    def psd_shift_norm(self, status):
+        return np.sqrt(2 ** status.dim)
+
+    def mask_shift_norm(self, status):
+        return np.sqrt(max(status.num_ineq_constraints, 1.0))
+
+    def budgeted_round_tol(self, base_tol, shift_norm):
+        total_budget = self.update_budget_growth * base_tol * (1.0 + shift_norm)
+        return total_budget / (1.0 + shift_norm)
+
+    def update_x_round_tol(self, status):
+        return self.budgeted_round_tol(self.update_primal_base(status), self.psd_shift_norm(status))
+
+    def update_z_round_tol(self, status):
+        return self.budgeted_round_tol(self.update_dual_base(status), self.psd_shift_norm(status))
+
+    def update_t_round_tol(self, status):
+        return self.budgeted_round_tol(self.update_dual_base(status), self.mask_shift_norm(status))
+
+
+def _tt_rank_sum(train_tt):
+    return sum(tt_ranks(train_tt))
+
+
+def _tt_budgeted_psd_symmetrise(matrix_tt, err_bound):
+    matrix_tt = tt_scale(0.5, tt_add(matrix_tt, tt_transpose(matrix_tt)))
+    old_rank_sum = _tt_rank_sum(matrix_tt)
+    rounded_tt = tt_psd_rank_reduce([core.copy() for core in matrix_tt], eps=err_bound)
+    if _tt_rank_sum(rounded_tt) >= old_rank_sum:
+        return matrix_tt
+    return rounded_tt
+
+
+def _tt_budgeted_mask_symmetrise(matrix_tt, mask_tt, err_bound):
+    matrix_tt = tt_scale(0.5, tt_add(matrix_tt, tt_transpose(matrix_tt)))
+    old_rank_sum = _tt_rank_sum(matrix_tt)
+    rounded_tt = tt_mask_rank_reduce([core.copy() for core in matrix_tt], mask_tt, eps=err_bound)
+    if _tt_rank_sum(rounded_tt) >= old_rank_sum:
+        return matrix_tt
+    return rounded_tt
+
 def tt_compute_primal_feasibility(lin_op_tt, bias_tt, X_tt, status):
-    primal_feas = tt_rank_reduce(tt_sub(tt_mat_vec_mul(lin_op_tt, tt_reshape(X_tt, (4,)), 0.01*status.eta*status.primal_error_normalisation, status.eps), bias_tt),
-                   0.01*status.eta*status.primal_error_normalisation)  # primal feasibility
+    primal_feas = tt_rank_reduce(tt_sub(tt_mat_vec_mul(lin_op_tt, tt_reshape(X_tt, (4,)), status.rounding.residual_primal(status), status.eps), bias_tt),
+                   status.rounding.residual_primal(status))  # primal feasibility
     return primal_feas
 
 
 def tt_compute_dual_feasibility(obj_tt, lin_op_tt_adj, Z_tt, Y_tt, T_tt, status):
     dual_feas = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(lin_op_tt_adj, Y_tt, status.eps),
                                       tt_rank_reduce(tt_add(tt_reshape(Z_tt, (4,)), obj_tt), status.eps)),
-                               status.eps if status.ineq_status is IneqStatus.ACTIVE else 0.01*status.eta*status.dual_error_normalisation)
+                               status.eps if status.ineq_status is IneqStatus.ACTIVE else status.rounding.residual_dual(status))
     if status.ineq_status is IneqStatus.ACTIVE and T_tt is not None:
-        dual_feas = tt_rank_reduce(tt_sub(dual_feas, tt_reshape(T_tt, (4,))), 0.01*status.eta*status.dual_error_normalisation)
+        dual_feas = tt_rank_reduce(tt_sub(dual_feas, tt_reshape(T_tt, (4,))), status.rounding.residual_dual(status))
 
     return dual_feas
 
 
 def tt_compute_centrality(X_tt, Z_tt, status):
     if status.aho_direction:
-        centrality_feas = tt_reshape(tt_scale(-1, _tt_symmetrise(tt_mat_mat_mul(X_tt, Z_tt, 0.01*status.eta*status.centrl_error_normalisation, status.eps),
-                                                        0.01*status.eta*status.centrl_error_normalisation)), (4,))
+        centrality_feas = tt_reshape(tt_scale(-1, _tt_symmetrise(tt_mat_mat_mul(X_tt, Z_tt, status.rounding.residual_centrality(status), status.eps),
+                                                        status.rounding.residual_centrality(status))), (4,))
     else:
-        centrality_feas = tt_reshape(tt_scale(-1, tt_mat_mat_mul(Z_tt, X_tt, 0.01*status.eta*status.centrl_error_normalisation, status.eps)), (4,))
+        centrality_feas = tt_reshape(tt_scale(-1, tt_mat_mat_mul(Z_tt, X_tt, status.rounding.residual_centrality(status), status.eps)), (4,))
     return centrality_feas
 
 
@@ -451,11 +549,11 @@ def tt_infeasible_newton_system(
     status.is_last_iter = status.is_last_iter or (status.is_primal_feasible and status.is_dual_feasible and status.is_central)
 
     if status.aho_direction:
-        lhs[2, 1] = tt_psd_rank_reduce(tt_scale(0.5, tt_add(tt_IkronM(Z_tt), tt_MkronI(Z_tt))), eps=0.1*status.eta*status.dual_error_normalisation)
-        lhs[2, 2] = tt_psd_rank_reduce(tt_scale(0.5, tt_add(tt_MkronI(X_tt), tt_IkronM(X_tt))), eps=0.1*status.eta*status.primal_error_normalisation)
+        lhs[2, 1] = tt_psd_rank_reduce(tt_scale(0.5, tt_add(tt_IkronM(Z_tt), tt_MkronI(Z_tt))), eps=status.rounding.operator_dual(status))
+        lhs[2, 2] = tt_psd_rank_reduce(tt_scale(0.5, tt_add(tt_MkronI(X_tt), tt_IkronM(X_tt))), eps=status.rounding.operator_primal(status))
     else:
-        lhs[2, 1] = tt_psd_rank_reduce(tt_MkronI(Z_tt), eps=0.1*status.eta*status.dual_error_normalisation)
-        lhs[2, 2] = tt_psd_rank_reduce(tt_IkronM(X_tt), eps=0.1*status.eta*status.primal_error_normalisation)
+        lhs[2, 1] = tt_psd_rank_reduce(tt_MkronI(Z_tt), eps=status.rounding.operator_dual(status))
+        lhs[2, 2] = tt_psd_rank_reduce(tt_IkronM(X_tt), eps=status.rounding.operator_primal(status))
 
     if not status.is_primal_feasible or status.is_last_iter:
         rhs[0] = primal_feas
@@ -467,11 +565,11 @@ def tt_infeasible_newton_system(
         rhs[2] = tt_compute_centrality(X_tt, Z_tt, status)
 
     if status.ineq_status is IneqStatus.ACTIVE:
-        lhs[3, 1] =  tt_diag_op(T_tt, 0.1*status.eta*status.dual_error_normalisation)
+        lhs[3, 1] =  tt_diag_op(T_tt, status.rounding.operator_dual(status))
         masked_X_tt = tt_rank_reduce(tt_add(tt_scale(status.ineq_boundary_val, ineq_mask), tt_fast_hadamard(ineq_mask, X_tt, status.eps)), eps=status.eps)
-        lhs[3, 3] = tt_rank_reduce(tt_add(status.lag_map_t, tt_diag_op(masked_X_tt, status.eps)), eps=0.1*status.eta*status.dual_error_normalisation)
+        lhs[3, 3] = tt_rank_reduce(tt_add(status.lag_map_t, tt_diag_op(masked_X_tt, status.eps)), eps=status.rounding.operator_dual(status))
         if not status.is_central or status.is_last_iter:
-            rhs[3] = tt_rank_reduce(tt_reshape(tt_scale(-1, tt_fast_hadamard(masked_X_tt, T_tt, status.eps)), (4, )), eps=0.01*status.eta*status.centrl_error_normalisation)
+            rhs[3] = tt_rank_reduce(tt_reshape(tt_scale(-1, tt_fast_hadamard(masked_X_tt, T_tt, status.eps)), (4, )), eps=status.rounding.residual_centrality(status))
     return lhs, rhs, status
 
 def _tt_symmetrise(matrix_tt, err_bound):
@@ -629,7 +727,7 @@ def _tt_ipm_newton_step(
                     rhs_vec_tt[3]  = tt_rank_reduce(tt_add(
                             tt_scale(status.sigma * status.mu, tt_reshape(ineq_mask, (4,))),
                             rhs_vec_tt.get_row(3),
-                            ), 0.1*status.eta*status.centrl_error_normalisation
+                            ), status.rounding.operator_centrality(status)
                             )
             else:
                 mu_aff = (
@@ -651,15 +749,15 @@ def _tt_ipm_newton_step(
                             Delta_XZ_term
                         )
                     ),
-                    0.1*status.eta*status.centrl_error_normalisation
-                ) if status.sigma > 1e-4 else tt_rank_reduce(tt_add(rhs_vec_tt.get_row(2), Delta_XZ_term), 0.1*status.eta*status.centrl_error_normalisation)
+                    status.rounding.operator_centrality(status)
+                ) if status.sigma > 1e-4 else tt_rank_reduce(tt_add(rhs_vec_tt.get_row(2), Delta_XZ_term), status.rounding.operator_centrality(status))
             else:
                 rhs_vec_tt[2] = tt_rank_reduce(
                     tt_add(
                         tt_scale(status.sigma * status.mu, tt_reshape(tt_identity(len(X_tt)), (4,))),
                         rhs_vec_tt.get_row(2)
                     ),
-                    0.1*status.eta*status.centrl_error_normalisation
+                    status.rounding.operator_centrality(status)
                 ) if status.sigma > 1e-4 else rhs_vec_tt.get_row(2)
 
             lhs_cc_tt, rhs_cc_tt = _tt_build_row_scaled_kkt(lhs_matrix_tt, rhs_vec_tt, status, row_scales=row_scales)
@@ -789,7 +887,7 @@ def _initialise(ineq_mask, status, dim, lambdaStar, lambdaStarIneq):
         T_tt = tt_scale(lambdaStarIneq, ineq_mask)
         # Need to initialise so it stays psd
         x_step_size, _ = tt_max_generalised_eigen(X_tt, ineq_mask, tol=1e-7, verbose=status.verbose)
-        X_tt = tt_rank_reduce(tt_add(X_tt, tt_scale(0.1*x_step_size, ineq_mask)), 0.1*status.eta*status.primal_error_normalisation)
+        X_tt = tt_rank_reduce(tt_add(X_tt, tt_scale(0.1*x_step_size, ineq_mask)), status.rounding.update_x_round_tol(status))
 
     return X_tt, Y_tt, Z_tt, T_tt
 
@@ -941,7 +1039,8 @@ def tt_ipm(
     epsilonDash=None,
     epsilonDashineq=None,
     verbose=False,
-    solver_verbose=False
+    solver_verbose=False,
+    rounding_update_budget_growth=1.25
 ):
     dim = len(obj_tt)
     centrality_tol = gap_tol / np.sqrt(dim) # for larger problems we need to be closer
@@ -967,6 +1066,7 @@ def tt_ipm(
         1,
         r_max
     )
+    status.rounding = RoundingController(update_budget_growth=rounding_update_budget_growth)
     lag_maps = {key: tt_rank_reduce(value, eps=eps) for key, value in lag_maps.items()}
     obj_tt = tt_rank_reduce(obj_tt, eps=eps)
     lin_op_tt = tt_rank_reduce(lin_op_tt, eps=eps)
@@ -1083,23 +1183,14 @@ def tt_ipm(
                 print("============================================\n Hit PSD boundary! Entering finishing phase.\n============================================")
                 status.is_last_iter = True
         else:
-            if finishing_steps <= 1:
-                X_tt = _tt_symmetrise(tt_add(X_tt, tt_scale(x_step_size, Delta_X_tt)), 0.1*status.eta*status.primal_error_normalisation)
-            else:
-                X_tt = _tt_psd_symmetrise(tt_add(X_tt, tt_scale(x_step_size, Delta_X_tt)), 0.1*status.eta*status.primal_error_normalisation)
-            if finishing_steps <= 1:
-                Z_tt = _tt_symmetrise(tt_add(Z_tt, tt_scale(z_step_size, Delta_Z_tt)), 0.1*status.eta*status.dual_error_normalisation)
-            else:
-                Z_tt = _tt_psd_symmetrise(tt_add(Z_tt, tt_scale(z_step_size, Delta_Z_tt)), 0.1*status.eta*status.dual_error_normalisation)
+            X_tt = _tt_budgeted_psd_symmetrise(tt_add(X_tt, tt_scale(x_step_size, Delta_X_tt)), status.rounding.update_x_round_tol(status))
+            Z_tt = _tt_budgeted_psd_symmetrise(tt_add(Z_tt, tt_scale(z_step_size, Delta_Z_tt)), status.rounding.update_z_round_tol(status))
 
             Y_tt = tt_rank_reduce(tt_add(Y_tt, tt_scale(z_step_size, Delta_Y_tt)), status.eps)
-            Y_tt = tt_reshape(_tt_symmetrise(tt_reshape(tt_sub(Y_tt, tt_fast_matrix_vec_mul(status.lag_map_y, Y_tt, status.eps)), (2, 2)), 0.1*status.eta*status.dual_error_normalisation), (4, ))
+            Y_tt = tt_reshape(_tt_symmetrise(tt_reshape(tt_sub(Y_tt, tt_fast_matrix_vec_mul(status.lag_map_y, Y_tt, status.eps)), (2, 2)), status.rounding.update_z_round_tol(status)), (4, ))
 
             if status.ineq_status is IneqStatus.ACTIVE:
-                if finishing_steps <= 1:
-                    T_tt = _tt_symmetrise(tt_add(T_tt, tt_scale(z_step_size, Delta_T_tt)), 0.1*status.eta*status.dual_error_normalisation)
-                else:
-                    T_tt = _tt_mask_symmetrise(tt_add(T_tt, tt_scale(z_step_size, Delta_T_tt)), ineq_mask, 0.1*status.eta*status.dual_error_normalisation)
+                T_tt = _tt_budgeted_mask_symmetrise(tt_add(T_tt, tt_scale(z_step_size, Delta_T_tt)), ineq_mask, status.rounding.update_t_round_tol(status))
             elif status.ineq_status is IneqStatus.SETTING_INACTIVE:
                 solver = solver_eq
                 lhs = lhs_skeleton.get_submatrix(2, 2)

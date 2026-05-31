@@ -392,6 +392,7 @@ def run_and_record(seed, r_i, s_i, rank, config, args, create_problem_fn, memory
             max_iter=config["max_iter"],
             verbose=config["verbose"],
             solver_verbose=bool(config.get("solver_verbose", False)),
+            rounding_update_budget_growth=float(config.get("rounding_update_budget_growth", 1.25)),
             gap_tol=float(config["gap_tol"]),
             op_tol=float(config["op_tol"]),
             warm_up=config["warm_up"],
