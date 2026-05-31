@@ -888,14 +888,35 @@ def _ipm_check_convergence(status, finishing_steps, ZX, TX, abs_tol, max_refinem
     return status, finishing_steps
 
 
+def _tt_rank_peak(tt):
+    if tt is None:
+        return "-"
+    return str(max(tt_ranks(tt)))
+
+
 def _ipm_log_iteration(iteration, status, X_tt, Y_tt, Z_tt, T_tt):
-    """Prints verbose output for the current iteration."""
-    print(f"\n--- Iteration {iteration - 1} ---")
-    print(f"Status: Finishing up={status.is_last_iter}, Ineq={str(status.ineq_status)}")
-    print(f"Feasibility: Central={status.is_central}, Primal={status.is_primal_feasible}, Dual={status.is_dual_feasible}")
-    print(f"Direction: {'AHO' if status.aho_direction else 'XZ'}, Sigma: {status.sigma:.2e}")
-    print(f"Errors: Centrality={status.centrality_error:.4e}, Primal={status.primal_error:.4e}, Dual={status.dual_error:.4e}")
-    print(f"Ranks: X={tt_ranks(X_tt)}, Z={tt_ranks(Z_tt)}, Y={tt_ranks(Y_tt)}, T={tt_ranks(T_tt) if T_tt else 'N/A'}", flush=True)
+    """Prints a compact progress line for the current iteration."""
+    phase = "finish" if status.is_last_iter else "main"
+    direction = "AHO" if status.aho_direction else "XZ"
+    feas_flags = "".join([
+        "C" if status.is_central else "c",
+        "P" if status.is_primal_feasible else "p",
+        "D" if status.is_dual_feasible else "d",
+    ])
+    ineq_status = status.ineq_status.name.lower()
+    ranks = "/".join([
+        _tt_rank_peak(X_tt),
+        _tt_rank_peak(Y_tt),
+        _tt_rank_peak(Z_tt),
+        _tt_rank_peak(T_tt),
+    ])
+    print(
+        f"it {iteration - 1:03d} | {phase:<6} | {direction:<3} | ineq={ineq_status:<8} | "
+        f"mu={status.mu:.2e} eta={status.eta:.2e} sigma={status.sigma:.2e} | "
+        f"err c/p/d={status.centrality_error:.2e}/{status.primal_error:.2e}/{status.dual_error:.2e} | "
+        f"ok={feas_flags} | rmax X/Y/Z/T={ranks}",
+        flush=True,
+    )
 
 
 def tt_ipm(
@@ -919,7 +940,8 @@ def tt_ipm(
     # Backward-compat deprecated aliases:
     epsilonDash=None,
     epsilonDashineq=None,
-    verbose=False
+    verbose=False,
+    solver_verbose=False
 ):
     dim = len(obj_tt)
     centrality_tol = gap_tol / np.sqrt(dim) # for larger problems we need to be closer
@@ -940,7 +962,7 @@ def tt_ipm(
         np.inf,
         False,
         IneqStatus.NOT_IN_USE if ineq_mask is None else IneqStatus.ACTIVE,
-        verbose,
+        solver_verbose,
         1,
         1,
         r_max
@@ -965,7 +987,7 @@ def tt_ipm(
         termination_tol=termination_tol,
         num_restarts=mals_restarts,
         inner_m=nwsp,
-        verbose=verbose
+        verbose=solver_verbose
     )
     solver_eq = lambda lhs, rhs, x0, nwsp, restriction, termination_tol: tt_restarted_block_amen(
         lhs,
@@ -977,7 +999,7 @@ def tt_ipm(
         termination_tol=termination_tol,
         num_restarts=mals_restarts, 
         inner_m=nwsp,
-        verbose=verbose
+        verbose=solver_verbose
     )
     if status.ineq_status is IneqStatus.ACTIVE:
         solver = solver_ineq

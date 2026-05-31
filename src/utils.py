@@ -391,6 +391,7 @@ def run_and_record(seed, r_i, s_i, rank, config, args, create_problem_fn, memory
             ineq_mask=ineq_mask,
             max_iter=config["max_iter"],
             verbose=config["verbose"],
+            solver_verbose=bool(config.get("solver_verbose", False)),
             gap_tol=float(config["gap_tol"]),
             op_tol=float(config["op_tol"]),
             warm_up=config["warm_up"],
