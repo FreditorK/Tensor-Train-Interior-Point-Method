@@ -1,3 +1,6 @@
+import os
+import re
+
 import numpy as np
 import scipy.sparse as sp
 
@@ -19,23 +22,97 @@ def _require_sdpap():
     return sdpap
 
 
+def _sdpa_info_dicts(result):
+    for key in ("sdpapinfo", "sdpainfo", "timeinfo"):
+        info = result.get(key)
+        if isinstance(info, dict):
+            yield info
+
+
+def _sdpa_info_texts(result):
+    for key in ("sdpapinfo", "sdpainfo", "timeinfo"):
+        info = result.get(key)
+        if isinstance(info, bytes):
+            try:
+                info = info.decode("utf-8", errors="ignore")
+            except Exception:
+                info = str(info)
+        if isinstance(info, str):
+            yield info
+        elif isinstance(info, (list, tuple)):
+            joined = "\n".join(str(item) for item in info)
+            if joined:
+                yield joined
+
+
+def _safe_float(value):
+    try:
+        return float(value)
+    except Exception:
+        return np.nan
+
+
 def _sdpa_info_value(result, keys, default=np.nan):
-    info = result.get("sdpapinfo", {})
-    if isinstance(info, dict):
+    for info in _sdpa_info_dicts(result):
         for key in keys:
             if key in info:
-                try:
-                    return float(info[key])
-                except Exception:
-                    pass
+                value = _safe_float(info[key])
+                if np.isfinite(value):
+                    return value
+        lower_map = {str(k).lower(): k for k in info.keys()}
+        for key in keys:
+            match_key = lower_map.get(str(key).lower())
+            if match_key is not None:
+                value = _safe_float(info[match_key])
+                if np.isfinite(value):
+                    return value
     return default
 
 
+def _sdpa_text_value(result, patterns, default=np.nan):
+    last_value = None
+    for text in _sdpa_info_texts(result):
+        for pattern in patterns:
+            for match in re.finditer(pattern, text, flags=re.IGNORECASE | re.MULTILINE):
+                last_value = match.group(1)
+    value = _safe_float(last_value)
+    return value if np.isfinite(value) else default
+
+
+def _sdpa_info_str(result, keys, default=""):
+    for info in _sdpa_info_dicts(result):
+        for key in keys:
+            if key in info:
+                value = str(info[key]).strip()
+                if value:
+                    return value
+        lower_map = {str(k).lower(): k for k in info.keys()}
+        for key in keys:
+            match_key = lower_map.get(str(key).lower())
+            if match_key is not None:
+                value = str(info[match_key]).strip()
+                if value:
+                    return value
+    return default
+
+
+def _neg_part_norm_sq(values):
+    values = np.asarray(values, dtype=float).reshape(-1)
+    neg = np.minimum(values, 0.0)
+    return float(np.sum(neg ** 2))
+
+
+def _sdpa_psd_violation(matrix):
+    if matrix is None:
+        return np.nan
+    sym = 0.5 * (matrix + matrix.T)
+    eigs = np.linalg.eigvalsh(sym)
+    return _neg_part_norm_sq(eigs)
+
+
 def sdpa_phase(result):
-    info = result.get("sdpapinfo", {})
-    if isinstance(info, dict):
-        return str(info.get("phase", info.get("SDPA.phase", info.get("phasevalue", "")))).strip()
-    return ""
+    value = _sdpa_info_str(result, ("phase", "SDPA.phase", "phasevalue"), default="")
+    return value
 
 
 def require_sdpa_optimal(result):
@@ -44,13 +121,101 @@ def require_sdpa_optimal(result):
         raise RuntimeError(f"SDPA did not converge to pdOPT (phase={phase or 'unknown'})")
 
 
+def sdpa_dual_error_reported(result):
+    value = _sdpa_info_value(
+        result,
+        (
+            "dualError",
+            "dual_error",
+            "err_d",
+            "dualFeas",
+            "dual_feas",
+            "d.feas",
+            "dfeas",
+            "SDPA.dualError",
+            "SDPA.dual_error",
+            "SDPA.err_d",
+            "SDPA.dfeas",
+        ),
+    )
+    if not np.isfinite(value):
+        value = _sdpa_text_value(
+            result,
+            [
+                r"\bdual\s*error\s*[:=]\s*([+-]?[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)",
+                r"\bdualerror\s*[:=]\s*([+-]?[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)",
+                r"\berr[_\s]*d\s*[:=]\s*([+-]?[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)",
+                r"\bdual\s*feas(?:ibility)?\s*[:=]\s*([+-]?[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)",
+            ],
+        )
+    return float(value) if np.isfinite(value) else np.nan
+
+
 def sdpa_dual_error(result):
-    value = _sdpa_info_value(result, ("dualError", "dual_error", "err_d"))
-    if np.isfinite(value):
-        return value ** 2
-    y_full = np.concatenate([result["y_eq"], result["y_ineq"]])
-    dual_res = result["c"] - result["A"].T @ y_full - result["z_matrix"].reshape(-1, order="F")
-    return float(np.sum(np.asarray(dual_res).reshape(-1) ** 2))
+    reported = sdpa_dual_error_reported(result)
+    if np.isfinite(reported):
+        return float(reported) ** 2
+
+    theta_d = _sdpa_info_value(
+        result,
+        ("thetaD", "theta_d", "SDPA.thetaD", "SDPA.theta_d"),
+    )
+    if not np.isfinite(theta_d):
+        theta_d = _sdpa_text_value(
+            result,
+            [
+                r"^\s*\d+\s+[-+0-9.eE]+\s+[-+0-9.eE]+\s+([-+0-9.eE]+)",
+            ],
+        )
+    if np.isfinite(theta_d) and theta_d > 0.0:
+        return float(theta_d) ** 2
+
+    psd_violation = _sdpa_psd_violation(result.get("z_matrix"))
+    ineq_violation = np.nan
+    if "y_ineq" in result:
+        ineq_violation = _neg_part_norm_sq(result["y_ineq"])
+
+    if np.isfinite(psd_violation) or np.isfinite(ineq_violation):
+        total = 0.0
+        if np.isfinite(psd_violation):
+            total += psd_violation
+        if np.isfinite(ineq_violation):
+            total += ineq_violation
+        return float(total)
+
+    return np.nan
+
+
+def sdpa_num_iters(result):
+    value = _sdpa_info_value(
+        result,
+        (
+            "iter",
+            "iteration",
+            "numIter",
+            "numIterations",
+            "nIter",
+            "iters",
+            "SDPA.iter",
+            "SDPA.iteration",
+        ),
+    )
+    if not np.isfinite(value):
+        value = _sdpa_text_value(
+            result,
+            [
+                r"\biter(?:ation)?\s*[:=]\s*(\d+)",
+                r"\bnum(?:ber)?\s*iter(?:ation)?s?\s*[:=]\s*(\d+)",
+            ],
+        )
+    if not np.isfinite(value):
+        value = _sdpa_text_value(
+            result,
+            [
+                r"^\s*(\d+)\s+[-+0-9.]+(?:[eE][+-]?[0-9]+)?\s+[-+0-9.]+(?:[eE][+-]?[0-9]+)?\s+[-+0-9.]+(?:[eE][+-]?[0-9]+)?",
+            ],
+        )
+    return float(value) if np.isfinite(value) else np.nan
 
 
 def sdpa_duality_gap(result):
@@ -60,12 +225,26 @@ def sdpa_duality_gap(result):
     return float(abs(np.trace(result["x_matrix"] @ result["z_matrix"])))
 
 
+def _sdpa_num_threads(config):
+    for key in ("sdpa_num_threads", "numThreads"):
+        if key in config:
+            return int(config[key])
+    for env_name in ("SDPA_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS"):
+        value = os.environ.get(env_name)
+        if value:
+            return int(value)
+    return None
+
+
 def sdpa_solver_options(config, gamma_star=None, domain_method="basis", range_method=None):
     option = {
         "print": "display",
         "epsilonDash": float(config.get("sdpa_feas_tol", config.get("sdpa_gap_tol", 1e-5))),
         "epsilonStar": float(config.get("sdpa_gap_tol", 1e-5)),
     }
+    num_threads = _sdpa_num_threads(config)
+    if num_threads is not None:
+        option["numThreads"] = num_threads
     if gamma_star is not None:
         option["gammaStar"] = gamma_star
     if domain_method is not None:

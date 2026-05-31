@@ -6,9 +6,121 @@ import time
 import yaml
 import re
 import json
+import multiprocessing as mp
+import queue
+import traceback
 from memory_profiler import memory_usage
+import psutil
 
 sys.path.append(os.getcwd() + '/../../')
+
+
+def _process_tree_memory_mib(pid, include_children=True):
+    try:
+        root = psutil.Process(pid)
+    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+        return None
+
+    processes = [root]
+    if include_children:
+        try:
+            processes.extend(root.children(recursive=True))
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            pass
+
+    total = 0.0
+    seen = set()
+    for proc in processes:
+        if proc.pid in seen:
+            continue
+        seen.add(proc.pid)
+        try:
+            total += proc.memory_info().rss / (1024 ** 2)
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            continue
+    return total
+
+
+def _isolated_entry(fn, result_queue):
+    try:
+        result_queue.put(("ok", fn()))
+    except BaseException as exc:
+        result_queue.put((
+            "error",
+            {
+                "type": type(exc).__name__,
+                "message": str(exc),
+                "traceback": traceback.format_exc(),
+            },
+        ))
+
+
+def run_isolated(fn, track_mem=False, interval=0.1, include_children=True):
+    """Run fn in a child process so native solver exits cannot kill the batch."""
+    if "fork" not in mp.get_all_start_methods():
+        raise RuntimeError("run_isolated requires a platform with multiprocessing fork support")
+
+    ctx = mp.get_context("fork")
+    result_queue = ctx.Queue(maxsize=1)
+    proc = ctx.Process(target=_isolated_entry, args=(fn, result_queue))
+
+    baseline = None
+    peak = None
+    result = None
+    proc.start()
+    try:
+        while proc.is_alive():
+            if track_mem:
+                sample = _process_tree_memory_mib(proc.pid, include_children=include_children)
+                if sample is not None:
+                    if baseline is None:
+                        baseline = sample
+                    peak = sample if peak is None else max(peak, sample)
+            if result is None:
+                try:
+                    result = result_queue.get_nowait()
+                except queue.Empty:
+                    pass
+            time.sleep(interval)
+
+        proc.join()
+        if track_mem:
+            sample = _process_tree_memory_mib(proc.pid, include_children=include_children)
+            if sample is not None:
+                if baseline is None:
+                    baseline = sample
+                peak = sample if peak is None else max(peak, sample)
+
+        if result is None:
+            try:
+                result = result_queue.get_nowait()
+            except queue.Empty:
+                result = None
+
+        if proc.exitcode != 0:
+            raise RuntimeError(
+                f"Isolated solver process exited before returning (exit code {proc.exitcode})."
+            )
+        if result is None:
+            raise RuntimeError("Isolated solver process exited without returning a result.")
+
+        status, payload = result
+        if status == "error":
+            message = payload["message"] or payload["type"]
+            raise RuntimeError(message)
+
+        memory_delta = np.nan
+        if track_mem and baseline is not None and peak is not None:
+            memory_delta = max(0.0, peak - baseline)
+        return memory_delta, payload
+    finally:
+        if proc.is_alive():
+            proc.terminate()
+            proc.join(timeout=1.0)
+            if proc.is_alive():
+                proc.kill()
+                proc.join()
+
 
 def run_experiment(create_problem_fn):
 

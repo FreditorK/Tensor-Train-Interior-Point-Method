@@ -507,4 +507,4 @@ cdef class IneqMatVecWrapper(BaseMatVec):
             einsum(self.XAX_k_31, self.block_A_k_31, self.XAX_kp1_31, self.x_reshaped_1, self.result2, self.A_31_workspace1, self.A_31_workspace1_2, self.A_31_workspace2, self.A_31_workspace2_2, self.r, self.n, self.R, 1.0, 0.0)
             einsum(self.XAX_k_33, self.block_A_k_33, self.XAX_kp1_33, self.x_reshaped_2, self.result2, self.A_33_workspace1, self.A_33_workspace1_2, self.A_33_workspace2, self.A_33_workspace2_2, self.r, self.n, self.R, 1.0, 1.0)
         pack_results3(self.result0, self.result1, self.result2, self.flat_result, self.R, self.n, self.r)
-        return self.flat_result
+        return self.flat_result_arr

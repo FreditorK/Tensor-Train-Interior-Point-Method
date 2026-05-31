@@ -6,13 +6,12 @@ import time
 
 import numpy as np
 import yaml
-from memory_profiler import memory_usage
 
 
 sys.path.append(os.getcwd() + '/../../')
 from maxcut import *
-from psd_system.direct_conic import require_sdpa_optimal, sdpa_dual_error, sdpa_duality_gap, sdpa_row_from_entries, sdpa_solver_options, solve_sdpa_psd_max
-from src.utils import print_results_summary
+from psd_system.direct_conic import require_sdpa_optimal, sdpa_dual_error, sdpa_duality_gap, sdpa_num_iters, sdpa_row_from_entries, sdpa_solver_options, solve_sdpa_psd_max
+from src.utils import print_results_summary, run_isolated
 
 import warnings
 
@@ -42,6 +41,7 @@ if __name__ == "__main__":
     complementary_slackness = np.full(num_seeds, np.nan)
     feasibility_errors = np.full(num_seeds, np.nan)
     dual_feasibility_errors = np.full(num_seeds, np.nan)
+    num_iters = np.full(num_seeds, np.nan)
     num_failed_seeds = 0
 
     for s_i, seed in enumerate(config["seeds"]):
@@ -52,10 +52,6 @@ if __name__ == "__main__":
                 current_seed = np.random.randint(0, 10000)
                 print(f"Trying with new random seed: {current_seed}")
             np.random.seed(current_seed)
-
-            if args.track_mem:
-                # Baseline before setup so peak delta includes objective/constraint build and solve.
-                start_mem = memory_usage(max_usage=True, include_children=True)
 
             try:
                 def build_and_solve():
@@ -68,20 +64,19 @@ if __name__ == "__main__":
                     result = solve_sdpa_psd_max(C, eq_rows, eq_rhs, option=option)
                     require_sdpa_optimal(result)
                     t3 = time.time()
-                    return C, result, t2 - t1, t3 - t2
+                    X_val = result["x_matrix"]
+                    return {
+                        "problem_creation_time": t2 - t1,
+                        "runtime": t3 - t2,
+                        "complementary_slackness": sdpa_duality_gap(result),
+                        "feasibility_error": np.linalg.norm(np.diag(X_val) - 1) ** 2,
+                        "dual_feasibility_error": sdpa_dual_error(result),
+                        "num_iters": sdpa_num_iters(result),
+                    }
 
+                mem_delta, metrics = run_isolated(build_and_solve, track_mem=args.track_mem)
                 if args.track_mem:
-                    peak_mem, payload = memory_usage(
-                        proc=build_and_solve,
-                        max_usage=True,
-                        retval=True,
-                        include_children=True,
-                    )
-                    memory[s_i] = peak_mem - start_mem
-                else:
-                    payload = build_and_solve()
-
-                C, result, problem_creation_time, runtime = payload
+                    memory[s_i] = mem_delta
                 break
             except Exception as e:
                 print(e)
@@ -93,15 +88,13 @@ if __name__ == "__main__":
         else:
             continue
 
-        X_val = result["x_matrix"]
-        Z = result["z_matrix"]
-        problem_creation_times[s_i] = problem_creation_time
-        runtimes[s_i] = runtime
-        complementary_slackness[s_i] = sdpa_duality_gap(result)
-        feasibility_errors[s_i] = np.linalg.norm(np.diag(X_val) - 1) ** 2
-        dual_feasibility_errors[s_i] = sdpa_dual_error(result)
+        problem_creation_times[s_i] = metrics["problem_creation_time"]
+        runtimes[s_i] = metrics["runtime"]
+        complementary_slackness[s_i] = metrics["complementary_slackness"]
+        feasibility_errors[s_i] = metrics["feasibility_error"]
+        dual_feasibility_errors[s_i] = metrics["dual_feasibility_error"]
+        num_iters[s_i] = metrics["num_iters"]
 
-    num_iters = np.zeros(num_seeds)
     ranksX = np.zeros((1, num_seeds, 1))
     ranksY = np.zeros((1, num_seeds, 1))
     ranksZ = np.zeros((1, num_seeds, 1))
