@@ -15,6 +15,33 @@ import psutil
 sys.path.append(os.getcwd() + '/../../')
 
 
+def _run_acceptance_thresholds(config):
+    base_tol = float(config.get("pathology_tol", 1e-3))
+    return {
+        "base": base_tol,
+        "relaxed_slack": float(config.get("slack_accept_tol", 5.0 * base_tol)),
+        "excellent_feas": float(config.get("excellent_feas_tol", min(1e-5, 0.01 * base_tol))),
+        "excellent_dual": float(config.get("excellent_dual_tol", min(1e-5, 0.01 * base_tol))),
+    }
+
+
+def _classify_run(config, feas_err, dual_err, slack):
+    thresholds = _run_acceptance_thresholds(config)
+    if not all(np.isfinite(value) for value in (feas_err, dual_err, slack)):
+        return "failed"
+    if feas_err <= thresholds["base"] and dual_err <= thresholds["base"] and slack <= thresholds["base"]:
+        return "accepted"
+    if (
+            slack <= thresholds["relaxed_slack"]
+            and feas_err <= thresholds["excellent_feas"]
+            and dual_err <= thresholds["excellent_dual"]
+    ):
+        return "accepted"
+    if feas_err <= thresholds["base"] and dual_err <= thresholds["base"]:
+        return "terminated"
+    return "failed"
+
+
 def _process_tree_memory_mib(pid, include_children=True):
     try:
         root = psutil.Process(pid)
@@ -169,15 +196,15 @@ def run_experiment(create_problem_fn):
     print(f"\n===== Processing Rank: {rank} =====")
     for s_i, seed in enumerate(config["seeds"]):
         print(f"Running seed {seed}")
-        feas_err, slack = run_and_record(
+        feas_err, dual_err, slack, run_status = run_and_record(
             seed, r_i, s_i, rank, config, args, create_problem_fn, memory,
             problem_creation_times, runtimes, complementary_slackness,
             feasibility_errors, dual_feasibility_errors, num_iters,
             ranksX, ranksY, ranksZ, ranksT, config_path
         )
         new_seed = seed
-        while (feas_err > 1e-3) or (slack > 1e-3):
-            print(f"Seed {new_seed} is pathological (feasibility error: {feas_err:.2e}, slackness: {slack:.2e}). Suggesting a new seed.")
+        while run_status != "accepted":
+            print(f"Seed {new_seed} {run_status} (feasibility error: {feas_err:.2e}, dual feasibility error: {dual_err:.2e}, slackness: {slack:.2e}). Suggesting a new seed.")
             new_seed = np.random.randint(0, 2**10)
             while new_seed in used_seeds:
                 new_seed = np.random.randint(0, 2**10)
@@ -187,13 +214,13 @@ def run_experiment(create_problem_fn):
             with open(config_path, "w") as file:
                 yaml.safe_dump(config, file)
             # Rerun with new seed
-            feas_err, slack = run_and_record(
+            feas_err, dual_err, slack, run_status = run_and_record(
                 new_seed, r_i, s_i, rank, config, args, create_problem_fn, memory,
                 problem_creation_times, runtimes, complementary_slackness,
                 feasibility_errors, dual_feasibility_errors, num_iters,
                 ranksX, ranksY, ranksZ, ranksT, config_path
             )
-            print(f"Rerun with new seed {new_seed} complete. Feasibility error: {feas_err:.2e}, Slackness: {slack:.2e}")
+            print(f"Rerun with new seed {new_seed} {run_status}. Feasibility error: {feas_err:.2e}, dual feasibility error: {dual_err:.2e}, slackness: {slack:.2e}")
 
     print_results_summary(
         config, args,
@@ -427,9 +454,15 @@ def run_and_record(seed, r_i, s_i, rank, config, args, create_problem_fn, memory
     ranksZ[r_i, s_i, :] = info["ranksZ"]
     if ranksT is not None:
         ranksT[r_i, s_i, :] = info["ranksT"]
-    print(f"Convergence after {num_iters[r_i, s_i]:.0f} iterations. "
+    run_status = _classify_run(
+        config,
+        feasibility_errors[r_i, s_i],
+        dual_feasibility_errors[r_i, s_i],
+        complementary_slackness[r_i, s_i],
+    )
+    print(f"Run {run_status} after {num_iters[r_i, s_i]:.0f} iterations. "
           f"Compl Slackness: {complementary_slackness[r_i, s_i]:.4e}. "
           f"Feasibility error: {feasibility_errors[r_i, s_i]:.4e}. "
           f"Dual Feasibility error: {dual_feasibility_errors[r_i, s_i]:.4e}.")
-    print(f"Convergence in {runtimes[r_i, s_i]:.2f}s. Memory: {memory[r_i, s_i]:.2f} MB.")
-    return feasibility_errors[r_i, s_i], complementary_slackness[r_i, s_i]
+    print(f"Run {run_status} in {runtimes[r_i, s_i]:.2f}s. Memory: {memory[r_i, s_i]:.2f} MB.")
+    return feasibility_errors[r_i, s_i], dual_feasibility_errors[r_i, s_i], complementary_slackness[r_i, s_i], run_status

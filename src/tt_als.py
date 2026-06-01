@@ -319,11 +319,11 @@ def _bck_sweep(
                 resz = np.reshape(rhsz.__isub__(Az), (rz[k] * block_size, N[k] * rz[k + 1])).T
 
             scales = np.maximum(np.array([np.linalg.norm(solution_now[:, k]) for k in range(solution_now.shape[1])]), 1e-10).reshape(1, -1, 1, 1)
-            solution_now = np.reshape(scales*solution_now, (rx[k] * block_size, N[k] * rx[k + 1])).T
+            solution_now = np.reshape(solution_now / scales, (rx[k] * block_size, N[k] * rx[k + 1])).T
         else:
             solution_now = x_cores[k]
             scales = np.maximum(np.array([np.linalg.norm(solution_now[:, k]) for k in range(solution_now.shape[1])]), 1e-10).reshape(1, -1, 1, 1)
-            solution_now = np.reshape(scales*solution_now, (rx[k] * block_size, N[k] * rx[k + 1])).T
+            solution_now = np.reshape(solution_now / scales, (rx[k] * block_size, N[k] * rx[k + 1])).T
             if amen and not last:
                 resz = np.reshape(z_cores[k], (rz[k] * block_size, N[k] * rz[k + 1])).T
 
@@ -332,7 +332,7 @@ def _bck_sweep(
             v = s.reshape(-1, 1) * v
 
             if swp > 0 and not last:
-                trunc_lim = max(2*trunc_tol, block_res_new)
+                trunc_lim = max(2*trunc_tol, 10.0 * block_res_new)
                 r_start = min(prune_singular_vals(s, eps), r_max)
                 solution_now = np.reshape((u[:, :r_start] @ v[:r_start]).T, (rx[k], block_size, N[k], rx[k + 1]))
                 res = block_A_k.block_local_product(XAX[k], XAX[k + 1], solution_now) - rhs
@@ -351,7 +351,7 @@ def _bck_sweep(
                     Axz = block_A_k.lcompressed_block_local_product(ZAX[k], XAX[k + 1], solution_now, shape=(rz[k], block_size, N[k], rx[k + 1]))
                     rhsxz = block_b_k.block_local_product(Zb[k], Xb[k + 1], 1, (rz[k], block_size, N[k], rx[k + 1]))
                     resxz = rhsxz.__isub__(Axz)
-                    kr = min(kick_rank, rz[k] * block_size, N[k] * rx[k + 1])
+                    kr = min(kick_rank, r_max - r, rz[k] * block_size, N[k] * rx[k + 1])
                     uz, _ = truncated_svd(np.reshape(resxz, (rz[k] * block_size, N[k] * rx[k + 1])).T, kr)
                     uz = uz.T.reshape(kr, N[k], rx[k + 1])
                     u = np.concatenate((np.reshape(u, (r, N[k], rx[k + 1])), uz), axis=0)
@@ -366,7 +366,7 @@ def _bck_sweep(
                 v = v[:r].T.reshape(rx[k], block_size, r)
 
             x_cores[k] = u
-            x_cores[k - 1] = einsum('rdc,cbR->rbdR', x_cores[k - 1], v, optimize=[(0, 1)]) / scales
+            x_cores[k - 1] = einsum('rdc,cbR->rbdR', x_cores[k - 1], v, optimize=[(0, 1)]) * scales
             rx[k] = r
 
             XAX[k] = {(i, j): compute_phi_bck_A(XAX[k + 1][(i, j)], x_cores[k], block_A_k[(i, j)], x_cores[k]) for (i, j) in block_A_k}
@@ -379,7 +379,7 @@ def _bck_sweep(
                 uz = uz.T.reshape(kr, N[k], rz[k + 1])
                 vz = np.reshape(vz.T, (rz[k], block_size, kr))
                 z_cores[k] = uz
-                z_cores[k - 1] = einsum('rdc,cbR->rbdR', z_cores[k - 1], vz, optimize=[(0, 1)]) / scales
+                z_cores[k - 1] = einsum('rdc,cbR->rbdR', z_cores[k - 1], vz, optimize=[(0, 1)]) * scales
                 rz[k] = uz.shape[0]
 
                 ZAX[k] = {(i, j): compute_phi_bck_A(ZAX[k + 1][(i, j)], z_cores[k], block_A_k[(i, j)], x_cores[k]) for (i, j) in block_A_k}
@@ -387,9 +387,9 @@ def _bck_sweep(
                 Zb[k] = {i: compute_phi_bck_rhs(Zb[k + 1][i], block_b_k[i], z_cores[k]) for i in block_b_k}
 
         else:
-            x_cores[k] = np.reshape(solution_now.T, (rx[k], block_size, N[k], rx[k + 1])) / scales
+            x_cores[k] = np.reshape(solution_now.T, (rx[k], block_size, N[k], rx[k + 1])) * scales
             if amen and not last:
-                z_cores[k] = np.reshape(resz.T, (rz[k], block_size, N[k], rz[k + 1])) / scales
+                z_cores[k] = np.reshape(resz.T, (rz[k], block_size, N[k], rz[k + 1])) * scales
 
     return x_cores, z_cores, XAX, Xb, rx, local_res, local_dx, direct_solve_failure 
 
@@ -442,12 +442,12 @@ def _fwd_sweep(
                 resz = np.transpose(rhsz.__isub__(Az), (0, 2, 1, 3)).reshape(rz[k] * N[k], block_size * rz[k + 1])
 
             scales = np.maximum(np.array([np.linalg.norm(solution_now[:, k]) for k in range(solution_now.shape[1])]), 1e-10).reshape(1, -1, 1, 1)
-            solution_now = np.transpose(scales*solution_now, (0, 2, 1, 3))
+            solution_now = np.transpose(solution_now / scales, (0, 2, 1, 3))
             solution_now = np.reshape(solution_now, (rx[k] * N[k], block_size * rx[k + 1]))
         else:
             solution_now = x_cores[k]
             scales = np.maximum(np.array([np.linalg.norm(solution_now[:, k]) for k in range(solution_now.shape[1])]), 1e-10).reshape(1, -1, 1, 1)
-            solution_now = (scales*solution_now).transpose(0, 2, 1, 3)
+            solution_now = (solution_now / scales).transpose(0, 2, 1, 3)
             solution_now = np.reshape(solution_now, (rx[k] * N[k],  block_size * rx[k + 1]))
             if amen and not last:
                 resz = np.reshape(z_cores[k].transpose(0, 2, 1, 3), (rz[k] * N[k], block_size * rz[k + 1]))
@@ -460,7 +460,7 @@ def _fwd_sweep(
             v = v.reshape(-1, block_size, rx[k + 1])
 
             if swp > 0 and not last:
-                trunc_lim = max(2*trunc_tol, block_res_new)
+                trunc_lim = max(2*trunc_tol, 10.0 * block_res_new)
                 r_start = min(prune_singular_vals(s, eps), r_max)
                 solution_now = einsum("rbR, Rdk -> rbdk", u[:, :, :r_start], v[:r_start], optimize=[(0, 1)])
                 res = block_A_k.block_local_product(XAX[k], XAX[k + 1], np.transpose(solution_now, (0, 2, 1, 3))) - rhs
@@ -475,7 +475,7 @@ def _fwd_sweep(
                     Axz = block_A_k.rcompressed_block_local_product(XAX[k], ZAX[k + 1], einsum("rbR, Rdk -> rdbk", u[:, :, :r], v[:r], optimize=[(0, 1)]), shape=(rx[k], block_size, N[k], rz[k + 1]))
                     rhsxz = block_b_k.block_local_product(Xb[k], Zb[k + 1], 1, (rx[k], block_size, N[k], rz[k + 1]))
                     resxz = np.transpose(rhsxz.__isub__(Axz), (0, 2, 1, 3))
-                    kr = min(kick_rank, rx[k] * N[k], block_size * rz[k + 1])
+                    kr = min(kick_rank, r_max - r, rx[k] * N[k], block_size * rz[k + 1])
                     uz, _ = truncated_svd(np.reshape(resxz, (rx[k] * N[k], block_size * rz[k + 1])), kr)
                     uz = np.reshape(uz, (rx[k], N[k], kr))
                     u = np.concatenate((u[:, :, :r], uz), axis=-1)
@@ -493,7 +493,7 @@ def _fwd_sweep(
 
             v = einsum("rbR, Rdk -> rbdk", v, x_cores[k + 1], optimize=[(0, 1)])
             x_cores[k] = u
-            x_cores[k + 1] = v.reshape(r, block_size, N[k + 1], rx[k + 2])/scales
+            x_cores[k + 1] = v.reshape(r, block_size, N[k + 1], rx[k + 2]) * scales
             rx[k + 1] = r
 
             XAX[k + 1] = {(i, j): compute_phi_fwd_A(XAX[k][(i, j)], x_cores[k], block_A_k[(i, j)], x_cores[k]) for
@@ -506,7 +506,7 @@ def _fwd_sweep(
                 uz = np.reshape(uz, (rz[k], N[k], kr))
                 vz = np.reshape(vz, (kr, block_size, rz[k + 1]))
                 z_cores[k] = uz
-                z_cores[k + 1] = einsum("rbR, Rdk -> rbdk", vz, z_cores[k + 1], optimize=[(0, 1)]) / scales
+                z_cores[k + 1] = einsum("rbR, Rdk -> rbdk", vz, z_cores[k + 1], optimize=[(0, 1)]) * scales
                 rz[k + 1] = uz.shape[-1]
 
                 ZAX[k + 1] = {(i, j): compute_phi_fwd_A(ZAX[k][(i, j)], z_cores[k], block_A_k[(i, j)], x_cores[k]) for (i, j) in block_A_k}
@@ -514,9 +514,9 @@ def _fwd_sweep(
                 Zb[k + 1] = {i: compute_phi_fwd_rhs(Zb[k][i], block_b_k[i], z_cores[k]) for i in block_b_k}
 
         else:
-            x_cores[k] = np.reshape(solution_now, (rx[k], N[k], block_size, rx[k + 1])).transpose(0, 2, 1, 3) / scales
+            x_cores[k] = np.reshape(solution_now, (rx[k], N[k], block_size, rx[k + 1])).transpose(0, 2, 1, 3) * scales
             if amen and not last:
-                z_cores[k] = np.reshape(resz, (rz[k], N[k], block_size, rz[k + 1])).transpose(0, 2, 1, 3) / scales
+                z_cores[k] = np.reshape(resz, (rz[k], N[k], block_size, rz[k + 1])).transpose(0, 2, 1, 3) * scales
 
 
     return x_cores, z_cores, XAX, Xb, rx, local_res, local_dx, direct_solve_failure 
@@ -752,7 +752,8 @@ def tt_restarted_block_amen(
     inner_m=10,
     x0=None,
     local_solver=None,
-    verbose=False
+    verbose=False,
+    strict_first_attempt=False
 ):
     if x0 is not None:
         dim = len(x0)
@@ -794,6 +795,8 @@ def tt_restarted_block_amen(
         if verbose:
             print(f"\n\tTerminated on global criterion, Relative Error = {rhs_norm / orig_rhs_norm:.3e}")
         return x_cores, res
+    if strict_first_attempt:
+        raise RuntimeError(f"\n\tTarget residual not reached after first AMEn attempt, Relative Error = {rhs_norm / orig_rhs_norm:.3e}.")
     elif rhs_norm < orig_rhs_norm:
         if verbose:
             print(f"\n\tTerminated on leniency, Relative Error = {rhs_norm / orig_rhs_norm:.3e}")
@@ -809,7 +812,7 @@ def tt_restarted_block_amen(
         
         dim = len(x_cores)
         x_cores = tt_rank_retraction(x_cores, [2*dim]*(dim-1))
-        x_cores, res = solve_als(rhs, rank_restriction+4, x_cores, inner_m, 4)
+        x_cores, res = solve_als(rhs, rank_restriction, x_cores, inner_m, 4)
 
         rhs_norm = update_rhs(rhs, x_cores).norm
 
@@ -1185,7 +1188,7 @@ def tt_max_generalised_eigen(A, Delta, x0=None, nswp=10, tol=1e-8, size_limit = 
         if np.max(local_res) < tol or swp == nswp - 1:
             for k in range(d):
                 previous_solution = x_cores[k]
-                solution_now, step_size, _ = _step_size_local_solve_last(previous_solution, XDX[k], Delta[k], XDX[k+1], XAX[k], A[k], XAX[k+1], np.sqrt(rx[k] * rx[k + 1]) < size_limit, step_size, tol)
+                solution_now, step_size, _ = _step_size_local_solve_last(previous_solution, XDX[k], Delta[k], XDX[k+1], XAX[k], A[k], XAX[k+1], previous_solution.size <= size_limit, step_size, tol)
                 solution_now = np.reshape(solution_now, (rx[k] * N[k], rx[k + 1]))
                     
                 if k < d - 1:
@@ -1233,7 +1236,7 @@ def tt_max_generalised_eigen(A, Delta, x0=None, nswp=10, tol=1e-8, size_limit = 
         if np.max(local_res) < tol:
             for k in range(d - 1, -1, -1):
                 previous_solution = x_cores[k]
-                solution_now, step_size, _ = _step_size_local_solve_last(previous_solution, XDX[k], Delta[k], XDX[k+1], XAX[k], A[k], XAX[k+1], np.sqrt(rx[k] * rx[k + 1]) < size_limit, step_size, tol)
+                solution_now, step_size, _ = _step_size_local_solve_last(previous_solution, XDX[k], Delta[k], XDX[k+1], XAX[k], A[k], XAX[k+1], previous_solution.size <= size_limit, step_size, tol)
                 solution_now = np.reshape(solution_now, (rx[k], N[k] * rx[k + 1])).T
 
                 if k > 0:

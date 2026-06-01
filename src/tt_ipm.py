@@ -686,6 +686,43 @@ def _tt_build_row_scaled_kkt(lhs_matrix_tt, rhs_vec_tt, status, row_scales=None)
     return lhs_scaled, rhs_scaled
 
 
+def _tt_amen_fallback_triggered(exc):
+    message = str(exc)
+    return isinstance(exc, RuntimeError) and (
+        "Target residual not reached" in message
+        or "Number of restarts exhausted" in message
+    )
+
+
+def _tt_clone_block_matrix(block_matrix_tt):
+    clone = TTBlockMatrix()
+    clone._data = dict(block_matrix_tt._data)
+    clone._aliases = dict(block_matrix_tt._aliases)
+    clone._transposes = dict(block_matrix_tt._transposes)
+    return clone
+
+
+def _tt_clone_block_vector(block_vec_tt):
+    clone = TTBlockVector()
+    for row_index in block_vec_tt.keys():
+        clone[row_index] = block_vec_tt.get_row(row_index)
+    return clone
+
+
+def _tt_xz_fallback_kkt(lhs_matrix_tt, rhs_vec_tt, X_tt, Z_tt, status):
+    if status.verbose:
+        print("\tAHO KKT solve missed target residual; retrying predictor with XZ direction.", flush=True)
+    status.aho_direction = False
+    status.mals_delta0 = None
+    lhs_xz = _tt_clone_block_matrix(lhs_matrix_tt)
+    lhs_xz[2, 1] = tt_psd_rank_reduce(tt_MkronI(Z_tt), eps=status.rounding.operator_dual(status))
+    lhs_xz[2, 2] = tt_psd_rank_reduce(tt_IkronM(X_tt), eps=status.rounding.operator_primal(status))
+    rhs_xz = _tt_clone_block_vector(rhs_vec_tt)
+    if rhs_vec_tt.get_row(2) is not None:
+        rhs_xz[2] = tt_compute_centrality(X_tt, Z_tt, status)
+    return lhs_xz, rhs_xz
+
+
 def _tt_ipm_newton_step(
         lhs_matrix_tt,
         rhs_vec_tt,
@@ -704,7 +741,23 @@ def _tt_ipm_newton_step(
             print("\n--- Predictor  step ---", flush=True)
         row_scales = _tt_kkt_row_scales(rhs_vec_tt, status)
         lhs_pred_tt, rhs_pred_tt = _tt_build_row_scaled_kkt(lhs_matrix_tt, rhs_vec_tt, status, row_scales=row_scales)
-        Delta_tt, _ = solver(lhs_pred_tt, rhs_pred_tt, status.mals_delta0, status.kkt_iterations + status.is_last_iter, status.mals_rank_restriction, status.eta)
+        try:
+            Delta_tt, _ = solver(
+                lhs_pred_tt,
+                rhs_pred_tt,
+                status.mals_delta0,
+                status.kkt_iterations + status.is_last_iter,
+                status.mals_rank_restriction,
+                status.eta,
+                strict_first_attempt=status.aho_direction,
+            )
+        except RuntimeError as solve_exc:
+            if not (status.aho_direction and _tt_amen_fallback_triggered(solve_exc)):
+                raise
+            lhs_matrix_tt, rhs_vec_tt = _tt_xz_fallback_kkt(lhs_matrix_tt, rhs_vec_tt, X_tt, Z_tt, status)
+            row_scales = _tt_kkt_row_scales(rhs_vec_tt, status)
+            lhs_pred_tt, rhs_pred_tt = _tt_build_row_scaled_kkt(lhs_matrix_tt, rhs_vec_tt, status, row_scales=row_scales)
+            Delta_tt, _ = solver(lhs_pred_tt, rhs_pred_tt, status.mals_delta0, status.kkt_iterations + status.is_last_iter, status.mals_rank_restriction, status.eta)
         status.mals_delta0 = Delta_tt
         Delta_X_tt = _tt_symmetrise(tt_reshape(_tt_get_block(1, Delta_tt), (2, 2)), status.eps)
         Delta_Z_tt = _tt_symmetrise(tt_reshape(_tt_get_block(2, Delta_tt), (2, 2)), status.eps)
@@ -969,7 +1022,7 @@ def _ipm_format_output(X_tt, Y_tt, T_tt, Z_tt, iteration, status):
     ranksT = tt_ranks(T_tt) if T_tt else [0] * (status.dim - 1)
     
     print("---Terminated---")
-    print(f"Converged in {iteration} iterations.")
+    print(f"Terminated in {iteration} iterations.")
     print(f"Ranks: X={ranksX}, Z={ranksZ}, Y={ranksY}, T={ranksT}")
     
     results = {"num_iters": iteration, "ranksX": ranksX, "ranksY": ranksY, "ranksZ": ranksZ, "ranksT": ranksT, "status": status}
@@ -1105,7 +1158,7 @@ def tt_ipm(
 
     lhs_skeleton = TTBlockMatrix()
     lhs_skeleton[1, 2] = tt_reshape(tt_identity(2 * dim), (4, 4))
-    solver_ineq = lambda lhs, rhs, x0, nwsp, restriction, termination_tol: tt_restarted_block_amen(
+    solver_ineq = lambda lhs, rhs, x0, nwsp, restriction, termination_tol, strict_first_attempt=False: tt_restarted_block_amen(
         lhs,
         rhs,
         rank_restriction=restriction,
@@ -1115,9 +1168,10 @@ def tt_ipm(
         termination_tol=termination_tol,
         num_restarts=mals_restarts,
         inner_m=nwsp,
-        verbose=solver_verbose
+        verbose=solver_verbose,
+        strict_first_attempt=strict_first_attempt
     )
-    solver_eq = lambda lhs, rhs, x0, nwsp, restriction, termination_tol: tt_restarted_block_amen(
+    solver_eq = lambda lhs, rhs, x0, nwsp, restriction, termination_tol, strict_first_attempt=False: tt_restarted_block_amen(
         lhs,
         rhs,
         rank_restriction=restriction,
@@ -1127,7 +1181,8 @@ def tt_ipm(
         termination_tol=termination_tol,
         num_restarts=mals_restarts, 
         inner_m=nwsp,
-        verbose=solver_verbose
+        verbose=solver_verbose,
+        strict_first_attempt=strict_first_attempt
     )
     if status.ineq_status is IneqStatus.ACTIVE:
         solver = solver_ineq

@@ -7,7 +7,7 @@ max_iter: 25
 max_refinement: 6
 op_tol: 0.0001
 seeds:
-- 602
+- 588
 - 985
 - 884
 - 757

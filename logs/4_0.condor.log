@@ -10,3 +10,54 @@
 	1148  -  MemoryUsage of job (MB)
 	1175020  -  ResidentSetSize of job (KB)
 ...
+006 (004.000.000) 06/01 11:42:00 Image size of job updated: 11166048
+	1224  -  MemoryUsage of job (MB)
+	1253208  -  ResidentSetSize of job (KB)
+...
+006 (004.000.000) 06/01 11:47:00 Image size of job updated: 11166048
+	2111  -  MemoryUsage of job (MB)
+	2161268  -  ResidentSetSize of job (KB)
+...
+006 (004.000.000) 06/01 11:52:01 Image size of job updated: 11166048
+	2156  -  MemoryUsage of job (MB)
+	2207188  -  ResidentSetSize of job (KB)
+...
+006 (004.000.000) 06/01 12:07:02 Image size of job updated: 15533700
+	2238  -  MemoryUsage of job (MB)
+	2291028  -  ResidentSetSize of job (KB)
+...
+006 (004.000.000) 06/01 12:12:03 Image size of job updated: 15533700
+	2695  -  MemoryUsage of job (MB)
+	2758680  -  ResidentSetSize of job (KB)
+...
+006 (004.000.000) 06/01 12:42:05 Image size of job updated: 15533700
+	4150  -  MemoryUsage of job (MB)
+	4249588  -  ResidentSetSize of job (KB)
+...
+006 (004.000.000) 06/01 12:47:06 Image size of job updated: 15533700
+	5806  -  MemoryUsage of job (MB)
+	5944396  -  ResidentSetSize of job (KB)
+...
+010 (004.000.000) 06/01 13:01:19 Job was suspended.
+	Number of processes actually suspended: 7
+...
+006 (004.000.000) 06/01 13:01:19 Image size of job updated: 15603488
+	7047  -  MemoryUsage of job (MB)
+	7215524  -  ResidentSetSize of job (KB)
+...
+011 (004.000.000) 06/01 13:07:22 Job was unsuspended.
+...
+004 (004.000.000) 06/01 13:08:22 Job was evicted.
+	(0) Job was not checkpointed.
+		Usr 0 14:12:14, Sys 0 00:10:45  -  Run Remote Usage
+		Usr 0 00:00:00, Sys 0 00:00:00  -  Run Local Usage
+	0  -  Run Bytes Sent By Job
+	0  -  Run Bytes Received By Job
+	Partitionable Resources :    Usage  Request Allocated 
+	   Cpus                 :    12.25       16        24 
+	   Disk (KB)            :     4           4   5755356 
+	   Gpus                 :                           0 
+	   Memory (MB)          :  7047           1     15626 
+...
+001 (004.000.000) 06/01 13:08:51 Job executing on host: <146.169.52.8:9618?addrs=146.169.52.8-9618+[2a0c-5bc0-40-11c4-b3be-83e6-9024-f649]-9618&noUDP&sock=54282_579d_4>
+...
