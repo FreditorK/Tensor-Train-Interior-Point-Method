@@ -539,11 +539,13 @@ def tt_infeasible_newton_system(
 ):
     rhs = TTBlockVector()
     primal_feas = tt_compute_primal_feasibility(lin_op_tt, bias_tt, X_tt, status)
-    status.primal_error = np.divide(tt_norm(primal_feas), status.primal_error_normalisation)
+    status.primal_feas_norm = tt_norm(primal_feas)
+    status.primal_error = np.divide(status.primal_feas_norm, status.primal_error_normalisation)
     status.is_primal_feasible = np.less(status.primal_error, status.feasibility_tol)
 
     dual_feas = tt_compute_dual_feasibility(obj_tt, lin_op_tt_adj, Z_tt, Y_tt, T_tt, status)
-    status.dual_error = np.divide(tt_norm(dual_feas), status.dual_error_normalisation)
+    status.dual_feas_norm = tt_norm(dual_feas)
+    status.dual_error = np.divide(status.dual_feas_norm, status.dual_error_normalisation)
     status.is_dual_feasible = np.less(status.dual_error, (1 + (status.ineq_status is IneqStatus.ACTIVE))*status.feasibility_tol)
 
     status.is_last_iter = status.is_last_iter or (status.is_primal_feasible and status.is_dual_feasible and status.is_central)
@@ -605,9 +607,20 @@ def _tt_rhs_row_norm(rhs_vec_tt, row_index):
     return float(row_norm) if np.isfinite(row_norm) else 0.0
 
 
+def _tt_cached_rhs_row_norm(rhs_vec_tt, row_index, cached_norm):
+    if rhs_vec_tt.get_row(row_index) is None:
+        return 0.0
+    if cached_norm is not None and np.isfinite(cached_norm):
+        return float(cached_norm)
+    return _tt_rhs_row_norm(rhs_vec_tt, row_index)
+
+
 def _tt_kkt_row_scales(rhs_vec_tt, status):
     eps = max(status.op_tol, 1e-12)
-    feas_norm = max(_tt_rhs_row_norm(rhs_vec_tt, 0), _tt_rhs_row_norm(rhs_vec_tt, 1))
+    feas_norm = max(
+        _tt_cached_rhs_row_norm(rhs_vec_tt, 0, getattr(status, "primal_feas_norm", None)),
+        _tt_cached_rhs_row_norm(rhs_vec_tt, 1, getattr(status, "dual_feas_norm", None)),
+    )
     cent_norm = max(_tt_rhs_row_norm(rhs_vec_tt, 2), _tt_rhs_row_norm(rhs_vec_tt, 3))
 
     row_scales = {}
@@ -640,6 +653,16 @@ def _tt_effective_row_scale(lhs_matrix_tt, key, row_scales):
     return float(scale)
 
 
+def _tt_scale_kkt_rhs(rhs_vec_tt, row_scales):
+    if not row_scales:
+        return rhs_vec_tt
+    rhs_scaled = TTBlockVector()
+    for row_index in rhs_vec_tt.keys():
+        scale = row_scales.get(row_index, 1.0)
+        rhs_scaled[row_index] = _tt_scale_nondestructive(rhs_vec_tt.get_row(row_index), scale)
+    return rhs_scaled
+
+
 def _tt_build_row_scaled_kkt(lhs_matrix_tt, rhs_vec_tt, status, row_scales=None):
     if row_scales is None:
         row_scales = _tt_kkt_row_scales(rhs_vec_tt, status)
@@ -653,10 +676,7 @@ def _tt_build_row_scaled_kkt(lhs_matrix_tt, rhs_vec_tt, status, row_scales=None)
         scale = _tt_effective_row_scale(lhs_matrix_tt, key, row_scales)
         lhs_scaled[key] = _tt_scale_nondestructive(block, scale)
 
-    rhs_scaled = TTBlockVector()
-    for row_index in rhs_vec_tt.keys():
-        scale = row_scales.get(row_index, 1.0)
-        rhs_scaled[row_index] = _tt_scale_nondestructive(rhs_vec_tt.get_row(row_index), scale)
+    rhs_scaled = _tt_scale_kkt_rhs(rhs_vec_tt, row_scales)
 
     if status.verbose:
         feas_scale = row_scales.get(0, row_scales.get(1, 1.0))
@@ -708,6 +728,7 @@ def _tt_ipm_newton_step(
         if not status.is_central and not status.is_last_iter:
 
             DXZ = tt_inner_prod(Delta_X_tt, Delta_Z_tt)
+            corrector_needed = False
             # Corrector
             if status.verbose:
                 print(f"\n--- Centering-Corrector  step ---", flush=True)
@@ -729,6 +750,7 @@ def _tt_ipm_newton_step(
                             rhs_vec_tt.get_row(3),
                             ), status.rounding.operator_centrality(status)
                             )
+                    corrector_needed = True
             else:
                 mu_aff = (
                     ZX + x_step_size * z_step_size * DXZ
@@ -751,39 +773,43 @@ def _tt_ipm_newton_step(
                     ),
                     status.rounding.operator_centrality(status)
                 ) if status.sigma > 1e-4 else tt_rank_reduce(tt_add(rhs_vec_tt.get_row(2), Delta_XZ_term), status.rounding.operator_centrality(status))
-            else:
+                corrector_needed = True
+            elif status.sigma > 1e-4:
                 rhs_vec_tt[2] = tt_rank_reduce(
                     tt_add(
                         tt_scale(status.sigma * status.mu, tt_reshape(tt_identity(len(X_tt)), (4,))),
                         rhs_vec_tt.get_row(2)
                     ),
                     status.rounding.operator_centrality(status)
-                ) if status.sigma > 1e-4 else rhs_vec_tt.get_row(2)
+                )
+                corrector_needed = True
 
-            lhs_cc_tt, rhs_cc_tt = _tt_build_row_scaled_kkt(lhs_matrix_tt, rhs_vec_tt, status, row_scales=row_scales)
-            Delta_tt_cc, _ = solver(lhs_cc_tt, rhs_cc_tt, status.mals_delta0, status.kkt_iterations + status.is_last_iter, status.mals_rank_restriction, status.eta)
-            status.mals_delta0 = Delta_tt_cc
-            Delta_X_tt_cc = _tt_symmetrise(tt_reshape(_tt_get_block(1, Delta_tt_cc), (2, 2)), status.eps)
-            Delta_Z_tt_cc = _tt_symmetrise(tt_reshape(_tt_get_block(2, Delta_tt_cc), (2, 2)), status.eps)
-            Delta_Y_tt_cc = tt_rank_reduce(_tt_get_block(0, Delta_tt_cc), eps=status.eps)
-            Delta_X_tt = tt_rank_reduce(tt_add(Delta_X_tt_cc, Delta_X_tt), eps=status.eps)
-            Delta_Y_tt = tt_rank_reduce(tt_add(Delta_Y_tt_cc, Delta_Y_tt), eps=status.eps)
-            Delta_Z_tt = tt_rank_reduce(tt_add(Delta_Z_tt_cc, Delta_Z_tt), eps=status.eps)
-            if status.ineq_status is IneqStatus.ACTIVE:
-                Delta_T_tt_cc = tt_rank_reduce(_tt_get_block(3, Delta_tt_cc), eps=status.eps)
-                Delta_T_tt_cc = tt_fast_hadamard(ineq_mask, tt_reshape(Delta_T_tt_cc, (2, 2)), status.eps)
-                Delta_T_tt = tt_rank_reduce(tt_add(Delta_T_tt_cc, Delta_T_tt), eps=status.eps)
+            if corrector_needed:
+                lhs_cc_tt = lhs_pred_tt
+                rhs_cc_tt = _tt_scale_kkt_rhs(rhs_vec_tt, row_scales)
+                Delta_tt_cc, _ = solver(lhs_cc_tt, rhs_cc_tt, status.mals_delta0, status.kkt_iterations + status.is_last_iter, status.mals_rank_restriction, status.eta)
+                status.mals_delta0 = Delta_tt_cc
+                Delta_X_tt_cc = _tt_symmetrise(tt_reshape(_tt_get_block(1, Delta_tt_cc), (2, 2)), status.eps)
+                Delta_Z_tt_cc = _tt_symmetrise(tt_reshape(_tt_get_block(2, Delta_tt_cc), (2, 2)), status.eps)
+                Delta_Y_tt_cc = tt_rank_reduce(_tt_get_block(0, Delta_tt_cc), eps=status.eps)
+                Delta_X_tt = tt_rank_reduce(tt_add(Delta_X_tt_cc, Delta_X_tt), eps=status.eps)
+                Delta_Y_tt = tt_rank_reduce(tt_add(Delta_Y_tt_cc, Delta_Y_tt), eps=status.eps)
+                Delta_Z_tt = tt_rank_reduce(tt_add(Delta_Z_tt_cc, Delta_Z_tt), eps=status.eps)
+                if status.ineq_status is IneqStatus.ACTIVE:
+                    Delta_T_tt_cc = tt_rank_reduce(_tt_get_block(3, Delta_tt_cc), eps=status.eps)
+                    Delta_T_tt_cc = tt_fast_hadamard(ineq_mask, tt_reshape(Delta_T_tt_cc, (2, 2)), status.eps)
+                    Delta_T_tt = tt_rank_reduce(tt_add(Delta_T_tt_cc, Delta_T_tt), eps=status.eps)
 
-            x_step_size, z_step_size = _tt_get_step_sizes(
-                X_tt,
-                Z_tt,
-                T_tt,
-                Delta_X_tt,
-                Delta_Z_tt,
-                Delta_T_tt,
-                ineq_mask,
-                status
-            )
+                x_step_size, z_step_size = _tt_get_step_sizes(
+                    X_tt,
+                    Z_tt,
+                    T_tt,
+                    Delta_X_tt,
+                    Delta_Z_tt,
+                    Delta_T_tt,
+                    ineq_mask,
+                    status
+                )
         else:
             status.sigma = 0
     except Exception as e:
@@ -930,6 +956,8 @@ class IPMStatus:
     eigen_zt0 = None
     kkt_iterations = 7
     centrl_error_normalisation: float = 1.0
+    primal_feas_norm: float = np.inf
+    dual_feas_norm: float = np.inf
     eta = 1e-3
 
 

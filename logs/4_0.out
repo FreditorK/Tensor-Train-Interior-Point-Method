@@ -1,0 +1,31 @@
+Running: max_stable_set (rank=3)
+==== max_stable_set TT-IPM Batch Run Started at Mon  1 Jun 11:21:52 BST 2026 ====
+
+▶ Running dim=10 with config=configs/max_stable_set_10.yaml at Mon  1 Jun 11:21:52 BST 2026
+
+===== Processing Rank: 3 =====
+Running seed 602
+Creating Problem...
+===Terminated Graph Sampling=== rank:  [1, 2, 3, 3, 3, 2, 2, 2, 3]
+it 000 | main   | XZ  | ineq=not_in_use | mu=4.00e+00 eta=1.00e-03 sigma=5.00e-01 | err c/p/d=5.71e-01/5.11e+02/1.60e+01 | ok=cpd | rmax X/Y/Z/T=1/1/1/-
+it 001 | main   | XZ  | ineq=not_in_use | mu=8.90e-01 eta=1.00e-03 sigma=9.46e-02 | err c/p/d=1.04e-01/1.10e+02/4.65e+00 | ok=cpd | rmax X/Y/Z/T=6/4/6/-
+it 002 | main   | XZ  | ineq=not_in_use | mu=1.42e-01 eta=1.00e-03 sigma=1.60e-01 | err c/p/d=3.23e-02/1.51e+01/3.93e+00 | ok=cpd | rmax X/Y/Z/T=28/11/18/-
+it 003 | main   | AHO | ineq=not_in_use | mu=7.54e-02 eta=1.00e-03 sigma=3.15e-01 | err c/p/d=4.99e-02/6.65e+00/3.27e+00 | ok=cpd | rmax X/Y/Z/T=25/22/26/-
+it 004 | main   | AHO | ineq=not_in_use | mu=1.21e-02 eta=1.00e-03 sigma=6.86e-02 | err c/p/d=9.37e-03/6.86e-01/1.53e+00 | ok=cpd | rmax X/Y/Z/T=21/24/29/-
+	 Target Residual not reached!
+	 Target Residual not reached!
+	 Target Residual not reached!
+it 005 | main   | AHO | ineq=not_in_use | mu=9.12e-03 eta=1.00e-03 sigma=4.42e-01 | err c/p/d=7.06e-03/7.07e-01/5.49e-01 | ok=cpd | rmax X/Y/Z/T=20/26/32/-
+	 Target Residual not reached!
+	 Target Residual not reached!
+	 Target Residual not reached!
+	 Target Residual not reached!
+it 006 | main   | AHO | ineq=not_in_use | mu=9.08e-03 eta=1.00e-03 sigma=9.88e-01 | err c/p/d=7.03e-03/7.07e-01/4.58e-01 | ok=cpd | rmax X/Y/Z/T=20/25/32/-
+	 Target Residual not reached!
+	 Target Residual not reached!
+	 Target Residual not reached!
+it 007 | main   | AHO | ineq=not_in_use | mu=8.93e-03 eta=1.00e-03 sigma=4.91e-01 | err c/p/d=6.91e-03/7.07e-01/4.27e-01 | ok=cpd | rmax X/Y/Z/T=20/25/31/-
+	 Target Residual not reached!
+	 Target Residual not reached!
+	 Target Residual not reached!
+it 008 | main   | AHO | ineq=not_in_use | mu=8.80e-03 eta=1.00e-03 sigma=4.87e-01 | err c/p/d=6.81e-03/7.07e-01/4.00e-01 | ok=cpd | rmax X/Y/Z/T=20/24/31/-

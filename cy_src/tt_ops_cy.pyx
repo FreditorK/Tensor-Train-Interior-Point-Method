@@ -95,7 +95,7 @@ cpdef list tt_ranks(list train_tt):
 @cython.wraparound(False)
 cpdef list tt_scale(float alpha, list train_tt):
     cdef int n = len(train_tt)
-    cdef int i, idx = np.random.randint(0, n)
+    cdef int i, idx = 0
     cdef list scaled_tt = [None] * n
     cdef cnp.ndarray core
 

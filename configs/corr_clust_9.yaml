@@ -1,14 +1,14 @@
 abs_tol: 0.001
 dim: 9
+gap_tol: 0.0003
 lambdaStar: 2.0
 lambdaStarIneq: 0.001
-gap_tol: 0.0003
 mals_restarts: 2
 max_iter: 30
 max_refinement: 10
 op_tol: 0.0001
 seeds:
-- 764
+- 942
 - 493
 - 324
 - 237
