@@ -351,7 +351,7 @@ def _bck_sweep(
                     Axz = block_A_k.lcompressed_block_local_product(ZAX[k], XAX[k + 1], solution_now, shape=(rz[k], block_size, N[k], rx[k + 1]))
                     rhsxz = block_b_k.block_local_product(Zb[k], Xb[k + 1], 1, (rz[k], block_size, N[k], rx[k + 1]))
                     resxz = rhsxz.__isub__(Axz)
-                    kr = min(kick_rank, r_max - r, rz[k] * block_size, N[k] * rx[k + 1])
+                    kr = min(kick_rank, max(0, r_max - r), rz[k] * block_size, N[k] * rx[k + 1])
                     uz, _ = truncated_svd(np.reshape(resxz, (rz[k] * block_size, N[k] * rx[k + 1])).T, kr)
                     uz = uz.T.reshape(kr, N[k], rx[k + 1])
                     u = np.concatenate((np.reshape(u, (r, N[k], rx[k + 1])), uz), axis=0)
@@ -475,7 +475,7 @@ def _fwd_sweep(
                     Axz = block_A_k.rcompressed_block_local_product(XAX[k], ZAX[k + 1], einsum("rbR, Rdk -> rdbk", u[:, :, :r], v[:r], optimize=[(0, 1)]), shape=(rx[k], block_size, N[k], rz[k + 1]))
                     rhsxz = block_b_k.block_local_product(Xb[k], Zb[k + 1], 1, (rx[k], block_size, N[k], rz[k + 1]))
                     resxz = np.transpose(rhsxz.__isub__(Axz), (0, 2, 1, 3))
-                    kr = min(kick_rank, r_max - r, rx[k] * N[k], block_size * rz[k + 1])
+                    kr = min(kick_rank, max(0, r_max - r), rx[k] * N[k], block_size * rz[k + 1])
                     uz, _ = truncated_svd(np.reshape(resxz, (rx[k] * N[k], block_size * rz[k + 1])), kr)
                     uz = np.reshape(uz, (rx[k], N[k], kr))
                     u = np.concatenate((u[:, :, :r], uz), axis=-1)
@@ -1281,7 +1281,7 @@ def tt_max_generalised_eigen(A, Delta, x0=None, nswp=10, tol=1e-8, size_limit = 
         print('\t Time per sweep: ', (time.time() - t0) / (swp + 1), flush=True)
 
     if max_res > tol:
-        print('\t Target Residual not reached!', flush=True)
+        print(f"warn   | step-eig | target=miss | residual={max_res:.2e} > {tol:.2e} | action=damp", flush=True)
         step_size *= (tol/max_res)
     return step_size, x_cores
 

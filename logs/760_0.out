@@ -1,0 +1,182 @@
+Running: max_stable_set (rank=5)
+==== max_stable_set TT-IPM Batch Run Started at Mon  1 Jun 22:29:59 BST 2026 ====
+
+▶ Running dim=9 with config=configs/max_stable_set_9.yaml at Mon  1 Jun 22:29:59 BST 2026
+
+===== Processing Rank: 5 =====
+Running seed 745
+Creating Problem...
+===Terminated Graph Sampling=== rank:  [3, 3, 4, 4, 5, 3, 3, 2]
+it 000 | main   | XZ  | ineq=not_in_use | mu=4.00e+00 eta=1.00e-03 sigma=5.00e-01 | err c/p/d=5.71e-01/2.55e+02/1.14e+01 | ok=cpd | rmax X/Y/Z/T=1/1/1/-
+it 001 | main   | XZ  | ineq=not_in_use | mu=9.25e-01 eta=1.00e-03 sigma=1.01e-01 | err c/p/d=1.08e-01/5.71e+01/3.28e+00 | ok=cpd | rmax X/Y/Z/T=7/6/7/-
+it 002 | main   | XZ  | ineq=not_in_use | mu=1.51e-01 eta=1.00e-03 sigma=1.68e-01 | err c/p/d=3.88e-02/7.81e+00/2.78e+00 | ok=cpd | rmax X/Y/Z/T=61/33/36/-
+it 003 | main   | AHO | ineq=not_in_use | mu=4.78e-02 eta=1.00e-03 sigma=1.77e-01 | err c/p/d=3.20e-02/2.20e+00/2.33e+00 | ok=cpd | rmax X/Y/Z/T=51/42/49/-
+warn   | step-eig | target=miss | residual=1.05e-08 > 1.00e-08 | action=damp
+it 004 | main   | AHO | ineq=not_in_use | mu=1.02e-02 eta=1.00e-03 sigma=2.03e-01 | err c/p/d=7.09e-03/8.53e-02/2.80e-01 | ok=cpd | rmax X/Y/Z/T=46/45/52/-
+warn   | step-eig | target=miss | residual=4.49e-08 > 1.00e-08 | action=damp
+warn   | step-eig | target=miss | residual=1.77e-08 > 1.00e-08 | action=damp
+it 005 | main   | AHO | ineq=not_in_use | mu=7.77e-03 eta=1.00e-03 sigma=7.79e-01 | err c/p/d=3.66e-03/4.92e-02/2.19e-01 | ok=cpd | rmax X/Y/Z/T=68/45/51/-
+warn   | step-eig | target=miss | residual=1.74e-08 > 1.00e-08 | action=damp
+it 006 | main   | AHO | ineq=not_in_use | mu=7.97e-03 eta=1.00e-03 sigma=8.51e-01 | err c/p/d=2.68e-03/4.40e-02/1.78e-01 | ok=cpd | rmax X/Y/Z/T=62/53/58/-
+warn   | step-eig | target=miss | residual=1.49e-08 > 1.00e-08 | action=damp
+it 007 | main   | AHO | ineq=not_in_use | mu=5.87e-03 eta=1.00e-03 sigma=6.46e-01 | err c/p/d=1.68e-03/3.47e-02/1.12e-01 | ok=cpd | rmax X/Y/Z/T=59/53/57/-
+warn   | step-eig | target=miss | residual=3.60e-08 > 1.00e-08 | action=damp
+warn   | step-eig | target=miss | residual=4.43e-08 > 1.00e-08 | action=damp
+it 008 | main   | AHO | ineq=not_in_use | mu=5.61e-03 eta=1.00e-03 sigma=9.55e-01 | err c/p/d=1.54e-03/3.89e-02/1.07e-01 | ok=cpd | rmax X/Y/Z/T=55/52/57/-
+warn   | step-eig | target=miss | residual=5.54e-08 > 1.00e-08 | action=damp
+warn   | step-eig | target=miss | residual=9.32e-08 > 1.00e-08 | action=damp
+it 009 | main   | AHO | ineq=not_in_use | mu=5.64e-03 eta=1.00e-03 sigma=9.83e-01 | err c/p/d=1.54e-03/4.78e-02/1.06e-01 | ok=cpd | rmax X/Y/Z/T=52/52/57/-
+warn   | step-eig | target=miss | residual=5.90e-08 > 1.00e-08 | action=damp
+warn   | step-eig | target=miss | residual=8.89e-08 > 1.00e-08 | action=damp
+it 010 | main   | AHO | ineq=not_in_use | mu=5.71e-03 eta=1.00e-03 sigma=9.87e-01 | err c/p/d=1.55e-03/5.64e-02/1.04e-01 | ok=cpd | rmax X/Y/Z/T=50/52/57/-
+warn   | step-eig | target=miss | residual=5.54e-08 > 1.00e-08 | action=damp
+warn   | step-eig | target=miss | residual=9.21e-08 > 1.00e-08 | action=damp
+it 011 | main   | AHO | ineq=not_in_use | mu=5.75e-03 eta=1.00e-03 sigma=9.89e-01 | err c/p/d=1.55e-03/6.27e-02/1.03e-01 | ok=cpd | rmax X/Y/Z/T=49/51/57/-
+warn   | step-eig | target=miss | residual=5.86e-08 > 1.00e-08 | action=damp
+warn   | step-eig | target=miss | residual=9.64e-08 > 1.00e-08 | action=damp
+it 012 | main   | AHO | ineq=not_in_use | mu=5.83e-03 eta=1.00e-03 sigma=9.90e-01 | err c/p/d=1.57e-03/7.05e-02/1.02e-01 | ok=cpd | rmax X/Y/Z/T=48/51/57/-
+warn   | step-eig | target=miss | residual=6.51e-08 > 1.00e-08 | action=damp
+warn   | step-eig | target=miss | residual=1.04e-07 > 1.00e-08 | action=damp
+it 013 | main   | AHO | ineq=not_in_use | mu=5.91e-03 eta=1.00e-03 sigma=9.90e-01 | err c/p/d=1.59e-03/7.82e-02/1.02e-01 | ok=cpd | rmax X/Y/Z/T=47/51/57/-
+warn   | step-eig | target=miss | residual=6.43e-08 > 1.00e-08 | action=damp
+warn   | step-eig | target=miss | residual=1.24e-07 > 1.00e-08 | action=damp
+it 014 | main   | AHO | ineq=not_in_use | mu=6.06e-03 eta=1.00e-03 sigma=9.90e-01 | err c/p/d=1.62e-03/9.11e-02/1.01e-01 | ok=cpd | rmax X/Y/Z/T=46/51/57/-
+warn   | step-eig | target=miss | residual=8.02e-08 > 1.00e-08 | action=damp
+warn   | step-eig | target=miss | residual=1.34e-07 > 1.00e-08 | action=damp
+it 015 | main   | AHO | ineq=not_in_use | mu=6.13e-03 eta=1.00e-03 sigma=9.90e-01 | err c/p/d=1.64e-03/9.84e-02/1.01e-01 | ok=cpd | rmax X/Y/Z/T=45/51/57/-
+warn   | step-eig | target=miss | residual=8.42e-08 > 1.00e-08 | action=damp
+warn   | step-eig | target=miss | residual=1.26e-07 > 1.00e-08 | action=damp
+it 016 | main   | AHO | ineq=not_in_use | mu=6.22e-03 eta=1.00e-03 sigma=9.90e-01 | err c/p/d=1.66e-03/1.07e-01/1.00e-01 | ok=cpd | rmax X/Y/Z/T=44/51/57/-
+warn   | step-eig | target=miss | residual=8.45e-08 > 1.00e-08 | action=damp
+warn   | step-eig | target=miss | residual=1.31e-07 > 1.00e-08 | action=damp
+it 017 | main   | AHO | ineq=not_in_use | mu=6.32e-03 eta=1.00e-03 sigma=9.90e-01 | err c/p/d=1.68e-03/1.15e-01/9.99e-02 | ok=cpd | rmax X/Y/Z/T=43/51/57/-
+warn   | step-eig | target=miss | residual=9.51e-08 > 1.00e-08 | action=damp
+warn   | step-eig | target=miss | residual=1.61e-07 > 1.00e-08 | action=damp
+it 018 | main   | AHO | ineq=not_in_use | mu=6.28e-03 eta=1.00e-03 sigma=9.90e-01 | err c/p/d=1.67e-03/1.14e-01/9.96e-02 | ok=cpd | rmax X/Y/Z/T=43/51/57/-
+warn   | step-eig | target=miss | residual=9.37e-08 > 1.00e-08 | action=damp
+warn   | step-eig | target=miss | residual=1.65e-07 > 1.00e-08 | action=damp
+it 019 | main   | AHO | ineq=not_in_use | mu=6.27e-03 eta=1.00e-03 sigma=9.90e-01 | err c/p/d=1.67e-03/1.13e-01/9.93e-02 | ok=cpd | rmax X/Y/Z/T=43/51/57/-
+warn   | step-eig | target=miss | residual=5.15e-08 > 1.00e-08 | action=damp
+warn   | step-eig | target=miss | residual=1.06e-07 > 1.00e-08 | action=damp
+warn   | step-eig | target=miss | residual=3.55e-08 > 1.00e-08 | action=damp
+warn   | step-eig | target=miss | residual=1.79e-07 > 1.00e-08 | action=damp
+warn   | ipm      | limit=max_iter | action=finish
+it 020 | finish | AHO | ineq=not_in_use | mu=6.27e-03 eta=1.00e-03 sigma=9.90e-01 | err c/p/d=1.67e-03/1.13e-01/9.91e-02 | ok=cpd | rmax X/Y/Z/T=43/51/57/-
+warn   | step-eig | target=miss | residual=1.15e-07 > 1.00e-08 | action=damp
+it 021 | finish | AHO | ineq=not_in_use | mu=6.21e-03 eta=1.00e-03 sigma=0.00e+00 | err c/p/d=1.64e-03/1.12e-01/9.88e-02 | ok=cpd | rmax X/Y/Z/T=43/51/57/-
+warn   | step-eig | target=miss | residual=1.11e-07 > 1.00e-08 | action=damp
+it 022 | finish | AHO | ineq=not_in_use | mu=6.14e-03 eta=1.00e-03 sigma=0.00e+00 | err c/p/d=1.61e-03/1.11e-01/9.85e-02 | ok=cpd | rmax X/Y/Z/T=43/51/57/-
+warn   | step-eig | target=miss | residual=1.16e-07 > 1.00e-08 | action=damp
+it 023 | finish | AHO | ineq=not_in_use | mu=6.08e-03 eta=1.00e-03 sigma=0.00e+00 | err c/p/d=1.59e-03/1.09e-01/9.83e-02 | ok=cpd | rmax X/Y/Z/T=43/51/57/-
+warn   | step-eig | target=miss | residual=1.42e-07 > 1.00e-08 | action=damp
+it 024 | finish | AHO | ineq=not_in_use | mu=6.03e-03 eta=1.00e-03 sigma=0.00e+00 | err c/p/d=1.57e-03/1.08e-01/9.82e-02 | ok=cpd | rmax X/Y/Z/T=43/51/57/-
+---Terminated---
+Terminated in 24 iterations.
+Ranks: X=[5, 6, 18, 21, 43, 33, 17, 5], Z=[5, 7, 20, 29, 57, 25, 12, 5], Y=[4, 7, 19, 26, 51, 22, 10, 3], T=[0, 0, 0, 0, 0, 0, 0, 0]
+Run failed after 24 iterations. Compl Slackness: 3.0861e+00. Feasibility error: 1.8748e-01. Dual Feasibility error: 1.5415e-01.
+Run failed in 3994.28s. Memory: 1812.14 MB.
+Seed 745 failed (feasibility error: 1.87e-01, dual feasibility error: 1.54e-01, slackness: 3.09e+00). Suggesting a new seed.
+New seed suggested: 425
+Creating Problem...
+===Terminated Graph Sampling=== rank:  [2, 4, 5, 3, 4, 3, 3, 3]
+it 000 | main   | XZ  | ineq=not_in_use | mu=4.00e+00 eta=1.00e-03 sigma=5.00e-01 | err c/p/d=5.71e-01/2.55e+02/1.14e+01 | ok=cpd | rmax X/Y/Z/T=1/1/1/-
+warn   | step-eig | target=miss | residual=1.19e-08 > 1.00e-08 | action=damp
+it 001 | main   | XZ  | ineq=not_in_use | mu=4.85e-01 eta=1.00e-03 sigma=6.32e-02 | err c/p/d=5.10e-02/3.03e+01/5.32e+00 | ok=cpd | rmax X/Y/Z/T=8/6/8/-
+warn   | step-eig | target=miss | residual=1.39e-08 > 1.00e-08 | action=damp
+it 002 | main   | XZ  | ineq=not_in_use | mu=1.69e-01 eta=1.00e-03 sigma=4.09e-01 | err c/p/d=1.59e-02/9.62e+00/2.40e+00 | ok=cpd | rmax X/Y/Z/T=45/16/20/-
+it 003 | main   | AHO | ineq=not_in_use | mu=5.12e-02 eta=1.00e-03 sigma=4.46e-01 | err c/p/d=1.76e-02/1.68e+00/2.03e+00 | ok=cpd | rmax X/Y/Z/T=71/24/27/-
+it 004 | main   | AHO | ineq=not_in_use | mu=1.21e-02 eta=1.00e-03 sigma=1.61e-02 | err c/p/d=3.73e-03/1.72e-01/6.67e-01 | ok=cpd | rmax X/Y/Z/T=74/25/27/-
+it 005 | main   | AHO | ineq=not_in_use | mu=7.01e-03 eta=1.00e-03 sigma=7.95e-01 | err c/p/d=1.64e-03/7.96e-02/2.28e-01 | ok=cpd | rmax X/Y/Z/T=79/32/39/-
+warn   | step-eig | target=miss | residual=1.36e-08 > 1.00e-08 | action=damp
+it 006 | main   | AHO | ineq=not_in_use | mu=3.98e-03 eta=1.00e-03 sigma=5.25e-01 | err c/p/d=7.39e-04/4.12e-02/1.35e-01 | ok=cpd | rmax X/Y/Z/T=78/30/38/-
+warn   | step-eig | target=miss | residual=1.51e-08 > 1.00e-08 | action=damp
+it 007 | main   | AHO | ineq=not_in_use | mu=1.85e-03 eta=1.00e-03 sigma=5.99e-01 | err c/p/d=2.96e-04/1.88e-02/7.22e-02 | ok=cpd | rmax X/Y/Z/T=74/32/38/-
+it 008 | main   | AHO | ineq=not_in_use | mu=8.07e-04 eta=1.00e-03 sigma=5.29e-01 | err c/p/d=1.20e-04/1.60e-02/1.27e-02 | ok=cpd | rmax X/Y/Z/T=64/38/44/-
+warn   | step-eig | target=miss | residual=1.07e-08 > 1.00e-08 | action=damp
+it 009 | main   | AHO | ineq=not_in_use | mu=4.55e-04 eta=9.11e-04 sigma=7.29e-02 | err c/p/d=6.59e-05/2.05e-02/3.25e-03 | ok=Cpd | rmax X/Y/Z/T=51/41/47/-
+it 010 | main   | AHO | ineq=not_in_use | mu=7.18e-04 eta=9.11e-04 sigma=0.00e+00 | err c/p/d=1.06e-04/1.79e-02/6.06e-04 | ok=cpd | rmax X/Y/Z/T=46/42/46/-
+it 011 | main   | AHO | ineq=not_in_use | mu=3.80e-04 eta=7.59e-04 sigma=3.52e-03 | err c/p/d=5.47e-05/1.99e-02/7.34e-04 | ok=Cpd | rmax X/Y/Z/T=44/48/52/-
+it 012 | repair | XZ  | ineq=not_in_use | mu=5.87e-04 eta=7.59e-04 sigma=0.00e+00 | err c/p/d=8.64e-05/1.43e-02/3.58e-04 | ok=CpD | rmax X/Y/Z/T=40/48/52/-
+it 013 | main   | AHO | ineq=not_in_use | mu=8.34e-04 eta=7.59e-04 sigma=0.00e+00 | err c/p/d=1.24e-04/2.34e-02/8.71e-04 | ok=cpd | rmax X/Y/Z/T=44/52/56/-
+it 014 | repair | XZ  | ineq=not_in_use | mu=3.51e-04 eta=7.02e-04 sigma=2.36e-03 | err c/p/d=5.05e-05/1.90e-02/5.79e-04 | ok=CpD | rmax X/Y/Z/T=58/57/61/-
+it 015 | main   | AHO | ineq=not_in_use | mu=5.55e-04 eta=7.02e-04 sigma=0.00e+00 | err c/p/d=8.04e-05/2.65e-02/1.18e-03 | ok=Cpd | rmax X/Y/Z/T=66/58/61/-
+it 016 | repair | XZ  | ineq=not_in_use | mu=7.81e-04 eta=7.02e-04 sigma=0.00e+00 | err c/p/d=1.17e-04/1.59e-02/4.45e-04 | ok=cpD | rmax X/Y/Z/T=64/59/61/-
+it 017 | main   | AHO | ineq=not_in_use | mu=9.95e-04 eta=7.02e-04 sigma=0.00e+00 | err c/p/d=1.50e-04/2.22e-02/8.90e-04 | ok=cpd | rmax X/Y/Z/T=62/59/61/-
+it 018 | repair | XZ  | ineq=not_in_use | mu=3.19e-04 eta=6.37e-04 sigma=1.52e-03 | err c/p/d=4.59e-05/1.61e-02/4.42e-04 | ok=CpD | rmax X/Y/Z/T=63/63/65/-
+it 019 | main   | AHO | ineq=not_in_use | mu=5.09e-04 eta=6.37e-04 sigma=0.00e+00 | err c/p/d=7.35e-05/2.68e-02/7.13e-04 | ok=Cpd | rmax X/Y/Z/T=64/64/66/-
+warn   | ipm      | limit=max_iter | action=finish
+it 020 | finish | AHO | ineq=not_in_use | mu=6.92e-04 eta=6.37e-04 sigma=0.00e+00 | err c/p/d=1.03e-04/1.31e-02/1.64e-04 | ok=cpD | rmax X/Y/Z/T=63/64/66/-
+it 021 | finish | AHO | ineq=not_in_use | mu=2.03e-04 eta=4.07e-04 sigma=0.00e+00 | err c/p/d=2.92e-05/1.15e-02/3.86e-04 | ok=CpD | rmax X/Y/Z/T=62/64/66/-
+it 022 | finish | AHO | ineq=not_in_use | mu=1.58e-04 eta=3.15e-04 sigma=0.00e+00 | err c/p/d=2.26e-05/1.00e-02/5.14e-04 | ok=CpD | rmax X/Y/Z/T=80/65/67/-
+it 023 | finish | AHO | ineq=not_in_use | mu=1.26e-04 eta=2.51e-04 sigma=0.00e+00 | err c/p/d=1.80e-05/8.07e-03/3.04e-04 | ok=CpD | rmax X/Y/Z/T=114/65/73/-
+it 024 | finish | AHO | ineq=not_in_use | mu=9.19e-05 eta=1.84e-04 sigma=0.00e+00 | err c/p/d=1.32e-05/5.90e-03/2.71e-04 | ok=CpD | rmax X/Y/Z/T=132/65/86/-
+---Terminated---
+Terminated in 24 iterations.
+Ranks: X=[5, 15, 43, 112, 132, 55, 17, 5], Z=[5, 13, 39, 86, 70, 23, 9, 5], Y=[2, 8, 32, 64, 65, 21, 7, 4], T=[0, 0, 0, 0, 0, 0, 0, 0]
+Run terminated after 24 iterations. Compl Slackness: 4.7032e-02. Feasibility error: 5.5736e-04. Dual Feasibility error: 1.1716e-06.
+Run terminated in 21643.95s. Memory: 5090.15 MB.
+Rerun with new seed 425 terminated. Feasibility error: 5.57e-04, dual feasibility error: 1.17e-06, slackness: 4.70e-02
+Seed 425 terminated (feasibility error: 5.57e-04, dual feasibility error: 1.17e-06, slackness: 4.70e-02). Suggesting a new seed.
+New seed suggested: 836
+Creating Problem...
+===Terminated Graph Sampling=== rank:  [2, 4, 5, 5, 4, 2, 1, 1]
+it 000 | main   | XZ  | ineq=not_in_use | mu=4.00e+00 eta=1.00e-03 sigma=5.00e-01 | err c/p/d=5.71e-01/2.55e+02/1.14e+01 | ok=cpd | rmax X/Y/Z/T=1/1/1/-
+it 001 | main   | XZ  | ineq=not_in_use | mu=5.06e-01 eta=1.00e-03 sigma=6.97e-02 | err c/p/d=5.32e-02/3.16e+01/4.14e+00 | ok=cpd | rmax X/Y/Z/T=8/6/8/-
+warn   | step-eig | target=miss | residual=1.38e-08 > 1.00e-08 | action=damp
+warn   | step-eig | target=miss | residual=1.39e-08 > 1.00e-08 | action=damp
+it 002 | main   | XZ  | ineq=not_in_use | mu=2.07e-01 eta=1.00e-03 sigma=4.77e-01 | err c/p/d=1.80e-02/1.18e+01/2.19e+00 | ok=cpd | rmax X/Y/Z/T=31/17/19/-
+it 003 | main   | AHO | ineq=not_in_use | mu=6.90e-02 eta=1.00e-03 sigma=6.11e-01 | err c/p/d=3.76e-02/2.03e+00/1.85e+00 | ok=cpd | rmax X/Y/Z/T=30/19/21/-
+warn   | step-eig | target=miss | residual=1.99e-08 > 1.00e-08 | action=damp
+it 004 | main   | AHO | ineq=not_in_use | mu=1.89e-02 eta=1.00e-03 sigma=9.55e-02 | err c/p/d=8.54e-03/1.75e-01/1.26e+00 | ok=cpd | rmax X/Y/Z/T=31/19/21/-
+warn   | step-eig | target=miss | residual=3.09e-08 > 1.00e-08 | action=damp
+it 005 | main   | AHO | ineq=not_in_use | mu=1.24e-02 eta=1.00e-03 sigma=8.84e-01 | err c/p/d=4.06e-03/1.12e-01/2.07e-03 | ok=cpd | rmax X/Y/Z/T=33/19/21/-
+warn   | step-eig | target=miss | residual=3.24e-08 > 1.00e-08 | action=damp
+it 006 | main   | AHO | ineq=not_in_use | mu=5.37e-03 eta=1.00e-03 sigma=5.99e-01 | err c/p/d=9.14e-04/3.80e-02/1.79e-03 | ok=cpd | rmax X/Y/Z/T=32/20/22/-
+warn   | step-eig | target=miss | residual=1.33e-08 > 1.00e-08 | action=damp
+it 007 | main   | AHO | ineq=not_in_use | mu=2.03e-03 eta=1.00e-03 sigma=2.31e-01 | err c/p/d=2.87e-04/2.45e-02/9.01e-04 | ok=cpd | rmax X/Y/Z/T=30/19/22/-
+it 008 | main   | AHO | ineq=not_in_use | mu=5.70e-04 eta=1.00e-03 sigma=8.10e-02 | err c/p/d=7.46e-05/1.88e-02/7.00e-04 | ok=Cpd | rmax X/Y/Z/T=26/22/24/-
+it 009 | repair | XZ  | ineq=not_in_use | mu=7.75e-04 eta=1.00e-03 sigma=0.00e+00 | err c/p/d=1.04e-04/1.26e-02/3.21e-04 | ok=cpD | rmax X/Y/Z/T=24/22/24/-
+it 010 | repair | XZ  | ineq=not_in_use | mu=1.08e-03 eta=1.00e-03 sigma=0.00e+00 | err c/p/d=1.45e-04/2.37e-02/3.48e-04 | ok=cpD | rmax X/Y/Z/T=23/22/24/-
+it 011 | repair | XZ  | ineq=not_in_use | mu=1.32e-03 eta=1.00e-03 sigma=0.00e+00 | err c/p/d=1.80e-04/2.63e-02/3.64e-04 | ok=cpD | rmax X/Y/Z/T=22/22/24/-
+it 012 | repair | XZ  | ineq=not_in_use | mu=1.49e-03 eta=1.00e-03 sigma=0.00e+00 | err c/p/d=2.06e-04/2.33e-02/3.66e-04 | ok=cpD | rmax X/Y/Z/T=21/22/24/-
+it 013 | repair | XZ  | ineq=not_in_use | mu=1.68e-03 eta=1.00e-03 sigma=0.00e+00 | err c/p/d=2.36e-04/2.31e-02/4.55e-04 | ok=cpD | rmax X/Y/Z/T=20/24/26/-
+it 014 | repair | XZ  | ineq=not_in_use | mu=1.68e-03 eta=1.00e-03 sigma=0.00e+00 | err c/p/d=2.39e-04/1.22e-02/4.59e-04 | ok=cpD | rmax X/Y/Z/T=20/24/26/-
+it 015 | repair | XZ  | ineq=not_in_use | mu=1.88e-03 eta=1.00e-03 sigma=0.00e+00 | err c/p/d=2.69e-04/1.77e-02/4.61e-04 | ok=cpD | rmax X/Y/Z/T=19/24/26/-
+it 016 | repair | XZ  | ineq=not_in_use | mu=1.88e-03 eta=1.00e-03 sigma=0.00e+00 | err c/p/d=2.73e-04/9.35e-03/4.63e-04 | ok=cpD | rmax X/Y/Z/T=19/24/26/-
+it 017 | main   | AHO | ineq=not_in_use | mu=1.88e-03 eta=1.00e-03 sigma=0.00e+00 | err c/p/d=2.74e-04/4.94e-03/4.65e-04 | ok=cpD | rmax X/Y/Z/T=19/24/26/-
+warn   | step-eig | target=miss | residual=1.12e-08 > 1.00e-08 | action=damp
+it 018 | main   | AHO | ineq=not_in_use | mu=5.99e-04 eta=1.00e-03 sigma=5.69e-03 | err c/p/d=7.83e-05/2.33e-02/9.92e-04 | ok=Cpd | rmax X/Y/Z/T=14/27/29/-
+it 019 | repair | XZ  | ineq=not_in_use | mu=9.04e-04 eta=1.00e-03 sigma=0.00e+00 | err c/p/d=1.21e-04/1.85e-02/4.23e-04 | ok=cpD | rmax X/Y/Z/T=10/27/29/-
+warn   | ipm      | limit=max_iter | action=finish
+it 020 | finish | AHO | ineq=not_in_use | mu=1.13e-03 eta=1.00e-03 sigma=0.00e+00 | err c/p/d=1.53e-04/2.24e-02/7.59e-04 | ok=cpd | rmax X/Y/Z/T=10/29/32/-
+it 021 | finish | AHO | ineq=not_in_use | mu=3.59e-04 eta=7.17e-04 sigma=0.00e+00 | err c/p/d=4.64e-05/1.83e-02/2.97e-04 | ok=CpD | rmax X/Y/Z/T=6/30/32/-
+it 022 | finish | AHO | ineq=not_in_use | mu=1.36e-04 eta=2.72e-04 sigma=0.00e+00 | err c/p/d=1.75e-05/7.64e-03/1.38e-04 | ok=CpD | rmax X/Y/Z/T=6/30/32/-
+it 023 | finish | AHO | ineq=not_in_use | mu=4.97e-05 eta=1.00e-04 sigma=0.00e+00 | err c/p/d=6.41e-06/2.82e-03/1.07e-04 | ok=CpD | rmax X/Y/Z/T=4/32/36/-
+it 024 | finish | AHO | ineq=not_in_use | mu=1.51e-05 eta=1.00e-04 sigma=0.00e+00 | err c/p/d=1.95e-06/8.56e-04/6.40e-05 | ok=CpD | rmax X/Y/Z/T=4/53/59/-
+---Terminated---
+Terminated in 24 iterations.
+Ranks: X=[3, 4, 4, 4, 4, 4, 4, 4], Z=[4, 10, 32, 59, 23, 9, 5, 4], Y=[2, 8, 30, 53, 20, 7, 3, 1], T=[0, 0, 0, 0, 0, 0, 0, 0]
+Run terminated after 24 iterations. Compl Slackness: 7.7188e-03. Feasibility error: 1.1721e-05. Dual Feasibility error: 6.5591e-08.
+Run terminated in 960.29s. Memory: 916.52 MB.
+Rerun with new seed 836 terminated. Feasibility error: 1.17e-05, dual feasibility error: 6.56e-08, slackness: 7.72e-03
+Seed 836 terminated (feasibility error: 1.17e-05, dual feasibility error: 6.56e-08, slackness: 7.72e-03). Suggesting a new seed.
+New seed suggested: 395
+Creating Problem...
+===Terminated Graph Sampling=== rank:  [2, 2, 4, 5, 5, 4, 3, 1]
+it 000 | main   | XZ  | ineq=not_in_use | mu=4.00e+00 eta=1.00e-03 sigma=5.00e-01 | err c/p/d=5.71e-01/2.55e+02/1.14e+01 | ok=cpd | rmax X/Y/Z/T=1/1/1/-
+it 001 | main   | XZ  | ineq=not_in_use | mu=6.91e-01 eta=1.00e-03 sigma=9.36e-02 | err c/p/d=7.51e-02/4.28e+01/3.89e+00 | ok=cpd | rmax X/Y/Z/T=9/7/9/-
+it 002 | main   | XZ  | ineq=not_in_use | mu=2.69e-01 eta=1.00e-03 sigma=4.11e-01 | err c/p/d=3.26e-02/1.36e+01/4.96e-01 | ok=cpd | rmax X/Y/Z/T=60/32/35/-
+it 003 | main   | AHO | ineq=not_in_use | mu=5.29e-02 eta=1.00e-03 sigma=1.07e-02 | err c/p/d=1.71e-02/2.51e+00/4.19e-01 | ok=cpd | rmax X/Y/Z/T=61/33/37/-
+it 004 | main   | AHO | ineq=not_in_use | mu=2.11e-02 eta=1.00e-03 sigma=6.69e-01 | err c/p/d=1.39e-02/4.84e-01/3.53e-01 | ok=cpd | rmax X/Y/Z/T=62/35/37/-
+warn   | step-eig | target=miss | residual=1.63e-08 > 1.00e-08 | action=damp
+warn   | step-eig | target=miss | residual=1.70e-08 > 1.00e-08 | action=damp
+it 005 | main   | AHO | ineq=not_in_use | mu=1.22e-02 eta=1.00e-03 sigma=5.84e-01 | err c/p/d=5.59e-03/2.00e-01/1.76e-01 | ok=cpd | rmax X/Y/Z/T=64/35/38/-
+warn   | step-eig | target=miss | residual=1.71e-08 > 1.00e-08 | action=damp
+warn   | step-eig | target=miss | residual=1.38e-08 > 1.00e-08 | action=damp
+it 006 | main   | AHO | ineq=not_in_use | mu=8.21e-03 eta=1.00e-03 sigma=8.29e-01 | err c/p/d=2.87e-03/1.08e-01/3.91e-02 | ok=cpd | rmax X/Y/Z/T=65/36/38/-
+warn   | step-eig | target=miss | residual=2.06e-08 > 1.00e-08 | action=damp
+it 007 | main   | AHO | ineq=not_in_use | mu=4.81e-03 eta=1.00e-03 sigma=8.63e-01 | err c/p/d=1.28e-03/4.21e-02/3.15e-02 | ok=cpd | rmax X/Y/Z/T=65/36/38/-
+it 008 | main   | AHO | ineq=not_in_use | mu=3.11e-03 eta=1.00e-03 sigma=8.18e-01 | err c/p/d=7.06e-04/2.48e-02/1.18e-02 | ok=cpd | rmax X/Y/Z/T=65/53/64/-
+it 009 | main   | AHO | ineq=not_in_use | mu=2.16e-03 eta=1.00e-03 sigma=7.23e-01 | err c/p/d=4.37e-04/2.73e-02/3.45e-03 | ok=cpd | rmax X/Y/Z/T=113/88/119/-
+it 010 | main   | AHO | ineq=not_in_use | mu=1.94e-03 eta=1.00e-03 sigma=8.14e-01 | err c/p/d=3.81e-04/3.20e-02/1.19e-03 | ok=cpd | rmax X/Y/Z/T=114/102/140/-
+it 011 | main   | AHO | ineq=not_in_use | mu=2.04e-03 eta=1.00e-03 sigma=8.08e-01 | err c/p/d=3.95e-04/4.09e-02/1.79e-03 | ok=cpd | rmax X/Y/Z/T=142/101/145/-

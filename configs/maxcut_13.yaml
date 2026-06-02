@@ -1,16 +1,16 @@
-dim: !!int 13
-seeds: 
-- 83
-- 45
-- 23
-- 53
-- 12 
-gap_tol: !!float 3e-4
-verbose: true
-op_tol: !!float 1e-4
-abs_tol: !!float 0.001
-max_iter: !!int 30
-warm_up: !!int 3
-mals_restarts: !!int 2
-max_refinement:  !!int 6
+abs_tol: 0.001
+dim: 13
+gap_tol: 0.0003
 lambdaStar: 1.0
+mals_restarts: 2
+max_iter: 30
+max_refinement: 6
+op_tol: 0.0001
+seeds:
+- 83
+- 491
+- 23
+- 244
+- 12
+verbose: true
+warm_up: 3

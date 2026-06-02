@@ -164,3 +164,72 @@ it 007 | main   | AHO | ineq=not_in_use | mu=7.47e-03 eta=1.00e-03 sigma=8.89e-0
 	 Target Residual not reached!
 	 Target Residual not reached!
 it 008 | main   | AHO | ineq=not_in_use | mu=6.69e-03 eta=1.00e-03 sigma=9.57e-01 | err c/p/d=2.78e-03/5.94e-03/1.39e-01 | ok=cpd | rmax X/Y/Z/T=28/16/20/-
+	 Target Residual not reached!
+	 Target Residual not reached!
+it 009 | main   | AHO | ineq=not_in_use | mu=5.99e-03 eta=1.00e-03 sigma=9.40e-01 | err c/p/d=2.19e-03/1.44e-02/1.21e-01 | ok=cpd | rmax X/Y/Z/T=27/16/20/-
+	 Target Residual not reached!
+	 Target Residual not reached!
+it 010 | main   | AHO | ineq=not_in_use | mu=5.00e-03 eta=1.00e-03 sigma=9.29e-01 | err c/p/d=1.57e-03/1.85e-02/9.54e-02 | ok=cpd | rmax X/Y/Z/T=27/16/20/-
+	 Target Residual not reached!
+	 Target Residual not reached!
+it 011 | main   | AHO | ineq=not_in_use | mu=3.64e-03 eta=1.00e-03 sigma=9.10e-01 | err c/p/d=9.63e-04/1.81e-02/5.88e-02 | ok=cpd | rmax X/Y/Z/T=28/16/21/-
+	 Target Residual not reached!
+it 012 | main   | AHO | ineq=not_in_use | mu=2.01e-03 eta=1.00e-03 sigma=8.20e-01 | err c/p/d=4.41e-04/1.34e-02/3.08e-02 | ok=cpd | rmax X/Y/Z/T=28/17/23/-
+it 013 | main   | AHO | ineq=not_in_use | mu=6.84e-04 eta=1.00e-03 sigma=6.17e-01 | err c/p/d=1.31e-04/1.24e-02/8.12e-03 | ok=cpd | rmax X/Y/Z/T=24/20/24/-
+	 Target Residual not reached!
+it 014 | main   | AHO | ineq=not_in_use | mu=3.26e-04 eta=6.53e-04 sigma=2.44e-02 | err c/p/d=6.00e-05/1.85e-02/2.74e-03 | ok=Cpd | rmax X/Y/Z/T=15/34/41/-
+it 015 | main   | AHO | ineq=not_in_use | mu=4.56e-04 eta=6.53e-04 sigma=0.00e+00 | err c/p/d=8.53e-05/1.19e-02/6.49e-04 | ok=Cpd | rmax X/Y/Z/T=16/37/44/-
+it 016 | main   | AHO | ineq=not_in_use | mu=5.70e-04 eta=6.53e-04 sigma=0.00e+00 | err c/p/d=1.08e-04/1.04e-02/5.38e-04 | ok=cpD | rmax X/Y/Z/T=15/37/43/-
+it 017 | main   | AHO | ineq=not_in_use | mu=2.24e-04 eta=4.47e-04 sigma=1.54e-03 | err c/p/d=4.09e-05/1.36e-02/1.11e-03 | ok=Cpd | rmax X/Y/Z/T=18/58/67/-
+it 018 | main   | AHO | ineq=not_in_use | mu=2.64e-04 eta=4.47e-04 sigma=0.00e+00 | err c/p/d=4.89e-05/4.09e-03/4.43e-04 | ok=CpD | rmax X/Y/Z/T=18/70/80/-
+it 019 | main   | AHO | ineq=not_in_use | mu=2.78e-04 eta=4.47e-04 sigma=0.00e+00 | err c/p/d=5.17e-05/1.37e-03/8.17e-04 | ok=Cpd | rmax X/Y/Z/T=18/69/80/-
+============================================
+ Maximum #iterations reached!
+============================================
+it 020 | finish | AHO | ineq=not_in_use | mu=2.79e-04 eta=4.47e-04 sigma=0.00e+00 | err c/p/d=5.21e-05/1.94e-04/3.29e-04 | ok=CPD | rmax X/Y/Z/T=18/70/77/-
+it 021 | finish | AHO | ineq=not_in_use | mu=1.07e-04 eta=2.14e-04 sigma=0.00e+00 | err c/p/d=1.95e-05/7.94e-03/3.22e-04 | ok=CpD | rmax X/Y/Z/T=17/102/111/-
+it 022 | finish | AHO | ineq=not_in_use | mu=3.53e-05 eta=1.00e-04 sigma=0.00e+00 | err c/p/d=6.42e-06/2.95e-03/1.57e-04 | ok=CpD | rmax X/Y/Z/T=18/122/126/-
+it 023 | finish | AHO | ineq=not_in_use | mu=1.22e-05 eta=1.00e-04 sigma=0.00e+00 | err c/p/d=2.21e-06/1.03e-03/7.48e-05 | ok=CpD | rmax X/Y/Z/T=18/126/130/-
+it 024 | finish | AHO | ineq=not_in_use | mu=1.90e-05 eta=1.00e-04 sigma=0.00e+00 | err c/p/d=3.45e-06/1.62e-03/4.80e-05 | ok=CpD | rmax X/Y/Z/T=17/127/130/-
+---Terminated---
+Terminated in 24 iterations.
+Ranks: X=[5, 5, 17, 17, 17, 5, 5, 5], Z=[4, 10, 34, 128, 130, 46, 16, 5], Y=[2, 8, 32, 124, 127, 44, 14, 4], T=[0, 0, 0, 0, 0, 0, 0, 0]
+Run terminated after 24 iterations. Compl Slackness: 9.7116e-03. Feasibility error: 4.2012e-05. Dual Feasibility error: 3.6875e-08.
+Run terminated in 9132.21s. Memory: 4367.32 MB.
+Rerun with new seed 590 terminated. Feasibility error: 4.20e-05, dual feasibility error: 3.69e-08, slackness: 9.71e-03
+Seed 590 terminated (feasibility error: 4.20e-05, dual feasibility error: 3.69e-08, slackness: 9.71e-03). Suggesting a new seed.
+New seed suggested: 380
+Creating Problem...
+===Terminated Graph Sampling=== rank:  [2, 2, 2, 2, 2, 2, 2, 2]
+it 000 | main   | XZ  | ineq=not_in_use | mu=4.00e+00 eta=1.00e-03 sigma=5.00e-01 | err c/p/d=5.71e-01/2.55e+02/1.14e+01 | ok=cpd | rmax X/Y/Z/T=1/1/1/-
+it 001 | main   | XZ  | ineq=not_in_use | mu=6.60e-01 eta=1.00e-03 sigma=8.34e-02 | err c/p/d=7.21e-02/4.10e+01/3.84e+00 | ok=cpd | rmax X/Y/Z/T=5/3/5/-
+it 002 | main   | XZ  | ineq=not_in_use | mu=2.14e-01 eta=1.00e-03 sigma=2.71e-01 | err c/p/d=2.93e-02/1.09e+01/2.77e+00 | ok=cpd | rmax X/Y/Z/T=13/5/7/-
+it 003 | main   | AHO | ineq=not_in_use | mu=8.65e-02 eta=1.00e-03 sigma=2.39e-01 | err c/p/d=4.34e-02/3.90e+00/2.32e+00 | ok=cpd | rmax X/Y/Z/T=13/6/8/-
+it 004 | main   | AHO | ineq=not_in_use | mu=1.15e-02 eta=1.00e-03 sigma=1.54e-01 | err c/p/d=7.21e-03/1.06e-01/1.37e+00 | ok=cpd | rmax X/Y/Z/T=13/6/8/-
+	 Target Residual not reached!
+it 005 | main   | AHO | ineq=not_in_use | mu=7.31e-03 eta=1.00e-03 sigma=8.56e-01 | err c/p/d=2.63e-03/4.77e-02/3.06e-01 | ok=cpd | rmax X/Y/Z/T=15/6/9/-
+it 006 | main   | AHO | ineq=not_in_use | mu=2.30e-03 eta=1.00e-03 sigma=3.21e-01 | err c/p/d=5.13e-04/1.64e-02/4.47e-02 | ok=cpd | rmax X/Y/Z/T=13/6/8/-
+	 Target Residual not reached!
+	 Target Residual not reached!
+it 007 | main   | AHO | ineq=not_in_use | mu=2.21e-03 eta=1.00e-03 sigma=9.33e-01 | err c/p/d=4.92e-04/1.63e-02/8.21e-03 | ok=cpd | rmax X/Y/Z/T=13/6/9/-
+it 008 | main   | AHO | ineq=not_in_use | mu=2.46e-04 eta=4.92e-04 sigma=3.31e-02 | err c/p/d=4.56e-05/2.71e-03/2.77e-03 | ok=Cpd | rmax X/Y/Z/T=13/6/8/-
+it 009 | finish | AHO | ineq=not_in_use | mu=2.47e-04 eta=4.92e-04 sigma=0.00e+00 | err c/p/d=4.60e-05/2.57e-04/1.85e-04 | ok=CPD | rmax X/Y/Z/T=13/6/8/-
+it 010 | finish | AHO | ineq=not_in_use | mu=4.12e-05 eta=1.00e-04 sigma=0.00e+00 | err c/p/d=7.50e-06/2.45e-03/3.29e-04 | ok=CpD | rmax X/Y/Z/T=11/7/10/-
+it 011 | finish | AHO | ineq=not_in_use | mu=4.26e-06 eta=1.00e-04 sigma=0.00e+00 | err c/p/d=7.74e-07/3.03e-04/9.94e-05 | ok=CPD | rmax X/Y/Z/T=18/21/24/-
+it 012 | finish | AHO | ineq=not_in_use | mu=8.71e-06 eta=1.00e-04 sigma=0.00e+00 | err c/p/d=1.58e-06/7.38e-04/7.16e-05 | ok=CpD | rmax X/Y/Z/T=17/40/46/-
+it 013 | finish | AHO | ineq=not_in_use | mu=9.93e-06 eta=1.00e-04 sigma=0.00e+00 | err c/p/d=1.80e-06/8.44e-04/7.50e-05 | ok=CpD | rmax X/Y/Z/T=17/48/55/-
+---Terminated---
+Terminated in 13 iterations.
+Ranks: X=[5, 10, 17, 17, 17, 17, 5, 5], Z=[4, 10, 16, 51, 55, 25, 15, 5], Y=[2, 8, 14, 47, 48, 22, 13, 4], T=[0, 0, 0, 0, 0, 0, 0, 0]
+Run terminated after 13 iterations. Compl Slackness: 5.0817e-03. Feasibility error: 1.1388e-05. Dual Feasibility error: 8.9981e-08.
+Run terminated in 1023.65s. Memory: 1473.00 MB.
+Rerun with new seed 380 terminated. Feasibility error: 1.14e-05, dual feasibility error: 9.00e-08, slackness: 5.08e-03
+Seed 380 terminated (feasibility error: 1.14e-05, dual feasibility error: 9.00e-08, slackness: 5.08e-03). Suggesting a new seed.
+New seed suggested: 988
+Creating Problem...
+===Terminated Graph Sampling=== rank:  [2, 2, 2, 2, 2, 2, 1, 1]
+it 000 | main   | XZ  | ineq=not_in_use | mu=4.00e+00 eta=1.00e-03 sigma=5.00e-01 | err c/p/d=5.71e-01/2.55e+02/1.14e+01 | ok=cpd | rmax X/Y/Z/T=1/1/1/-
+it 001 | main   | XZ  | ineq=not_in_use | mu=4.18e-01 eta=1.00e-03 sigma=5.64e-02 | err c/p/d=4.33e-02/2.62e+01/4.25e+00 | ok=cpd | rmax X/Y/Z/T=6/4/6/-
+	 Target Residual not reached!
+	 Target Residual not reached!
+it 002 | main   | XZ  | ineq=not_in_use | mu=1.52e-01 eta=1.00e-03 sigma=4.14e-01 | err c/p/d=9.69e-03/9.34e+00/2.82e+00 | ok=cpd | rmax X/Y/Z/T=17/7/9/-

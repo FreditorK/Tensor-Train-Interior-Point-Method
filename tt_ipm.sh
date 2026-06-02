@@ -3,10 +3,10 @@
 set -u
 
 usage() {
-    echo "Usage: bash tt_ipm.sh <problem> <start_dim> <end_dim> <rank> [--track_mem]"
+    echo "Usage: bash tt_ipm.sh <problem> <start_dim> <end_dim> <rank> [--track_mem] [--terminal_only]"
 }
 
-if [ "$#" -lt 4 ] || [ "$#" -gt 5 ]; then
+if [ "$#" -lt 4 ] || [ "$#" -gt 6 ]; then
     usage
     exit 1
 fi
@@ -16,14 +16,22 @@ START_DIM=$2
 END_DIM=$3
 RANK=$4
 TRACK_MEM=""
+TERMINAL_ONLY=""
 
-if [ "$#" -eq 5 ]; then
-    if [ "$5" != "--track_mem" ]; then
-        usage
-        exit 1
-    fi
-    TRACK_MEM="--track_mem"
-fi
+for arg in "${@:5}"; do
+    case "$arg" in
+        --track_mem)
+            TRACK_MEM="--track_mem"
+            ;;
+        --terminal_only|--terminal-only)
+            TERMINAL_ONLY="--terminal_only"
+            ;;
+        *)
+            usage
+            exit 1
+            ;;
+    esac
+done
 
 if ! [[ "$START_DIM" =~ ^[0-9]+$ && "$END_DIM" =~ ^[0-9]+$ && "$RANK" =~ ^[0-9]+$ ]]; then
     echo "❌ start_dim, end_dim, and rank must be positive integers."
@@ -39,9 +47,11 @@ cd "$SCRIPT_DIR"
 
 echo "Running: ${PROBLEM} (rank=${RANK})"
 BASE_TIMEOUT=40000 # 12h changed for graphm rank >2
-mkdir -p results
-LOGFILE="results/tt_ipm_${PROBLEM}_${START_DIM}_${END_DIM}_${RANK}.txt"
-rm -f "$LOGFILE"
+if [ -z "$TERMINAL_ONLY" ]; then
+    mkdir -p results
+    LOGFILE="results/tt_ipm_${PROBLEM}_${START_DIM}_${END_DIM}_${RANK}.txt"
+    rm -f "$LOGFILE"
+fi
 
 # ---------------------------
 # Activate conda environment if not already activated
@@ -86,7 +96,9 @@ trap 'echo -e "\n⚠️ Script resumed (was suspended). Memory may not have been
 # ---------------------------
 # Logging setup
 # ---------------------------
-exec > >(tee -a "$LOGFILE") 2>&1
+if [ -z "$TERMINAL_ONLY" ]; then
+    exec > >(tee -a "$LOGFILE") 2>&1
+fi
 
 echo "==== ${PROBLEM} TT-IPM Batch Run Started at $(date) ===="
 
@@ -103,6 +115,9 @@ for dim in $(seq $START_DIM $END_DIM); do
     cmd=(python "${PROBLEM}.py" --config "$CONFIG" --rank "$RANK")
     if [ -n "$TRACK_MEM" ]; then
         cmd+=("$TRACK_MEM")
+    fi
+    if [ -n "$TERMINAL_ONLY" ]; then
+        cmd+=("$TERMINAL_ONLY")
     fi
     timeout "$CURRENT_TIMEOUT" "${cmd[@]}"
     status=$?

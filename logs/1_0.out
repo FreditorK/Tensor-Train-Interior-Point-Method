@@ -67,3 +67,14 @@ it 003 | main   | AHO | ineq=active   | mu=4.24e-03 eta=1.00e-03 sigma=5.37e-01 
 it 004 | main   | AHO | ineq=active   | mu=3.72e-03 eta=1.00e-03 sigma=5.89e-01 | err c/p/d=2.33e-04/1.26e+00/9.69e+00 | ok=cpd | rmax X/Y/Z/T=53/6/25/19
 	 Target Residual not reached!
 	 Target Residual not reached!
+it 005 | main   | AHO | ineq=active   | mu=3.57e-03 eta=1.00e-03 sigma=6.50e-01 | err c/p/d=2.32e-04/1.22e+00/8.62e+00 | ok=cpd | rmax X/Y/Z/T=52/6/24/19
+	 Target Residual not reached!
+	 Target Residual not reached!
+it 006 | main   | AHO | ineq=active   | mu=3.34e-03 eta=1.00e-03 sigma=6.82e-01 | err c/p/d=2.44e-04/1.08e+00/8.55e+00 | ok=cpd | rmax X/Y/Z/T=52/6/24/19
+	 Target Residual not reached!
+it 007 | main   | AHO | ineq=active   | mu=3.25e-03 eta=1.00e-03 sigma=5.51e-01 | err c/p/d=2.37e-04/1.08e+00/7.62e+00 | ok=cpd | rmax X/Y/Z/T=51/6/24/19
+	 Target Residual not reached!
+	 Target Residual not reached!
+	 Target Residual not reached!
+it 008 | main   | AHO | ineq=active   | mu=3.24e-03 eta=1.00e-03 sigma=7.39e-01 | err c/p/d=2.36e-04/1.08e+00/7.52e+00 | ok=cpd | rmax X/Y/Z/T=50/6/24/19
+	 Target Residual not reached!

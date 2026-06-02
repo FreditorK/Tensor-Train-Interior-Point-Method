@@ -46,3 +46,26 @@
 	6177  -  MemoryUsage of job (MB)
 	6324628  -  ResidentSetSize of job (KB)
 ...
+006 (001.000.000) 06/01 14:46:19 Image size of job updated: 15855580
+	6177  -  MemoryUsage of job (MB)
+	6324628  -  ResidentSetSize of job (KB)
+...
+006 (001.000.000) 06/01 15:26:22 Image size of job updated: 16002692
+	6177  -  MemoryUsage of job (MB)
+	6324628  -  ResidentSetSize of job (KB)
+...
+004 (001.000.000) 06/01 16:19:08 Job was evicted.
+	(0) Job was not checkpointed.
+		Usr 1 05:02:08, Sys 0 00:21:13  -  Run Remote Usage
+		Usr 0 00:00:00, Sys 0 00:00:00  -  Run Local Usage
+	0  -  Run Bytes Sent By Job
+	0  -  Run Bytes Received By Job
+	Partitionable Resources :    Usage  Request Allocated 
+	   Cpus                 :     1.04       16        24 
+	   Disk (KB)            :     4           4   5812856 
+	   Gpus                 :                           0 
+	   Memory (MB)          :  6177           1     15626 
+...
+009 (001.000.000) 06/01 16:19:08 Job was aborted by the user.
+	via condor_rm (by user fjk20)
+...

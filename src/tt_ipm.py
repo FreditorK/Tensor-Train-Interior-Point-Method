@@ -524,6 +524,13 @@ def tt_compute_centrality(X_tt, Z_tt, status):
     return centrality_feas
 
 
+def _tt_should_restore_primal(status):
+    if status.is_last_iter or status.is_primal_feasible or not status.is_dual_feasible:
+        return False
+    reference_error = max(status.dual_error, status.centrality_error, status.feasibility_tol)
+    return status.primal_error > 10.0 * reference_error
+
+
 def tt_infeasible_newton_system(
         lhs,
         obj_tt,
@@ -549,6 +556,9 @@ def tt_infeasible_newton_system(
     status.is_dual_feasible = np.less(status.dual_error, (1 + (status.ineq_status is IneqStatus.ACTIVE))*status.feasibility_tol)
 
     status.is_last_iter = status.is_last_iter or (status.is_primal_feasible and status.is_dual_feasible and status.is_central)
+    status.primal_restoration = _tt_should_restore_primal(status)
+    if status.primal_restoration:
+        status.aho_direction = False
 
     if status.aho_direction:
         lhs[2, 1] = tt_psd_rank_reduce(tt_scale(0.5, tt_add(tt_IkronM(Z_tt), tt_MkronI(Z_tt))), eps=status.rounding.operator_dual(status))
@@ -560,17 +570,17 @@ def tt_infeasible_newton_system(
     if not status.is_primal_feasible or status.is_last_iter:
         rhs[0] = primal_feas
 
-    if not status.is_dual_feasible or status.is_last_iter:
+    if (not status.is_dual_feasible or status.is_last_iter) and not status.primal_restoration:
         rhs[1] = dual_feas
 
-    if not status.is_central or status.is_last_iter:
+    if (not status.is_central or status.is_last_iter) and not status.primal_restoration:
         rhs[2] = tt_compute_centrality(X_tt, Z_tt, status)
 
     if status.ineq_status is IneqStatus.ACTIVE:
         lhs[3, 1] =  tt_diag_op(T_tt, status.rounding.operator_dual(status))
         masked_X_tt = tt_rank_reduce(tt_add(tt_scale(status.ineq_boundary_val, ineq_mask), tt_fast_hadamard(ineq_mask, X_tt, status.eps)), eps=status.eps)
         lhs[3, 3] = tt_rank_reduce(tt_add(status.lag_map_t, tt_diag_op(masked_X_tt, status.eps)), eps=status.rounding.operator_dual(status))
-        if not status.is_central or status.is_last_iter:
+        if (not status.is_central or status.is_last_iter) and not status.primal_restoration:
             rhs[3] = tt_rank_reduce(tt_reshape(tt_scale(-1, tt_fast_hadamard(masked_X_tt, T_tt, status.eps)), (4, )), eps=status.rounding.residual_centrality(status))
     return lhs, rhs, status
 
@@ -778,7 +788,11 @@ def _tt_ipm_newton_step(
             status
         )
 
-        if not status.is_central and not status.is_last_iter:
+        if status.primal_restoration:
+            x_step_size *= 0.5
+            z_step_size *= 0.5
+
+        if not status.primal_restoration and not status.is_central and not status.is_last_iter:
 
             DXZ = tt_inner_prod(Delta_X_tt, Delta_Z_tt)
             corrector_needed = False
@@ -1012,6 +1026,7 @@ class IPMStatus:
     primal_feas_norm: float = np.inf
     dual_feas_norm: float = np.inf
     eta = 1e-3
+    primal_restoration: bool = False
 
 
 def _ipm_format_output(X_tt, Y_tt, T_tt, Z_tt, iteration, status):
@@ -1075,7 +1090,7 @@ def _tt_rank_peak(tt):
 
 def _ipm_log_iteration(iteration, status, X_tt, Y_tt, Z_tt, T_tt):
     """Prints a compact progress line for the current iteration."""
-    phase = "finish" if status.is_last_iter else "main"
+    phase = "repair" if status.primal_restoration else ("finish" if status.is_last_iter else "main")
     direction = "AHO" if status.aho_direction else "XZ"
     feas_flags = "".join([
         "C" if status.is_central else "c",
@@ -1212,7 +1227,7 @@ def tt_ipm(
         iteration += 1
         status.aho_direction = (iteration > warm_up)
         if max_iter - max_refinement == iteration - 1 and not status.is_last_iter:
-            print("============================================\n Maximum #iterations reached!\n============================================")
+            print("warn   | ipm      | limit=max_iter | action=finish", flush=True)
             status.is_last_iter = True
         ZX = tt_inner_prod(Z_tt, X_tt)
         TX = tt_inner_prod(X_tt, T_tt) + status.ineq_boundary_val*tt_entrywise_sum(T_tt) if status.ineq_status is IneqStatus.ACTIVE else 0

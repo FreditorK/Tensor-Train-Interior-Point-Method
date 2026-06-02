@@ -1,0 +1,9 @@
+Running: max_stable (rank=4)
+==== max_stable TT-IPM Batch Run Started at Mon  1 Jun 16:31:55 BST 2026 ====
+/vol/bitbucket/fjk20/projects/Tensor-Train-Interior-Point-Method/tt_ipm.sh: line 105: cd: psd_system/max_stable: No such file or directory
+
+▶ Running dim=9 with config=configs/max_stable_9.yaml at Mon  1 Jun 16:31:55 BST 2026
+python: can't open file '/vol/bitbucket/fjk20/projects/Tensor-Train-Interior-Point-Method/max_stable.py': [Errno 2] No such file or directory
+❌ Error occurred for dim=9 (exit code 2)
+
+==== All runs completed at Mon  1 Jun 16:31:55 BST 2026 ====

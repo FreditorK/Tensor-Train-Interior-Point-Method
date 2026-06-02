@@ -1,0 +1,23 @@
+Running: max_stable_set (rank=3)
+==== max_stable_set TT-IPM Batch Run Started at Mon  1 Jun 16:55:15 BST 2026 ====
+
+▶ Running dim=9 with config=configs/max_stable_set_9.yaml at Mon  1 Jun 16:55:15 BST 2026
+
+===== Processing Rank: 3 =====
+Running seed 590
+Creating Problem...
+===Terminated Graph Sampling=== rank:  [2, 3, 2, 2, 3, 2, 2, 2]
+it 000 | main   | XZ  | ineq=not_in_use | mu=4.00e+00 eta=1.00e-03 sigma=5.00e-01 | err c/p/d=5.71e-01/2.55e+02/1.14e+01 | ok=cpd | rmax X/Y/Z/T=1/1/1/-
+it 001 | main   | XZ  | ineq=not_in_use | mu=5.89e-01 eta=1.00e-03 sigma=8.29e-02 | err c/p/d=6.25e-02/3.66e+01/4.07e+00 | ok=cpd | rmax X/Y/Z/T=6/4/6/-
+warn   | step-eig | target=miss | residual=1.84e-08 > 1.00e-08 | action=damp
+warn   | step-eig | target=miss | residual=1.88e-08 > 1.00e-08 | action=damp
+it 002 | main   | XZ  | ineq=not_in_use | mu=2.39e-01 eta=1.00e-03 sigma=4.86e-01 | err c/p/d=2.15e-02/1.38e+01/2.60e+00 | ok=cpd | rmax X/Y/Z/T=39/14/19/-
+it 003 | main   | AHO | ineq=not_in_use | mu=5.22e-02 eta=1.00e-03 sigma=6.08e-01 | err c/p/d=2.37e-02/1.39e+00/2.20e+00 | ok=cpd | rmax X/Y/Z/T=40/22/27/-
+warn   | step-eig | target=miss | residual=1.22e-08 > 1.00e-08 | action=damp
+it 004 | main   | AHO | ineq=not_in_use | mu=1.42e-02 eta=1.00e-03 sigma=1.48e-01 | err c/p/d=4.96e-03/9.76e-02/9.67e-01 | ok=cpd | rmax X/Y/Z/T=46/25/30/-
+warn   | step-eig | target=miss | residual=1.82e-08 > 1.00e-08 | action=damp
+it 005 | main   | AHO | ineq=not_in_use | mu=8.17e-03 eta=1.00e-03 sigma=8.45e-01 | err c/p/d=1.84e-03/4.75e-02/2.33e-01 | ok=cpd | rmax X/Y/Z/T=59/31/36/-
+warn   | step-eig | target=miss | residual=1.09e-08 > 1.00e-08 | action=damp
+warn   | step-eig | target=miss | residual=1.43e-08 > 1.00e-08 | action=damp
+it 006 | main   | AHO | ineq=not_in_use | mu=4.71e-03 eta=1.00e-03 sigma=6.55e-01 | err c/p/d=8.19e-04/2.59e-02/1.40e-01 | ok=cpd | rmax X/Y/Z/T=63/32/37/-
+it 007 | main   | AHO | ineq=not_in_use | mu=2.17e-03 eta=1.00e-03 sigma=6.62e-01 | err c/p/d=3.18e-04/1.78e-02/4.41e-02 | ok=cpd | rmax X/Y/Z/T=61/35/38/-

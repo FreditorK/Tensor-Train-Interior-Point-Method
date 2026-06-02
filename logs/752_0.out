@@ -1,7 +1,7 @@
 Running: corr_clust (rank=1)
-==== corr_clust TT-IPM Batch Run Started at Mon  1 Jun 13:51:03 BST 2026 ====
+==== corr_clust TT-IPM Batch Run Started at Mon  1 Jun 14:48:53 BST 2026 ====
 
-▶ Running dim=11 with config=configs/corr_clust_11.yaml at Mon  1 Jun 13:51:03 BST 2026
+▶ Running dim=11 with config=configs/corr_clust_11.yaml at Mon  1 Jun 14:48:53 BST 2026
 
 ===== Processing Rank: 1 =====
 Running seed 235
@@ -12,3 +12,4 @@ Actual graph TT-rank: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
 Obj TT-rank: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
 it 000 | main   | XZ  | ineq=active   | mu=4.00e+00 eta=1.00e-03 sigma=5.00e-01 | err c/p/d=2.40e-02/2.19e+01/2.31e+01 | ok=cpd | rmax X/Y/Z/T=1/1/1/1
 it 001 | main   | XZ  | ineq=inactive | mu=2.72e-01 eta=1.00e-03 sigma=1.03e-03 | err c/p/d=2.04e-02/9.42e-01/1.97e+01 | ok=cpd | rmax X/Y/Z/T=4/2/4/1
+it 002 | main   | XZ  | ineq=inactive | mu=8.41e-04 eta=1.00e-03 sigma=2.97e-02 | err c/p/d=4.98e-04/6.56e-01/1.40e+01 | ok=cpd | rmax X/Y/Z/T=4/2/4/1

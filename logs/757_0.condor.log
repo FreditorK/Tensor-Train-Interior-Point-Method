@@ -1,0 +1,96 @@
+000 (757.000.000) 06/01 17:30:08 Job submitted from host: <146.169.22.28:9618?addrs=146.169.22.28-9618+[2a0c-5bc0-80-110-494d-1845-2a15-2cd8]-9618&noUDP&sock=7662_6323_3>
+...
+001 (757.000.000) 06/01 17:30:52 Job executing on host: <146.169.52.2:9618?addrs=146.169.52.2-9618+[2a0c-5bc0-40-11c4-4128-2e6e-e43a-acea]-9618&noUDP&sock=55866_5263_4>
+...
+006 (757.000.000) 06/01 17:31:01 Image size of job updated: 2227012
+	56  -  MemoryUsage of job (MB)
+	56912  -  ResidentSetSize of job (KB)
+...
+006 (757.000.000) 06/01 17:36:02 Image size of job updated: 9353324
+	403  -  MemoryUsage of job (MB)
+	412556  -  ResidentSetSize of job (KB)
+...
+006 (757.000.000) 06/01 17:41:02 Image size of job updated: 10052356
+	877  -  MemoryUsage of job (MB)
+	898016  -  ResidentSetSize of job (KB)
+...
+006 (757.000.000) 06/01 17:46:02 Image size of job updated: 12380444
+	973  -  MemoryUsage of job (MB)
+	995368  -  ResidentSetSize of job (KB)
+...
+006 (757.000.000) 06/01 17:51:03 Image size of job updated: 12380444
+	3775  -  MemoryUsage of job (MB)
+	3864600  -  ResidentSetSize of job (KB)
+...
+006 (757.000.000) 06/01 17:56:04 Image size of job updated: 13443012
+	5035  -  MemoryUsage of job (MB)
+	5155328  -  ResidentSetSize of job (KB)
+...
+006 (757.000.000) 06/01 18:01:04 Image size of job updated: 18333020
+	9836  -  MemoryUsage of job (MB)
+	10071752  -  ResidentSetSize of job (KB)
+...
+006 (757.000.000) 06/01 18:06:05 Image size of job updated: 18813032
+	10276  -  MemoryUsage of job (MB)
+	10522376  -  ResidentSetSize of job (KB)
+...
+006 (757.000.000) 06/01 18:16:06 Image size of job updated: 18813032
+	10575  -  MemoryUsage of job (MB)
+	10828276  -  ResidentSetSize of job (KB)
+...
+006 (757.000.000) 06/01 18:51:10 Image size of job updated: 22404172
+	11209  -  MemoryUsage of job (MB)
+	11477336  -  ResidentSetSize of job (KB)
+...
+006 (757.000.000) 06/01 18:56:11 Image size of job updated: 22404172
+	12146  -  MemoryUsage of job (MB)
+	12436952  -  ResidentSetSize of job (KB)
+...
+004 (757.000.000) 06/01 20:30:53 Job was evicted.
+	(0) Job was not checkpointed.
+		Usr 1 07:39:09, Sys 0 00:14:54  -  Run Remote Usage
+		Usr 0 00:00:00, Sys 0 00:00:00  -  Run Local Usage
+	0  -  Run Bytes Sent By Job
+	0  -  Run Bytes Received By Job
+	Partitionable Resources :    Usage  Request Allocated 
+	   Cpus                 :    10.65       16        24 
+	   Disk (KB)            :     4           4   5755912 
+	   Gpus                 :                           0 
+	   Memory (MB)          : 12146           1     15626 
+...
+001 (757.000.000) 06/01 20:43:54 Job executing on host: <146.169.53.176:9618?addrs=146.169.53.176-9618+[2a0c-5bc0-40-11c4-2670-7067-47fc-35ad]-9618&noUDP&sock=53652_b3b4_4>
+...
+004 (757.000.000) 06/01 21:44:54 Job was evicted.
+	(0) Job was not checkpointed.
+		Usr 0 07:33:01, Sys 0 00:11:41  -  Run Remote Usage
+		Usr 0 00:00:00, Sys 0 00:00:00  -  Run Local Usage
+	0  -  Run Bytes Sent By Job
+	0  -  Run Bytes Received By Job
+	Partitionable Resources :    Usage  Request Allocated 
+	   Cpus                 :    12.14       16        24 
+	   Disk (KB)            :     4           4   5745072 
+	   Gpus                 :                           0 
+	   Memory (MB)          : 12208       12208     15626 
+...
+001 (757.000.000) 06/01 22:14:56 Job executing on host: <146.169.53.195:9618?addrs=146.169.53.195-9618+[2a0c-5bc0-40-11c4-9f39-33b8-f84-4e84]-9618&noUDP&sock=53502_d080_4>
+...
+006 (757.000.000) 06/02 00:35:17 Image size of job updated: 22671684
+	12208  -  MemoryUsage of job (MB)
+	12500000  -  ResidentSetSize of job (KB)
+...
+005 (757.000.000) 06/02 02:03:50 Job terminated.
+	(1) Normal termination (return value 0)
+		Usr 1 15:14:03, Sys 0 00:21:22  -  Run Remote Usage
+		Usr 0 00:00:00, Sys 0 00:00:00  -  Run Local Usage
+		Usr 1 15:14:03, Sys 0 00:21:22  -  Total Remote Usage
+		Usr 0 00:00:00, Sys 0 00:00:00  -  Total Local Usage
+	0  -  Run Bytes Sent By Job
+	0  -  Run Bytes Received By Job
+	0  -  Total Bytes Sent By Job
+	0  -  Total Bytes Received By Job
+	Partitionable Resources :    Usage  Request Allocated 
+	   Cpus                 :     9.08       16        24 
+	   Disk (KB)            :     4           4   5804644 
+	   Gpus                 :                           0 
+	   Memory (MB)          : 12208       12208     15626 
+...

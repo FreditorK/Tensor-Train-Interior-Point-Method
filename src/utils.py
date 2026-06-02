@@ -155,6 +155,7 @@ def run_experiment(create_problem_fn):
 
     parser = argparse.ArgumentParser(description="Script with optional memory tracking.")
     parser.add_argument("--track_mem", action="store_true", help="Enable memory tracking from a certain point.")
+    parser.add_argument("--terminal_only", action="store_true", help="Print to terminal without writing result files.")
     parser.add_argument("--rank", type=int, default=1, help="Rank of the process (default: 1)")
     parser.add_argument("--config", type=str, required=True, help="Path to the YAML configuration file")
     args = parser.parse_args()
@@ -230,14 +231,15 @@ def run_experiment(create_problem_fn):
         ranksT=ranksT,
         memory=memory
     )
-    save_results_summary(
-        config, rank, args,
-        runtimes, problem_creation_times, num_iters,
-        feasibility_errors, dual_feasibility_errors, complementary_slackness,
-        ranksX, ranksY, ranksZ,
-        ranksT=ranksT,
-        memory=memory
-    )
+    if not args.terminal_only:
+        save_results_summary(
+            config, rank, args,
+            runtimes, problem_creation_times, num_iters,
+            feasibility_errors, dual_feasibility_errors, complementary_slackness,
+            ranksX, ranksY, ranksZ,
+            ranksT=ranksT,
+            memory=memory
+        )
 
 
 def format_ranks_with_std(mean_array, std_array, precision=1):

@@ -1,0 +1,160 @@
+Running: maxcut (rank=4)
+==== maxcut TT-IPM Batch Run Started at Mon  1 Jun 22:14:59 BST 2026 ====
+
+▶ Running dim=10 with config=configs/maxcut_10.yaml at Mon  1 Jun 22:14:59 BST 2026
+
+===== Processing Rank: 4 =====
+Running seed 328
+Creating Problem for dim=10, rank=4...
+===Terminated Graph Sampling=== rank:  [2, 2, 3, 4, 4, 4, 4, 3, 2]
+it 000 | main   | XZ  | ineq=not_in_use | mu=1.00e+00 eta=1.00e-03 sigma=5.00e-01 | err c/p/d=1.04e-02/7.25e+00/8.74e+00 | ok=cpd | rmax X/Y/Z/T=1/1/1/-
+it 001 | main   | XZ  | ineq=not_in_use | mu=9.30e-02 eta=1.00e-03 sigma=3.73e-03 | err c/p/d=7.25e-03/2.41e-01/7.45e+00 | ok=cpd | rmax X/Y/Z/T=7/4/7/-
+it 002 | main   | XZ  | ineq=not_in_use | mu=7.86e-03 eta=1.00e-03 sigma=1.58e-02 | err c/p/d=1.05e-03/2.05e-01/4.59e-02 | ok=cpd | rmax X/Y/Z/T=22/4/8/-
+it 003 | main   | AHO | ineq=not_in_use | mu=8.47e-03 eta=1.00e-03 sigma=8.57e-01 | err c/p/d=7.02e-04/1.69e-01/2.86e-02 | ok=cpd | rmax X/Y/Z/T=28/4/8/-
+it 004 | main   | AHO | ineq=not_in_use | mu=3.86e-03 eta=1.00e-03 sigma=7.27e-01 | err c/p/d=2.94e-04/3.36e-02/7.57e-03 | ok=cpd | rmax X/Y/Z/T=35/4/9/-
+it 005 | repair | XZ  | ineq=not_in_use | mu=3.07e-03 eta=1.00e-03 sigma=7.22e-01 | err c/p/d=2.28e-04/2.68e-02/2.77e-04 | ok=cpD | rmax X/Y/Z/T=35/4/9/-
+it 006 | repair | XZ  | ineq=not_in_use | mu=3.08e-03 eta=1.00e-03 sigma=0.00e+00 | err c/p/d=2.32e-04/1.46e-02/2.77e-04 | ok=cpD | rmax X/Y/Z/T=34/4/9/-
+it 007 | repair | XZ  | ineq=not_in_use | mu=3.08e-03 eta=1.00e-03 sigma=0.00e+00 | err c/p/d=2.35e-04/7.72e-03/2.77e-04 | ok=cpD | rmax X/Y/Z/T=34/4/9/-
+it 008 | main   | AHO | ineq=not_in_use | mu=3.08e-03 eta=1.00e-03 sigma=0.00e+00 | err c/p/d=2.36e-04/4.08e-03/2.77e-04 | ok=cpD | rmax X/Y/Z/T=34/4/9/-
+it 009 | main   | AHO | ineq=not_in_use | mu=1.16e-03 eta=1.00e-03 sigma=3.68e-01 | err c/p/d=7.76e-05/1.89e-03/2.77e-04 | ok=CpD | rmax X/Y/Z/T=37/4/9/-
+it 010 | main   | AHO | ineq=not_in_use | mu=1.16e-03 eta=1.00e-03 sigma=0.00e+00 | err c/p/d=7.80e-05/6.96e-04/2.76e-04 | ok=CpD | rmax X/Y/Z/T=36/4/9/-
+it 011 | main   | AHO | ineq=not_in_use | mu=1.17e-03 eta=1.00e-03 sigma=0.00e+00 | err c/p/d=7.84e-05/6.88e-04/2.76e-04 | ok=CpD | rmax X/Y/Z/T=35/4/9/-
+it 012 | finish | AHO | ineq=not_in_use | mu=1.17e-03 eta=1.00e-03 sigma=0.00e+00 | err c/p/d=7.85e-05/3.52e-05/2.76e-04 | ok=CPD | rmax X/Y/Z/T=35/4/9/-
+it 013 | finish | AHO | ineq=not_in_use | mu=2.54e-04 eta=5.08e-04 sigma=0.00e+00 | err c/p/d=1.61e-05/4.78e-04/4.79e-05 | ok=CPD | rmax X/Y/Z/T=36/4/9/-
+it 014 | finish | AHO | ineq=not_in_use | mu=2.21e-04 eta=4.41e-04 sigma=0.00e+00 | err c/p/d=1.40e-05/5.86e-04/4.54e-06 | ok=CPD | rmax X/Y/Z/T=36/4/9/-
+it 015 | finish | AHO | ineq=not_in_use | mu=1.83e-05 eta=1.00e-04 sigma=0.00e+00 | err c/p/d=1.15e-06/3.47e-04/2.23e-06 | ok=CPD | rmax X/Y/Z/T=37/4/9/-
+it 016 | finish | AHO | ineq=not_in_use | mu=2.94e-06 eta=1.00e-04 sigma=0.00e+00 | err c/p/d=1.83e-07/1.36e-04/7.43e-07 | ok=CPD | rmax X/Y/Z/T=38/4/9/-
+it 017 | finish | AHO | ineq=not_in_use | mu=6.52e-07 eta=1.00e-04 sigma=0.00e+00 | err c/p/d=4.07e-08/7.05e-05/1.20e-07 | ok=CPD | rmax X/Y/Z/T=38/4/9/-
+---Terminated---
+Terminated in 17 iterations.
+Ranks: X=[5, 7, 11, 38, 25, 21, 17, 9, 5], Z=[4, 5, 6, 9, 7, 7, 7, 6, 4], Y=[2, 2, 2, 4, 2, 2, 2, 2, 2], T=[0, 0, 0, 0, 0, 0, 0, 0, 0]
+Run accepted after 17 iterations. Compl Slackness: 6.6776e-04. Feasibility error: 7.9637e-08. Dual Feasibility error: 1.1608e-12.
+Run accepted in 137.94s. Memory: 763.38 MB.
+Running seed 23
+Creating Problem for dim=10, rank=4...
+===Terminated Graph Sampling=== rank:  [2, 3, 3, 4, 4, 4, 2, 1, 1]
+it 000 | main   | XZ  | ineq=not_in_use | mu=1.00e+00 eta=1.00e-03 sigma=5.00e-01 | err c/p/d=2.06e-02/7.25e+00/8.40e+00 | ok=cpd | rmax X/Y/Z/T=1/1/1/-
+it 001 | main   | XZ  | ineq=not_in_use | mu=1.18e-01 eta=1.00e-03 sigma=1.90e-02 | err c/p/d=1.39e-02/4.91e-01/7.14e+00 | ok=cpd | rmax X/Y/Z/T=18/3/8/-
+it 002 | main   | XZ  | ineq=not_in_use | mu=5.96e-03 eta=1.00e-03 sigma=2.77e-02 | err c/p/d=1.95e-03/4.22e-01/9.92e-01 | ok=cpd | rmax X/Y/Z/T=26/3/9/-
+it 003 | main   | AHO | ineq=not_in_use | mu=1.43e-02 eta=1.00e-03 sigma=9.90e-01 | err c/p/d=1.71e-03/3.42e-01/8.47e-01 | ok=cpd | rmax X/Y/Z/T=46/5/10/-
+it 004 | main   | AHO | ineq=not_in_use | mu=6.35e-03 eta=1.00e-03 sigma=6.64e-01 | err c/p/d=8.30e-04/1.50e-01/6.54e-02 | ok=cpd | rmax X/Y/Z/T=51/5/10/-
+it 005 | main   | AHO | ineq=not_in_use | mu=3.11e-03 eta=1.00e-03 sigma=6.86e-01 | err c/p/d=4.00e-04/7.64e-02/4.11e-03 | ok=cpd | rmax X/Y/Z/T=51/5/10/-
+
+	⚠️ Attention: SVD did not converge
+
+	==> Full traceback (most recent call last):
+Traceback (most recent call last):
+  File "/vol/bitbucket/fjk20/projects/Tensor-Train-Interior-Point-Method/psd_system/maxcut/../../src/tt_ipm.py", line 857, in _tt_ipm_newton_step
+    Delta_tt_cc, _ = solver(lhs_cc_tt, rhs_cc_tt, status.mals_delta0, status.kkt_iterations + status.is_last_iter, status.mals_rank_restriction, status.eta)
+                     ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/vol/bitbucket/fjk20/projects/Tensor-Train-Interior-Point-Method/psd_system/maxcut/../../src/tt_ipm.py", line 1189, in <lambda>
+    solver_eq = lambda lhs, rhs, x0, nwsp, restriction, termination_tol, strict_first_attempt=False: tt_restarted_block_amen(
+                                                                                                     ~~~~~~~~~~~~~~~~~~~~~~~^
+        lhs,
+        ^^^^
+    ...<9 lines>...
+        strict_first_attempt=strict_first_attempt
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/vol/bitbucket/fjk20/projects/Tensor-Train-Interior-Point-Method/psd_system/maxcut/../../src/tt_als.py", line 785, in tt_restarted_block_amen
+    x_cores, res = solve_als(rhs, rank_restriction, x0, inner_m, 2)
+                   ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/vol/bitbucket/fjk20/projects/Tensor-Train-Interior-Point-Method/psd_system/maxcut/../../src/tt_als.py", line 763, in solve_als
+    return tt_block_amen(
+        block_A, rhs, termination_tol, r_max=rank, eps=eps, nswp=iters, x0=x0, local_solver=local_solver, kick_rank=kick_rank, amen=True, verbose=verbose
+    )
+  File "/vol/bitbucket/fjk20/projects/Tensor-Train-Interior-Point-Method/psd_system/maxcut/../../src/tt_als.py", line 594, in tt_block_amen
+    x_cores, z_cores, XAX, Xb, rx, local_res, local_dx, direct_solve_failure = _bck_sweep(
+                                                                               ~~~~~~~~~~^
+        local_solver,
+        ^^^^^^^^^^^^^
+    ...<20 lines>...
+        direct_solve_failure
+        ^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/vol/bitbucket/fjk20/projects/Tensor-Train-Interior-Point-Method/psd_system/maxcut/../../src/tt_als.py", line 331, in _bck_sweep
+    u, s, v = scp.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True)
+              ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/homes/fjk20/miniforge3/envs/ttipm/lib/python3.14/site-packages/scipy/_lib/_util.py", line 1181, in wrapper
+    return f(*arrays, *other_args, **kwargs)
+  File "/homes/fjk20/miniforge3/envs/ttipm/lib/python3.14/site-packages/scipy/linalg/_decomp_svd.py", line 170, in svd
+    raise LinAlgError("SVD did not converge")
+numpy.linalg.LinAlgError: SVD did not converge
+============================================
+ Hit PSD boundary! Entering finishing phase.
+============================================
+it 006 | finish | AHO | ineq=not_in_use | mu=3.11e-03 eta=1.00e-03 sigma=6.69e-01 | err c/p/d=4.00e-04/7.64e-02/4.11e-03 | ok=cpd | rmax X/Y/Z/T=51/5/10/-
+	Attention: dropping warm start with block core at index 2; expected boundary core.
+it 007 | finish | AHO | ineq=not_in_use | mu=2.01e-03 eta=1.00e-03 sigma=0.00e+00 | err c/p/d=2.50e-04/3.66e-02/3.22e-03 | ok=cpd | rmax X/Y/Z/T=51/5/10/-
+it 008 | finish | AHO | ineq=not_in_use | mu=1.11e-03 eta=1.00e-03 sigma=0.00e+00 | err c/p/d=1.36e-04/2.86e-02/1.25e-03 | ok=cpd | rmax X/Y/Z/T=51/5/10/-
+it 009 | finish | AHO | ineq=not_in_use | mu=4.04e-04 eta=8.07e-04 sigma=0.00e+00 | err c/p/d=4.84e-05/1.57e-02/9.64e-05 | ok=CpD | rmax X/Y/Z/T=51/5/10/-
+it 010 | finish | AHO | ineq=not_in_use | mu=7.25e-05 eta=1.45e-04 sigma=0.00e+00 | err c/p/d=8.51e-06/3.18e-03/3.78e-04 | ok=CpD | rmax X/Y/Z/T=54/4/9/-
+it 011 | finish | AHO | ineq=not_in_use | mu=4.74e-06 eta=1.00e-04 sigma=0.00e+00 | err c/p/d=5.54e-07/2.62e-04/7.55e-05 | ok=CPD | rmax X/Y/Z/T=64/4/9/-
+---Terminated---
+Terminated in 11 iterations.
+Ranks: X=[5, 9, 11, 37, 64, 36, 10, 6, 3], Z=[4, 5, 6, 9, 9, 9, 6, 5, 3], Y=[2, 2, 2, 4, 3, 3, 2, 2, 2], T=[0, 0, 0, 0, 0, 0, 0, 0, 0]
+Run accepted after 11 iterations. Compl Slackness: 4.8502e-03. Feasibility error: 1.1019e-06. Dual Feasibility error: 9.1217e-08.
+Run accepted in 279.56s. Memory: 523.35 MB.
+Running seed 836
+Creating Problem for dim=10, rank=4...
+===Terminated Graph Sampling=== rank:  [1, 1, 3, 3, 4, 2, 3, 2, 2]
+it 000 | main   | XZ  | ineq=not_in_use | mu=1.00e+00 eta=1.00e-03 sigma=5.00e-01 | err c/p/d=1.68e-02/7.25e+00/8.48e+00 | ok=cpd | rmax X/Y/Z/T=1/1/1/-
+it 001 | main   | XZ  | ineq=not_in_use | mu=1.12e-01 eta=1.00e-03 sigma=1.37e-02 | err c/p/d=1.15e-02/4.31e-01/7.21e+00 | ok=cpd | rmax X/Y/Z/T=17/5/10/-
+it 002 | main   | XZ  | ineq=not_in_use | mu=6.79e-03 eta=1.00e-03 sigma=2.58e-02 | err c/p/d=1.76e-03/3.69e-01/7.22e-01 | ok=cpd | rmax X/Y/Z/T=24/5/10/-
+it 003 | main   | AHO | ineq=not_in_use | mu=1.39e-02 eta=1.00e-03 sigma=9.90e-01 | err c/p/d=1.52e-03/3.00e-01/6.01e-01 | ok=cpd | rmax X/Y/Z/T=51/6/10/-
+it 004 | main   | AHO | ineq=not_in_use | mu=8.31e-03 eta=1.00e-03 sigma=6.84e-01 | err c/p/d=8.69e-04/2.15e-01/1.78e-01 | ok=cpd | rmax X/Y/Z/T=71/8/12/-
+it 005 | main   | AHO | ineq=not_in_use | mu=4.31e-03 eta=1.00e-03 sigma=5.90e-01 | err c/p/d=4.58e-04/9.70e-02/3.44e-02 | ok=cpd | rmax X/Y/Z/T=73/8/12/-
+it 006 | main   | AHO | ineq=not_in_use | mu=2.31e-03 eta=1.00e-03 sigma=6.75e-01 | err c/p/d=2.36e-04/4.44e-02/1.79e-03 | ok=cpd | rmax X/Y/Z/T=73/8/12/-
+it 007 | main   | AHO | ineq=not_in_use | mu=7.45e-04 eta=1.00e-03 sigma=5.16e-01 | err c/p/d=7.19e-05/5.08e-03/7.66e-05 | ok=CpD | rmax X/Y/Z/T=73/8/12/-
+it 008 | finish | AHO | ineq=not_in_use | mu=7.45e-04 eta=1.00e-03 sigma=0.00e+00 | err c/p/d=7.23e-05/2.55e-04/7.66e-05 | ok=CPD | rmax X/Y/Z/T=73/8/12/-
+it 009 | finish | AHO | ineq=not_in_use | mu=3.23e-04 eta=6.46e-04 sigma=0.00e+00 | err c/p/d=3.07e-05/3.39e-04/2.96e-05 | ok=CPD | rmax X/Y/Z/T=73/8/12/-
+it 010 | finish | AHO | ineq=not_in_use | mu=9.15e-05 eta=1.83e-04 sigma=0.00e+00 | err c/p/d=8.60e-06/4.33e-04/4.69e-06 | ok=CPD | rmax X/Y/Z/T=73/8/12/-
+it 011 | finish | AHO | ineq=not_in_use | mu=5.75e-06 eta=1.00e-04 sigma=0.00e+00 | err c/p/d=5.37e-07/1.79e-04/6.32e-06 | ok=CPD | rmax X/Y/Z/T=74/8/12/-
+it 012 | finish | AHO | ineq=not_in_use | mu=1.32e-06 eta=1.00e-04 sigma=0.00e+00 | err c/p/d=1.23e-07/9.88e-05/4.54e-05 | ok=CPD | rmax X/Y/Z/T=102/8/12/-
+it 013 | finish | AHO | ineq=not_in_use | mu=9.04e-07 eta=1.00e-04 sigma=0.00e+00 | err c/p/d=8.43e-08/9.15e-05/3.36e-05 | ok=CPD | rmax X/Y/Z/T=116/8/12/-
+---Terminated---
+Terminated in 13 iterations.
+Ranks: X=[3, 4, 11, 15, 48, 116, 65, 17, 5], Z=[3, 4, 7, 7, 10, 11, 12, 7, 4], Y=[1, 1, 2, 2, 4, 8, 8, 4, 2], T=[0, 0, 0, 0, 0, 0, 0, 0, 0]
+Run accepted after 13 iterations. Compl Slackness: 9.2568e-04. Feasibility error: 1.3394e-07. Dual Feasibility error: 1.8061e-08.
+Run accepted in 2809.52s. Memory: 6669.44 MB.
+Running seed 837
+Creating Problem for dim=10, rank=4...
+===Terminated Graph Sampling=== rank:  [2, 2, 2, 2, 3, 4, 4, 2, 2]
+it 000 | main   | XZ  | ineq=not_in_use | mu=1.00e+00 eta=1.00e-03 sigma=5.00e-01 | err c/p/d=1.65e-02/7.25e+00/8.49e+00 | ok=cpd | rmax X/Y/Z/T=1/1/1/-
+it 001 | main   | XZ  | ineq=not_in_use | mu=1.08e-01 eta=1.00e-03 sigma=1.08e-02 | err c/p/d=1.12e-02/3.94e-01/7.22e+00 | ok=cpd | rmax X/Y/Z/T=15/5/9/-
+it 002 | main   | XZ  | ineq=not_in_use | mu=8.63e-03 eta=1.00e-03 sigma=2.44e-02 | err c/p/d=2.07e-03/3.36e-01/2.19e-01 | ok=cpd | rmax X/Y/Z/T=44/6/11/-
+it 003 | main   | AHO | ineq=not_in_use | mu=1.66e-02 eta=1.00e-03 sigma=9.90e-01 | err c/p/d=1.81e-03/2.73e-01/1.85e-01 | ok=cpd | rmax X/Y/Z/T=102/8/14/-
+warn   | step-eig | target=miss | residual=4.67e-03 > 1.00e-08 | action=damp
+it 004 | main   | AHO | ineq=not_in_use | mu=1.12e-02 eta=1.00e-03 sigma=9.43e-01 | err c/p/d=1.17e-03/2.07e-01/1.50e-01 | ok=cpd | rmax X/Y/Z/T=174/12/17/-
+warn   | step-eig | target=miss | residual=3.46e-03 > 1.00e-08 | action=damp
+it 005 | main   | AHO | ineq=not_in_use | mu=7.56e-03 eta=1.00e-03 sigma=4.50e-01 | err c/p/d=7.87e-04/2.08e-01/5.39e-02 | ok=cpd | rmax X/Y/Z/T=168/12/17/-
+it 006 | main   | AHO | ineq=not_in_use | mu=5.77e-03 eta=1.00e-03 sigma=5.56e-01 | err c/p/d=5.66e-04/1.54e-01/4.40e-02 | ok=cpd | rmax X/Y/Z/T=202/12/17/-
+it 007 | main   | AHO | ineq=not_in_use | mu=3.96e-03 eta=1.00e-03 sigma=6.11e-01 | err c/p/d=3.79e-04/1.03e-01/7.81e-03 | ok=cpd | rmax X/Y/Z/T=206/12/17/-
+it 008 | main   | AHO | ineq=not_in_use | mu=1.23e-03 eta=1.00e-03 sigma=5.27e-01 | err c/p/d=1.08e-04/1.36e-02/3.53e-03 | ok=cpd | rmax X/Y/Z/T=222/12/17/-
+it 009 | main   | AHO | ineq=not_in_use | mu=3.62e-04 eta=7.24e-04 sigma=5.87e-01 | err c/p/d=3.04e-05/1.36e-03/1.26e-03 | ok=Cpd | rmax X/Y/Z/T=239/11/17/-
+it 010 | main   | AHO | ineq=not_in_use | mu=3.67e-04 eta=7.24e-04 sigma=0.00e+00 | err c/p/d=3.08e-05/6.67e-04/7.02e-05 | ok=CpD | rmax X/Y/Z/T=234/12/17/-
+it 011 | finish | AHO | ineq=not_in_use | mu=3.71e-04 eta=7.24e-04 sigma=0.00e+00 | err c/p/d=3.11e-05/5.81e-04/7.03e-05 | ok=CPD | rmax X/Y/Z/T=230/12/17/-
+it 012 | finish | AHO | ineq=not_in_use | mu=1.40e-04 eta=2.80e-04 sigma=0.00e+00 | err c/p/d=1.16e-05/1.02e-03/6.23e-04 | ok=Cpd | rmax X/Y/Z/T=239/11/16/-
+Terminated
+❌ Error occurred for dim=10 (exit code 143)
+Process MemTimer-4:
+
+==== All runs completed at Tue  2 Jun 02:03:50 BST 2026 ====
+Traceback (most recent call last):
+  File "/homes/fjk20/miniforge3/envs/ttipm/lib/python3.14/multiprocessing/process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "/homes/fjk20/miniforge3/envs/ttipm/lib/python3.14/site-packages/memory_profiler.py", line 265, in run
+    self.pipe.send(self.mem_usage)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+  File "/homes/fjk20/miniforge3/envs/ttipm/lib/python3.14/multiprocessing/connection.py", line 216, in send
+    self._send_bytes(_ForkingPickler.dumps(obj))
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/homes/fjk20/miniforge3/envs/ttipm/lib/python3.14/multiprocessing/connection.py", line 448, in _send_bytes
+    self._send(header + buf)
+    ~~~~~~~~~~^^^^^^^^^^^^^^
+  File "/homes/fjk20/miniforge3/envs/ttipm/lib/python3.14/multiprocessing/connection.py", line 404, in _send
+    n = write(self._handle, buf)
+BrokenPipeError: [Errno 32] Broken pipe
