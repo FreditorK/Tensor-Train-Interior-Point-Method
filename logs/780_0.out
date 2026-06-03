@@ -74,3 +74,5 @@ it 013 | finish | AHO | ineq=active   | mu=4.64e-04 eta=8.90e-04 sigma=0.00e+00 
 it 014 | finish | AHO | ineq=active   | mu=3.31e-04 eta=6.62e-04 sigma=0.00e+00 | err c/p/d=4.73e-05/9.51e-04/2.72e-03 | ok=Cpd | rmax X/Y/Z/T=248/6/44/38
 it 015 | finish | AHO | ineq=active   | mu=2.36e-04 eta=4.72e-04 sigma=0.00e+00 | err c/p/d=3.17e-05/1.04e-03/3.43e-03 | ok=Cpd | rmax X/Y/Z/T=252/6/41/36
 it 016 | finish | AHO | ineq=active   | mu=1.81e-04 eta=3.63e-04 sigma=0.00e+00 | err c/p/d=2.36e-05/1.08e-03/3.70e-03 | ok=Cpd | rmax X/Y/Z/T=255/6/41/34
+it 017 | finish | AHO | ineq=active   | mu=1.67e-04 eta=3.34e-04 sigma=0.00e+00 | err c/p/d=2.15e-05/1.29e-03/3.94e-03 | ok=Cpd | rmax X/Y/Z/T=256/6/40/33
+it 018 | finish | AHO | ineq=active   | mu=1.19e-04 eta=2.38e-04 sigma=0.00e+00 | err c/p/d=1.50e-05/1.09e-03/3.24e-03 | ok=Cpd | rmax X/Y/Z/T=256/5/41/35

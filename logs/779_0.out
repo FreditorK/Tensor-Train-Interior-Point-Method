@@ -14,3 +14,6 @@ it 000 | main   | XZ  | ineq=active   | mu=4.00e+00 eta=1.00e-03 sigma=5.00e-01 
 it 001 | main   | XZ  | ineq=inactive | mu=2.65e-01 eta=1.00e-03 sigma=1.49e-03 | err c/p/d=4.07e-02/4.64e-01/1.39e+01 | ok=cpd | rmax X/Y/Z/T=3/2/3/1
 it 002 | main   | XZ  | ineq=inactive | mu=5.02e-03 eta=1.00e-03 sigma=2.69e-02 | err c/p/d=1.95e-03/4.03e-01/4.06e+00 | ok=cpd | rmax X/Y/Z/T=3/2/3/1
 it 003 | main   | AHO | ineq=inactive | mu=1.64e-03 eta=1.00e-03 sigma=1.95e-01 | err c/p/d=2.77e-04/3.32e-01/2.30e+00 | ok=cpd | rmax X/Y/Z/T=3/2/3/1
+it 004 | main   | AHO | ineq=inactive | mu=1.66e-04 eta=3.32e-04 sigma=2.13e-02 | err c/p/d=5.30e-05/2.82e-01/8.71e-02 | ok=Cpd | rmax X/Y/Z/T=4/2/3/1
+it 005 | main   | AHO | ineq=inactive | mu=1.84e-04 eta=3.32e-04 sigma=0.00e+00 | err c/p/d=4.26e-05/2.08e-02/4.60e-02 | ok=Cpd | rmax X/Y/Z/T=7/2/3/1
+it 006 | main   | AHO | ineq=inactive | mu=1.84e-04 eta=3.32e-04 sigma=0.00e+00 | err c/p/d=4.17e-05/6.84e-04/2.30e-03 | ok=Cpd | rmax X/Y/Z/T=7/2/3/1

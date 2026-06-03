@@ -8,8 +8,8 @@ max_refinement: 5
 op_tol: 0.0001
 seeds:
 - 633
-- 9313
-- 724
+- 552
+- 53
 - 22
 - 899
 verbose: true

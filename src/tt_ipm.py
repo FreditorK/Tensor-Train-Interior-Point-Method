@@ -1128,14 +1128,24 @@ def _ipm_check_convergence(status, finishing_steps, ZX, TX, abs_tol, max_refinem
     return status, finishing_steps
 
 
-def _ipm_finish_merit(status):
-    return max(status.centrality_error, status.primal_error, status.dual_error)
+def _ipm_finish_merit(status, ZX, TX):
+    raw_slack = abs(ZX) + abs(TX)
+    primal_sq = status.primal_feas_norm ** 2
+    dual_sq = status.dual_feas_norm ** 2
+    return max(raw_slack, primal_sq, dual_sq)
 
 
 def _tt_copy_state(X_tt, Y_tt, T_tt, Z_tt, status):
     def copy_train(tt):
         return None if tt is None else [core.copy() for core in tt]
     return copy_train(X_tt), copy_train(Y_tt), copy_train(T_tt), copy_train(Z_tt), copy.copy(status)
+
+
+def _tt_reset_step_eigen_warm_starts(status):
+    status.eigen_x0 = None
+    status.eigen_z0 = None
+    status.eigen_xt0 = None
+    status.eigen_zt0 = None
 
 
 def _ipm_trace(status, stage, message="", t0=None):
@@ -1326,7 +1336,7 @@ def tt_ipm(
         _ipm_trace(status, "system", f"rhs_rows={list(rhs_vec_tt.keys())}", t0)
 
         if status.is_last_iter:
-            finish_merit = _ipm_finish_merit(status)
+            finish_merit = _ipm_finish_merit(status, ZX, TX)
             if finish_prev_state is not None and finish_merit > finish_prev_merit * (1 + 1e-8) + 1e-12:
                 X_tt, Y_tt, T_tt, Z_tt, status = finish_prev_state
                 iteration -= 1
@@ -1386,12 +1396,14 @@ def tt_ipm(
                 solver = solver_eq
                 lhs = lhs_skeleton.get_submatrix(2, 2)
                 status.mals_delta0 = None
+                _tt_reset_step_eigen_warm_starts(status)
                 status.ineq_status = IneqStatus.INACTIVE
             elif status.ineq_status is IneqStatus.SETTING_ACTIVE:
                 _ipm_trace(status, "ineq", "switch inactive->active")
                 solver = solver_ineq
                 lhs = lhs_skeleton
                 status.mals_delta0 = None
+                _tt_reset_step_eigen_warm_starts(status)
                 status.ineq_status = IneqStatus.ACTIVE
 
         if _ipm_check_for_stalled_progress(prev_errors, status, gap_tol):

@@ -99,3 +99,96 @@ it 011 | main   | AHO | ineq=not_in_use | mu=5.89e-03 eta=1.00e-03 sigma=4.64e-0
 it 012 | main   | AHO | ineq=not_in_use | mu=5.89e-03 eta=1.00e-03 sigma=4.65e-01 | err c/p/d=2.10e-03/1.66e-01/4.07e-01 | ok=cpd | rmax X/Y/Z/T=65/58/66/-
 it 013 | main   | AHO | ineq=not_in_use | mu=5.89e-03 eta=1.00e-03 sigma=4.64e-01 | err c/p/d=2.10e-03/1.66e-01/4.06e-01 | ok=cpd | rmax X/Y/Z/T=65/58/66/-
 it 014 | main   | AHO | ineq=not_in_use | mu=5.89e-03 eta=1.00e-03 sigma=4.65e-01 | err c/p/d=2.10e-03/1.66e-01/4.06e-01 | ok=cpd | rmax X/Y/Z/T=65/58/66/-
+it 015 | main   | AHO | ineq=not_in_use | mu=5.89e-03 eta=1.00e-03 sigma=4.64e-01 | err c/p/d=2.10e-03/1.66e-01/4.06e-01 | ok=cpd | rmax X/Y/Z/T=65/58/66/-
+warn   | step-eig | target=miss | relres=inf > 1.00e-08 | action=keep-reset
+warn   | step-eig | target=miss | relres=inf > 1.00e-08 | action=keep-reset
+============================================
+ Hit PSD boundary! Entering finishing phase.
+============================================
+it 016 | finish | AHO | ineq=not_in_use | mu=5.89e-03 eta=1.00e-03 sigma=4.64e-01 | err c/p/d=2.10e-03/1.66e-01/4.06e-01 | ok=cpd | rmax X/Y/Z/T=65/58/66/-
+it 017 | finish | AHO | ineq=not_in_use | mu=2.80e-03 eta=1.00e-03 sigma=0.00e+00 | err c/p/d=7.61e-04/8.38e-02/2.26e-01 | ok=cpd | rmax X/Y/Z/T=64/67/78/-
+it 018 | finish | AHO | ineq=not_in_use | mu=5.55e-04 eta=1.00e-03 sigma=0.00e+00 | err c/p/d=1.22e-04/3.06e-02/8.28e-02 | ok=cpd | rmax X/Y/Z/T=58/72/81/-
+it 019 | finish | AHO | ineq=not_in_use | mu=2.83e-04 eta=5.65e-04 sigma=0.00e+00 | err c/p/d=6.07e-05/2.65e-02/8.51e-03 | ok=Cpd | rmax X/Y/Z/T=34/97/105/-
+it 020 | finish | AHO | ineq=not_in_use | mu=1.62e-04 eta=3.25e-04 sigma=0.00e+00 | err c/p/d=3.49e-05/1.57e-02/7.81e-04 | ok=Cpd | rmax X/Y/Z/T=21/113/119/-
+---Terminated---
+Terminated in 20 iterations.
+Ranks: X=[5, 6, 14, 13, 19, 21, 11, 5], Z=[5, 17, 47, 101, 119, 42, 13, 5], Y=[4, 16, 45, 93, 113, 40, 11, 4], T=[0, 0, 0, 0, 0, 0, 0, 0]
+Run failed after 20 iterations. Compl Slackness: 8.3116e-02. Feasibility error: 3.9665e-03. Dual Feasibility error: 9.7594e-06.
+Run failed in 12917.71s. Memory: 3799.94 MB.
+Rerun with new seed 850 failed. Feasibility error: 3.97e-03, dual feasibility error: 9.76e-06, slackness: 8.31e-02
+Seed 850 failed (feasibility error: 3.97e-03, dual feasibility error: 9.76e-06, slackness: 8.31e-02). Suggesting a new seed.
+New seed suggested: 432
+Creating Problem...
+===Terminated Graph Sampling=== rank:  [2, 2, 3, 4, 4, 3, 2, 1]
+it 000 | main   | XZ  | ineq=not_in_use | mu=4.00e+00 eta=1.00e-03 sigma=5.00e-01 | err c/p/d=5.71e-01/2.55e+02/1.14e+01 | ok=cpd | rmax X/Y/Z/T=1/1/1/-
+it 001 | main   | XZ  | ineq=not_in_use | mu=7.35e-01 eta=1.00e-03 sigma=2.24e-02 | err c/p/d=8.67e-02/4.70e+01/9.60e+00 | ok=cpd | rmax X/Y/Z/T=7/5/7/-
+it 002 | main   | XZ  | ineq=not_in_use | mu=4.25e-01 eta=1.00e-03 sigma=4.84e-01 | err c/p/d=2.93e-02/2.53e+01/5.85e+00 | ok=cpd | rmax X/Y/Z/T=35/24/27/-
+it 003 | main   | AHO | ineq=not_in_use | mu=3.80e-01 eta=1.00e-03 sigma=6.40e-01 | err c/p/d=6.65e-02/1.73e+01/4.78e+00 | ok=cpd | rmax X/Y/Z/T=39/29/31/-
+it 004 | main   | AHO | ineq=not_in_use | mu=5.33e-01 eta=1.00e-03 sigma=8.65e-01 | err c/p/d=1.17e-01/1.44e+01/3.87e+00 | ok=cpd | rmax X/Y/Z/T=40/30/32/-
+it 005 | main   | AHO | ineq=not_in_use | mu=9.19e-02 eta=1.00e-03 sigma=4.66e-02 | err c/p/d=6.55e-02/2.13e+00/3.28e+00 | ok=cpd | rmax X/Y/Z/T=38/30/32/-
+it 006 | main   | AHO | ineq=not_in_use | mu=1.23e-02 eta=1.00e-03 sigma=2.36e-01 | err c/p/d=1.07e-02/5.67e-02/2.80e+00 | ok=cpd | rmax X/Y/Z/T=33/30/32/-
+it 007 | main   | AHO | ineq=not_in_use | mu=8.94e-03 eta=1.00e-03 sigma=7.31e-01 | err c/p/d=6.18e-03/5.47e-02/1.45e+00 | ok=cpd | rmax X/Y/Z/T=35/30/32/-
+warn   | step-eig | target=miss | relres=inf > 1.00e-08 | action=keep-reset
+it 008 | main   | AHO | ineq=not_in_use | mu=6.72e-03 eta=1.00e-03 sigma=7.87e-01 | err c/p/d=2.87e-03/3.43e-02/1.45e+00 | ok=cpd | rmax X/Y/Z/T=41/30/32/-
+it 009 | main   | AHO | ineq=not_in_use | mu=4.04e-03 eta=1.00e-03 sigma=7.36e-01 | err c/p/d=1.43e-03/2.07e-02/8.53e-02 | ok=cpd | rmax X/Y/Z/T=41/30/33/-
+it 010 | main   | AHO | ineq=not_in_use | mu=1.67e-03 eta=1.00e-03 sigma=7.95e-01 | err c/p/d=4.36e-04/1.01e-02/2.98e-02 | ok=cpd | rmax X/Y/Z/T=40/31/33/-
+warn   | step-eig | target=miss | relres=inf > 1.00e-08 | action=keep-reset
+it 011 | main   | AHO | ineq=not_in_use | mu=4.70e-04 eta=9.41e-04 sigma=4.54e-01 | err c/p/d=1.07e-04/3.71e-03/9.21e-03 | ok=cpd | rmax X/Y/Z/T=40/31/33/-
+it 012 | main   | AHO | ineq=not_in_use | mu=2.30e-04 eta=4.61e-04 sigma=4.38e-01 | err c/p/d=5.11e-05/4.69e-03/2.41e-03 | ok=Cpd | rmax X/Y/Z/T=40/31/33/-
+it 013 | finish | AHO | ineq=not_in_use | mu=2.31e-04 eta=4.61e-04 sigma=0.00e+00 | err c/p/d=5.14e-05/2.66e-04/2.45e-04 | ok=CPD | rmax X/Y/Z/T=40/31/33/-
+
+	⚠️ Attention: 
+	Number of restarts exhausted, Relative Error = 3.974131e+00. Consider increasing rank ceiling.
+
+	==> Full traceback (most recent call last):
+Traceback (most recent call last):
+  File "/vol/bitbucket/fjk20/projects/Tensor-Train-Interior-Point-Method/psd_system/max_stable_set/../../src/tt_ipm.py", line 763, in _tt_ipm_newton_step
+    t0 = time.time()
+    
+    ...<7 lines>...
+            lhs_pred_tt,
+    
+  File "/vol/bitbucket/fjk20/projects/Tensor-Train-Interior-Point-Method/psd_system/max_stable_set/../../src/tt_ipm.py", line 1207, in <lambda>
+        r_max=1000,
+    
+    ...<11 lines>...
+        centrality_tol = gap_tol / np.sqrt(dim) # for larger problems we need to be closer
+        ^
+  File "/vol/bitbucket/fjk20/projects/Tensor-Train-Interior-Point-Method/psd_system/max_stable_set/../../src/tt_als.py", line 799, in tt_restarted_block_amen
+    raise RuntimeError(f"\n\tTarget residual not reached after first AMEn attempt, Relative Error = {rhs_norm / orig_rhs_norm:.3e}.")
+RuntimeError: 
+	Target residual not reached after first AMEn attempt, Relative Error = 1.578e-02.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/vol/bitbucket/fjk20/projects/Tensor-Train-Interior-Point-Method/psd_system/max_stable_set/../../src/tt_ipm.py", line 778, in _tt_ipm_newton_step
+    )
+    
+  File "/vol/bitbucket/fjk20/projects/Tensor-Train-Interior-Point-Method/psd_system/max_stable_set/../../src/tt_ipm.py", line 1207, in <lambda>
+        r_max=1000,
+    
+    ...<11 lines>...
+        centrality_tol = gap_tol / np.sqrt(dim) # for larger problems we need to be closer
+        ^
+  File "/vol/bitbucket/fjk20/projects/Tensor-Train-Interior-Point-Method/psd_system/max_stable_set/../../src/tt_als.py", line 828, in tt_restarted_block_amen
+    raise RuntimeError(f"\n\tNumber of restarts exhausted, Relative Error = {rhs_norm / orig_rhs_norm:3e}. Consider increasing rank ceiling.")
+RuntimeError: 
+	Number of restarts exhausted, Relative Error = 3.974131e+00. Consider increasing rank ceiling.
+---Terminated---
+Terminated in 14 iterations.
+Ranks: X=[5, 9, 17, 40, 34, 10, 6, 3], Z=[5, 8, 13, 33, 31, 13, 7, 3], Y=[4, 6, 11, 31, 28, 13, 7, 3], T=[0, 0, 0, 0, 0, 0, 0, 0]
+Run terminated after 14 iterations. Compl Slackness: 1.1814e-01. Feasibility error: 1.1383e-06. Dual Feasibility error: 9.5677e-07.
+Run terminated in 3427.57s. Memory: 1861.14 MB.
+Rerun with new seed 432 terminated. Feasibility error: 1.14e-06, dual feasibility error: 9.57e-07, slackness: 1.18e-01
+Seed 432 terminated (feasibility error: 1.14e-06, dual feasibility error: 9.57e-07, slackness: 1.18e-01). Suggesting a new seed.
+New seed suggested: 441
+Creating Problem...
+===Terminated Graph Sampling=== rank:  [3, 4, 4, 4, 4, 4, 3, 2]
+it 000 | main   | XZ  | ineq=not_in_use | mu=4.00e+00 eta=1.00e-03 sigma=5.00e-01 | err c/p/d=5.71e-01/2.55e+02/1.14e+01 | ok=cpd | rmax X/Y/Z/T=1/1/1/-
+it 001 | main   | XZ  | ineq=not_in_use | mu=6.80e-01 eta=1.00e-03 sigma=7.63e-02 | err c/p/d=7.61e-02/4.23e+01/3.66e+00 | ok=cpd | rmax X/Y/Z/T=7/5/7/-
+it 002 | main   | XZ  | ineq=not_in_use | mu=2.19e-01 eta=1.00e-03 sigma=2.07e-01 | err c/p/d=2.91e-02/1.23e+01/3.23e-02 | ok=cpd | rmax X/Y/Z/T=40/22/25/-
+it 003 | main   | AHO | ineq=not_in_use | mu=3.43e-02 eta=1.00e-03 sigma=3.55e-02 | err c/p/d=1.30e-02/1.61e+00/2.81e-02 | ok=cpd | rmax X/Y/Z/T=43/30/34/-
+it 004 | main   | AHO | ineq=not_in_use | mu=7.85e-03 eta=1.00e-03 sigma=6.02e-01 | err c/p/d=4.65e-03/6.66e-02/2.33e-02 | ok=cpd | rmax X/Y/Z/T=44/36/41/-
+it 005 | main   | AHO | ineq=not_in_use | mu=5.51e-03 eta=1.00e-03 sigma=7.21e-01 | err c/p/d=1.85e-03/5.37e-03/1.71e-02 | ok=cpd | rmax X/Y/Z/T=46/36/40/-
+it 006 | main   | AHO | ineq=not_in_use | mu=3.71e-03 eta=1.00e-03 sigma=8.28e-01 | err c/p/d=9.60e-04/2.02e-02/8.10e-04 | ok=cpd | rmax X/Y/Z/T=46/41/47/-

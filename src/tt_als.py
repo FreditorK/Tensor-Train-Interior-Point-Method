@@ -1,6 +1,7 @@
 import sys
 import os
 import time
+import warnings
 import numpy as np
 
 sys.path.append(os.getcwd() + '/../')
@@ -912,6 +913,12 @@ def _lobpcg_maxiter(m):
     return max(20, min(100, m))
 
 
+def _lobpcg_min(op, x0, tol, maxiter):
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message="Exited at iteration .*", category=UserWarning)
+        return scp.sparse.linalg.lobpcg(op, X=x0, tol=tol, largest=False, maxiter=maxiter)
+
+
 def _eigen_residual_stalled(prev_res, res, tol):
     return (
         np.isfinite(prev_res)
@@ -994,6 +1001,50 @@ def _relative_eigen_residual(matvec, vec, eig_val=None):
     residual = np.linalg.norm(A_vec - theta * vec)
     scale = max(np.linalg.norm(A_vec), abs(theta) * vec_norm, 1.0)
     return residual / scale
+
+
+def _ritz_residual_vec(matvec, vec, eig_val=None):
+    vec = np.asarray(vec, dtype=np.float64).reshape(-1, 1)
+    vec_norm = np.linalg.norm(vec)
+    if (not np.isfinite(vec_norm)) or vec_norm <= 0:
+        return None
+    try:
+        A_vec = np.asarray(matvec(vec), dtype=np.float64).reshape(-1, 1)
+    except Exception:
+        return None
+    if eig_val is None:
+        theta = float((vec.T @ A_vec).squeeze() / (vec_norm ** 2))
+    else:
+        theta = float(np.asarray(eig_val).reshape(-1)[0])
+    residual = A_vec - theta * vec
+    residual_norm = np.linalg.norm(residual)
+    if (not np.isfinite(residual_norm)) or residual_norm <= 0:
+        return None
+    return residual
+
+
+def _residual_split_enrichment(residual_vec, target_shape, bwd, r_add):
+    if residual_vec is None or r_add <= 0:
+        return None
+    try:
+        left_dim = int(np.prod(target_shape[:2]))
+        right_dim = int(np.prod(target_shape[2:]))
+        residual_mat = np.asarray(residual_vec, dtype=np.float64).reshape(left_dim, right_dim)
+        if bwd:
+            residual_mat = residual_mat.T
+        u, s, _ = scp.linalg.svd(
+            residual_mat, full_matrices=False, check_finite=False,
+            overwrite_a=False, lapack_driver="gesvd"
+        )
+    except Exception:
+        return None
+    if s.size == 0 or (not np.isfinite(s[0])) or s[0] <= 0:
+        return None
+    keep = int(np.sum(s > max(1e-12 * s[0], 1e-300)))
+    keep = min(keep, r_add, u.shape[1])
+    if keep <= 0:
+        return None
+    return u[:, :keep].T if bwd else u[:, :keep]
 
 
 def _eig_scalar(eig_val):
@@ -1083,6 +1134,7 @@ def _step_size_local_solve(
     prev_sol_shape = previous_solution.shape
     m = np.prod(prev_sol_shape)
     previous_solution = previous_solution.reshape(-1, 1)
+    residual_vec = None
     if prev_sol_shape[0]*prev_sol_shape[-1] <= size_limit:
         D = scp.sparse.csr_matrix(cached_einsum("lsr, smnk, kptS, LSR->lmpLrntR", XDX_k, D_k, D_kp1, XDX_k2).reshape(m, m))
         D = 0.5*(D + D.T)
@@ -1133,7 +1185,9 @@ def _step_size_local_solve(
                 return previous_solution1, previous_solution2, 0.0, np.inf
 
         M_now = (1/step_size)*A + D
-        old_res = _relative_eigen_residual(lambda x: M_now @ x, solution_now)
+        step_matvec = lambda x: M_now @ x
+        old_res = _relative_eigen_residual(step_matvec, solution_now)
+        residual_vec = _ritz_residual_vec(step_matvec, solution_now)
     else:
         mat_vec_A = _sym_two_core_matvec(XAX_k, A_k, A_kp1, XAX_k2, prev_sol_shape, diagonal_shift=1e-12)
         mat_vec_D = _sym_two_core_matvec(XDX_k, D_k, D_kp1, XDX_k2, prev_sol_shape)
@@ -1142,9 +1196,7 @@ def _step_size_local_solve(
             op = scp.sparse.linalg.LinearOperator((m, m), matvec=lambda x_vec: mat_vec_A(x_vec) / alpha + mat_vec_D(x_vec))
             v0 = _normalised_column(v0, m)
             try:
-                eig_val_alpha, vec_alpha = scp.sparse.linalg.lobpcg(
-                    op, v0, tol=eps, largest=False, maxiter=_lobpcg_maxiter(m)
-                )
+                eig_val_alpha, vec_alpha = _lobpcg_min(op, v0, eps, _lobpcg_maxiter(m))
                 return _eig_scalar(eig_val_alpha), vec_alpha
             except Exception:
                 return _rayleigh_value(_linear_op_matvec(op), v0), v0
@@ -1159,13 +1211,17 @@ def _step_size_local_solve(
                 return previous_solution1, previous_solution2, 0.0, np.inf
 
         AD_op = scp.sparse.linalg.LinearOperator((m, m), matvec=lambda x_vec: mat_vec_A(x_vec) / step_size + mat_vec_D(x_vec))
-        old_res = _relative_eigen_residual(_linear_op_matvec(AD_op), solution_now)
+        step_matvec = _linear_op_matvec(AD_op)
+        old_res = _relative_eigen_residual(step_matvec, solution_now)
+        residual_vec = _ritz_residual_vec(step_matvec, solution_now)
     solution_now /= np.linalg.norm(solution_now)
     if bwd:
         u, s, v = scp.linalg.svd(solution_now.reshape(np.prod(prev_sol_shape[:2]), np.prod(prev_sol_shape[2:])).T, full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
         v = s.reshape(-1, 1) * v
         r = min(prune_singular_vals(s, trunc_tol), max_rank)
-        solution1, solution2, r = _add_kick_rank_rev(v[:r].T, u[:, :r].T, 4)
+        r_add = max(0, min(4, max_rank - r))
+        enrich = _residual_split_enrichment(residual_vec, prev_sol_shape, True, r_add)
+        solution1, solution2, r = _add_kick_rank_rev(v[:r].T, u[:, :r].T, r_add, uk=enrich)
         solution2 = solution2.reshape(r, prev_sol_shape[2], prev_sol_shape[3])
         solution1 = solution1.reshape(prev_sol_shape[0], prev_sol_shape[1], r)
     else:
@@ -1173,22 +1229,71 @@ def _step_size_local_solve(
         r = min(prune_singular_vals(s, trunc_tol), max_rank)
         solution1 = solution1[:, :r]
         solution2 = s.reshape(-1, 1)[:r] * solution2[:r]
-        solution1, solution2, r = _add_kick_rank(solution1, solution2, 4)
+        r_add = max(0, min(4, max_rank - r))
+        enrich = _residual_split_enrichment(residual_vec, prev_sol_shape, False, r_add)
+        solution1, solution2, r = _add_kick_rank(solution1, solution2, r_add, uk=enrich)
         solution1 = solution1.reshape(prev_sol_shape[0], prev_sol_shape[1], r)
         solution2 = solution2.reshape(r, prev_sol_shape[2], prev_sol_shape[3])
     return solution1, solution2, step_size, old_res
 
 
-def _add_kick_rank(u, v, r_add=2):
+def _orthogonal_enrichment_cols(basis, enrich, r_add):
+    if r_add <= 0 or enrich is None:
+        return None
+    enrich = np.asarray(enrich, dtype=np.float64)
+    if enrich.ndim == 1:
+        enrich = enrich.reshape(-1, 1)
+    if enrich.shape[0] != basis.shape[0]:
+        return None
+    enrich = enrich[:, :r_add]
+    if enrich.size == 0 or not np.all(np.isfinite(enrich)):
+        return None
+    try:
+        if basis.shape[1] > 0:
+            q_basis, _ = scp.linalg.qr(basis, check_finite=False, mode="economic")
+            enrich = enrich - q_basis @ (q_basis.T @ enrich)
+        q_enrich, r_enrich = scp.linalg.qr(enrich, check_finite=False, mode="economic")
+    except Exception:
+        return None
+    diag = np.abs(np.diag(r_enrich))
+    if diag.size == 0:
+        return None
+    keep = diag > max(1e-12 * max(np.linalg.norm(enrich), 1.0), 1e-300)
+    if not np.any(keep):
+        return None
+    return q_enrich[:, keep][:, :r_add]
+
+
+def _add_kick_rank(u, v, r_add=2, uk=None):
     old_r = u.shape[-1]
-    uk = np.random.randn(u.shape[0], r_add)
-    u, Rmat = scp.linalg.qr(np.concatenate((u, uk), 1), check_finite=False, mode="economic", overwrite_a=True)
+    if r_add <= 0:
+        return u, v, old_r
+    enrich = _orthogonal_enrichment_cols(u, uk, r_add)
+    if enrich is None:
+        enrich = _orthogonal_enrichment_cols(u, np.random.randn(u.shape[0], r_add), r_add)
+    if enrich is None:
+        return u, v, old_r
+    u, Rmat = scp.linalg.qr(np.concatenate((u, enrich), 1), check_finite=False, mode="economic", overwrite_a=True)
     v = Rmat[:, :old_r] @ v
     return u, v, u.shape[-1]
 
-def _add_kick_rank_rev(u, v, r_add=2):
+
+def _add_kick_rank_rev(u, v, r_add=2, uk=None):
     old_r = v.shape[0]
-    uk = np.random.randn(r_add, v.shape[-1])
+    if r_add <= 0:
+        return u, v, old_r
+    enrich_cols = None
+    if uk is not None:
+        uk = np.asarray(uk, dtype=np.float64)
+        if uk.ndim == 1:
+            uk = uk.reshape(1, -1)
+        if uk.shape[1] == v.shape[-1]:
+            enrich_cols = _orthogonal_enrichment_cols(v.T, uk.T, r_add)
+    if enrich_cols is None:
+        enrich_cols = _orthogonal_enrichment_cols(v.T, np.random.randn(v.shape[-1], r_add), r_add)
+    if enrich_cols is None:
+        return u, v, old_r
+    uk = enrich_cols.T
     Rmat, v = scp.linalg.rq(np.concatenate((v, uk), 0), check_finite=False, mode="economic", overwrite_a=True)
     u = u @ Rmat[:old_r]
     return u, v, v.shape[0]
@@ -1262,9 +1367,7 @@ def _step_size_local_solve_last(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k
             op = scp.sparse.linalg.LinearOperator((m, m), matvec=lambda x_vec: mat_vec_A(x_vec) / alpha + mat_vec_D(x_vec))
             v0 = _normalised_column(v0, m)
             try:
-                eig_val_alpha, vec_alpha = scp.sparse.linalg.lobpcg(
-                    op, X=v0, tol=eps, largest=False, maxiter=_lobpcg_maxiter(m)
-                )
+                eig_val_alpha, vec_alpha = _lobpcg_min(op, v0, eps, _lobpcg_maxiter(m))
                 return _eig_scalar(eig_val_alpha), vec_alpha
             except Exception:
                 return _rayleigh_value(_linear_op_matvec(op), v0), v0
@@ -1457,6 +1560,7 @@ def _eigen_local_solve(
     prev_sol_shape = previous_solution.shape
     m = np.prod(prev_sol_shape)
     previous_solution = previous_solution.reshape(-1, 1)
+    residual_vec = None
     if previous_solution.shape[0]*previous_solution.shape[-1] <= size_limit:
         A = scp.sparse.csr_matrix(cached_einsum("lsr, smnk, kptS, LSR->lmpLrntR", XAX_k, A_k, A_kp1, XAX_k2).reshape(m, m))
         A = 0.5*(A.T + A)
@@ -1467,23 +1571,29 @@ def _eigen_local_solve(
             solution_now = previous_solution
             eig_val = previous_solution.T @ A @ previous_solution
             lanczos_discount = min(0.999, lanczos_discount*1.1)
+        eig_matvec = lambda x: A @ x
+        residual_vec = _ritz_residual_vec(eig_matvec, solution_now, eig_val)
         old_res = np.linalg.norm(eig_val * previous_solution - A @ previous_solution)
     else:
         mat_vec_A = _sym_two_core_matvec(XAX_k, A_k, A_kp1, XAX_k2, prev_sol_shape)
         A_op = scp.sparse.linalg.LinearOperator((m, m), matvec=mat_vec_A)
         try:
-            eig_val, solution_now = scp.sparse.linalg.lobpcg(A_op, X=previous_solution, tol=eps, largest=False, maxiter=_lobpcg_maxiter(m))
+            eig_val, solution_now = _lobpcg_min(A_op, previous_solution, eps, _lobpcg_maxiter(m))
         except Exception as e:
             _print_attention(e)
             solution_now = previous_solution
             eig_val = previous_solution.T @ A_op(previous_solution)
             lanczos_discount = min(0.999, lanczos_discount*1.1)
+        eig_matvec = _linear_op_matvec(A_op)
+        residual_vec = _ritz_residual_vec(eig_matvec, solution_now, eig_val)
         old_res = np.linalg.norm(eig_val * previous_solution - A_op(previous_solution))
     if bwd:
         u, s, v = scp.linalg.svd(solution_now.reshape(np.prod(prev_sol_shape[:2]), np.prod(prev_sol_shape[2:])).T, full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
         v = s.reshape(-1, 1) * v
         r = min(prune_singular_vals(s, trunc_tol), max_rank)
-        solution1, solution2, r = _add_kick_rank_rev(v[:r].T, u[:, :r].T, 4)
+        r_add = max(0, min(4, max_rank - r))
+        enrich = _residual_split_enrichment(residual_vec, prev_sol_shape, True, r_add)
+        solution1, solution2, r = _add_kick_rank_rev(v[:r].T, u[:, :r].T, r_add, uk=enrich)
         solution2 = solution2.reshape(r, prev_sol_shape[2], prev_sol_shape[3])
         solution1 = solution1.reshape(prev_sol_shape[0], prev_sol_shape[1], r)
     else:
@@ -1491,7 +1601,9 @@ def _eigen_local_solve(
         r = min(prune_singular_vals(s, trunc_tol), max_rank)
         solution1 = solution1[:, :r]
         solution2 = s.reshape(-1, 1)[:r] * solution2[:r]
-        solution1, solution2, r = _add_kick_rank(solution1, solution2, 4)
+        r_add = max(0, min(4, max_rank - r))
+        enrich = _residual_split_enrichment(residual_vec, prev_sol_shape, False, r_add)
+        solution1, solution2, r = _add_kick_rank(solution1, solution2, r_add, uk=enrich)
         solution1 = solution1.reshape(prev_sol_shape[0], prev_sol_shape[1], r)
         solution2 = solution2.reshape(r, prev_sol_shape[2], prev_sol_shape[3])
     lanczos_discount = max(0.1, lanczos_discount*0.999)
@@ -1533,7 +1645,7 @@ def _eigen_local_solve_last(previous_solution, XAX_k, A_k, XAX_k1, m, size_limit
     mat_vec_A = _sym_one_core_matvec(XAX_k, A_k, XAX_k1, x_shape)
     A_op = scp.sparse.linalg.LinearOperator((m, m), matvec=mat_vec_A)
     try:
-        eig_val, solution_now = scp.sparse.linalg.lobpcg(A_op, X=previous_solution, tol=eps, largest=False, maxiter=_lobpcg_maxiter(m))
+        eig_val, solution_now = _lobpcg_min(A_op, previous_solution, eps, _lobpcg_maxiter(m))
     except Exception as e:
         _print_attention(e)
         solution_now = previous_solution

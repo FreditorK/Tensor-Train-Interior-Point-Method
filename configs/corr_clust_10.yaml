@@ -14,5 +14,4 @@ seeds:
 #- 892
 #- 821
 verbose: true
-trace_verbose: true
 warm_up: 3

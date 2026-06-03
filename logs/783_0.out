@@ -91,3 +91,12 @@ it 008 | main   | AHO | ineq=not_in_use | mu=1.70e-03 eta=1.00e-03 sigma=6.15e-0
 it 009 | main   | AHO | ineq=not_in_use | mu=5.34e-04 eta=1.00e-03 sigma=1.09e-02 | err c/p/d=7.00e-05/3.21e-02/2.50e-03 | ok=Cpd | rmax X/Y/Z/T=10/16/21/-
 it 010 | main   | AHO | ineq=not_in_use | mu=4.97e-04 eta=9.93e-04 sigma=0.00e+00 | err c/p/d=6.72e-05/8.35e-03/1.23e-03 | ok=Cpd | rmax X/Y/Z/T=10/16/20/-
 it 011 | main   | AHO | ineq=not_in_use | mu=5.11e-04 eta=9.93e-04 sigma=0.00e+00 | err c/p/d=6.96e-05/3.75e-03/1.52e-03 | ok=Cpd | rmax X/Y/Z/T=10/27/36/-
+it 012 | main   | AHO | ineq=not_in_use | mu=1.32e-03 eta=9.93e-04 sigma=0.00e+00 | err c/p/d=1.80e-04/3.90e-02/2.90e-03 | ok=cpd | rmax X/Y/Z/T=11/91/109/-
+/vol/bitbucket/fjk20/projects/Tensor-Train-Interior-Point-Method/tt_ipm.sh: line 111: 1099127 Killed                  timeout "$CURRENT_TIMEOUT" "${cmd[@]}"
+
+⚠️ Script resumed (was suspended). Memory may not have been cleaned up.
+Process MemTimer-3:
+❌ Error occurred for dim=10 (exit code 137)
+
+==== All runs completed at Wed  3 Jun 18:26:26 BST 2026 ====
+Traceback (most recent call last):

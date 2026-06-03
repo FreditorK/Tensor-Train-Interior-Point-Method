@@ -3227,3 +3227,9 @@ it 014 | finish | AHO | ineq=active   | mu=2.56e-04 eta=5.12e-04 sigma=0.00e+00 
 it 015 | finish | AHO | ineq=active   | mu=1.74e-04 eta=3.48e-04 sigma=0.00e+00 | err c/p/d=2.56e-05/9.83e-04/3.60e-03 | ok=Cpd | rmax X/Y/Z/T=240/8/67/61
 it 016 | finish | AHO | ineq=active   | mu=1.68e-04 eta=3.35e-04 sigma=0.00e+00 | err c/p/d=2.46e-05/1.22e-03/3.95e-03 | ok=Cpd | rmax X/Y/Z/T=238/8/68/61
 it 017 | finish | AHO | ineq=active   | mu=1.67e-04 eta=3.34e-04 sigma=0.00e+00 | err c/p/d=2.45e-05/1.47e-03/4.67e-03 | ok=Cpd | rmax X/Y/Z/T=237/8/67/60
+Terminated
+Process MemTimer-9:
+❌ Error occurred for dim=9 (exit code 143)
+
+==== All runs completed at Wed  3 Jun 17:42:13 BST 2026 ====
+Traceback (most recent call last):
