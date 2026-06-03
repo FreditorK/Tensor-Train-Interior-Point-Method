@@ -984,6 +984,7 @@ def _ineq_step_size(A_tt, Delta_tt, e_tt, status):
 
 
 def _tt_get_ineq_step_sizes(x_step_size, z_step_size, X_tt, T_tt, Delta_X_tt, Delta_T_tt, ineq_mask, status):
+    status.ineq_next_status = None
 
     if x_step_size > 0:
         masked_X_tt = tt_fast_hadamard(ineq_mask, X_tt, status.eps)
@@ -995,12 +996,25 @@ def _tt_get_ineq_step_sizes(x_step_size, z_step_size, X_tt, T_tt, Delta_X_tt, De
             status
         )
         if not status.is_last_iter:
-            if 1 - x_ineq_step_size < status.op_tol and tt_norm(T_tt) < status.op_tol:
-                if status.ineq_status is IneqStatus.ACTIVE:
-                    status.ineq_status = IneqStatus.SETTING_INACTIVE
-            else:
-                if status.ineq_status is IneqStatus.INACTIVE:
-                    status.ineq_status = IneqStatus.SETTING_ACTIVE
+            step_deficit = 1 - x_ineq_step_size
+            if status.ineq_status is IneqStatus.ACTIVE:
+                if step_deficit < status.op_tol:
+                    status.ineq_full_step_streak += 1
+                else:
+                    status.ineq_full_step_streak = 0
+                primal_dual_ready = (
+                    status.primal_error < 10.0*status.feasibility_tol
+                    and status.dual_error < 10.0*status.feasibility_tol
+                )
+                t_small = tt_norm(T_tt) < status.op_tol
+                tx_small = status.ineq_slack <= 0.1*max(status.psd_slack, status.op_tol)
+                switch_cooldown = status.iteration - status.ineq_last_switch_iter >= 3
+                if (primal_dual_ready and t_small and tx_small
+                        and switch_cooldown and status.ineq_full_step_streak >= 3):
+                    status.ineq_next_status = IneqStatus.INACTIVE
+            elif status.ineq_status is IneqStatus.INACTIVE:
+                if step_deficit > 10.0*status.op_tol:
+                    status.ineq_next_status = IneqStatus.ACTIVE
         x_step_size *= x_ineq_step_size
 
     if z_step_size > 0 and status.ineq_status is IneqStatus.ACTIVE:
@@ -1075,6 +1089,12 @@ class IPMStatus:
     primal_restoration_steps: int = 0
     max_primal_restoration_steps: int = 2
     trace_verbose: bool = False
+    ineq_next_status = None
+    ineq_full_step_streak: int = 0
+    ineq_last_switch_iter: int = -1000000
+    iteration: int = 0
+    psd_slack: float = np.inf
+    ineq_slack: float = np.inf
 
 
 def _ipm_format_output(X_tt, Y_tt, T_tt, Z_tt, iteration, status):
@@ -1313,6 +1333,9 @@ def tt_ipm(
             status.is_last_iter = True
         ZX = tt_inner_prod(Z_tt, X_tt)
         TX = tt_inner_prod(X_tt, T_tt) + status.ineq_boundary_val*tt_entrywise_sum(T_tt) if status.ineq_status is IneqStatus.ACTIVE else 0
+        status.iteration = iteration
+        status.psd_slack = abs(ZX)
+        status.ineq_slack = abs(TX)
         status.mu = np.divide(abs(ZX) + abs(TX), (2 ** dim + (status.ineq_status is IneqStatus.ACTIVE)*status.num_ineq_constraints))
         status.centrl_error_normalisation = 1 + abs(tt_inner_prod(obj_tt, tt_reshape(X_tt, (4, ))))
         status.centrality_error = status.mu / status.centrl_error_normalisation
@@ -1378,7 +1401,7 @@ def tt_ipm(
             if status.is_last_iter:
                 break
             else:
-                print("============================================\n Hit PSD boundary! Entering finishing phase.\n============================================")
+                print("warn   | ipm      | event=psd-boundary | action=finish", flush=True)
                 status.is_last_iter = True
         else:
             t0 = time.time()
@@ -1391,20 +1414,26 @@ def tt_ipm(
             if status.ineq_status is IneqStatus.ACTIVE:
                 T_tt = _tt_budgeted_mask_symmetrise(tt_add(T_tt, tt_scale(z_step_size, Delta_T_tt)), ineq_mask, status.rounding.update_t_round_tol(status))
             _ipm_trace(status, "update", f"rmax X/Y/Z/T={_tt_rank_peak(X_tt)}/{_tt_rank_peak(Y_tt)}/{_tt_rank_peak(Z_tt)}/{_tt_rank_peak(T_tt)}", t0)
-            if status.ineq_status is IneqStatus.SETTING_INACTIVE:
+            if status.ineq_next_status is IneqStatus.INACTIVE and status.ineq_status is IneqStatus.ACTIVE:
                 _ipm_trace(status, "ineq", "switch active->inactive")
                 solver = solver_eq
                 lhs = lhs_skeleton.get_submatrix(2, 2)
                 status.mals_delta0 = None
                 _tt_reset_step_eigen_warm_starts(status)
                 status.ineq_status = IneqStatus.INACTIVE
-            elif status.ineq_status is IneqStatus.SETTING_ACTIVE:
+                status.ineq_next_status = None
+                status.ineq_full_step_streak = 0
+                status.ineq_last_switch_iter = iteration
+            elif status.ineq_next_status is IneqStatus.ACTIVE and status.ineq_status is IneqStatus.INACTIVE:
                 _ipm_trace(status, "ineq", "switch inactive->active")
                 solver = solver_ineq
                 lhs = lhs_skeleton
                 status.mals_delta0 = None
                 _tt_reset_step_eigen_warm_starts(status)
                 status.ineq_status = IneqStatus.ACTIVE
+                status.ineq_next_status = None
+                status.ineq_full_step_streak = 0
+                status.ineq_last_switch_iter = iteration
 
         if _ipm_check_for_stalled_progress(prev_errors, status, gap_tol):
             status.is_last_iter = True

@@ -85,3 +85,4 @@ it 003 | main   | AHO | ineq=not_in_use | mu=2.08e-03 eta=1.00e-03 sigma=9.90e-0
 it 004 | main   | AHO | ineq=not_in_use | mu=1.10e-03 eta=1.00e-03 sigma=5.94e-01 | err c/p/d=6.31e-04/4.03e-02/1.29e+01 | ok=cpd | rmax X/Y/Z/T=9/2/4/-
 it 005 | main   | AHO | ineq=not_in_use | mu=1.07e-03 eta=1.00e-03 sigma=9.56e-01 | err c/p/d=1.01e-03/3.45e-02/1.24e+01 | ok=cpd | rmax X/Y/Z/T=15/3/5/-
 it 006 | main   | AHO | ineq=not_in_use | mu=1.07e-03 eta=1.00e-03 sigma=9.85e-01 | err c/p/d=9.91e-04/3.17e-02/1.20e+01 | ok=cpd | rmax X/Y/Z/T=16/4/5/-
+it 007 | main   | AHO | ineq=not_in_use | mu=1.06e-03 eta=1.00e-03 sigma=9.78e-01 | err c/p/d=7.62e-04/2.78e-02/1.17e+01 | ok=cpd | rmax X/Y/Z/T=19/4/5/-

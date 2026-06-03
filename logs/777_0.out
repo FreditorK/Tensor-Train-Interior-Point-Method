@@ -97,3 +97,6 @@ it 015 | main   | AHO | ineq=not_in_use | mu=1.52e-03 eta=1.00e-03 sigma=9.34e-0
 it 016 | main   | AHO | ineq=not_in_use | mu=1.56e-03 eta=1.00e-03 sigma=6.80e-01 | err c/p/d=2.94e-04/6.67e-02/2.90e-03 | ok=cpd | rmax X/Y/Z/T=130/111/141/-
 it 017 | main   | AHO | ineq=not_in_use | mu=1.53e-03 eta=1.00e-03 sigma=8.21e-01 | err c/p/d=2.92e-04/5.97e-02/2.92e-03 | ok=cpd | rmax X/Y/Z/T=153/115/157/-
 it 018 | main   | AHO | ineq=not_in_use | mu=1.66e-03 eta=1.00e-03 sigma=7.34e-01 | err c/p/d=3.16e-04/6.61e-02/2.68e-03 | ok=cpd | rmax X/Y/Z/T=144/127/153/-
+it 019 | main   | AHO | ineq=not_in_use | mu=1.94e-03 eta=1.00e-03 sigma=8.74e-01 | err c/p/d=3.71e-04/8.17e-02/3.44e-03 | ok=cpd | rmax X/Y/Z/T=127/124/145/-
+warn   | ipm      | limit=max_iter | action=finish
+it 020 | finish | AHO | ineq=not_in_use | mu=2.16e-03 eta=1.00e-03 sigma=9.24e-01 | err c/p/d=4.14e-04/9.14e-02/4.05e-03 | ok=cpd | rmax X/Y/Z/T=135/124/143/-
