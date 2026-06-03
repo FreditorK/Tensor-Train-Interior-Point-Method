@@ -1,5 +1,7 @@
 import sys
 import os
+import copy
+import time
 import numpy as np
 import traceback
 import scipy.linalg as la
@@ -556,7 +558,14 @@ def tt_infeasible_newton_system(
     status.is_dual_feasible = np.less(status.dual_error, (1 + (status.ineq_status is IneqStatus.ACTIVE))*status.feasibility_tol)
 
     status.is_last_iter = status.is_last_iter or (status.is_primal_feasible and status.is_dual_feasible and status.is_central)
-    status.primal_restoration = _tt_should_restore_primal(status)
+    wants_primal_restoration = _tt_should_restore_primal(status)
+    if wants_primal_restoration and status.primal_restoration_steps < status.max_primal_restoration_steps:
+        status.primal_restoration = True
+        status.primal_restoration_steps += 1
+    else:
+        status.primal_restoration = False
+        if not wants_primal_restoration or status.primal_restoration_steps >= status.max_primal_restoration_steps:
+            status.primal_restoration_steps = 0
     if status.primal_restoration:
         status.aho_direction = False
 
@@ -573,14 +582,14 @@ def tt_infeasible_newton_system(
     if (not status.is_dual_feasible or status.is_last_iter) and not status.primal_restoration:
         rhs[1] = dual_feas
 
-    if (not status.is_central or status.is_last_iter) and not status.primal_restoration:
+    if not status.is_central or status.is_last_iter:
         rhs[2] = tt_compute_centrality(X_tt, Z_tt, status)
 
     if status.ineq_status is IneqStatus.ACTIVE:
         lhs[3, 1] =  tt_diag_op(T_tt, status.rounding.operator_dual(status))
         masked_X_tt = tt_rank_reduce(tt_add(tt_scale(status.ineq_boundary_val, ineq_mask), tt_fast_hadamard(ineq_mask, X_tt, status.eps)), eps=status.eps)
         lhs[3, 3] = tt_rank_reduce(tt_add(status.lag_map_t, tt_diag_op(masked_X_tt, status.eps)), eps=status.rounding.operator_dual(status))
-        if (not status.is_central or status.is_last_iter) and not status.primal_restoration:
+        if not status.is_central or status.is_last_iter:
             rhs[3] = tt_rank_reduce(tt_reshape(tt_scale(-1, tt_fast_hadamard(masked_X_tt, T_tt, status.eps)), (4, )), eps=status.rounding.residual_centrality(status))
     return lhs, rhs, status
 
@@ -746,12 +755,18 @@ def _tt_ipm_newton_step(
         solver
 ):
     try:
+        newton_t0 = time.time()
+        _ipm_trace(status, "newton", f"start dir={'AHO' if status.aho_direction else 'XZ'} ineq={status.ineq_status.name.lower()} eta={status.eta:.2e}")
         # Predictor
         if status.verbose:
             print("\n--- Predictor  step ---", flush=True)
+        t0 = time.time()
         row_scales = _tt_kkt_row_scales(rhs_vec_tt, status)
         lhs_pred_tt, rhs_pred_tt = _tt_build_row_scaled_kkt(lhs_matrix_tt, rhs_vec_tt, status, row_scales=row_scales)
+        _ipm_trace(status, "kkt-build", f"rhs_rows={list(rhs_vec_tt.keys())} scales={[f'{s:.1e}' for s in row_scales]}", t0)
         try:
+            t0 = time.time()
+            _ipm_trace(status, "kkt-pred", f"start nswp={status.kkt_iterations + status.is_last_iter} rank_cap={status.mals_rank_restriction}")
             Delta_tt, _ = solver(
                 lhs_pred_tt,
                 rhs_pred_tt,
@@ -761,14 +776,21 @@ def _tt_ipm_newton_step(
                 status.eta,
                 strict_first_attempt=status.aho_direction,
             )
+            _ipm_trace(status, "kkt-pred", "done", t0)
         except RuntimeError as solve_exc:
             if not (status.aho_direction and _tt_amen_fallback_triggered(solve_exc)):
                 raise
+            _ipm_trace(status, "kkt-pred", "fallback=aho_to_xz")
             lhs_matrix_tt, rhs_vec_tt = _tt_xz_fallback_kkt(lhs_matrix_tt, rhs_vec_tt, X_tt, Z_tt, status)
+            t0 = time.time()
             row_scales = _tt_kkt_row_scales(rhs_vec_tt, status)
             lhs_pred_tt, rhs_pred_tt = _tt_build_row_scaled_kkt(lhs_matrix_tt, rhs_vec_tt, status, row_scales=row_scales)
+            _ipm_trace(status, "kkt-build", f"fallback rhs_rows={list(rhs_vec_tt.keys())}", t0)
+            t0 = time.time()
             Delta_tt, _ = solver(lhs_pred_tt, rhs_pred_tt, status.mals_delta0, status.kkt_iterations + status.is_last_iter, status.mals_rank_restriction, status.eta)
+            _ipm_trace(status, "kkt-pred", "fallback done", t0)
         status.mals_delta0 = Delta_tt
+        t0 = time.time()
         Delta_X_tt = _tt_symmetrise(tt_reshape(_tt_get_block(1, Delta_tt), (2, 2)), status.eps)
         Delta_Z_tt = _tt_symmetrise(tt_reshape(_tt_get_block(2, Delta_tt), (2, 2)), status.eps)
         Delta_Y_tt = tt_rank_reduce(_tt_get_block(0, Delta_tt), eps=status.eps)
@@ -776,7 +798,10 @@ def _tt_ipm_newton_step(
         if status.ineq_status is IneqStatus.ACTIVE:
             Delta_T_tt = tt_rank_reduce(_tt_get_block(3, Delta_tt), eps=status.eps)
             Delta_T_tt = tt_fast_hadamard(ineq_mask, tt_reshape(Delta_T_tt, (2, 2)), status.eps)
+        _ipm_trace(status, "delta", f"rmax dX/dY/dZ/dT={_tt_rank_peak(Delta_X_tt)}/{_tt_rank_peak(Delta_Y_tt)}/{_tt_rank_peak(Delta_Z_tt)}/{_tt_rank_peak(Delta_T_tt)}", t0)
 
+        t0 = time.time()
+        _ipm_trace(status, "step-size", "start")
         x_step_size, z_step_size = _tt_get_step_sizes(
             X_tt,
             Z_tt,
@@ -787,6 +812,7 @@ def _tt_ipm_newton_step(
             ineq_mask,
             status
         )
+        _ipm_trace(status, "step-size", f"alpha_x={x_step_size:.2e} alpha_z={z_step_size:.2e}", t0)
 
         if status.primal_restoration:
             x_step_size *= 0.5
@@ -852,9 +878,15 @@ def _tt_ipm_newton_step(
                 corrector_needed = True
 
             if corrector_needed:
+                _ipm_trace(status, "corrector", f"needed sigma={status.sigma:.2e} dxz={DXZ:.2e}")
                 lhs_cc_tt = lhs_pred_tt
+                t0 = time.time()
                 rhs_cc_tt = _tt_scale_kkt_rhs(rhs_vec_tt, row_scales)
+                _ipm_trace(status, "rhs-scale", "corrector", t0)
+                t0 = time.time()
+                _ipm_trace(status, "kkt-corr", f"start nswp={status.kkt_iterations + status.is_last_iter} rank_cap={status.mals_rank_restriction}")
                 Delta_tt_cc, _ = solver(lhs_cc_tt, rhs_cc_tt, status.mals_delta0, status.kkt_iterations + status.is_last_iter, status.mals_rank_restriction, status.eta)
+                _ipm_trace(status, "kkt-corr", "done", t0)
                 status.mals_delta0 = Delta_tt_cc
                 Delta_X_tt_cc = _tt_symmetrise(tt_reshape(_tt_get_block(1, Delta_tt_cc), (2, 2)), status.eps)
                 Delta_Z_tt_cc = _tt_symmetrise(tt_reshape(_tt_get_block(2, Delta_tt_cc), (2, 2)), status.eps)
@@ -867,6 +899,8 @@ def _tt_ipm_newton_step(
                     Delta_T_tt_cc = tt_fast_hadamard(ineq_mask, tt_reshape(Delta_T_tt_cc, (2, 2)), status.eps)
                     Delta_T_tt = tt_rank_reduce(tt_add(Delta_T_tt_cc, Delta_T_tt), eps=status.eps)
 
+                t0 = time.time()
+                _ipm_trace(status, "step-size", "corrector start")
                 x_step_size, z_step_size = _tt_get_step_sizes(
                     X_tt,
                     Z_tt,
@@ -877,14 +911,19 @@ def _tt_ipm_newton_step(
                     ineq_mask,
                     status
                 )
+                _ipm_trace(status, "step-size", f"corrector alpha_x={x_step_size:.2e} alpha_z={z_step_size:.2e}", t0)
+            else:
+                _ipm_trace(status, "corrector", f"skipped sigma={status.sigma:.2e} dxz={DXZ:.2e}")
         else:
             status.sigma = 0
+            _ipm_trace(status, "corrector", "skipped by phase/centrality")
     except Exception as e:
         print(f"\n\t⚠️ Attention: {e}")
         print("\n\t==> Full traceback (most recent call last):")
         traceback.print_exc(file=sys.stdout)
         return 0, 0, None, None, None, None, status
 
+    _ipm_trace(status, "newton", f"done alpha_x={x_step_size:.2e} alpha_z={z_step_size:.2e}", newton_t0)
     return x_step_size, z_step_size, Delta_X_tt, Delta_Y_tt, Delta_Z_tt, Delta_T_tt, status
 
 
@@ -902,13 +941,19 @@ def _tt_get_step_sizes(
         X_tt = tt_add(X_tt, tt_scale(status.boundary_val, tt_identity(len(X_tt))))
         Z_tt = tt_add(Z_tt, tt_scale(status.boundary_val, tt_identity(len(Z_tt))))
 
+    t0 = time.time()
     x_step_size, status.eigen_x0 = tt_max_generalised_eigen(X_tt, Delta_X_tt, x0=status.eigen_x0, tol=1e-8, verbose=status.verbose)
+    _ipm_trace(status, "step-x", f"alpha={x_step_size:.2e}", t0)
+    t0 = time.time()
     z_step_size, status.eigen_z0 = tt_max_generalised_eigen(Z_tt, Delta_Z_tt, x0=status.eigen_z0, tol=1e-8, verbose=status.verbose)
+    _ipm_trace(status, "step-z", f"alpha={z_step_size:.2e}", t0)
     if status.ineq_status is not IneqStatus.NOT_IN_USE:
         if status.is_last_iter:
             X_tt = tt_add(X_tt, tt_scale(status.ineq_boundary_val + status.boundary_val, ineq_mask))
             T_tt = tt_add(T_tt, tt_scale(status.ineq_boundary_val + status.boundary_val, ineq_mask))
+        t0 = time.time()
         x_step_size, z_step_size = _tt_get_ineq_step_sizes(x_step_size, z_step_size, X_tt, T_tt, Delta_X_tt, Delta_T_tt, ineq_mask, status)
+        _ipm_trace(status, "step-ineq", f"alpha_x={x_step_size:.2e} alpha_z={z_step_size:.2e}", t0)
     tau_x = 0.9 + 0.05*min(x_step_size,  z_step_size)
     tau_z = 0.9 + 0.05*min(x_step_size,  z_step_size)
 
@@ -1027,6 +1072,9 @@ class IPMStatus:
     dual_feas_norm: float = np.inf
     eta = 1e-3
     primal_restoration: bool = False
+    primal_restoration_steps: int = 0
+    max_primal_restoration_steps: int = 2
+    trace_verbose: bool = False
 
 
 def _ipm_format_output(X_tt, Y_tt, T_tt, Z_tt, iteration, status):
@@ -1064,22 +1112,40 @@ def _ipm_check_convergence(status, finishing_steps, ZX, TX, abs_tol, max_refinem
     """Checks for final convergence and updates the finishing step counter."""
     if not status.is_last_iter:
         return status, finishing_steps
-        
-    converged = (abs(ZX) + abs(TX) < abs_tol and 
-                 status.primal_error < abs_tol and 
-                 status.dual_error < abs_tol)
 
-    if converged:
+    if (abs(ZX) + abs(TX) < abs_tol and
+            status.primal_error < abs_tol and
+            status.dual_error < abs_tol):
         if status.verbose:
-            print("Absolute tolerance reached!")
+            print("info   | finish   | accepted=absolute | action=stop")
         finishing_steps = 0
     else:
         finishing_steps -= 1
         status.boundary_val = 0.001 * (1 - (finishing_steps / max_refinement))
         if finishing_steps == 1:
             status.kkt_iterations += 1
-            
+
     return status, finishing_steps
+
+
+def _ipm_finish_merit(status):
+    return max(status.centrality_error, status.primal_error, status.dual_error)
+
+
+def _tt_copy_state(X_tt, Y_tt, T_tt, Z_tt, status):
+    def copy_train(tt):
+        return None if tt is None else [core.copy() for core in tt]
+    return copy_train(X_tt), copy_train(Y_tt), copy_train(T_tt), copy_train(Z_tt), copy.copy(status)
+
+
+def _ipm_trace(status, stage, message="", t0=None):
+    if not getattr(status, "trace_verbose", False):
+        return
+    details = message
+    if t0 is not None:
+        elapsed = f"dt={time.time() - t0:.2f}s"
+        details = f"{details} | {elapsed}" if details else elapsed
+    print(f"trace  | {stage:<12} | {details}", flush=True)
 
 
 def _tt_rank_peak(tt):
@@ -1136,6 +1202,7 @@ def tt_ipm(
     epsilonDashineq=None,
     verbose=False,
     solver_verbose=False,
+    trace_verbose=False,
     rounding_update_budget_growth=1.25
 ):
     dim = len(obj_tt)
@@ -1162,6 +1229,7 @@ def tt_ipm(
         1,
         r_max
     )
+    status.trace_verbose = trace_verbose
     status.rounding = RoundingController(update_budget_growth=rounding_update_budget_growth)
     lag_maps = {key: tt_rank_reduce(value, eps=eps) for key, value in lag_maps.items()}
     obj_tt = tt_rank_reduce(obj_tt, eps=eps)
@@ -1221,11 +1289,15 @@ def tt_ipm(
     iteration = 0
     finishing_steps = max_refinement
     prev_errors = {'primal': np.inf, 'dual': np.inf, 'centrality': np.inf}
+    finish_prev_state = None
+    finish_prev_merit = np.inf
     lhs = lhs_skeleton
 
     while finishing_steps > 0:
         iteration += 1
+        iter_t0 = time.time()
         status.aho_direction = (iteration > warm_up)
+        _ipm_trace(status, "iter", f"start it={iteration - 1:03d} dir={'AHO' if status.aho_direction else 'XZ'} ineq={status.ineq_status.name.lower()}")
         if max_iter - max_refinement == iteration - 1 and not status.is_last_iter:
             print("warn   | ipm      | limit=max_iter | action=finish", flush=True)
             status.is_last_iter = True
@@ -1237,6 +1309,7 @@ def tt_ipm(
         status.is_central = np.less(status.centrality_error, centrality_tol)
         status.eta = max(min(status.eta, 2*status.mu), status.op_tol)
 
+        t0 = time.time()
         lhs_matrix_tt, rhs_vec_tt, status = tt_infeasible_newton_system(
             lhs,
             obj_tt,
@@ -1250,6 +1323,21 @@ def tt_ipm(
             ineq_mask,
             status
         )
+        _ipm_trace(status, "system", f"rhs_rows={list(rhs_vec_tt.keys())}", t0)
+
+        if status.is_last_iter:
+            finish_merit = _ipm_finish_merit(status)
+            if finish_prev_state is not None and finish_merit > finish_prev_merit * (1 + 1e-8) + 1e-12:
+                X_tt, Y_tt, T_tt, Z_tt, status = finish_prev_state
+                iteration -= 1
+                if verbose:
+                    print(f"warn   | finish   | merit=worse | prev={finish_prev_merit:.2e} current={finish_merit:.2e} | action=restore-stop", flush=True)
+                break
+            finish_prev_merit = finish_merit
+            finish_prev_state = _tt_copy_state(X_tt, Y_tt, T_tt, Z_tt, status)
+        else:
+            finish_prev_state = None
+            finish_prev_merit = np.inf
 
         if verbose:
             _ipm_log_iteration(iteration, status, X_tt, Y_tt, Z_tt, T_tt)
@@ -1261,6 +1349,7 @@ def tt_ipm(
             iteration -= 1
             break
 
+        t0 = time.time()
         x_step_size, z_step_size, Delta_X_tt, Delta_Y_tt, Delta_Z_tt, Delta_T_tt, status = _tt_ipm_newton_step(
             lhs_matrix_tt,
             rhs_vec_tt,
@@ -1273,6 +1362,7 @@ def tt_ipm(
             status,
             solver
         )
+        _ipm_trace(status, "newton-all", "returned", t0)
 
         if (Delta_X_tt is None and Delta_Z_tt is None) or (x_step_size < 1e-5 and z_step_size < 1e-5):
             if status.is_last_iter:
@@ -1281,6 +1371,7 @@ def tt_ipm(
                 print("============================================\n Hit PSD boundary! Entering finishing phase.\n============================================")
                 status.is_last_iter = True
         else:
+            t0 = time.time()
             X_tt = _tt_budgeted_psd_symmetrise(tt_add(X_tt, tt_scale(x_step_size, Delta_X_tt)), status.rounding.update_x_round_tol(status))
             Z_tt = _tt_budgeted_psd_symmetrise(tt_add(Z_tt, tt_scale(z_step_size, Delta_Z_tt)), status.rounding.update_z_round_tol(status))
 
@@ -1289,12 +1380,15 @@ def tt_ipm(
 
             if status.ineq_status is IneqStatus.ACTIVE:
                 T_tt = _tt_budgeted_mask_symmetrise(tt_add(T_tt, tt_scale(z_step_size, Delta_T_tt)), ineq_mask, status.rounding.update_t_round_tol(status))
-            elif status.ineq_status is IneqStatus.SETTING_INACTIVE:
+            _ipm_trace(status, "update", f"rmax X/Y/Z/T={_tt_rank_peak(X_tt)}/{_tt_rank_peak(Y_tt)}/{_tt_rank_peak(Z_tt)}/{_tt_rank_peak(T_tt)}", t0)
+            if status.ineq_status is IneqStatus.SETTING_INACTIVE:
+                _ipm_trace(status, "ineq", "switch active->inactive")
                 solver = solver_eq
                 lhs = lhs_skeleton.get_submatrix(2, 2)
                 status.mals_delta0 = None
                 status.ineq_status = IneqStatus.INACTIVE
             elif status.ineq_status is IneqStatus.SETTING_ACTIVE:
+                _ipm_trace(status, "ineq", "switch inactive->active")
                 solver = solver_ineq
                 lhs = lhs_skeleton
                 status.mals_delta0 = None
@@ -1302,6 +1396,8 @@ def tt_ipm(
 
         if _ipm_check_for_stalled_progress(prev_errors, status, gap_tol):
             status.is_last_iter = True
+
+        _ipm_trace(status, "iter", f"done it={iteration - 1:03d}", iter_t0)
 
         prev_errors['primal'] = status.primal_error
         prev_errors['dual'] = status.dual_error

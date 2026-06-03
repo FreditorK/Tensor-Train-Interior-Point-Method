@@ -931,6 +931,133 @@ def _eigen_step_stalled(prev_step, step, prev_res, res, tol):
     )
 
 
+def _sym_two_core_matvec(Phi_l, A_l, A_r, Phi_r, x_shape, diagonal_shift=0.0):
+    mat_vec = contract_expression(
+        'lsr, smnk, kptS, LSR, rntR->lmpL',
+        Phi_l.shape, A_l.shape, A_r.shape, Phi_r.shape, x_shape, optimize="greedy"
+    )
+    mat_vec_t = contract_expression(
+        'lsr, smnk, kptS, LSR, lmpL->rntR',
+        Phi_l.shape, A_l.shape, A_r.shape, Phi_r.shape, x_shape, optimize="greedy"
+    )
+
+    def apply(x_vec):
+        x = x_vec.reshape(*x_shape)
+        y = 0.5 * (
+            mat_vec(Phi_l, A_l, A_r, Phi_r, x).reshape(-1, 1)
+            + mat_vec_t(Phi_l, A_l, A_r, Phi_r, x).reshape(-1, 1)
+        )
+        if diagonal_shift:
+            y += diagonal_shift * x_vec.reshape(-1, 1)
+        return y
+
+    return apply
+
+
+def _sym_one_core_matvec(Phi_l, A_k, Phi_r, x_shape, diagonal_shift=0.0):
+    mat_vec = contract_expression(
+        'lsr,smnS,LSR,rnR->lmL',
+        Phi_l.shape, A_k.shape, Phi_r.shape, x_shape, optimize="greedy"
+    )
+    mat_vec_t = contract_expression(
+        'lsr,smnS,LSR,lmL->rnR',
+        Phi_l.shape, A_k.shape, Phi_r.shape, x_shape, optimize="greedy"
+    )
+
+    def apply(x_vec):
+        x = x_vec.reshape(*x_shape)
+        y = 0.5 * (
+            mat_vec(Phi_l, A_k, Phi_r, x).reshape(-1, 1)
+            + mat_vec_t(Phi_l, A_k, Phi_r, x).reshape(-1, 1)
+        )
+        if diagonal_shift:
+            y += diagonal_shift * x_vec.reshape(-1, 1)
+        return y
+
+    return apply
+
+
+def _linear_op_matvec(op):
+    return lambda x_vec: op.matvec(np.asarray(x_vec).reshape(-1)).reshape(-1, 1)
+
+
+def _relative_eigen_residual(matvec, vec, eig_val=None):
+    vec = vec.reshape(-1, 1)
+    vec_norm = np.linalg.norm(vec)
+    if vec_norm <= 0:
+        return np.inf
+    A_vec = matvec(vec)
+    if eig_val is None:
+        theta = float((vec.T @ A_vec).squeeze() / (vec_norm ** 2))
+    else:
+        theta = float(np.asarray(eig_val).reshape(-1)[0])
+    residual = np.linalg.norm(A_vec - theta * vec)
+    scale = max(np.linalg.norm(A_vec), abs(theta) * vec_norm, 1.0)
+    return residual / scale
+
+
+def _eig_scalar(eig_val):
+    return float(np.asarray(eig_val).reshape(-1)[0])
+
+
+def _normalised_column(vec, m):
+    vec = np.asarray(vec, dtype=np.float64).reshape(-1, 1)
+    if vec.shape[0] != m:
+        vec = np.ones((m, 1), dtype=np.float64)
+    vec_norm = np.linalg.norm(vec)
+    if (not np.isfinite(vec_norm)) or vec_norm == 0:
+        vec = np.ones((m, 1), dtype=np.float64)
+        vec_norm = np.linalg.norm(vec)
+    return vec / vec_norm
+
+
+def _rayleigh_value(matvec, vec):
+    vec = _normalised_column(vec, vec.reshape(-1, 1).shape[0])
+    A_vec = matvec(vec)
+    return float((vec.T @ A_vec).squeeze())
+
+
+def _safeguard_psd_step(step_size, eig_val, solution_now, min_eig_at_step, eps):
+    eig_val = _eig_scalar(eig_val)
+    if eig_val >= 0:
+        return step_size, solution_now, eig_val
+
+    eig_floor = -max(10 * eps, 1e-12)
+    bad_step = step_size
+    good_step = 0.0
+    good_vec = solution_now
+    good_val = eig_val
+    probe_vec = solution_now
+
+    for _ in range(16):
+        trial_step = 0.5 * bad_step
+        if trial_step <= 0:
+            break
+        trial_val, trial_vec = min_eig_at_step(trial_step, probe_vec)
+        probe_vec = trial_vec
+        if trial_val >= eig_floor:
+            good_step = trial_step
+            good_vec = trial_vec
+            good_val = trial_val
+            break
+        bad_step = trial_step
+
+    if good_step <= 0:
+        return 0.0, probe_vec, good_val
+
+    for _ in range(8):
+        trial_step = 0.5 * (good_step + bad_step)
+        trial_val, trial_vec = min_eig_at_step(trial_step, good_vec)
+        if trial_val >= eig_floor:
+            good_step = trial_step
+            good_vec = trial_vec
+            good_val = trial_val
+        else:
+            bad_step = trial_step
+
+    return good_step, good_vec, good_val
+
+
 def _step_size_local_solve(
     previous_solution1, 
     previous_solution2, 
@@ -964,7 +1091,7 @@ def _step_size_local_solve(
         M = (1/step_size)*A + D
         try:
             eig_val, solution_now = scp.sparse.linalg.eigsh(M, tol=eps, k=1, ncv=_eigsh_ncv(m), maxiter=_eigsh_maxiter(m), which="SA", v0=_eigsh_v0(previous_solution))
-            if np.linalg.norm(M @ solution_now - eig_val * solution_now) > eps:
+            if _relative_eigen_residual(lambda x: M @ x, solution_now, eig_val) > eps:
                 sigma = eig_val.squeeze()
                 M_shift = M - sigma * scp.sparse.eye(M.shape[1], format=M.format)
                 lu = scp.sparse.linalg.splu(M_shift.tocsc())
@@ -987,41 +1114,52 @@ def _step_size_local_solve(
             solution_now = previous_solution
         solution_now /= np.linalg.norm(solution_now)
         if eig_val < 0:
-            try:
-                eig_val, solution_now = scp.sparse.linalg.eigsh(-D, M=A, tol=eps, k=1, ncv=_eigsh_ncv(m), which="LA", maxiter=_eigsh_maxiter(m), v0=_eigsh_v0(solution_now))
-                step_size = max(0, min(step_size, 1/ eig_val[0]))
-            except Exception as e:
-                _print_attention(e)
-                solution_now = previous_solution
-                step_size *= (1-eps)
+            def min_eig_at_step(alpha, v0):
+                M_alpha = (1/alpha)*A + D
+                try:
+                    eig_val_alpha, vec_alpha = scp.sparse.linalg.eigsh(
+                        M_alpha, tol=eps, k=1, ncv=_eigsh_ncv(m),
+                        maxiter=_eigsh_maxiter(m), which="SA", v0=_eigsh_v0(v0)
+                    )
+                    return _eig_scalar(eig_val_alpha), vec_alpha
+                except Exception:
+                    vec_alpha = _normalised_column(v0, m)
+                    return _rayleigh_value(lambda x: M_alpha @ x, vec_alpha), vec_alpha
 
-        eig_val = previous_solution.T @ (((1/step_size)*A + D) @ previous_solution)
-        old_res = np.linalg.norm(((1/step_size)*A + D) @ previous_solution - eig_val*previous_solution)
+            step_size, solution_now, eig_val = _safeguard_psd_step(
+                step_size, eig_val, solution_now, min_eig_at_step, eps
+            )
+            if step_size <= 0:
+                return previous_solution1, previous_solution2, 0.0, np.inf
+
+        M_now = (1/step_size)*A + D
+        old_res = _relative_eigen_residual(lambda x: M_now @ x, solution_now)
     else:
-        _mat_vec_A = contract_expression('lsr, smnk, kptS, LSR, rntR->lmpL', XAX_k.shape, A_k.shape, A_kp1.shape, XAX_k2.shape, prev_sol_shape, optimize="greedy")
-        mat_vec_A = lambda x_vec: _mat_vec_A(XAX_k, A_k, A_kp1, XAX_k2, x_vec.reshape(*prev_sol_shape)).reshape(-1, 1).__iadd__(1e-12*x_vec.reshape(-1, 1)) # regularisation term for convergence
-        A_op = scp.sparse.linalg.LinearOperator((m, m), matvec=mat_vec_A)
-        _mat_vec_D = contract_expression('lsr, smnk, kptS, LSR, rntR->lmpL', XDX_k.shape, D_k.shape, D_kp1.shape, XDX_k2.shape, prev_sol_shape, optimize="greedy")
-        mat_vec_D = lambda x_vec: _mat_vec_D(XDX_k, D_k, D_kp1, XDX_k2, x_vec.reshape(*prev_sol_shape)).reshape(-1, 1).__imul__(-1)
-        D_op = scp.sparse.linalg.LinearOperator((m, m), matvec=mat_vec_D)
-        AD_op = scp.sparse.linalg.LinearOperator((m, m), matvec=lambda x_vec: (mat_vec_A(x_vec) / step_size).__isub__(mat_vec_D(x_vec)))
-        try:
-            eig_val, solution_now = scp.sparse.linalg.lobpcg(AD_op, previous_solution, tol=eps, largest=False, maxiter=_lobpcg_maxiter(m))
-        except Exception as e:
-            eig_val = previous_solution.T @ AD_op(previous_solution)
-            solution_now = previous_solution
+        mat_vec_A = _sym_two_core_matvec(XAX_k, A_k, A_kp1, XAX_k2, prev_sol_shape, diagonal_shift=1e-12)
+        mat_vec_D = _sym_two_core_matvec(XDX_k, D_k, D_kp1, XDX_k2, prev_sol_shape)
+
+        def min_eig_at_step(alpha, v0):
+            op = scp.sparse.linalg.LinearOperator((m, m), matvec=lambda x_vec: mat_vec_A(x_vec) / alpha + mat_vec_D(x_vec))
+            v0 = _normalised_column(v0, m)
+            try:
+                eig_val_alpha, vec_alpha = scp.sparse.linalg.lobpcg(
+                    op, v0, tol=eps, largest=False, maxiter=_lobpcg_maxiter(m)
+                )
+                return _eig_scalar(eig_val_alpha), vec_alpha
+            except Exception:
+                return _rayleigh_value(_linear_op_matvec(op), v0), v0
+
+        eig_val, solution_now = min_eig_at_step(step_size, previous_solution)
         solution_now /= np.linalg.norm(solution_now)
         if eig_val < 0:
-            try:
-                eig_val, solution_now = scp.sparse.linalg.lobpcg(D_op, solution_now, B=A_op, tol=eps, maxiter=_lobpcg_maxiter(m))
-                step_size = max(0, min(step_size, 1 / eig_val[0]))
-            except Exception as e:
-                _print_attention(e)
-                solution_now = previous_solution
-                step_size *= (1-eps)
+            step_size, solution_now, eig_val = _safeguard_psd_step(
+                step_size, eig_val, solution_now, min_eig_at_step, eps
+            )
+            if step_size <= 0:
+                return previous_solution1, previous_solution2, 0.0, np.inf
 
-        eig_val = previous_solution.T @ AD_op(previous_solution)
-        old_res = np.linalg.norm(AD_op(previous_solution).__isub__(eig_val * previous_solution))
+        AD_op = scp.sparse.linalg.LinearOperator((m, m), matvec=lambda x_vec: mat_vec_A(x_vec) / step_size + mat_vec_D(x_vec))
+        old_res = _relative_eigen_residual(_linear_op_matvec(AD_op), solution_now)
     solution_now /= np.linalg.norm(solution_now)
     if bwd:
         u, s, v = scp.linalg.svd(solution_now.reshape(np.prod(prev_sol_shape[:2]), np.prod(prev_sol_shape[2:])).T, full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
@@ -1066,11 +1204,13 @@ def _step_size_local_solve_last(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k
             "lsr,smnS,LSR->lmLrnR",
             XDX_k, Delta_k, XDX_k1
         ).reshape(m, m))
+        D = 0.5*(D + D.T)
         A = scp.sparse.csr_matrix(cached_einsum("lsr,smnS,LSR->lmLrnR", XAX_k, A_k, XAX_k1).reshape(m, m))
+        A = 0.5*(A + A.T)
         M = (1/step_size)*A + D
         try:
             eig_val, solution_now = scp.sparse.linalg.eigsh(M, tol=eps, k=1, ncv=_eigsh_ncv(m), maxiter=_eigsh_maxiter(m), which="SA", v0=_eigsh_v0(previous_solution))
-            if np.linalg.norm(M @ solution_now - eig_val * solution_now) > eps:
+            if _relative_eigen_residual(lambda x: M @ x, solution_now, eig_val) > eps:
                 sigma = eig_val.squeeze()
                 M_shift = M - sigma * scp.sparse.eye(M.shape[1], format=M.format)
                 lu = scp.sparse.linalg.splu(M_shift.tocsc())
@@ -1092,43 +1232,53 @@ def _step_size_local_solve_last(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k
             eig_val = previous_solution.T @ ((1/step_size)*A + D)  @ previous_solution
             solution_now = previous_solution
         if eig_val < 0:
-            try:
-                eig_val, solution_now = scp.sparse.linalg.eigsh(-D, M=A, tol=eps, k=1, ncv=_eigsh_ncv(m), which="LA", maxiter=_eigsh_maxiter(m), v0=_eigsh_v0(solution_now))
-                step_size = max(0, min(step_size, 1/ eig_val[0]))
-            except Exception as e:
-                _print_attention(e)
-                solution_now = previous_solution
-                step_size *= (1-eps)
+            def min_eig_at_step(alpha, v0):
+                M_alpha = (1/alpha)*A + D
+                try:
+                    eig_val_alpha, vec_alpha = scp.sparse.linalg.eigsh(
+                        M_alpha, tol=eps, k=1, ncv=_eigsh_ncv(m),
+                        maxiter=_eigsh_maxiter(m), which="SA", v0=_eigsh_v0(v0)
+                    )
+                    return _eig_scalar(eig_val_alpha), vec_alpha
+                except Exception:
+                    vec_alpha = _normalised_column(v0, m)
+                    return _rayleigh_value(lambda x: M_alpha @ x, vec_alpha), vec_alpha
 
-        eig_val = previous_solution.T @ ((1/step_size)*A + D) @ previous_solution
-        old_res = np.linalg.norm(((1/step_size)*A + D) @ previous_solution - eig_val*previous_solution)
+            step_size, solution_now, eig_val = _safeguard_psd_step(
+                step_size, eig_val, solution_now, min_eig_at_step, eps
+            )
+            if step_size <= 0:
+                return previous_solution.reshape(-1, 1), 0.0, np.inf
+
+        M_now = (1/step_size)*A + D
+        old_res = _relative_eigen_residual(lambda x: M_now @ x, solution_now)
     else:
         x_shape = previous_solution.shape
         previous_solution = previous_solution.reshape(-1, 1)
-        _mat_vec_A = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k.shape, A_k.shape, XAX_k1.shape, x_shape, optimize="greedy")
-        mat_vec_A = lambda x_vec: _mat_vec_A(XAX_k, A_k, XAX_k1, x_vec.reshape(*x_shape)).reshape(-1, 1).__iadd__(1e-12*x_vec.reshape(-1, 1)) # regularisation term for convergence
-        A_op = scp.sparse.linalg.LinearOperator((m, m), matvec=mat_vec_A)
-        _mat_vec_D = contract_expression('lsr,smnS,LSR,rnR->lmL', XDX_k.shape, Delta_k.shape, XDX_k1.shape, x_shape, optimize="greedy")
-        mat_vec_D = lambda x_vec: _mat_vec_D(XDX_k, Delta_k, XDX_k1, x_vec.reshape(*x_shape)).reshape(-1, 1).__imul__(-1)
-        D_op = scp.sparse.linalg.LinearOperator((m, m), matvec=mat_vec_D)
-        AD_op = scp.sparse.linalg.LinearOperator((m, m), matvec=lambda x_vec: (mat_vec_A(x_vec) / step_size).__isub__(mat_vec_D(x_vec)))
+        mat_vec_A = _sym_one_core_matvec(XAX_k, A_k, XAX_k1, x_shape, diagonal_shift=1e-12)
+        mat_vec_D = _sym_one_core_matvec(XDX_k, Delta_k, XDX_k1, x_shape)
 
-        try:
-            eig_val, solution_now = scp.sparse.linalg.lobpcg(AD_op, X=previous_solution, tol=eps, largest=False, maxiter=_lobpcg_maxiter(m))
-        except Exception as e:
-            eig_val = previous_solution.T @ AD_op(previous_solution)
-            solution_now = previous_solution
-        if eig_val < 0:
+        def min_eig_at_step(alpha, v0):
+            op = scp.sparse.linalg.LinearOperator((m, m), matvec=lambda x_vec: mat_vec_A(x_vec) / alpha + mat_vec_D(x_vec))
+            v0 = _normalised_column(v0, m)
             try:
-                eig_val, solution_now = scp.sparse.linalg.lobpcg(D_op, X=solution_now, B=A_op, tol=eps, maxiter=_lobpcg_maxiter(m))
-                step_size = max(0, min(step_size, 1 / eig_val[0]))
-            except Exception as e:
-                _print_attention(e)
-                solution_now = previous_solution
-                step_size *= (1-eps)
+                eig_val_alpha, vec_alpha = scp.sparse.linalg.lobpcg(
+                    op, X=v0, tol=eps, largest=False, maxiter=_lobpcg_maxiter(m)
+                )
+                return _eig_scalar(eig_val_alpha), vec_alpha
+            except Exception:
+                return _rayleigh_value(_linear_op_matvec(op), v0), v0
 
-        eig_val = previous_solution.T @ AD_op(previous_solution)
-        old_res = np.linalg.norm(AD_op(previous_solution).__isub__(eig_val * previous_solution))
+        eig_val, solution_now = min_eig_at_step(step_size, previous_solution)
+        if eig_val < 0:
+            step_size, solution_now, eig_val = _safeguard_psd_step(
+                step_size, eig_val, solution_now, min_eig_at_step, eps
+            )
+            if step_size <= 0:
+                return previous_solution.reshape(-1, 1), 0.0, np.inf
+
+        AD_op = scp.sparse.linalg.LinearOperator((m, m), matvec=lambda x_vec: mat_vec_A(x_vec) / step_size + mat_vec_D(x_vec))
+        old_res = _relative_eigen_residual(_linear_op_matvec(AD_op), solution_now)
     return solution_now.reshape(-1, 1), step_size, old_res
 
 
@@ -1281,8 +1431,11 @@ def tt_max_generalised_eigen(A, Delta, x0=None, nswp=10, tol=1e-8, size_limit = 
         print('\t Time per sweep: ', (time.time() - t0) / (swp + 1), flush=True)
 
     if max_res > tol:
-        print(f"warn   | step-eig | target=miss | residual={max_res:.2e} > {tol:.2e} | action=damp", flush=True)
-        step_size *= (tol/max_res)
+        severe_miss = (not np.isfinite(max_res)) or max_res > 1e-2
+        action = "keep-reset" if severe_miss else "keep"
+        print(f"warn   | step-eig | target=miss | relres={max_res:.2e} > {tol:.2e} | action={action}", flush=True)
+        if severe_miss:
+            x_cores = None
     return step_size, x_cores
 
 
@@ -1316,8 +1469,7 @@ def _eigen_local_solve(
             lanczos_discount = min(0.999, lanczos_discount*1.1)
         old_res = np.linalg.norm(eig_val * previous_solution - A @ previous_solution)
     else:
-        _mat_vec_A = contract_expression('lsr, smnk, kptS, LSR, rntR->lmpL', XAX_k.shape, A_k.shape, A_kp1.shape, XAX_k2.shape, prev_sol_shape, optimize="greedy")
-        mat_vec_A = lambda x_vec: _mat_vec_A(XAX_k, A_k, A_kp1, XAX_k2, x_vec.reshape(*prev_sol_shape)).reshape(-1, 1)
+        mat_vec_A = _sym_two_core_matvec(XAX_k, A_k, A_kp1, XAX_k2, prev_sol_shape)
         A_op = scp.sparse.linalg.LinearOperator((m, m), matvec=mat_vec_A)
         try:
             eig_val, solution_now = scp.sparse.linalg.lobpcg(A_op, X=previous_solution, tol=eps, largest=False, maxiter=_lobpcg_maxiter(m))
@@ -1378,8 +1530,7 @@ def _eigen_local_solve_last(previous_solution, XAX_k, A_k, XAX_k1, m, size_limit
 
     x_shape = previous_solution.shape
     previous_solution = previous_solution.reshape(-1, 1)
-    _mat_vec_A = contract_expression('lsr,smnS,LSR,rnR->lmL', XAX_k.shape, A_k.shape, XAX_k1.shape, x_shape, optimize="greedy")
-    mat_vec_A = lambda x_vec: _mat_vec_A(XAX_k, A_k, XAX_k1, x_vec.reshape(*x_shape)).reshape(-1, 1)
+    mat_vec_A = _sym_one_core_matvec(XAX_k, A_k, XAX_k1, x_shape)
     A_op = scp.sparse.linalg.LinearOperator((m, m), matvec=mat_vec_A)
     try:
         eig_val, solution_now = scp.sparse.linalg.lobpcg(A_op, X=previous_solution, tol=eps, largest=False, maxiter=_lobpcg_maxiter(m))

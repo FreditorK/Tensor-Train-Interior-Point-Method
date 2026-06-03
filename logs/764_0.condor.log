@@ -126,3 +126,32 @@
 	7577  -  MemoryUsage of job (MB)
 	7758848  -  ResidentSetSize of job (KB)
 ...
+004 (764.000.000) 06/02 12:12:01 Job was evicted.
+	(0) Job was not checkpointed.
+		Usr 4 22:28:28, Sys 0 01:18:20  -  Run Remote Usage
+		Usr 0 00:00:00, Sys 0 00:00:00  -  Run Local Usage
+	0  -  Run Bytes Sent By Job
+	0  -  Run Bytes Received By Job
+	Partitionable Resources :    Usage  Request Allocated 
+	   Cpus                 :     9.07       16        24 
+	   Disk (KB)            :     4           4   6040816 
+	   Gpus                 :                           0 
+	   Memory (MB)          :  7577        7325     15626 
+...
+001 (764.000.000) 06/02 12:15:02 Job executing on host: <146.169.52.17:9618?addrs=146.169.52.17-9618+[2a0c-5bc0-40-11c4-e5ad-4a26-a750-7ed1]-9618&noUDP&sock=56017_aa0d_4>
+...
+004 (764.000.000) 06/02 14:08:51 Job was evicted.
+	(0) Job was not checkpointed.
+		Usr 0 16:05:39, Sys 0 00:14:02  -  Run Remote Usage
+		Usr 0 00:00:00, Sys 0 00:00:00  -  Run Local Usage
+	0  -  Run Bytes Sent By Job
+	0  -  Run Bytes Received By Job
+	Partitionable Resources :    Usage  Request Allocated 
+	   Cpus                 :     9.34       16        24 
+	   Disk (KB)            :     4           4   5756476 
+	   Gpus                 :                           0 
+	   Memory (MB)          :  9766        9766     15626 
+...
+009 (764.000.000) 06/02 14:08:51 Job was aborted by the user.
+	via condor_rm (by user fjk20)
+...

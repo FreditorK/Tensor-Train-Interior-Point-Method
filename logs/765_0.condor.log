@@ -213,3 +213,37 @@
 ...
 001 (765.000.000) 06/02 10:14:00 Job executing on host: <146.169.52.1:9618?addrs=146.169.52.1-9618+[2a0c-5bc0-40-11c4-c11a-4090-1b54-a8b6]-9618&noUDP&sock=55671_916b_4>
 ...
+010 (765.000.000) 06/02 11:46:13 Job was suspended.
+	Number of processes actually suspended: 7
+...
+011 (765.000.000) 06/02 11:51:13 Job was unsuspended.
+...
+004 (765.000.000) 06/02 12:12:01 Job was evicted.
+	(0) Job was not checkpointed.
+		Usr 0 16:13:11, Sys 0 00:10:03  -  Run Remote Usage
+		Usr 0 00:00:00, Sys 0 00:00:00  -  Run Local Usage
+	0  -  Run Bytes Sent By Job
+	0  -  Run Bytes Received By Job
+	Partitionable Resources :    Usage  Request Allocated 
+	   Cpus                 :    12.30       16        24 
+	   Disk (KB)            :     4           4   5755648 
+	   Gpus                 :                           0 
+	   Memory (MB)          : 12208       12208     15626 
+...
+001 (765.000.000) 06/02 12:16:02 Job executing on host: <146.169.52.8:9618?addrs=146.169.52.8-9618+[2a0c-5bc0-40-11c4-b3be-83e6-9024-f649]-9618&noUDP&sock=54282_579d_4>
+...
+004 (765.000.000) 06/02 14:08:55 Job was evicted.
+	(0) Job was not checkpointed.
+		Usr 0 15:14:59, Sys 0 00:10:40  -  Run Remote Usage
+		Usr 0 00:00:00, Sys 0 00:00:00  -  Run Local Usage
+	0  -  Run Bytes Sent By Job
+	0  -  Run Bytes Received By Job
+	Partitionable Resources :    Usage  Request Allocated 
+	   Cpus                 :    10.43       16        24 
+	   Disk (KB)            :     4           4   5810196 
+	   Gpus                 :                           0 
+	   Memory (MB)          : 12208       12208     15626 
+...
+009 (765.000.000) 06/02 14:08:55 Job was aborted by the user.
+	via condor_rm (by user fjk20)
+...

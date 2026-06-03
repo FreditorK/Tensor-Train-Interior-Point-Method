@@ -1,0 +1,112 @@
+Running: corr_clust (rank=5)
+==== corr_clust TT-IPM Batch Run Started at Tue  2 Jun 14:12:06 BST 2026 ====
+
+▶ Running dim=9 with config=configs/corr_clust_9.yaml at Tue  2 Jun 14:12:06 BST 2026
+
+===== Processing Rank: 5 =====
+Running seed 295
+Creating Problem for dim=9, rank=5...
+===Terminated Graph Sampling=== rank:  [3, 4, 5, 4, 4, 4, 3, 3]
+===Terminated Graph Sampling=== rank:  [1, 1, 1, 1, 1, 1, 1, 1]
+Actual graph TT-rank: [3, 4, 5, 4, 4, 4, 3, 3]
+Obj TT-rank: [3, 6, 8, 7, 8, 7, 6, 3]
+it 000 | main   | XZ  | ineq=active   | mu=1.37e-01 eta=1.00e-03 sigma=5.00e-01 | err c/p/d=1.07e-03/1.06e+01/1.20e+01 | ok=cpd | rmax X/Y/Z/T=6/1/1/5
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 87 instead with accuracy 
+2.0812777169725118e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 7 instead with accuracy 
+1.771964857891686e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 41 instead with accuracy 
+1.3942754188893746e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 7 instead with accuracy 
+7.565732260977836e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+6.781307435437293e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 30 instead with accuracy 
+1.9997042053956036e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 30 instead with accuracy 
+1.999704309731301e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+6.781307421181236e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 6 instead with accuracy 
+6.853103156312263e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 57 instead with accuracy 
+2.8026874507718493e-08.
+
+it 001 | main   | XZ  | ineq=active   | mu=1.62e-02 eta=1.00e-03 sigma=2.28e-03 | err c/p/d=8.63e-04/8.62e-01/1.02e+01 | ok=cpd | rmax X/Y/Z/T=30/4/12/12
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 3 instead with accuracy 
+1.9132712380843087e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 7 instead with accuracy 
+2.247526715031349e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 15 instead with accuracy 
+1.993638096894674e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 16 instead with accuracy 
+1.2606446659086478e-08.
+
+it 002 | main   | XZ  | ineq=active   | mu=1.35e-03 eta=1.00e-03 sigma=2.99e-02 | err c/p/d=2.61e-04/3.59e-01/1.96e+00 | ok=cpd | rmax X/Y/Z/T=47/4/21/20
+it 003 | main   | AHO | ineq=active   | mu=2.82e-03 eta=1.00e-03 sigma=6.49e-01 | err c/p/d=2.50e-04/2.90e-01/1.76e+00 | ok=cpd | rmax X/Y/Z/T=76/4/29/29
+it 004 | main   | AHO | ineq=active   | mu=3.97e-04 eta=7.95e-04 sigma=3.16e-02 | err c/p/d=5.40e-05/1.40e-01/5.66e-02 | ok=Cpd | rmax X/Y/Z/T=81/6/33/32
+it 005 | main   | AHO | ineq=active   | mu=3.86e-04 eta=7.71e-04 sigma=0.00e+00 | err c/p/d=4.39e-05/6.63e-03/4.18e-03 | ok=Cpd | rmax X/Y/Z/T=81/6/33/32
+it 006 | main   | AHO | ineq=active   | mu=3.87e-04 eta=7.71e-04 sigma=0.00e+00 | err c/p/d=4.38e-05/1.39e-04/2.12e-03 | ok=CPd | rmax X/Y/Z/T=81/6/32/32
+it 007 | finish | AHO | ineq=active   | mu=3.88e-04 eta=7.71e-04 sigma=0.00e+00 | err c/p/d=4.39e-05/1.45e-05/8.97e-04 | ok=CPD | rmax X/Y/Z/T=81/6/32/32
+it 008 | finish | AHO | ineq=active   | mu=2.67e-04 eta=5.33e-04 sigma=0.00e+00 | err c/p/d=2.96e-05/4.62e-04/3.79e-03 | ok=CPd | rmax X/Y/Z/T=85/6/35/34
+it 009 | finish | AHO | ineq=active   | mu=2.24e-04 eta=4.48e-04 sigma=0.00e+00 | err c/p/d=2.46e-05/6.84e-04/4.50e-03 | ok=Cpd | rmax X/Y/Z/T=90/6/35/35
+it 010 | finish | AHO | ineq=active   | mu=1.91e-04 eta=3.81e-04 sigma=0.00e+00 | err c/p/d=2.06e-05/9.09e-04/4.69e-03 | ok=Cpd | rmax X/Y/Z/T=91/6/35/35
+it 011 | finish | AHO | ineq=active   | mu=1.68e-04 eta=3.36e-04 sigma=0.00e+00 | err c/p/d=1.77e-05/9.85e-04/4.81e-03 | ok=Cpd | rmax X/Y/Z/T=99/6/35/35
+it 012 | finish | AHO | ineq=active   | mu=1.45e-04 eta=2.89e-04 sigma=0.00e+00 | err c/p/d=1.49e-05/9.63e-04/4.87e-03 | ok=Cpd | rmax X/Y/Z/T=104/6/35/35
+it 013 | finish | AHO | ineq=active   | mu=1.08e-04 eta=2.17e-04 sigma=0.00e+00 | err c/p/d=1.08e-05/8.74e-04/4.55e-03 | ok=Cpd | rmax X/Y/Z/T=108/6/36/36
+it 014 | finish | AHO | ineq=active   | mu=5.20e-05 eta=1.04e-04 sigma=0.00e+00 | err c/p/d=4.89e-06/4.31e-04/3.27e-03 | ok=CPd | rmax X/Y/Z/T=114/6/37/37
+it 015 | finish | AHO | ineq=active   | mu=1.13e-05 eta=1.00e-04 sigma=0.00e+00 | err c/p/d=1.04e-06/1.80e-04/8.76e-04 | ok=CPD | rmax X/Y/Z/T=121/6/37/37

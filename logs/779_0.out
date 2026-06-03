@@ -1,0 +1,16 @@
+Running: corr_clust (rank=1)
+==== corr_clust TT-IPM Batch Run Started at Wed  3 Jun 15:18:29 BST 2026 ====
+
+▶ Running dim=10 with config=configs/corr_clust_10.yaml at Wed  3 Jun 15:18:29 BST 2026
+
+===== Processing Rank: 1 =====
+Running seed 531
+Creating Problem for dim=10, rank=1...
+===Terminated Graph Sampling=== rank:  [1, 1, 1, 1, 1, 1, 1, 1, 1]
+===Terminated Graph Sampling=== rank:  [1, 1, 1, 1, 1, 1, 1, 1, 1]
+Actual graph TT-rank: [1, 1, 1, 1, 1, 1, 1, 1, 1]
+Obj TT-rank: [1, 1, 1, 1, 1, 1, 1, 1, 1]
+it 000 | main   | XZ  | ineq=active   | mu=4.00e+00 eta=1.00e-03 sigma=5.00e-01 | err c/p/d=5.44e-02/1.53e+01/1.63e+01 | ok=cpd | rmax X/Y/Z/T=1/1/1/1
+it 001 | main   | XZ  | ineq=inactive | mu=2.65e-01 eta=1.00e-03 sigma=1.49e-03 | err c/p/d=4.07e-02/4.64e-01/1.39e+01 | ok=cpd | rmax X/Y/Z/T=3/2/3/1
+it 002 | main   | XZ  | ineq=inactive | mu=5.02e-03 eta=1.00e-03 sigma=2.69e-02 | err c/p/d=1.95e-03/4.03e-01/4.06e+00 | ok=cpd | rmax X/Y/Z/T=3/2/3/1
+it 003 | main   | AHO | ineq=inactive | mu=1.64e-03 eta=1.00e-03 sigma=1.95e-01 | err c/p/d=2.77e-04/3.32e-01/2.30e+00 | ok=cpd | rmax X/Y/Z/T=3/2/3/1

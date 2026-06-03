@@ -1,0 +1,21 @@
+Running: max_stable_set (rank=4)
+==== max_stable_set TT-IPM Batch Run Started at Tue  2 Jun 15:05:07 BST 2026 ====
+
+▶ Running dim=9 with config=configs/max_stable_set_9.yaml at Tue  2 Jun 15:05:07 BST 2026
+
+===== Processing Rank: 4 =====
+Running seed 384
+Creating Problem...
+===Terminated Graph Sampling=== rank:  [3, 4, 4, 4, 3, 2, 2, 1]
+it 000 | main   | XZ  | ineq=not_in_use | mu=4.00e+00 eta=1.00e-03 sigma=5.00e-01 | err c/p/d=5.71e-01/2.55e+02/1.14e+01 | ok=cpd | rmax X/Y/Z/T=1/1/1/-
+it 001 | main   | XZ  | ineq=not_in_use | mu=6.55e-01 eta=1.00e-03 sigma=8.79e-02 | err c/p/d=7.09e-02/4.07e+01/3.93e+00 | ok=cpd | rmax X/Y/Z/T=8/6/8/-
+it 002 | main   | XZ  | ineq=not_in_use | mu=2.66e-01 eta=1.00e-03 sigma=4.21e-01 | err c/p/d=3.32e-02/1.32e+01/8.26e-01 | ok=cpd | rmax X/Y/Z/T=28/18/19/-
+it 003 | main   | AHO | ineq=not_in_use | mu=5.40e-02 eta=1.00e-03 sigma=8.23e-03 | err c/p/d=1.84e-02/2.56e+00/6.98e-01 | ok=cpd | rmax X/Y/Z/T=30/18/19/-
+it 004 | main   | AHO | ineq=not_in_use | mu=2.78e-02 eta=1.00e-03 sigma=7.36e-01 | err c/p/d=1.67e-02/7.74e-01/5.84e-01 | ok=cpd | rmax X/Y/Z/T=30/18/19/-
+it 005 | main   | AHO | ineq=not_in_use | mu=1.40e-02 eta=1.00e-03 sigma=5.14e-01 | err c/p/d=6.70e-03/3.21e-01/1.07e-01 | ok=cpd | rmax X/Y/Z/T=31/18/19/-
+it 006 | main   | AHO | ineq=not_in_use | mu=9.80e-03 eta=1.00e-03 sigma=7.89e-01 | err c/p/d=3.01e-03/1.52e-01/6.76e-02 | ok=cpd | rmax X/Y/Z/T=31/18/20/-
+it 007 | main   | AHO | ineq=not_in_use | mu=3.08e-03 eta=1.00e-03 sigma=4.32e-01 | err c/p/d=6.72e-04/2.49e-02/8.21e-03 | ok=cpd | rmax X/Y/Z/T=31/19/20/-
+it 008 | main   | AHO | ineq=not_in_use | mu=1.40e-03 eta=1.00e-03 sigma=3.30e-01 | err c/p/d=2.61e-04/2.17e-02/2.94e-03 | ok=cpd | rmax X/Y/Z/T=37/37/44/-
+it 009 | main   | AHO | ineq=not_in_use | mu=1.71e-03 eta=1.00e-03 sigma=8.50e-01 | err c/p/d=3.16e-04/3.69e-02/3.03e-03 | ok=cpd | rmax X/Y/Z/T=59/56/69/-
+it 010 | main   | AHO | ineq=not_in_use | mu=1.84e-03 eta=1.00e-03 sigma=8.61e-01 | err c/p/d=3.38e-04/4.33e-02/3.44e-03 | ok=cpd | rmax X/Y/Z/T=71/59/70/-
+it 011 | main   | AHO | ineq=not_in_use | mu=2.18e-03 eta=1.00e-03 sigma=9.11e-01 | err c/p/d=4.00e-04/5.57e-02/3.79e-03 | ok=cpd | rmax X/Y/Z/T=67/59/69/-

@@ -5,14 +5,13 @@ import time
 
 import numpy as np
 import yaml
-from memory_profiler import memory_usage
 
 
 sys.path.append(os.getcwd() + '/../../')
 
 from src.tt_ops import *
 from psd_system.direct_conic import scs_row_from_entries, solve_scs_psd_max
-from src.utils import print_results_summary
+from src.utils import print_results_summary, run_isolated
 
 import warnings
 
@@ -73,10 +72,6 @@ if __name__ == "__main__":
                 print(f"Trying with new random seed: {current_seed}")
             np.random.seed(current_seed)
 
-            if args.track_mem:
-                # Baseline before setup so peak delta includes objective/constraint build and solve.
-                start_mem = memory_usage(max_usage=True, include_children=True)
-
             try:
                 def build_and_solve():
                     t1 = time.time()
@@ -93,20 +88,38 @@ if __name__ == "__main__":
                         verbose=True,
                     )
                     t3 = time.time()
-                    return adj_matrix, J, adj_constraint_count, result, t2 - t1, t3 - t2
+                    X_val = result["x_matrix"]
+                    Z = result["z_matrix"]
+                    y_eq = result["y_eq"]
+                    y_adj = y_eq[:adj_constraint_count]
+                    y_trace = y_eq[adj_constraint_count] if y_eq.size > adj_constraint_count else 0.0
 
+                    adj_dual_mat = np.zeros_like(adj_matrix, dtype=float)
+                    idx = 0
+                    for i in range(adj_matrix.shape[0]):
+                        for j in range(i, adj_matrix.shape[1]):
+                            coef = float(adj_matrix[i, j])
+                            if coef != 0.0:
+                                val = coef * y_adj[idx]
+                                adj_dual_mat[i, j] += val
+                                if i != j:
+                                    adj_dual_mat[j, i] += val
+                                idx += 1
+
+                    dual_feas = Z + J - y_trace * np.eye(adj_matrix.shape[0]) - adj_dual_mat
+                    info = result.get("sol", {}).get("info", {})
+                    return {
+                        "problem_creation_time": t2 - t1,
+                        "runtime": t3 - t2,
+                        "complementary_slackness": np.abs(np.trace(X_val @ Z)),
+                        "feasibility_error": _feasibility_error(X_val, adj_matrix),
+                        "dual_feasibility_error": np.sum(dual_feas ** 2),
+                        "num_iters": float(info.get("iter", 0)),
+                    }
+
+                mem_delta, metrics = run_isolated(build_and_solve, track_mem=args.track_mem)
                 if args.track_mem:
-                    peak_mem, payload = memory_usage(
-                        proc=build_and_solve,
-                        max_usage=True,
-                        retval=True,
-                        include_children=True,
-                    )
-                    memory[s_i] = peak_mem - start_mem
-                else:
-                    payload = build_and_solve()
-
-                adj_matrix, J, adj_constraint_count, result, problem_creation_time, runtime = payload
+                    memory[s_i] = mem_delta
                 break
             except Exception as e:
                 print(e)
@@ -118,35 +131,12 @@ if __name__ == "__main__":
         else:
             continue
 
-        X_val = result["x_matrix"]
-        Z = result["z_matrix"]
-        y_eq = result["y_eq"]
-        y_adj = y_eq[:adj_constraint_count]
-        y_trace = y_eq[adj_constraint_count] if y_eq.size > adj_constraint_count else 0.0
-
-        problem_creation_times[s_i] = problem_creation_time
-        runtimes[s_i] = runtime
-        complementary_slackness[s_i] = np.abs(np.trace(X_val @ Z))
-        feasibility_errors[s_i] = _feasibility_error(X_val, adj_matrix)
-
-        # Aggregate adjacency duals into a matrix for a matrix-space residual.
-        adj_dual_mat = np.zeros_like(adj_matrix, dtype=float)
-        idx = 0
-        for i in range(adj_matrix.shape[0]):
-            for j in range(i, adj_matrix.shape[1]):
-                coef = float(adj_matrix[i, j])
-                if coef != 0.0:
-                    val = coef * y_adj[idx]
-                    adj_dual_mat[i, j] += val
-                    if i != j:
-                        adj_dual_mat[j, i] += val
-                    idx += 1
-
-        dual_feas = Z + J - y_trace * np.eye(adj_matrix.shape[0]) - adj_dual_mat
-        dual_feasibility_errors[s_i] = np.sum(dual_feas ** 2)
-
-        info = result.get("sol", {}).get("info", {})
-        num_iters[s_i] = float(info.get("iter", 0))
+        problem_creation_times[s_i] = metrics["problem_creation_time"]
+        runtimes[s_i] = metrics["runtime"]
+        complementary_slackness[s_i] = metrics["complementary_slackness"]
+        feasibility_errors[s_i] = metrics["feasibility_error"]
+        dual_feasibility_errors[s_i] = metrics["dual_feasibility_error"]
+        num_iters[s_i] = metrics["num_iters"]
 
     ranksX = np.zeros((1, num_seeds, 1))
     ranksY = np.zeros((1, num_seeds, 1))

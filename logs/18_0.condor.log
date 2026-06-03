@@ -136,3 +136,101 @@
 	10341  -  MemoryUsage of job (MB)
 	10588520  -  ResidentSetSize of job (KB)
 ...
+006 (018.000.000) 06/02 10:21:20 Image size of job updated: 19848024
+	10341  -  MemoryUsage of job (MB)
+	10588520  -  ResidentSetSize of job (KB)
+...
+006 (018.000.000) 06/02 10:41:22 Image size of job updated: 21655544
+	10682  -  MemoryUsage of job (MB)
+	10938144  -  ResidentSetSize of job (KB)
+...
+006 (018.000.000) 06/02 10:46:23 Image size of job updated: 22204220
+	11032  -  MemoryUsage of job (MB)
+	11296224  -  ResidentSetSize of job (KB)
+...
+006 (018.000.000) 06/02 11:01:24 Image size of job updated: 22248740
+	11032  -  MemoryUsage of job (MB)
+	11296224  -  ResidentSetSize of job (KB)
+...
+006 (018.000.000) 06/02 11:06:25 Image size of job updated: 23391112
+	11032  -  MemoryUsage of job (MB)
+	11296224  -  ResidentSetSize of job (KB)
+...
+006 (018.000.000) 06/02 11:11:25 Image size of job updated: 24380392
+	11032  -  MemoryUsage of job (MB)
+	11296224  -  ResidentSetSize of job (KB)
+...
+006 (018.000.000) 06/02 11:36:28 Image size of job updated: 24380392
+	11079  -  MemoryUsage of job (MB)
+	11344616  -  ResidentSetSize of job (KB)
+...
+006 (018.000.000) 06/02 12:06:31 Image size of job updated: 24380392
+	11091  -  MemoryUsage of job (MB)
+	11356376  -  ResidentSetSize of job (KB)
+...
+004 (018.000.000) 06/02 12:12:01 Job was evicted.
+	(0) Job was not checkpointed.
+		Usr 5 19:14:25, Sys 0 01:09:00  -  Run Remote Usage
+		Usr 0 00:00:00, Sys 0 00:00:00  -  Run Local Usage
+	0  -  Run Bytes Sent By Job
+	0  -  Run Bytes Received By Job
+	Partitionable Resources :    Usage  Request Allocated 
+	   Cpus                 :     1.41       16        24 
+	   Disk (KB)            :     4           4   5747328 
+	   Gpus                 :                           0 
+	   Memory (MB)          : 11091        3174     15626 
+...
+001 (018.000.000) 06/02 12:14:02 Job executing on host: <146.169.52.19:9618?addrs=146.169.52.19-9618+[2a0c-5bc0-40-11c4-85ad-40b0-1614-db7a]-9618&noUDP&sock=55641_fd93_4>
+...
+010 (018.000.000) 06/02 12:24:31 Job was suspended.
+	Number of processes actually suspended: 7
+...
+011 (018.000.000) 06/02 12:29:32 Job was unsuspended.
+...
+010 (018.000.000) 06/02 13:52:40 Job was suspended.
+	Number of processes actually suspended: 7
+...
+011 (018.000.000) 06/02 13:58:41 Job was unsuspended.
+...
+004 (018.000.000) 06/02 13:59:41 Job was evicted.
+	(0) Job was not checkpointed.
+		Usr 0 12:20:15, Sys 0 00:11:25  -  Run Remote Usage
+		Usr 0 00:00:00, Sys 0 00:00:00  -  Run Local Usage
+	0  -  Run Bytes Sent By Job
+	0  -  Run Bytes Received By Job
+	Partitionable Resources :    Usage  Request Allocated 
+	   Cpus                 :    10.37       16        24 
+	   Disk (KB)            :     4           4   5809380 
+	   Gpus                 :                           0 
+	   Memory (MB)          : 12208       12208     15626 
+...
+001 (018.000.000) 06/02 14:00:04 Job executing on host: <146.169.53.53:9618?addrs=146.169.53.53-9618+[2a0c-5bc0-40-11c4-12a4-c579-ace8-ae12]-9618&noUDP&sock=50836_2903_4>
+...
+006 (018.000.000) 06/03 02:46:32 Image size of job updated: 25000000
+	12289  -  MemoryUsage of job (MB)
+	12583660  -  ResidentSetSize of job (KB)
+...
+006 (018.000.000) 06/03 02:51:32 Image size of job updated: 25000000
+	12726  -  MemoryUsage of job (MB)
+	13030444  -  ResidentSetSize of job (KB)
+...
+006 (018.000.000) 06/03 04:51:44 Image size of job updated: 25000000
+	12825  -  MemoryUsage of job (MB)
+	13132108  -  ResidentSetSize of job (KB)
+...
+005 (018.000.000) 06/03 05:00:08 Job terminated.
+	(1) Normal termination (return value 0)
+		Usr 5 15:47:58, Sys 0 01:22:13  -  Run Remote Usage
+		Usr 0 00:00:00, Sys 0 00:00:00  -  Run Local Usage
+		Usr 5 15:47:58, Sys 0 01:22:13  -  Total Remote Usage
+		Usr 0 00:00:00, Sys 0 00:00:00  -  Total Local Usage
+	0  -  Run Bytes Sent By Job
+	0  -  Run Bytes Received By Job
+	0  -  Total Bytes Sent By Job
+	0  -  Total Bytes Received By Job
+	Partitionable Resources :    Usage  Request Allocated 
+	   Cpus                 :    11.76       16        24 
+	   Disk (KB)            :     4           4   6082020 
+	   Gpus                 :                           0 
+	   Memory (MB)          : 12825       12208     15626 
+...

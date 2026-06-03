@@ -8,10 +8,11 @@ max_iter: 25
 max_refinement: 10
 op_tol: 0.0001
 seeds:
-- 608
-- 657
-- 324
-- 972
-- 9299
+- 531
+#- 657
+#- 324
+#- 892
+#- 821
 verbose: true
+trace_verbose: true
 warm_up: 3

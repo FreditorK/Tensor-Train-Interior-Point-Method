@@ -102,3 +102,55 @@
 	13466  -  MemoryUsage of job (MB)
 	13788488  -  ResidentSetSize of job (KB)
 ...
+006 (762.000.000) 06/02 11:01:21 Image size of job updated: 21481640
+	13466  -  MemoryUsage of job (MB)
+	13788488  -  ResidentSetSize of job (KB)
+...
+004 (762.000.000) 06/02 12:12:01 Job was evicted.
+	(0) Job was not checkpointed.
+		Usr 3 09:38:48, Sys 0 00:49:45  -  Run Remote Usage
+		Usr 0 00:00:00, Sys 0 00:00:00  -  Run Local Usage
+	0  -  Run Bytes Sent By Job
+	0  -  Run Bytes Received By Job
+	Partitionable Resources :    Usage  Request Allocated 
+	   Cpus                 :     7.52       16        24 
+	   Disk (KB)            :     4           4   5808704 
+	   Gpus                 :                           0 
+	   Memory (MB)          : 13466        2198     15626 
+...
+001 (762.000.000) 06/02 12:16:02 Job executing on host: <146.169.52.3:9618?addrs=146.169.52.3-9618+[2a0c-5bc0-40-11c4-b4fd-3cd3-ab4a-4bd7]-9618&noUDP&sock=56824_483f_4>
+...
+010 (762.000.000) 06/02 12:31:12 Job was suspended.
+	Number of processes actually suspended: 7
+...
+011 (762.000.000) 06/02 12:37:17 Job was unsuspended.
+...
+004 (762.000.000) 06/02 12:38:17 Job was evicted.
+	(0) Job was not checkpointed.
+		Usr 0 01:58:38, Sys 0 00:01:52  -  Run Remote Usage
+		Usr 0 00:00:00, Sys 0 00:00:00  -  Run Local Usage
+	0  -  Run Bytes Sent By Job
+	0  -  Run Bytes Received By Job
+	Partitionable Resources :    Usage  Request Allocated 
+	   Cpus                 :     7.73       16        24 
+	   Disk (KB)            :     4           4   5812856 
+	   Gpus                 :                           0 
+	   Memory (MB)          : 14649       14649     15626 
+...
+001 (762.000.000) 06/02 12:44:02 Job executing on host: <146.169.53.29:9618?addrs=146.169.53.29-9618+[2a0c-5bc0-40-11c4-7b41-f4f9-35ef-b962]-9618&noUDP&sock=50237_9c30_4>
+...
+004 (762.000.000) 06/02 14:08:20 Job was evicted.
+	(0) Job was not checkpointed.
+		Usr 0 11:45:13, Sys 0 00:07:51  -  Run Remote Usage
+		Usr 0 00:00:00, Sys 0 00:00:00  -  Run Local Usage
+	0  -  Run Bytes Sent By Job
+	0  -  Run Bytes Received By Job
+	Partitionable Resources :    Usage  Request Allocated 
+	   Cpus                 :     7.57       16        24 
+	   Disk (KB)            :     4           4   6714912 
+	   Gpus                 :                           0 
+	   Memory (MB)          : 14649       14649     15626 
+...
+009 (762.000.000) 06/02 14:08:20 Job was aborted by the user.
+	via condor_rm (by user fjk20)
+...

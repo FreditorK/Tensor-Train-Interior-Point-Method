@@ -1859,3 +1859,28 @@ it 018 | finish | AHO | ineq=active   | mu=2.46e-04 eta=4.91e-04 sigma=0.00e+00 
 it 019 | finish | AHO | ineq=active   | mu=2.15e-04 eta=4.30e-04 sigma=0.00e+00 | err c/p/d=5.24e-05/2.02e-02/6.64e-04 | ok=CpD | rmax X/Y/Z/T=13/3/7/4
 it 020 | finish | AHO | ineq=active   | mu=1.66e-04 eta=3.32e-04 sigma=0.00e+00 | err c/p/d=3.54e-05/1.54e-02/4.89e-04 | ok=CpD | rmax X/Y/Z/T=16/3/7/4
 it 021 | finish | AHO | ineq=active   | mu=1.53e-04 eta=3.06e-04 sigma=0.00e+00 | err c/p/d=3.16e-05/1.39e-02/5.83e-04 | ok=CpD | rmax X/Y/Z/T=79/3/7/4
+it 022 | finish | AHO | ineq=active   | mu=1.25e-04 eta=2.50e-04 sigma=0.00e+00 | err c/p/d=2.44e-05/1.14e-02/1.51e-03 | ok=Cpd | rmax X/Y/Z/T=151/3/14/10
+Terminated
+❌ Error occurred for dim=10 (exit code 143)
+Process MemTimer-7:
+Traceback (most recent call last):
+  File "/homes/fjk20/miniforge3/envs/ttipm/lib/python3.14/multiprocessing/process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "/homes/fjk20/miniforge3/envs/ttipm/lib/python3.14/site-packages/memory_profiler.py", line 252, in run
+    cur_mem = _get_memory(
+        self.monitor_pid, self.backend, timestamps=self.timestamps,
+        include_children=self.include_children,)
+  File "/homes/fjk20/miniforge3/envs/ttipm/lib/python3.14/site-packages/memory_profiler.py", line 221, in _get_memory
+    return tools[backend]()
+           ~~~~~~~~~~~~~~^^
+  File "/homes/fjk20/miniforge3/envs/ttipm/lib/python3.14/site-packages/memory_profiler.py", line 134, in ps_util_tool
+    process = psutil.Process(pid)
+  File "/homes/fjk20/miniforge3/envs/ttipm/lib/python3.14/site-packages/psutil/__init__.py", line 313, in __init__
+    self._init(pid)
+    ~~~~~~~~~~^^^^^
+  File "/homes/fjk20/miniforge3/envs/ttipm/lib/python3.14/site-packages/psutil/__init__.py", line 359, in _init
+    raise NoSuchProcess(pid, msg=msg) from None
+psutil.NoSuchProcess: process PID not found (pid=3522041)
+
+==== All runs completed at Tue  2 Jun 10:57:23 BST 2026 ====

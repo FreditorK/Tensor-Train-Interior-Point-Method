@@ -5,13 +5,12 @@ import time
 
 import numpy as np
 import yaml
-from memory_profiler import memory_usage
 
 
 sys.path.append(os.getcwd() + '/../../')
 from src.tt_ops import *
 from psd_system.direct_conic import scs_row_from_entries, solve_scs_psd_max
-from src.utils import print_results_summary
+from src.utils import print_results_summary, run_isolated
 
 
 def _build_constraints_graphm_scs(n):
@@ -176,10 +175,6 @@ if __name__ == "__main__":
                 print(f"Trying with new random seed: {current_seed}")
             np.random.seed(current_seed)
 
-            if args.track_mem:
-                # Baseline before setup so peak delta includes objective/constraint build and solve.
-                start_mem = memory_usage(max_usage=True, include_children=True)
-
             try:
                 def build_and_solve():
                     t1 = time.time()
@@ -203,20 +198,21 @@ if __name__ == "__main__":
                         verbose=True,
                     )
                     t3 = time.time()
-                    return n, result, t2 - t1, t3 - t2
+                    X_val = result["x_matrix"]
+                    Z = result["z_matrix"]
+                    info = result.get("sol", {}).get("info", {})
+                    return {
+                        "problem_creation_time": t2 - t1,
+                        "runtime": t3 - t2,
+                        "complementary_slackness": np.abs(np.trace(X_val @ Z)),
+                        "feasibility_error": _feasibility_error(X_val, n),
+                        "dual_feasibility_error": float(info.get("res_dual", np.nan)) ** 2,
+                        "num_iters": float(info.get("iter", 0)),
+                    }
 
+                mem_delta, metrics = run_isolated(build_and_solve, track_mem=args.track_mem)
                 if args.track_mem:
-                    peak_mem, payload = memory_usage(
-                        proc=build_and_solve,
-                        max_usage=True,
-                        retval=True,
-                        include_children=True,
-                    )
-                    memory[s_i] = peak_mem - start_mem
-                else:
-                    payload = build_and_solve()
-
-                n, result, problem_creation_time, runtime = payload
+                    memory[s_i] = mem_delta
                 break
             except Exception as e:
                 print(e)
@@ -228,17 +224,12 @@ if __name__ == "__main__":
         else:
             continue
 
-        X_val = result["x_matrix"]
-        Z = result["z_matrix"]
-
-        problem_creation_times[s_i] = problem_creation_time
-        runtimes[s_i] = runtime
-        complementary_slackness[s_i] = np.abs(np.trace(X_val @ Z))
-        feasibility_errors[s_i] = _feasibility_error(X_val, n)
-
-        info = result.get("sol", {}).get("info", {})
-        dual_feasibility_errors[s_i] = float(info.get("res_dual", np.nan)) ** 2
-        num_iters[s_i] = float(info.get("iter", 0))
+        problem_creation_times[s_i] = metrics["problem_creation_time"]
+        runtimes[s_i] = metrics["runtime"]
+        complementary_slackness[s_i] = metrics["complementary_slackness"]
+        feasibility_errors[s_i] = metrics["feasibility_error"]
+        dual_feasibility_errors[s_i] = metrics["dual_feasibility_error"]
+        num_iters[s_i] = metrics["num_iters"]
 
     ranksX = np.zeros((1, num_seeds, 1))
     ranksY = np.zeros((1, num_seeds, 1))
