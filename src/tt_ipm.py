@@ -130,16 +130,19 @@ class LGMRESSolver:
         self.ksp.setFromOptions() 
 
     def mult(self, _, x, y):
-        if self.x_buffer is None or self.x_buffer.shape[0] != x.array_r.shape[0]:
-            self.x_buffer = np.empty_like(x.array_r)
-        np.copyto(self.x_buffer, x.array_r)
-        y.array_w[:] = self.matvec_object.matvec(self.x_buffer)
+        x_np = x.array_r
+        if x_np.dtype != np.float64 or not x_np.flags.c_contiguous:
+            x_np = np.ascontiguousarray(x_np, dtype=np.float64)
+        y_np = y.array_w
+        if y_np.dtype == np.float64 and y_np.flags.c_contiguous:
+            self.matvec_object.matvec_into(x_np, y_np)
+        else:
+            y_np[:] = self.matvec_object.matvec(x_np)
 
     def solve_system(self, matvec_object, rhs_np, shape):
         rhs_np = np.ascontiguousarray(rhs_np, dtype=np.float64)
         self.matvec_object = matvec_object
         self.shape = shape
-        self.x_buffer = np.empty(shape[1], dtype=rhs_np.dtype)
 
         self.A_shell = PETSc.Mat().createPython(self.shape, comm=PETSc.COMM_WORLD)
         self.A_shell.setPythonContext(self)

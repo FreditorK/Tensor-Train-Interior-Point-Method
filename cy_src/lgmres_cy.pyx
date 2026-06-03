@@ -200,6 +200,12 @@ cdef class BaseMatVec:
     cpdef cnp.ndarray[double, ndim=1] matvec(self, cnp.ndarray[double, ndim=1] x_core):
         raise NotImplementedError("BaseMatVec.matvec must be implemented by subclass")
 
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.nonecheck(False)
+    cpdef matvec_into(self, cnp.ndarray[double, ndim=1] x_core, cnp.ndarray[double, ndim=1] out):
+        raise NotImplementedError("BaseMatVec.matvec_into must be implemented by subclass")
+
 cdef class MatVecWrapper(BaseMatVec):
     cdef double[:,  ::1] result0, result1, temp, x_reshaped_0, x_reshaped_1
     cdef object flat_result_arr
@@ -288,8 +294,9 @@ cdef class MatVecWrapper(BaseMatVec):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.nonecheck(False)
-    cpdef cnp.ndarray[double, ndim=1] matvec(self, cnp.ndarray[double, ndim=1] x_core):
+    cpdef matvec_into(self, cnp.ndarray[double, ndim=1] x_core, cnp.ndarray[double, ndim=1] out):
         cdef const double[:, :, :] x_reshaped_view = x_core.reshape(2, self.r*self.n, self.R)
+        cdef double[:] out_view = out
 
         with nogil:
             memcpy(&self.x_reshaped_0[0, 0], &x_reshaped_view[0, 0, 0], self.block_size)
@@ -326,11 +333,14 @@ cdef class MatVecWrapper(BaseMatVec):
                 self.r, self.n, self.R, -1.0,  1.0
                 )
 
-        pack_results(self.result0, self.result1, self.flat_result, self.R, self.n, self.r)
+        pack_results(self.result0, self.result1, out_view, self.R, self.n, self.r)
 
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.nonecheck(False)
+    cpdef cnp.ndarray[double, ndim=1] matvec(self, cnp.ndarray[double, ndim=1] x_core):
+        self.matvec_into(x_core, self.flat_result_arr)
         return self.flat_result_arr
-
-
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.nonecheck(False)
@@ -487,8 +497,9 @@ cdef class IneqMatVecWrapper(BaseMatVec):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.nonecheck(False)
-    cpdef cnp.ndarray[double, ndim=1] matvec(self, cnp.ndarray[double, ndim=1] x_core):
+    cpdef matvec_into(self, cnp.ndarray[double, ndim=1] x_core, cnp.ndarray[double, ndim=1] out):
         cdef const double[:, :, :] x_reshaped_view = x_core.reshape(3, self.r*self.n, self.R)
+        cdef double[:] out_view = out
 
         with nogil:
             memcpy(&self.x_reshaped_0[0, 0], &x_reshaped_view[0, 0, 0], self.block_size)
@@ -506,5 +517,11 @@ cdef class IneqMatVecWrapper(BaseMatVec):
             
             einsum(self.XAX_k_31, self.block_A_k_31, self.XAX_kp1_31, self.x_reshaped_1, self.result2, self.A_31_workspace1, self.A_31_workspace1_2, self.A_31_workspace2, self.A_31_workspace2_2, self.r, self.n, self.R, 1.0, 0.0)
             einsum(self.XAX_k_33, self.block_A_k_33, self.XAX_kp1_33, self.x_reshaped_2, self.result2, self.A_33_workspace1, self.A_33_workspace1_2, self.A_33_workspace2, self.A_33_workspace2_2, self.r, self.n, self.R, 1.0, 1.0)
-        pack_results3(self.result0, self.result1, self.result2, self.flat_result, self.R, self.n, self.r)
+        pack_results3(self.result0, self.result1, self.result2, out_view, self.R, self.n, self.r)
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.nonecheck(False)
+    cpdef cnp.ndarray[double, ndim=1] matvec(self, cnp.ndarray[double, ndim=1] x_core):
+        self.matvec_into(x_core, self.flat_result_arr)
         return self.flat_result_arr
