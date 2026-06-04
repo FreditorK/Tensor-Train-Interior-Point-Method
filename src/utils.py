@@ -431,7 +431,10 @@ def run_and_record(seed, r_i, s_i, rank, config, args, create_problem_fn, memory
             mals_restarts=config["mals_restarts"],
             max_refinement=config["max_refinement"],
             lambdaStar=float(config.get("lambdaStar", 1)),
-            lambdaStarIneq=float(config.get("lambdaStarIneq", 1))
+            lambdaStarIneq=float(config.get("lambdaStarIneq", 1)),
+            r_max=int(config.get("r_max", 1000)),
+            delta_t_kkt_weight=float(config.get("delta_t_kkt_weight", 0.5)),
+            allow_freeze_delta_t=bool(config.get("allow_freeze_delta_t", False))
         )
     if args.track_mem:
         start_mem = memory_usage(max_usage=True, include_children=True)

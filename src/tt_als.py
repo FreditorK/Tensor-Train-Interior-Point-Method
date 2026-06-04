@@ -275,6 +275,17 @@ def truncated_svd(matrix, trunc_rank):
     return u, s.reshape(-1, 1) * v
 
 
+def _block_component_scales(solution_now, block_weights=None):
+    norms = np.maximum(
+        np.array([np.linalg.norm(solution_now[:, k]) for k in range(solution_now.shape[1])]),
+        1e-10,
+    )
+    if block_weights is not None:
+        weights = np.asarray(block_weights, dtype=np.float64)
+        norms = norms / weights
+    return norms.reshape(1, -1, 1, 1)
+
+
 def _bck_sweep(
         local_solver,
         x_cores,
@@ -297,6 +308,7 @@ def _bck_sweep(
         kick_rank,
         last,
         amen,
+        block_weights,
         direct_solve_failure
 ):
     local_res = np.inf if swp == 0 else 0
@@ -319,11 +331,11 @@ def _bck_sweep(
                 rhsz = block_b_k.block_local_product(Zb[k], Zb[k + 1], 1, (rz[k], block_size, N[k], rz[k + 1]))
                 resz = np.reshape(rhsz.__isub__(Az), (rz[k] * block_size, N[k] * rz[k + 1])).T
 
-            scales = np.maximum(np.array([np.linalg.norm(solution_now[:, k]) for k in range(solution_now.shape[1])]), 1e-10).reshape(1, -1, 1, 1)
+            scales = _block_component_scales(solution_now, block_weights)
             solution_now = np.reshape(solution_now / scales, (rx[k] * block_size, N[k] * rx[k + 1])).T
         else:
             solution_now = x_cores[k]
-            scales = np.maximum(np.array([np.linalg.norm(solution_now[:, k]) for k in range(solution_now.shape[1])]), 1e-10).reshape(1, -1, 1, 1)
+            scales = _block_component_scales(solution_now, block_weights)
             solution_now = np.reshape(solution_now / scales, (rx[k] * block_size, N[k] * rx[k + 1])).T
             if amen and not last:
                 resz = np.reshape(z_cores[k], (rz[k] * block_size, N[k] * rz[k + 1])).T
@@ -417,6 +429,7 @@ def _fwd_sweep(
         kick_rank,
         last,
         amen,
+        block_weights,
         direct_solve_failure 
 ):
     local_res = np.inf if swp == 0 else 0
@@ -442,12 +455,12 @@ def _fwd_sweep(
                 rhsz = block_b_k.block_local_product(Zb[k], Zb[k + 1], 1, (rz[k], block_size, N[k], rz[k + 1]))
                 resz = np.transpose(rhsz.__isub__(Az), (0, 2, 1, 3)).reshape(rz[k] * N[k], block_size * rz[k + 1])
 
-            scales = np.maximum(np.array([np.linalg.norm(solution_now[:, k]) for k in range(solution_now.shape[1])]), 1e-10).reshape(1, -1, 1, 1)
+            scales = _block_component_scales(solution_now, block_weights)
             solution_now = np.transpose(solution_now / scales, (0, 2, 1, 3))
             solution_now = np.reshape(solution_now, (rx[k] * N[k], block_size * rx[k + 1]))
         else:
             solution_now = x_cores[k]
-            scales = np.maximum(np.array([np.linalg.norm(solution_now[:, k]) for k in range(solution_now.shape[1])]), 1e-10).reshape(1, -1, 1, 1)
+            scales = _block_component_scales(solution_now, block_weights)
             solution_now = (solution_now / scales).transpose(0, 2, 1, 3)
             solution_now = np.reshape(solution_now, (rx[k] * N[k],  block_size * rx[k + 1]))
             if amen and not last:
@@ -523,7 +536,7 @@ def _fwd_sweep(
     return x_cores, z_cores, XAX, Xb, rx, local_res, local_dx, direct_solve_failure 
             
 
-def tt_block_amen(block_A, block_b, term_tol, r_max=100, eps=1e-12, nswp=22, x0=None, local_solver=None, kick_rank=2, amen=False, verbose=False):
+def tt_block_amen(block_A, block_b, term_tol, r_max=100, eps=1e-12, nswp=22, x0=None, local_solver=None, kick_rank=2, amen=False, verbose=False, block_weights=None):
 
     block_size = np.max(list(k[0] for k in block_A.keys())) + 1
     model_entry = next(iter(block_b.values()))
@@ -531,6 +544,13 @@ def tt_block_amen(block_A, block_b, term_tol, r_max=100, eps=1e-12, nswp=22, x0=
 
     if local_solver is None:
         local_solver = _default_local_solver
+
+    if block_weights is not None:
+        block_weights = np.asarray(block_weights, dtype=np.float64)
+        if block_weights.shape != (block_size,):
+            raise ValueError(f"block_weights must have shape ({block_size},), got {block_weights.shape}")
+        if not np.all(np.isfinite(block_weights)) or np.any(block_weights <= 0):
+            raise ValueError("block_weights must be finite and positive")
 
     def _fresh_initial_guess():
         return tt_normalise([np.random.randn(1, *c.shape[1:-1], 1) for c in model_entry[:-1]]) + [np.random.randn(1, block_size, *x_shape, 1)]
@@ -615,6 +635,7 @@ def tt_block_amen(block_A, block_b, term_tol, r_max=100, eps=1e-12, nswp=22, x0=
                 kick_rank,
                 last,
                 amen,
+                block_weights,
                 direct_solve_failure 
             )
         else:
@@ -640,6 +661,7 @@ def tt_block_amen(block_A, block_b, term_tol, r_max=100, eps=1e-12, nswp=22, x0=
                 kick_rank,
                 last,
                 amen,
+                block_weights,
                 direct_solve_failure 
             )
 
@@ -755,7 +777,8 @@ def tt_restarted_block_amen(
     x0=None,
     local_solver=None,
     verbose=False,
-    strict_first_attempt=False
+    strict_first_attempt=False,
+    block_weights=None
 ):
     if x0 is not None:
         dim = len(x0)
@@ -763,7 +786,7 @@ def tt_restarted_block_amen(
 
     def solve_als(rhs, rank, x0, iters, kick_rank):
         return tt_block_amen(
-            block_A, rhs, termination_tol, r_max=rank, eps=eps, nswp=iters, x0=x0, local_solver=local_solver, kick_rank=kick_rank, amen=True, verbose=verbose
+            block_A, rhs, termination_tol, r_max=rank, eps=eps, nswp=iters, x0=x0, local_solver=local_solver, kick_rank=kick_rank, amen=True, verbose=verbose, block_weights=block_weights
         )
 
     def update_rhs(rhs, x_cores):

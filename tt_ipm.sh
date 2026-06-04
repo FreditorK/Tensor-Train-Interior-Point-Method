@@ -82,16 +82,74 @@ export OMP_NUM_THREADS=16
 export MKL_NUM_THREADS=16
 export OPENBLAS_NUM_THREADS=16
 export NUMEXPR_NUM_THREADS=16
+export TMPDIR="${TTIPM_TMPDIR:-/tmp}"
 
 # Cleanup on exit or interrupt
+RUN_PID=""
+TIMER_PID=""
+
 cleanup() {
-    echo -e "\n⚠️ Caught interrupt. Cleaning up at $(date)..." >&2
-    pkill -P $$ 2>/dev/null
-    echo "🧹 Cleaned up. Exiting." >&2
-    exit 1
+    local signal_name="${1:-interrupt}"
+    local exit_code="${2:-130}"
+
+    trap - SIGINT SIGTERM
+
+    if [ -n "${TIMER_PID:-}" ]; then
+        kill "$TIMER_PID" 2>/dev/null || true
+        wait "$TIMER_PID" 2>/dev/null || true
+    fi
+
+    if [ -n "${RUN_PID:-}" ]; then
+        kill -TERM -- "-$RUN_PID" 2>/dev/null || true
+        sleep 2
+        kill -KILL -- "-$RUN_PID" 2>/dev/null || true
+        wait "$RUN_PID" 2>/dev/null || true
+    fi
+
+    echo -e "\n⚠️ Caught ${signal_name}. Cleaned up at $(date). Exiting." >&2
+    exit "$exit_code"
 }
-trap cleanup SIGINT SIGTERM
+trap 'cleanup SIGINT 130' SIGINT
+trap 'cleanup SIGTERM 143' SIGTERM
 trap 'echo -e "\n⚠️ Script resumed (was suspended). Memory may not have been cleaned up."' SIGCONT
+
+run_with_timeout() {
+    local timeout_seconds=$1
+    shift
+
+    setsid "$@" &
+    RUN_PID=$!
+    local timeout_marker="${TMPDIR:-/tmp}/tt_ipm_timeout_${$}_${RUN_PID}"
+    rm -f "$timeout_marker"
+
+    (
+        sleep "$timeout_seconds"
+        if kill -0 "$RUN_PID" 2>/dev/null; then
+            : > "$timeout_marker"
+            kill -TERM -- "-$RUN_PID" 2>/dev/null || true
+            sleep 5
+            kill -KILL -- "-$RUN_PID" 2>/dev/null || true
+        fi
+    ) &
+    TIMER_PID=$!
+
+    wait "$RUN_PID"
+    local status=$?
+
+    if [ -f "$timeout_marker" ]; then
+        status=124
+    fi
+
+    if kill -0 "$TIMER_PID" 2>/dev/null; then
+        kill "$TIMER_PID" 2>/dev/null || true
+    fi
+    wait "$TIMER_PID" 2>/dev/null || true
+    rm -f "$timeout_marker"
+
+    RUN_PID=""
+    TIMER_PID=""
+    return "$status"
+}
 
 # ---------------------------
 # Logging setup
@@ -119,7 +177,7 @@ for dim in $(seq $START_DIM $END_DIM); do
     if [ -n "$TERMINAL_ONLY" ]; then
         cmd+=("$TERMINAL_ONLY")
     fi
-    timeout "$CURRENT_TIMEOUT" "${cmd[@]}"
+    run_with_timeout "$CURRENT_TIMEOUT" "${cmd[@]}"
     status=$?
 
     if [ $status -eq 124 ]; then
