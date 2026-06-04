@@ -100,3 +100,4 @@ it 018 | main   | AHO | ineq=not_in_use | mu=1.66e-03 eta=1.00e-03 sigma=7.34e-0
 it 019 | main   | AHO | ineq=not_in_use | mu=1.94e-03 eta=1.00e-03 sigma=8.74e-01 | err c/p/d=3.71e-04/8.17e-02/3.44e-03 | ok=cpd | rmax X/Y/Z/T=127/124/145/-
 warn   | ipm      | limit=max_iter | action=finish
 it 020 | finish | AHO | ineq=not_in_use | mu=2.16e-03 eta=1.00e-03 sigma=9.24e-01 | err c/p/d=4.14e-04/9.14e-02/4.05e-03 | ok=cpd | rmax X/Y/Z/T=135/124/143/-
+it 021 | finish | AHO | ineq=not_in_use | mu=1.43e-03 eta=1.00e-03 sigma=0.00e+00 | err c/p/d=2.68e-04/6.71e-02/2.49e-03 | ok=cpd | rmax X/Y/Z/T=115/132/140/-

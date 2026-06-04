@@ -79,3 +79,3762 @@ it 018 | finish | AHO | ineq=active   | mu=1.19e-04 eta=2.38e-04 sigma=0.00e+00 
 it 019 | finish | AHO | ineq=active   | mu=9.09e-05 eta=1.82e-04 sigma=0.00e+00 | err c/p/d=1.13e-05/1.13e-03/8.86e-04 | ok=CpD | rmax X/Y/Z/T=257/8/74/42
 it 020 | finish | AHO | ineq=active   | mu=8.07e-05 eta=1.61e-04 sigma=0.00e+00 | err c/p/d=1.00e-05/1.17e-03/5.01e-04 | ok=CpD | rmax X/Y/Z/T=257/7/54/39
 it 021 | finish | AHO | ineq=active   | mu=7.34e-05 eta=1.47e-04 sigma=0.00e+00 | err c/p/d=9.06e-06/1.18e-03/4.80e-04 | ok=CpD | rmax X/Y/Z/T=257/4/36/31
+it 022 | finish | AHO | ineq=active   | mu=3.61e-05 eta=1.00e-04 sigma=0.00e+00 | err c/p/d=4.35e-06/6.84e-04/4.35e-04 | ok=CpD | rmax X/Y/Z/T=257/4/28/26
+---Terminated---
+Terminated in 22 iterations.
+Ranks: X=[5, 17, 65, 257, 189, 58, 16, 5], Z=[5, 12, 26, 28, 19, 12, 7, 5], Y=[2, 3, 4, 4, 3, 3, 2, 2], T=[5, 12, 25, 26, 17, 11, 6, 6]
+Run accepted after 22 iterations. Compl Slackness: 1.7483e-03. Feasibility error: 7.4797e-06. Dual Feasibility error: 3.0262e-06.
+Run accepted in 41124.11s. Memory: 12151.98 MB.
+Rerun with new seed 428 accepted. Feasibility error: 7.48e-06, dual feasibility error: 3.03e-06, slackness: 1.75e-03
+Running seed 858
+Creating Problem for dim=9, rank=4...
+===Terminated Graph Sampling=== rank:  [2, 2, 3, 3, 4, 3, 4, 3]
+===Terminated Graph Sampling=== rank:  [1, 1, 1, 1, 1, 1, 1, 1]
+Actual graph TT-rank: [2, 2, 3, 3, 4, 3, 4, 3]
+Obj TT-rank: [3, 6, 8, 8, 9, 6, 7, 3]
+it 000 | main   | XZ  | ineq=active   | mu=4.56e-02 eta=1.00e-03 sigma=5.00e-01 | err c/p/d=3.49e-04/1.06e+01/1.20e+01 | ok=cpd | rmax X/Y/Z/T=5/1/1/4
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 69 instead with accuracy 
+1.0495188790668441e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 65 instead with accuracy 
+9.233983675475905e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 88 instead with accuracy 
+9.602120564878307e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 96 instead with accuracy 
+8.896829568434165e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 99 instead with accuracy 
+2.42197784357864e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 47 instead with accuracy 
+2.8833635521229516e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 92 instead with accuracy 
+2.2163936028711145e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 98 instead with accuracy 
+3.4172893483341687e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 84 instead with accuracy 
+4.648090765303734e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 31 instead with accuracy 
+1.9255607502499576e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 16 instead with accuracy 
+8.956786908812844e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 16 instead with accuracy 
+8.956786908568257e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 31 instead with accuracy 
+1.9255607504690869e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 33 instead with accuracy 
+1.706217305565077e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 89 instead with accuracy 
+5.498266716717055e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 99 instead with accuracy 
+2.6902074908442966e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 56 instead with accuracy 
+2.301108953836239e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 52 instead with accuracy 
+3.3014204340695477e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 52 instead with accuracy 
+2.0743722426278043e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 98 instead with accuracy 
+1.422097925341548e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 101 instead with accuracy 
+3.5815603873288403e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 79 instead with accuracy 
+1.9800935913331047e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 41 instead with accuracy 
+2.5064597337182135e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 38 instead with accuracy 
+1.8740912663426477e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 19 instead with accuracy 
+1.0548970898746611e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 19 instead with accuracy 
+1.05489708986524e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 38 instead with accuracy 
+1.874091265993449e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 39 instead with accuracy 
+3.931696727530041e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 89 instead with accuracy 
+2.418480493505672e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 77 instead with accuracy 
+4.903059572271796e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 91 instead with accuracy 
+2.089682929291947e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 59 instead with accuracy 
+1.252006395920767e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 71 instead with accuracy 
+2.3773097006496918e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 86 instead with accuracy 
+4.584202310353387e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 86 instead with accuracy 
+3.6319506047177495e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 57 instead with accuracy 
+4.258834636012112e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 52 instead with accuracy 
+1.0195955287883092e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 52 instead with accuracy 
+1.0195955270423272e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 57 instead with accuracy 
+4.258834634938143e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 86 instead with accuracy 
+3.6319508531313926e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 101 instead with accuracy 
+7.577436343731674e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 75 instead with accuracy 
+1.9796592126062657e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 42 instead with accuracy 
+1.3360082060925624e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 42 instead with accuracy 
+1.3757869844334414e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 75 instead with accuracy 
+2.2348320964148206e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 101 instead with accuracy 
+7.032059878094285e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 25 instead with accuracy 
+2.243172552330556e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 67 instead with accuracy 
+3.411935176962116e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 51 instead with accuracy 
+9.038779526973838e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 51 instead with accuracy 
+9.038779574168153e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 67 instead with accuracy 
+3.4119351779782476e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 25 instead with accuracy 
+2.243101843570409e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 98 instead with accuracy 
+8.824692770227039e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 81 instead with accuracy 
+2.2140930797971424e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 90 instead with accuracy 
+2.533213528128192e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 90 instead with accuracy 
+2.577345899419272e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 85 instead with accuracy 
+2.24743729169525e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 98 instead with accuracy 
+9.027229259693649e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0003]
+not reaching the requested tolerance 1e-08.
+Use iteration 54 instead with accuracy 
+3.016751128647479e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 58 instead with accuracy 
+3.303755353119493e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 47 instead with accuracy 
+1.0072723879050958e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 47 instead with accuracy 
+1.0072723839023573e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 58 instead with accuracy 
+3.3037553532070802e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 54 instead with accuracy 
+3.0162814209250254e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 37 instead with accuracy 
+1.4513373261469291e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 87 instead with accuracy 
+2.4498257005970925e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 82 instead with accuracy 
+2.629890364813e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 83 instead with accuracy 
+2.7719771382940025e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 93 instead with accuracy 
+2.46910224165162e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 37 instead with accuracy 
+1.376163666995745e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 30 instead with accuracy 
+2.785957908435552e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 93 instead with accuracy 
+4.233262293234485e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 52 instead with accuracy 
+7.655932162696734e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 52 instead with accuracy 
+7.655932161712796e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 93 instead with accuracy 
+4.233262326088927e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 30 instead with accuracy 
+2.7728686838594278e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 101 instead with accuracy 
+8.253430116680598e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 80 instead with accuracy 
+2.6768205695818315e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 97 instead with accuracy 
+5.6939879280150155e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 97 instead with accuracy 
+5.9286943297825776e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 82 instead with accuracy 
+1.967629952631592e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 22 instead with accuracy 
+1.2680141426033018e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0004]
+not reaching the requested tolerance 1e-08.
+Use iteration 41 instead with accuracy 
+2.617903425865833e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 90 instead with accuracy 
+6.104959160651435e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 49 instead with accuracy 
+1.491851680630337e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 49 instead with accuracy 
+1.4918516820385844e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 90 instead with accuracy 
+6.104959169840886e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0004]
+not reaching the requested tolerance 1e-08.
+Use iteration 41 instead with accuracy 
+2.6163765362498265e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 26 instead with accuracy 
+1.4010110558763252e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 83 instead with accuracy 
+2.000510389057922e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 97 instead with accuracy 
+7.891443341663324e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 97 instead with accuracy 
+8.4106741432632e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 88 instead with accuracy 
+2.300916926529081e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 26 instead with accuracy 
+1.3970877075798513e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 50 instead with accuracy 
+3.6536104482601736e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 82 instead with accuracy 
+4.122209798257972e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 44 instead with accuracy 
+1.4173669588785184e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 44 instead with accuracy 
+1.4173669564744525e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 82 instead with accuracy 
+4.122209798057696e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 50 instead with accuracy 
+3.6624078539481012e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 38 instead with accuracy 
+1.2239168823904915e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 91 instead with accuracy 
+2.3128186317328165e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 86 instead with accuracy 
+6.737306064072698e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 86 instead with accuracy 
+6.182851105868245e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 94 instead with accuracy 
+3.542159698276367e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 38 instead with accuracy 
+1.2643229072201196e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 30 instead with accuracy 
+2.6447472532379363e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 80 instead with accuracy 
+5.162297584188656e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 10 instead with accuracy 
+1.5288406902918519e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 71 instead with accuracy 
+4.9310370189727626e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 97 instead with accuracy 
+1.2513694448757514e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 88 instead with accuracy 
+5.473674473996951e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 101 instead with accuracy 
+1.1770573876208394e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 101 instead with accuracy 
+1.0143631348753778e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 57 instead with accuracy 
+1.2236356575224816e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 90 instead with accuracy 
+1.362793689098721e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 12 instead with accuracy 
+3.1482859516226535e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 12 instead with accuracy 
+3.436316847544913e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 2 instead with accuracy 
+3.4208653994717725e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 24 instead with accuracy 
+7.903621056055377e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 59 instead with accuracy 
+3.6706353620639696e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 9 instead with accuracy 
+2.905562721474863e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 60 instead with accuracy 
+1.6662305666313063e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 38 instead with accuracy 
+3.5894817607545965e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 3 instead with accuracy 
+1.1594490948349e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.4011497786800969e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.5286079587891857e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0003]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.219054515653053e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 3 instead with accuracy 
+1.4708970749239734e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 100 instead with accuracy 
+6.065727240369482e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 86 instead with accuracy 
+8.757684559369771e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 94 instead with accuracy 
+4.518570299343077e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 96 instead with accuracy 
+3.179482881605522e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 101 instead with accuracy 
+5.077368051858713e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 22 instead with accuracy 
+4.7313872406200845e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 86 instead with accuracy 
+8.036589637000244e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 76 instead with accuracy 
+1.52975311136277e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 98 instead with accuracy 
+1.4164374786132595e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 53 instead with accuracy 
+2.2796042181480385e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 93 instead with accuracy 
+1.885710640314625e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 93 instead with accuracy 
+1.8857106416163606e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 53 instead with accuracy 
+2.279233102370882e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0014]
+not reaching the requested tolerance 1e-08.
+Use iteration 12 instead with accuracy 
+2.1844181967153273e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 78 instead with accuracy 
+2.2063940176231896e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 13 instead with accuracy 
+2.52070662988964e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 88 instead with accuracy 
+3.1077276057694955e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 22 instead with accuracy 
+4.974756109573835e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 57 instead with accuracy 
+2.7652213216972888e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 78 instead with accuracy 
+2.1710978537460947e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0014]
+not reaching the requested tolerance 1e-08.
+Use iteration 23 instead with accuracy 
+2.3301737936416694e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 86 instead with accuracy 
+2.4668278287468202e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 93 instead with accuracy 
+8.632003363562365e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 93 instead with accuracy 
+8.63200334979897e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 86 instead with accuracy 
+2.4138798509463455e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 7 instead with accuracy 
+1.991587773242216e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 99 instead with accuracy 
+2.3359325668890758e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 72 instead with accuracy 
+2.5200162590203365e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 77 instead with accuracy 
+3.1807739734611248e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 79 instead with accuracy 
+2.3332999739744762e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 73 instead with accuracy 
+1.9946829389034365e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 100 instead with accuracy 
+2.70755107011895e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0003]
+not reaching the requested tolerance 1e-08.
+Use iteration 7 instead with accuracy 
+2.102562342639129e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0004]
+not reaching the requested tolerance 1e-08.
+Use iteration 65 instead with accuracy 
+4.0577564919614764e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 95 instead with accuracy 
+1.4503595770960575e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 95 instead with accuracy 
+1.4503595770092505e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0004]
+not reaching the requested tolerance 1e-08.
+Use iteration 65 instead with accuracy 
+4.3672727034404364e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 87 instead with accuracy 
+1.1763505015916634e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 99 instead with accuracy 
+4.273526169560625e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 81 instead with accuracy 
+2.2030637101766658e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 21 instead with accuracy 
+5.036758444469995e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0003]
+not reaching the requested tolerance 1e-08.
+Use iteration 29 instead with accuracy 
+4.914625280970421e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 83 instead with accuracy 
+1.8232107515664514e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 93 instead with accuracy 
+3.992256463953838e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 2 instead with accuracy 
+1.5202125211484625e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 47 instead with accuracy 
+6.967520005680816e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 85 instead with accuracy 
+8.76430965710747e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 85 instead with accuracy 
+8.764309656963934e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 47 instead with accuracy 
+6.967520005697844e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 2 instead with accuracy 
+1.520212521144618e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0005]
+not reaching the requested tolerance 1e-08.
+Use iteration 50 instead with accuracy 
+4.746445701281453e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 90 instead with accuracy 
+2.4225830064124612e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 25 instead with accuracy 
+4.608729341607657e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 25 instead with accuracy 
+4.856245121949822e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 91 instead with accuracy 
+2.21782257344096e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0006]
+not reaching the requested tolerance 1e-08.
+Use iteration 50 instead with accuracy 
+4.409556683109183e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 2 instead with accuracy 
+1.5299746544991638e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 18 instead with accuracy 
+8.965283493512274e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 96 instead with accuracy 
+6.674683365697455e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 96 instead with accuracy 
+6.674683367124511e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 18 instead with accuracy 
+8.96528349350341e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 2 instead with accuracy 
+1.5300418433514477e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0007]
+not reaching the requested tolerance 1e-08.
+Use iteration 46 instead with accuracy 
+3.4315983899297775e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 46 instead with accuracy 
+3.3296230998355976e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 86 instead with accuracy 
+3.5971960641501304e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 95 instead with accuracy 
+3.3790095548087122e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 94 instead with accuracy 
+3.366941457072352e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0007]
+not reaching the requested tolerance 1e-08.
+Use iteration 46 instead with accuracy 
+3.590734234396254e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 87 instead with accuracy 
+1.1127294214896348e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 100 instead with accuracy 
+3.992961443931157e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 101 instead with accuracy 
+9.045941908358631e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 101 instead with accuracy 
+9.045941911788955e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 100 instead with accuracy 
+3.904984152696551e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 87 instead with accuracy 
+1.4462243204315034e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0007]
+not reaching the requested tolerance 1e-08.
+Use iteration 43 instead with accuracy 
+3.248367014196819e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 88 instead with accuracy 
+3.3105456215886e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 18 instead with accuracy 
+3.5700124691328223e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 88 instead with accuracy 
+3.1224733285036386e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 87 instead with accuracy 
+3.6614438544592756e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0005]
+not reaching the requested tolerance 1e-08.
+Use iteration 43 instead with accuracy 
+2.780739998133209e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 2 instead with accuracy 
+1.5531540965959624e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 85 instead with accuracy 
+9.138451059741475e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 45 instead with accuracy 
+2.5577214833905978e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 45 instead with accuracy 
+2.5577214834106724e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 85 instead with accuracy 
+9.138429021542108e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 2 instead with accuracy 
+1.552572043958209e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0008]
+not reaching the requested tolerance 1e-08.
+Use iteration 52 instead with accuracy 
+4.074005720157948e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 86 instead with accuracy 
+3.9149379833457175e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 28 instead with accuracy 
+5.350193415303445e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 32 instead with accuracy 
+4.116531797920074e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 99 instead with accuracy 
+4.2102336494857516e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0008]
+not reaching the requested tolerance 1e-08.
+Use iteration 51 instead with accuracy 
+3.691936646246803e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0014]
+not reaching the requested tolerance 1e-08.
+Use iteration 2 instead with accuracy 
+1.562974245478763e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 100 instead with accuracy 
+5.3760014961014354e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 94 instead with accuracy 
+1.9144102569750665e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 94 instead with accuracy 
+1.914410256618228e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 100 instead with accuracy 
+5.3760014962858406e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0014]
+not reaching the requested tolerance 1e-08.
+Use iteration 2 instead with accuracy 
+1.5623083752674896e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0017]
+not reaching the requested tolerance 1e-08.
+Use iteration 21 instead with accuracy 
+4.433378356989292e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 55 instead with accuracy 
+3.66090440223879e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 47 instead with accuracy 
+5.120152361674749e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 48 instead with accuracy 
+5.282149473085721e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 55 instead with accuracy 
+4.571419651238944e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.002]
+not reaching the requested tolerance 1e-08.
+Use iteration 21 instead with accuracy 
+4.350431555087731e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0013]
+not reaching the requested tolerance 1e-08.
+Use iteration 2 instead with accuracy 
+1.5716411434140402e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 95 instead with accuracy 
+5.821788063247899e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 88 instead with accuracy 
+1.2931546239456701e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 100 instead with accuracy 
+3.106643598005706e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 95 instead with accuracy 
+7.389911339785902e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 99 instead with accuracy 
+2.5563245530556784e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+2.275254903490883e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+4.815427291409658e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.001]
+not reaching the requested tolerance 1e-08.
+Use iteration 10 instead with accuracy 
+7.1111306161461975e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 100 instead with accuracy 
+1.1412023972126162e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 4 instead with accuracy 
+7.123861448484718e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 3 instead with accuracy 
+7.291342950272761e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+1.2533496652923316e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+4.759761055428526e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+4.7597610554293165e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+1.2533496652923272e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 3 instead with accuracy 
+7.291365637199647e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 4 instead with accuracy 
+7.12389804685243e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 96 instead with accuracy 
+1.2167170569406832e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.001]
+not reaching the requested tolerance 1e-08.
+Use iteration 18 instead with accuracy 
+9.784703971136813e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0013]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+5.0486960956375045e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0003]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+2.3562015727619914e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0003]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+2.3562015727627966e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0013]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+5.048696095637446e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.001]
+not reaching the requested tolerance 1e-08.
+Use iteration 18 instead with accuracy 
+9.784703972464693e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 99 instead with accuracy 
+1.3035441904782264e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 4 instead with accuracy 
+8.537834538343031e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 3 instead with accuracy 
+8.43729574629104e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+1.254000639752314e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+5.963258281334759e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+5.963258281335284e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+1.2540006397523008e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 3 instead with accuracy 
+8.437295742572649e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 4 instead with accuracy 
+8.53783073745135e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 16 instead with accuracy 
+8.664771225405453e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0005]
+not reaching the requested tolerance 1e-08.
+Use iteration 20 instead with accuracy 
+9.43490164248764e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0018]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+5.5251409666536685e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0005]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+2.5967074096404473e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0005]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+2.596707409640146e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0018]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+5.5251409666550584e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0005]
+not reaching the requested tolerance 1e-08.
+Use iteration 20 instead with accuracy 
+9.434901648411764e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 101 instead with accuracy 
+5.939398470338023e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 4 instead with accuracy 
+7.589272645801203e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0003]
+not reaching the requested tolerance 1e-08.
+Use iteration 3 instead with accuracy 
+7.47181703757993e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0005]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+1.2533343721904204e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+5.536284597706223e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+5.536284597707086e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0005]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+1.2533343721904275e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0003]
+not reaching the requested tolerance 1e-08.
+Use iteration 3 instead with accuracy 
+7.471817040416974e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 4 instead with accuracy 
+7.589268306305028e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 96 instead with accuracy 
+2.641881746789601e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0005]
+not reaching the requested tolerance 1e-08.
+Use iteration 18 instead with accuracy 
+9.349692708520261e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0016]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+5.48615810541013e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0008]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+2.591706030807652e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0008]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+2.591706030808723e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0016]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+5.486158105407752e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0005]
+not reaching the requested tolerance 1e-08.
+Use iteration 18 instead with accuracy 
+9.349692708918158e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 96 instead with accuracy 
+9.572383296136224e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 4 instead with accuracy 
+7.176486925457443e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 3 instead with accuracy 
+7.78126025369727e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+1.2520074069441673e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+4.985369405915712e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+4.985369405916483e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+1.2520074069441676e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 3 instead with accuracy 
+7.781260251592687e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 4 instead with accuracy 
+7.176491381349642e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 101 instead with accuracy 
+3.2674600200856607e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0015]
+not reaching the requested tolerance 1e-08.
+Use iteration 19 instead with accuracy 
+8.176498797383506e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0025]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+5.842387850066474e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0027]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+3.0547578535165002e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0027]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+3.0547578535186407e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0025]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+5.842387850067465e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0015]
+not reaching the requested tolerance 1e-08.
+Use iteration 19 instead with accuracy 
+8.176498798836024e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 101 instead with accuracy 
+3.222522113795794e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0007]
+not reaching the requested tolerance 1e-08.
+Use iteration 4 instead with accuracy 
+6.935500954413327e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 3 instead with accuracy 
+7.759520849054365e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0004]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+1.2528362239295928e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+5.6267309278836645e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+5.626730927883817e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0004]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+1.252836223929596e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 3 instead with accuracy 
+7.75952084896853e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0003]
+not reaching the requested tolerance 1e-08.
+Use iteration 4 instead with accuracy 
+6.935511215989209e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 99 instead with accuracy 
+2.7208522922515974e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0003]
+not reaching the requested tolerance 1e-08.
+Use iteration 18 instead with accuracy 
+9.186186913425094e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0016]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+4.968706152825141e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0006]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+2.4074545772533693e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0006]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+2.407454577251859e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0016]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+4.968706152825875e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0003]
+not reaching the requested tolerance 1e-08.
+Use iteration 18 instead with accuracy 
+9.186186912304537e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 6 instead with accuracy 
+1.0777110086019814e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 4 instead with accuracy 
+8.388121642706208e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 2 instead with accuracy 
+7.901923097368056e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+1.2534036748850115e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+4.76445887349833e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+4.764458873498835e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+1.2534036748850122e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 2 instead with accuracy 
+7.901923097281652e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 4 instead with accuracy 
+8.388120449863943e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 101 instead with accuracy 
+9.531616938189008e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0013]
+not reaching the requested tolerance 1e-08.
+Use iteration 18 instead with accuracy 
+7.799405810488052e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.001]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+4.884705207512435e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0012]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+2.3895057472270602e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0012]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+2.389505747230276e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.001]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+4.884705207510823e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0013]
+not reaching the requested tolerance 1e-08.
+Use iteration 18 instead with accuracy 
+7.799405809796776e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 101 instead with accuracy 
+2.947022403728259e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 4 instead with accuracy 
+7.0689123617962445e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 3 instead with accuracy 
+7.779411265619548e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+1.2518114317290688e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+4.722445231751363e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+4.7224452317531505e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+1.2518114317290696e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 3 instead with accuracy 
+7.779411265086964e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 4 instead with accuracy 
+7.0689107767043955e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 15 instead with accuracy 
+8.13164664976205e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0013]
+not reaching the requested tolerance 1e-08.
+Use iteration 18 instead with accuracy 
+9.435232054487063e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0014]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+5.761682095498762e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0005]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+2.6145310571248226e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0005]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+2.6145310571267547e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0014]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+5.7616820955018715e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0013]
+not reaching the requested tolerance 1e-08.
+Use iteration 18 instead with accuracy 
+9.435232052555047e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 17 instead with accuracy 
+8.569893305247967e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 4 instead with accuracy 
+9.380580647667883e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 2 instead with accuracy 
+6.396689896422233e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+1.2530312373169463e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+5.402822051263729e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+5.4028220512641835e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+1.253031237316948e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 2 instead with accuracy 
+6.396689896977786e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 4 instead with accuracy 
+9.380606438493691e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 101 instead with accuracy 
+2.40926897778173e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0008]
+not reaching the requested tolerance 1e-08.
+Use iteration 19 instead with accuracy 
+8.213464180903774e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0021]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+5.493348841780294e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0014]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+2.7087032813495247e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0014]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+2.708703281345713e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0021]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+5.4933488417785e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0008]
+not reaching the requested tolerance 1e-08.
+Use iteration 19 instead with accuracy 
+8.21346418413559e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 100 instead with accuracy 
+1.3654659384407119e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0003]
+not reaching the requested tolerance 1e-08.
+Use iteration 4 instead with accuracy 
+7.147257685617475e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 2 instead with accuracy 
+7.196568586995547e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+1.2520170158076858e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+6.003424328277284e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+6.003424328277117e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+1.2520170158076938e-05.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 2 instead with accuracy 
+7.196568586483797e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 4 instead with accuracy 
+7.1472556974694e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 99 instead with accuracy 
+4.182190295460564e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0008]
+not reaching the requested tolerance 1e-08.
+Use iteration 18 instead with accuracy 
+7.5216403335038124e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.002]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+5.1859246860811175e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0011]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+2.714360703806262e-06.
+
+it 001 | main   | XZ  | ineq=active   | mu=6.58e-03 eta=1.00e-03 sigma=2.29e-03 | err c/p/d=2.81e-04/1.22e+00/1.02e+01 | ok=cpd | rmax X/Y/Z/T=33/5/16/14
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 16 instead with accuracy 
+1.3579126503234354e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 18 instead with accuracy 
+1.3817402819327084e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 99 instead with accuracy 
+3.592948749611855e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 85 instead with accuracy 
+4.6969194796459735e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 79 instead with accuracy 
+1.2468604022857688e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 98 instead with accuracy 
+9.103297502928456e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.001]
+not reaching the requested tolerance 1e-08.
+Use iteration 10 instead with accuracy 
+2.0386435376151027e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 7 instead with accuracy 
+2.389423427566255e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 13 instead with accuracy 
+1.1060982061754628e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 5 instead with accuracy 
+2.0053092747255e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 5 instead with accuracy 
+2.4108351981061504e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 51 instead with accuracy 
+1.932412281325686e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 35 instead with accuracy 
+1.2879806165031693e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 38 instead with accuracy 
+6.39940175444535e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 46 instead with accuracy 
+1.5546002541215132e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 12 instead with accuracy 
+3.055599893141332e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 14 instead with accuracy 
+2.960077523318078e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 31 instead with accuracy 
+4.361631715128376e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 25 instead with accuracy 
+4.017144884243806e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 10 instead with accuracy 
+2.2659643742072094e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 7 instead with accuracy 
+2.5719489733692127e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0009]
+not reaching the requested tolerance 1e-08.
+Use iteration 4 instead with accuracy 
+2.1438370810679556e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0003]
+not reaching the requested tolerance 1e-08.
+Use iteration 18 instead with accuracy 
+1.4824073606498486e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0003]
+not reaching the requested tolerance 1e-08.
+Use iteration 35 instead with accuracy 
+1.584709531335806e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 10 instead with accuracy 
+2.3314591450544943e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 14 instead with accuracy 
+3.951679052438662e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 11 instead with accuracy 
+4.055644740594841e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 92 instead with accuracy 
+1.006589085450483e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 90 instead with accuracy 
+7.241183347797248e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 6 instead with accuracy 
+2.5450713725134476e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0003]
+not reaching the requested tolerance 1e-08.
+Use iteration 10 instead with accuracy 
+2.4482226382727047e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0003]
+not reaching the requested tolerance 1e-08.
+Use iteration 73 instead with accuracy 
+2.7464581623931024e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 18 instead with accuracy 
+1.1246288038674795e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 19 instead with accuracy 
+9.252927035933925e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 48 instead with accuracy 
+2.2237604245644465e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 99 instead with accuracy 
+3.839193767646329e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 12 instead with accuracy 
+4.114946656035345e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 101 instead with accuracy 
+2.6360448834522583e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 89 instead with accuracy 
+2.2915490040861878e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 5 instead with accuracy 
+1.9159629365023267e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.001]
+not reaching the requested tolerance 1e-08.
+Use iteration 47 instead with accuracy 
+2.4106490039842318e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0006]
+not reaching the requested tolerance 1e-08.
+Use iteration 48 instead with accuracy 
+1.7627669792738191e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0008]
+not reaching the requested tolerance 1e-08.
+Use iteration 17 instead with accuracy 
+9.159714806008103e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 19 instead with accuracy 
+1.1016081707446258e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 33 instead with accuracy 
+2.2922378338929393e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 73 instead with accuracy 
+3.6539224469771725e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 11 instead with accuracy 
+3.7922620832850523e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 99 instead with accuracy 
+3.8714516349477864e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 94 instead with accuracy 
+3.448990278890099e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0003]
+not reaching the requested tolerance 1e-08.
+Use iteration 7 instead with accuracy 
+2.3166141152994478e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 74 instead with accuracy 
+2.8208147659258153e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0005]
+not reaching the requested tolerance 1e-08.
+Use iteration 5 instead with accuracy 
+2.7662847435210344e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.001]
+not reaching the requested tolerance 1e-08.
+Use iteration 15 instead with accuracy 
+1.8181227832930151e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 16 instead with accuracy 
+1.8401835357932058e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 8 instead with accuracy 
+2.611933714543073e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.001]
+not reaching the requested tolerance 1e-08.
+Use iteration 64 instead with accuracy 
+3.7130035348821753e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 9 instead with accuracy 
+3.903669615455125e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 74 instead with accuracy 
+8.124651686812027e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 95 instead with accuracy 
+1.594826261353875e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 6 instead with accuracy 
+2.1944361456295698e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 10 instead with accuracy 
+3.1859777977048863e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0003]
+not reaching the requested tolerance 1e-08.
+Use iteration 2 instead with accuracy 
+2.2304246434939756e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0005]
+not reaching the requested tolerance 1e-08.
+Use iteration 15 instead with accuracy 
+1.3437119513516523e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 16 instead with accuracy 
+1.5672969253236292e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 32 instead with accuracy 
+2.0717010477155884e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 12 instead with accuracy 
+4.006158140463838e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 11 instead with accuracy 
+4.619553536311202e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 85 instead with accuracy 
+9.148808302063402e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 72 instead with accuracy 
+7.886153484285484e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 10 instead with accuracy 
+2.4592383941708354e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0012]
+not reaching the requested tolerance 1e-08.
+Use iteration 10 instead with accuracy 
+2.9473522649755414e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0007]
+not reaching the requested tolerance 1e-08.
+Use iteration 4 instead with accuracy 
+2.0681345570378764e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 12 instead with accuracy 
+1.25325539647775e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0005]
+not reaching the requested tolerance 1e-08.
+Use iteration 13 instead with accuracy 
+1.5928628072642858e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0003]
+not reaching the requested tolerance 1e-08.
+Use iteration 11 instead with accuracy 
+2.9513417482503506e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 11 instead with accuracy 
+4.065628503536354e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 8 instead with accuracy 
+3.882065066056274e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 79 instead with accuracy 
+2.3450100695759797e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 96 instead with accuracy 
+2.438984620405799e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 9 instead with accuracy 
+2.583372922064865e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 6 instead with accuracy 
+2.4042293900127172e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0005]
+not reaching the requested tolerance 1e-08.
+Use iteration 3 instead with accuracy 
+1.8537190792996318e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 8 instead with accuracy 
+1.6146214763357375e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 18 instead with accuracy 
+1.710087324674738e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 8 instead with accuracy 
+2.368840902745184e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 10 instead with accuracy 
+4.0287089590904285e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 10 instead with accuracy 
+2.9123509431020593e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 67 instead with accuracy 
+9.132163300994242e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 0 instead with accuracy 
+1.1410863992237246e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+2.3962605801831028e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+2.396260580186233e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+2.396260035196201e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 3 instead with accuracy 
+4.283409082675623e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 3 instead with accuracy 
+3.932029330101704e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 2 instead with accuracy 
+3.744617563376085e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 2 instead with accuracy 
+3.363945899396017e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0003]
+not reaching the requested tolerance 1e-08.
+Use iteration 2 instead with accuracy 
+4.226744479109409e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+3.152711224974651e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+5.3870734368053545e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 2 instead with accuracy 
+5.3525943898940394e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 2 instead with accuracy 
+4.828974802758063e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0006]
+not reaching the requested tolerance 1e-08.
+Use iteration 2 instead with accuracy 
+5.395088232777718e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+4.194531336641248e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+3.6075526129514295e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+3.202091350211036e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+3.158525968671927e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+3.35262449300285e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+3.404733175777983e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+3.326276593189653e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+3.2620707739573696e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+3.4130916651423615e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+3.265965406230637e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+3.2398427579650504e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+3.233221466753125e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+3.2543711728841464e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+3.291550193497045e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+3.2670131679016246e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+3.262731168678662e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+4.5811939585533743e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+3.4827582683600824e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+3.23538826261812e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+3.243674207564201e-08.
+
+it 002 | main   | XZ  | ineq=active   | mu=7.34e-04 eta=1.00e-03 sigma=2.66e-02 | err c/p/d=1.15e-04/2.68e-01/1.90e+00 | ok=cpd | rmax X/Y/Z/T=58/6/34/31
+	Attention: Exited at iteration 100 with accuracies 
+[0.0008]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+9.341227635980058e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0005]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+9.327492905508385e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0006]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+9.326636886947914e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+9.326547626283402e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0006]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+9.536007225129026e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0003]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+9.522367510213661e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0003]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+9.480914029126989e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0004]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+9.463228873695691e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0004]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+9.506130335145797e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0003]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+9.058997263490457e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0006]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+8.903950623713255e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+8.87634367275558e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0006]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+9.109023428995282e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0004]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+9.047786742203508e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0004]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+8.961456065696003e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0006]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+8.950041145363209e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0004]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.0021848322916561e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0003]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+9.92623065346107e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0003]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+9.904412120162898e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+9.903512742116271e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0003]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+9.277942168361518e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0003]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+9.264373474988487e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0003]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+9.2078303071271e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+9.197626574171505e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0003]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+9.370159936740091e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0005]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+9.171760601281041e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0004]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+9.082810686030361e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0003]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+9.082634583799965e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.6550584985990834e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.6550443738765855e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0027]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.6550227915222428e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.001]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.6545516932872272e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+7.43403891980649e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+7.434038920001143e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.001]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.654551693295891e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0026]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.655022821514463e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.655059234391886e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+2.008984104164445e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+2.0941002186223225e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.667112927988554e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0014]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.6626220243665654e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0006]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.662621986015991e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0003]
+not reaching the requested tolerance 1e-08.
+Use iteration 7 instead with accuracy 
+5.898546643884399e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0003]
+not reaching the requested tolerance 1e-08.
+Use iteration 7 instead with accuracy 
+5.898546643875376e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0006]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.6626219860100809e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0014]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.6626220243845759e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.6689934043509815e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+2.189273205787586e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+2.1989629145121064e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0003]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.6836357680675515e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0012]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.671011407487252e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0006]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.6710113727524868e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 15 instead with accuracy 
+5.354076391260083e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 15 instead with accuracy 
+5.3540763911721035e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0006]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.6710113727489623e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0012]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.6710114083135744e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.6858119093314278e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+2.1824438053971768e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+2.1714716234780078e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0005]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.6881601072680862e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0008]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.6718616153548137e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0007]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.6718615680501797e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 6 instead with accuracy 
+1.8447850236173989e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 6 instead with accuracy 
+1.8447850236093862e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0007]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.6718615680529334e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0008]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.6718616154027386e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0004]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.6891599981762862e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0006]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+2.1914404505672007e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0006]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+2.2226114654847803e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0003]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.6937658212188845e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0011]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.675918060368133e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0007]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.6759179677048565e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0005]
+not reaching the requested tolerance 1e-08.
+Use iteration 11 instead with accuracy 
+1.3659648310333641e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0005]
+not reaching the requested tolerance 1e-08.
+Use iteration 11 instead with accuracy 
+1.3659648310316008e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0007]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.6759179677107957e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0011]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.6759180607912118e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0004]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.695657445601025e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0005]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+2.200097291729225e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0005]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+2.1806365889333736e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0004]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.695633745530195e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0006]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.675770302414193e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0007]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.6757702961942117e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0005]
+not reaching the requested tolerance 1e-08.
+Use iteration 12 instead with accuracy 
+1.472759862720231e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0005]
+not reaching the requested tolerance 1e-08.
+Use iteration 12 instead with accuracy 
+1.4727598627200677e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0007]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.6757702961921597e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0006]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.6757703024347553e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.6958476909360941e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 2 instead with accuracy 
+1.5281826266508615e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 2 instead with accuracy 
+1.4391676779966625e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.7016933074197005e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0008]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.6806779539037319e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.001]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.6806779533464174e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0005]
+not reaching the requested tolerance 1e-08.
+Use iteration 10 instead with accuracy 
+1.8947006711878593e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0005]
+not reaching the requested tolerance 1e-08.
+Use iteration 10 instead with accuracy 
+1.894700671190606e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.001]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.6806779533464244e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0008]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.680677953909495e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0003]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.7003583597557083e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 2 instead with accuracy 
+1.2476862016828618e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0001]
+not reaching the requested tolerance 1e-08.
+Use iteration 2 instead with accuracy 
+1.2647983501888639e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.7261831715008353e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0005]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.6935969865307145e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0003]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.6935969864217877e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0006]
+not reaching the requested tolerance 1e-08.
+Use iteration 11 instead with accuracy 
+1.84350913696907e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0006]
+not reaching the requested tolerance 1e-08.
+Use iteration 11 instead with accuracy 
+1.843509136968559e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0003]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.6935969864182755e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0005]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.693596986536488e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.7304059716804973e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 101 instead with accuracy 
+6.387897939954225e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 11 instead with accuracy 
+2.5548468443337917e-07.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0004]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.737966069753949e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0003]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.6988705831477988e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0003]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.6988705831393408e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0005]
+not reaching the requested tolerance 1e-08.
+Use iteration 12 instead with accuracy 
+2.138953868599281e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0005]
+not reaching the requested tolerance 1e-08.
+Use iteration 12 instead with accuracy 
+2.138953868595683e-08.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0003]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.698870583140538e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0003]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.6988705831447156e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.0002]
+not reaching the requested tolerance 1e-08.
+Use iteration 1 instead with accuracy 
+1.7377315314760855e-06.
+
+	Attention: Exited at iteration 100 with accuracies 
+[0.]
+not reaching the requested tolerance 1e-08.
+Use iteration 101 instead with accuracy 
+8.114047644273984e-08.
+
+it 003 | main   | AHO | ineq=active   | mu=1.28e-03 eta=1.00e-03 sigma=5.72e-01 | err c/p/d=1.21e-04/2.16e-01/1.76e+00 | ok=cpd | rmax X/Y/Z/T=112/6/45/42
+it 004 | main   | AHO | ineq=active   | mu=1.62e-04 eta=3.24e-04 sigma=1.29e-02 | err c/p/d=2.32e-05/1.83e-01/1.07e-01 | ok=Cpd | rmax X/Y/Z/T=122/6/59/55
+it 005 | main   | AHO | ineq=active   | mu=1.51e-04 eta=3.03e-04 sigma=0.00e+00 | err c/p/d=1.71e-05/8.95e-03/6.16e-03 | ok=Cpd | rmax X/Y/Z/T=129/7/66/61
+it 006 | main   | AHO | ineq=active   | mu=1.52e-04 eta=3.03e-04 sigma=0.00e+00 | err c/p/d=1.71e-05/3.06e-04/1.34e-03 | ok=CPd | rmax X/Y/Z/T=127/7/64/59
+it 007 | main   | AHO | ineq=active   | mu=1.53e-04 eta=3.03e-04 sigma=0.00e+00 | err c/p/d=1.72e-05/1.94e-04/1.45e-03 | ok=CPd | rmax X/Y/Z/T=126/7/63/57

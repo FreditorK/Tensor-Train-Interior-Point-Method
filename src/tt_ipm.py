@@ -765,8 +765,9 @@ def _tt_ipm_newton_step(
             print("\n--- Predictor  step ---", flush=True)
         t0 = time.time()
         row_scales = _tt_kkt_row_scales(rhs_vec_tt, status)
+        scale_log = [f"{row}:{scale:.1e}" for row, scale in row_scales.items()]
         lhs_pred_tt, rhs_pred_tt = _tt_build_row_scaled_kkt(lhs_matrix_tt, rhs_vec_tt, status, row_scales=row_scales)
-        _ipm_trace(status, "kkt-build", f"rhs_rows={list(rhs_vec_tt.keys())} scales={[f'{s:.1e}' for s in row_scales]}", t0)
+        _ipm_trace(status, "kkt-build", f"rhs_rows={list(rhs_vec_tt.keys())} scales={scale_log}", t0)
         try:
             t0 = time.time()
             _ipm_trace(status, "kkt-pred", f"start nswp={status.kkt_iterations + status.is_last_iter} rank_cap={status.mals_rank_restriction}")

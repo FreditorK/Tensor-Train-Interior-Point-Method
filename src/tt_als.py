@@ -588,6 +588,7 @@ def tt_block_amen(block_A, block_b, term_tol, r_max=100, eps=1e-12, nswp=22, x0=
     final_local_res = np.inf
     direct_solve_failure = False
     trunc_tol = term_tol / np.sqrt(d)
+    rank_eps = max(eps, 0.05 * trunc_tol)
 
     for swp in range(nswp+1):
 
@@ -609,7 +610,7 @@ def tt_block_amen(block_A, block_b, term_tol, r_max=100, eps=1e-12, nswp=22, x0=
                 trunc_tol,
                 d,
                 swp,
-                eps,
+                rank_eps,
                 r_max,
                 kick_rank,
                 last,
@@ -634,7 +635,7 @@ def tt_block_amen(block_A, block_b, term_tol, r_max=100, eps=1e-12, nswp=22, x0=
                 trunc_tol,
                 d,
                 swp,
-                eps,
+                rank_eps,
                 r_max,
                 kick_rank,
                 last,
