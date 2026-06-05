@@ -915,7 +915,10 @@ def _print_attention(e):
         cls = getattr(scp.sparse.linalg, name, None)
         if cls is not None:
             quiet.append(cls)
-    if "could not broadcast input array" in str(e):
+    message = str(e)
+    if "could not broadcast input array" in message:
+        return
+    if "Exited postprocessing with accuracies" in message and "[0.]" in message:
         return
     if not isinstance(e, tuple(quiet)):
         print(f"	Attention: {e}")
@@ -2056,4 +2059,3 @@ def tt_mat_vec_mul(mat, vec, op_tol, eps, verbose=False):
     if np.max((np.array(tt_ranks(mat))*np.array(tt_ranks(vec)))) <= 80:
         return tt_rank_reduce(tt_fast_matrix_vec_mul(mat, vec, eps), op_tol)
     return tt_approx_mat_vec_mul(mat, vec, tol=op_tol, verbose=verbose)
-

@@ -1117,7 +1117,33 @@ def _tt_get_step_sizes(
     return tau_x*x_step_size, tau_z*z_step_size
 
 
-def _ineq_step_size(A_tt, Delta_tt, e_tt, status):
+def _dense_masked_ineq_step_size(A_tt, Delta_tt, ineq_mask, status, max_entries=1 << 18):
+    if ineq_mask is None:
+        return None
+    num_entries = int(np.prod([np.prod(core.shape[1:-1], dtype=int) for core in ineq_mask], dtype=int))
+    if num_entries > max_entries:
+        return None
+
+    mask = np.abs(tt_to_tensor(ineq_mask).reshape(-1)) > status.eps
+    if not np.any(mask):
+        return 1.0
+    A = tt_to_tensor(A_tt).reshape(-1)[mask]
+    Delta = tt_to_tensor(Delta_tt).reshape(-1)[mask]
+    descending = Delta < -status.eps
+    if not np.any(descending):
+        return 1.0
+    ratios = -A[descending] / Delta[descending]
+    ratios = ratios[np.isfinite(ratios)]
+    if ratios.size == 0:
+        return 1.0
+    return float(np.clip(np.min(ratios), a_min=0.0, a_max=1.0))
+
+
+def _ineq_step_size(A_tt, Delta_tt, e_tt, ineq_mask, status):
+    dense_step_size = _dense_masked_ineq_step_size(A_tt, Delta_tt, ineq_mask, status)
+    if dense_step_size is not None:
+        return dense_step_size, e_tt
+
     sum_tt = tt_add(A_tt, Delta_tt)
     if status.compl_ineq_mask:
         sum_tt = tt_add(sum_tt, status.compl_ineq_mask)
@@ -1147,6 +1173,7 @@ def _tt_get_ineq_step_sizes(x_step_size, z_step_size, X_tt, T_tt, Delta_X_tt, De
             tt_add(masked_X_tt, tt_scale(status.ineq_boundary_val, ineq_mask)),
             tt_scale(x_step_size, masked_Delta_X_tt),
             status.eigen_xt0,
+            ineq_mask,
             status
         )
         if not status.is_last_iter and not getattr(status, "combine_ty", False):
@@ -1177,6 +1204,7 @@ def _tt_get_ineq_step_sizes(x_step_size, z_step_size, X_tt, T_tt, Delta_X_tt, De
             T_tt,
             tt_scale(z_step_size, Delta_T_tt),
             status.eigen_zt0,
+            ineq_mask,
             status
         )
         z_step_size *= t_step_size
