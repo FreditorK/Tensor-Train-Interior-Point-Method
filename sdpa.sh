@@ -59,19 +59,13 @@ else
     exit 1
 fi
 
-# Now activate the SDPA-specific environment. Override with SDPA_CONDA_ENV if needed.
-ENV_NAME="${SDPA_CONDA_ENV:-/vol/bitbucket/fjk20/conda_envs/sdpa}"
-if [ "${CONDA_PREFIX:-}" != "$ENV_NAME" ]; then
+# Now activate environment
+ENV_NAME="${TTIPM_CONDA_ENV:-ttipm}"
+if [ "${CONDA_DEFAULT_ENV:-}" != "$ENV_NAME" ]; then
     conda activate "$ENV_NAME"
 fi
 
-# Build Cython extensions for this Python version if they are missing.
-if ! python -c "import cy_src.tt_ops_cy, cy_src.lgmres_cy" >/dev/null 2>&1; then
-    echo "Building Cython extensions for SDPA environment: $ENV_NAME"
-    python setup.py build_ext --inplace
-fi
-
-# Fail early if sdpa-python itself is unavailable in the SDPA environment.
+# Fail early if sdpa-python itself is unavailable in the active environment.
 python -c "import sdpap"
 
 
