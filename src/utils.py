@@ -401,7 +401,10 @@ def run_and_record(seed, r_i, s_i, rank, config, args, create_problem_fn, memory
     np.random.seed(seed)
     t1 = time.time()
     problem = create_problem_fn(config["dim"], rank)
-    if len(problem) == 5:
+    problem_meta = {}
+    if len(problem) == 6:
+        obj_tt, L_op_tt, bias_tt, ineq_mask, lag_maps, problem_meta = problem
+    elif len(problem) == 5:
         obj_tt, L_op_tt, bias_tt, ineq_mask, lag_maps = problem
     else:
         obj_tt, L_op_tt, bias_tt, lag_y = problem
@@ -434,7 +437,8 @@ def run_and_record(seed, r_i, s_i, rank, config, args, create_problem_fn, memory
             lambdaStarIneq=float(config.get("lambdaStarIneq", 1)),
             r_max=int(config.get("r_max", 1000)),
             delta_t_kkt_weight=float(config.get("delta_t_kkt_weight", 0.5)),
-            allow_freeze_delta_t=bool(config.get("allow_freeze_delta_t", False))
+            combine_ty=bool(problem_meta.get("combine_ty", False)),
+            eq_mask=problem_meta.get("eq_mask")
         )
     if args.track_mem:
         start_mem = memory_usage(max_usage=True, include_children=True)

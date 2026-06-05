@@ -35,7 +35,14 @@ def create_problem(dim, rank):
         "y": tt_diag_op(lag_y),
         "t": tt_diag_op(lag_t)
     }
-    return tt_reshape(tt_normalise(obj_tt, radius=scale), (4,)), L_tt, tt_reshape(tt_normalise(bias_tt, radius=scale), (4,)), ineq_mask, lag_maps
+    return (
+        tt_reshape(tt_normalise(obj_tt, radius=scale), (4,)),
+        L_tt,
+        tt_reshape(tt_normalise(bias_tt, radius=scale), (4,)),
+        ineq_mask,
+        lag_maps,
+        {"combine_ty": True, "eq_mask": tt_identity(dim)}
+    )
 
 
 if __name__ == "__main__":

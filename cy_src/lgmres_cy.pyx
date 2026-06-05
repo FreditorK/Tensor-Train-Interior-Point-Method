@@ -386,6 +386,125 @@ cdef class MatVecWrapper(BaseMatVec):
 
         return self.flat_result_arr
 
+cdef class TYMatVecWrapper(BaseMatVec):
+    cdef double[:, ::1] result0, result1, temp, x_reshaped_0, x_reshaped_1
+    cdef object flat_result_arr
+    cdef double[:] flat_result
+    cdef const double[:, ::1] XAX_k_00, XAX_k_01, XAX_k_10, XAX_k_21, XAX_k_22
+    cdef const double[:, ::1] block_A_k_00, block_A_k_01, block_A_k_10, block_A_k_21, block_A_k_22
+    cdef const double[:, ::1] XAX_kp1_00, XAX_kp1_01, XAX_kp1_10, XAX_kp1_21, XAX_kp1_22
+    cdef double[:, ::1] A_00_workspace1, A_00_workspace2, A_01_workspace1, A_01_workspace2, A_10_workspace1, A_10_workspace2, A_21_workspace1, A_21_workspace2, A_22_workspace1, A_22_workspace2
+    cdef double[:, ::1] A_00_workspace1_2, A_00_workspace2_2, A_01_workspace1_2, A_01_workspace2_2, A_10_workspace1_2, A_10_workspace2_2, A_21_workspace1_2, A_21_workspace2_2, A_22_workspace1_2, A_22_workspace2_2
+    cdef const double[:, ::1] inv_I
+    cdef int r, n, R, total_size
+    cdef size_t block_size
+
+    def __init__(self,
+                 cnp.ndarray[double, ndim=3] XAX_k_00,
+                 cnp.ndarray[double, ndim=3] XAX_k_01,
+                 cnp.ndarray[double, ndim=3] XAX_k_10,
+                 cnp.ndarray[double, ndim=3] XAX_k_21,
+                 cnp.ndarray[double, ndim=3] XAX_k_22,
+                 cnp.ndarray[double, ndim=4] block_A_k_00,
+                 cnp.ndarray[double, ndim=4] block_A_k_01,
+                 cnp.ndarray[double, ndim=4] block_A_k_10,
+                 cnp.ndarray[double, ndim=4] block_A_k_21,
+                 cnp.ndarray[double, ndim=4] block_A_k_22,
+                 cnp.ndarray[double, ndim=3] XAX_kp1_00,
+                 cnp.ndarray[double, ndim=3] XAX_kp1_01,
+                 cnp.ndarray[double, ndim=3] XAX_kp1_10,
+                 cnp.ndarray[double, ndim=3] XAX_kp1_21,
+                 cnp.ndarray[double, ndim=3] XAX_kp1_22,
+                 cnp.ndarray[double, ndim=3] inv_I,
+                 int r,
+                 int n,
+                 int R):
+        self.XAX_k_00 = np.ascontiguousarray(XAX_k_00.transpose(0, 2, 1).reshape(XAX_k_00.shape[0], -1).T)
+        self.XAX_k_01 = np.ascontiguousarray(XAX_k_01.transpose(0, 2, 1).reshape(XAX_k_01.shape[0], -1).T)
+        self.XAX_k_10 = np.ascontiguousarray(XAX_k_10.transpose(0, 2, 1).reshape(XAX_k_10.shape[0], -1).T)
+        self.XAX_k_21 = np.ascontiguousarray(XAX_k_21.transpose(0, 2, 1).reshape(XAX_k_21.shape[0], -1).T)
+        self.XAX_k_22 = np.ascontiguousarray(XAX_k_22.transpose(0, 2, 1).reshape(XAX_k_22.shape[0], -1).T)
+
+        self.block_A_k_00 = np.ascontiguousarray(block_A_k_00.reshape(block_A_k_00.shape[0] * block_A_k_00.shape[1], block_A_k_00.shape[2] * block_A_k_00.shape[3]).T)
+        self.block_A_k_01 = np.ascontiguousarray(block_A_k_01.reshape(block_A_k_01.shape[0] * block_A_k_01.shape[1], block_A_k_01.shape[2] * block_A_k_01.shape[3]).T)
+        self.block_A_k_10 = np.ascontiguousarray(block_A_k_10.reshape(block_A_k_10.shape[0] * block_A_k_10.shape[1], block_A_k_10.shape[2] * block_A_k_10.shape[3]).T)
+        self.block_A_k_21 = np.ascontiguousarray(block_A_k_21.reshape(block_A_k_21.shape[0] * block_A_k_21.shape[1], block_A_k_21.shape[2] * block_A_k_21.shape[3]).T)
+        self.block_A_k_22 = np.ascontiguousarray(block_A_k_22.reshape(block_A_k_22.shape[0] * block_A_k_22.shape[1], block_A_k_22.shape[2] * block_A_k_22.shape[3]).T)
+
+        self.A_00_workspace1 = np.empty((r * n, R * block_A_k_00.shape[3]))
+        self.A_00_workspace1_2 = np.empty((r * R, n * block_A_k_00.shape[3]))
+        self.A_00_workspace2 = np.empty((r * R, block_A_k_00.shape[0] * n))
+        self.A_00_workspace2_2 = np.empty((R*n, r*block_A_k_00.shape[0]))
+
+        self.A_01_workspace1 = np.empty((r * n, R * block_A_k_01.shape[3]))
+        self.A_01_workspace1_2 = np.empty((r * R, n * block_A_k_01.shape[3]))
+        self.A_01_workspace2 = np.empty((r * R, block_A_k_01.shape[0] * n))
+        self.A_01_workspace2_2 = np.empty((R*n, r*block_A_k_01.shape[0]))
+
+        self.A_10_workspace1 = np.empty((r * n, R * block_A_k_10.shape[3]))
+        self.A_10_workspace1_2 = np.empty((r * R, n * block_A_k_10.shape[3]))
+        self.A_10_workspace2 = np.empty((r * R, block_A_k_10.shape[0] * n))
+        self.A_10_workspace2_2 = np.empty((R*n, r*block_A_k_10.shape[0]))
+
+        self.A_21_workspace1 = np.empty((r * n, R * block_A_k_21.shape[3]))
+        self.A_21_workspace1_2 = np.empty((r * R, n * block_A_k_21.shape[3]))
+        self.A_21_workspace2 = np.empty((r * R, block_A_k_21.shape[0] * n))
+        self.A_21_workspace2_2 = np.empty((R*n, r*block_A_k_21.shape[0]))
+
+        self.A_22_workspace1 = np.empty((r * n, R * block_A_k_22.shape[3]))
+        self.A_22_workspace1_2 = np.empty((r * R, n * block_A_k_22.shape[3]))
+        self.A_22_workspace2 = np.empty((r * R, block_A_k_22.shape[0] * n))
+        self.A_22_workspace2_2 = np.empty((R*n, r*block_A_k_22.shape[0]))
+
+        self.XAX_kp1_00 = np.ascontiguousarray(XAX_kp1_00.reshape(-1, R).T)
+        self.XAX_kp1_01 = np.ascontiguousarray(XAX_kp1_01.reshape(-1, R).T)
+        self.XAX_kp1_10 = np.ascontiguousarray(XAX_kp1_10.reshape(-1, R).T)
+        self.XAX_kp1_21 = np.ascontiguousarray(XAX_kp1_21.reshape(-1, R).T)
+        self.XAX_kp1_22 = np.ascontiguousarray(XAX_kp1_22.reshape(-1, R).T)
+
+        self.r = r
+        self.n = n
+        self.R = R
+        self.inv_I = np.ascontiguousarray(inv_I.reshape(self.r*self.n, self.R))
+
+        self.result0 = np.empty((self.R*self.n, self.r), dtype=np.float64)
+        self.result1 = np.empty((self.R*self.n, self.r), dtype=np.float64)
+        self.temp = np.empty((self.R*self.n, self.r), dtype=np.float64)
+        self.x_reshaped_0 = np.empty((self.r*self.n, self.R), dtype=np.float64)
+        self.x_reshaped_1 = np.empty((self.r*self.n, self.R), dtype=np.float64)
+        self.block_size = self.r * self.n * self.R * sizeof(double)
+        self.total_size = 2 * self.r * self.n * self.R
+        self.flat_result_arr = np.empty(self.total_size, dtype=np.float64)
+        self.flat_result = self.flat_result_arr
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.nonecheck(False)
+    cpdef matvec_into(self, cnp.ndarray[double, ndim=1] x_core, cnp.ndarray[double, ndim=1] out):
+        cdef const double[:, :, :] x_reshaped_view = x_core.reshape(2, self.r*self.n, self.R)
+        cdef double[:] out_view = out
+
+        with nogil:
+            memcpy(&self.x_reshaped_0[0, 0], &x_reshaped_view[0, 0, 0], self.block_size)
+            memcpy(&self.x_reshaped_1[0, 0], &x_reshaped_view[1, 0, 0], self.block_size)
+
+            einsum(self.XAX_k_00, self.block_A_k_00, self.XAX_kp1_00, self.x_reshaped_0, self.result0, self.A_00_workspace1, self.A_00_workspace1_2, self.A_00_workspace2, self.A_00_workspace2_2, self.r, self.n, self.R, 1.0, 0.0)
+            einsum(self.XAX_k_01, self.block_A_k_01, self.XAX_kp1_01, self.x_reshaped_1, self.result0, self.A_01_workspace1, self.A_01_workspace1_2, self.A_01_workspace2, self.A_01_workspace2_2, self.r, self.n, self.R, 1.0, 1.0)
+
+            einsum(self.XAX_k_21, self.block_A_k_21, self.XAX_kp1_21, self.x_reshaped_1, self.result1, self.A_21_workspace1, self.A_21_workspace1_2, self.A_21_workspace2, self.A_21_workspace2_2, self.r, self.n, self.R, 1.0, 0.0)
+            einsum(self.XAX_k_10, self.block_A_k_10, self.XAX_kp1_10, self.x_reshaped_0, self.temp, self.A_10_workspace1, self.A_10_workspace1_2, self.A_10_workspace2, self.A_10_workspace2_2, self.r, self.n, self.R, 1.0, 0.0)
+            _transpose_reshape_multiply_inplace(self.temp, self.x_reshaped_0, self.inv_I, self.r, self.n, self.R)
+            einsum(self.XAX_k_22, self.block_A_k_22, self.XAX_kp1_22, self.x_reshaped_0, self.result1, self.A_22_workspace1, self.A_22_workspace1_2, self.A_22_workspace2, self.A_22_workspace2_2, self.r, self.n, self.R, -1.0, 1.0)
+
+        pack_results(self.result0, self.result1, out_view, self.R, self.n, self.r)
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.nonecheck(False)
+    cpdef cnp.ndarray[double, ndim=1] matvec(self, cnp.ndarray[double, ndim=1] x_core):
+        self.matvec_into(x_core, self.flat_result_arr)
+        return self.flat_result_arr
+
 cdef class IneqMatVecWrapper(BaseMatVec):
     cdef double[:,  ::1] result0, result1, result2, temp, x_reshaped_0, x_reshaped_1, x_reshaped_2
     cdef object flat_result_arr
