@@ -8,8 +8,20 @@ sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
 from cy_src.lgmres_cy import (
+    core_matvec,
+    core_rmatvec,
+    dense_core_matrix,
+    dense_two_core_matrix,
     DiagOneCoreBlockWrapper,
     DiagTwoCoreBlockWrapper,
+    matmat_phi_bck,
+    matmat_phi_fwd,
+    matmat_product_core,
+    phi_bck_A,
+    phi_bck_rhs,
+    phi_fwd_A,
+    phi_fwd_rhs,
+    rhs_contract,
     SymOneCoreMatVecWrapper,
     SymTwoCoreMatVecWrapper,
 )
@@ -86,7 +98,7 @@ class TTBlockVectorView:
     def block_local_product(self, Xb_k, Xb_kp1, nrmsc, shape):
         result = np.zeros(shape, dtype=np.float64)
         for i in self._data.keys():
-            result[:, i] += cached_einsum('br,bnB,BR->rnR', Xb_k[i], nrmsc * self._data[i][self._list_index], Xb_kp1[i])
+            result[:, i] += rhs_contract(Xb_k[i], self._data[i][self._list_index], Xb_kp1[i], nrmsc)
         return result
 
 
@@ -197,51 +209,60 @@ class TTBlockMatrixView:
     def block_local_product(self, XAX_k, XAX_kp1, x_core):
         result = np.zeros_like(x_core, dtype=np.float64)
         for (i, j) in self._data.keys():
-            result[:, i] += cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[i, j], self._data[i, j][self._idx], XAX_kp1[i, j], x_core[:, j])
+            result[:, i] += core_matvec(XAX_k[i, j], self._data[i, j][self._idx], XAX_kp1[i, j], x_core[:, j])
             if (i, j) in self._transposes:
                 k, t = self._transposes[i, j]
-                result[:, k] += cached_einsum('lsr,smnS,LSR,lmL->rnR', XAX_k[i, j], self._data[i, j][self._idx], XAX_kp1[i, j], x_core[:, t])
+                result[:, k] += core_rmatvec(XAX_k[i, j], self._data[i, j][self._idx], XAX_kp1[i, j], x_core[:, t])
             if (i, j) in self._aliases:
                 k, t = self._aliases[i,  j]
-                result[:, k] += cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[i, j], self._data[i, j][self._idx], XAX_kp1[i, j], x_core[:, t])
+                result[:, k] += core_matvec(XAX_k[i, j], self._data[i, j][self._idx], XAX_kp1[i, j], x_core[:, t])
         return result
 
     def compressed_block_local_product(self, ZAX_k, ZAX_kp1, x_core, shape):
         result = np.zeros(shape, dtype=np.float64)
         for (i, j) in self._data.keys():
-            result[:, i] += cached_einsum('lsr,smnS,LSR,rnR->lmL', ZAX_k[i, j], self._data[i, j][self._idx], ZAX_kp1[i, j], x_core[:, j])
+            result[:, i] += core_matvec(ZAX_k[i, j], self._data[i, j][self._idx], ZAX_kp1[i, j], x_core[:, j])
             if (i, j) in self._transposes:
                 k, t = self._transposes[i, j]
-                result[:, k] += cached_einsum('lsr,snmS,LSR,rnR->lmL', ZAX_k[k, t], self._data[i, j][self._idx], ZAX_kp1[k, t], x_core[:, t])
+                result[:, k] += core_matvec(
+                    ZAX_k[k, t], np.transpose(self._data[i, j][self._idx], (0, 2, 1, 3)),
+                    ZAX_kp1[k, t], x_core[:, t]
+                )
             if (i, j) in self._aliases:
                 k, t = self._aliases[i,  j]
-                result[:, k] += cached_einsum('lsr,smnS,LSR,rnR->lmL', ZAX_k[i, j], self._data[i, j][self._idx], ZAX_kp1[i, j], x_core[:, t])
+                result[:, k] += core_matvec(ZAX_k[i, j], self._data[i, j][self._idx], ZAX_kp1[i, j], x_core[:, t])
         return result
 
 
     def lcompressed_block_local_product(self, ZAX_k, XAX_kp1, x_core, shape):
         result = np.zeros(shape, dtype=np.float64)
         for (i, j) in self._data.keys():
-            result[:, i] += cached_einsum('lsr,smnS,LSR,rnR->lmL', ZAX_k[i, j], self._data[i, j][self._idx], XAX_kp1[i, j], x_core[:, j])
+            result[:, i] += core_matvec(ZAX_k[i, j], self._data[i, j][self._idx], XAX_kp1[i, j], x_core[:, j])
             if (i, j) in self._transposes:
                 k, t = self._transposes[i, j]
-                result[:, k] += cached_einsum('lsr,snmS,RSL,rnR->lmL', ZAX_k[k, t], self._data[i, j][self._idx], XAX_kp1[i, j], x_core[:, t])
+                result[:, k] += core_matvec(
+                    ZAX_k[k, t], np.transpose(self._data[i, j][self._idx], (0, 2, 1, 3)),
+                    np.transpose(XAX_kp1[i, j], (2, 1, 0)), x_core[:, t]
+                )
             if (i, j) in self._aliases:
                 k, t = self._aliases[i,  j]
-                result[:, k] += cached_einsum('lsr,smnS,LSR,rnR->lmL', ZAX_k[i, j], self._data[i, j][self._idx], XAX_kp1[i, j], x_core[:, t])
+                result[:, k] += core_matvec(ZAX_k[i, j], self._data[i, j][self._idx], XAX_kp1[i, j], x_core[:, t])
         return result
 
 
     def rcompressed_block_local_product(self, XAX_k, ZAX_kp1, x_core, shape):
         result = np.zeros(shape, dtype=np.float64)
         for (i, j) in self._data.keys():
-            result[:, i] += cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[i, j], self._data[i, j][self._idx], ZAX_kp1[i, j], x_core[:, j])
+            result[:, i] += core_matvec(XAX_k[i, j], self._data[i, j][self._idx], ZAX_kp1[i, j], x_core[:, j])
             if (i, j) in self._transposes:
                 k, t = self._transposes[i, j]
-                result[:, k] += cached_einsum('rsl,snmS,LSR,rnR->lmL', XAX_k[i, j], self._data[i, j][self._idx], ZAX_kp1[k, t], x_core[:, t])
+                result[:, k] += core_matvec(
+                    np.transpose(XAX_k[i, j], (2, 1, 0)), np.transpose(self._data[i, j][self._idx], (0, 2, 1, 3)),
+                    ZAX_kp1[k, t], x_core[:, t]
+                )
             if (i, j) in self._aliases:
                 k, t = self._aliases[i,  j]
-                result[:, k] += cached_einsum('lsr,smnS,LSR,rnR->lmL', XAX_k[i, j], self._data[i, j][self._idx], ZAX_kp1[i, j], x_core[:, t])
+                result[:, k] += core_matvec(XAX_k[i, j], self._data[i, j][self._idx], ZAX_kp1[i, j], x_core[:, t])
         return result
 
     def keys(self):
@@ -257,19 +278,19 @@ class TTBlockMatrixView:
         return self._data.keys() | self._aliases.values() | self._transposes.values()
 
 def compute_phi_bck_A(Phi_now, core_left, core_A, core_right):
-    return cached_einsum('LSR,lML,sMNS,rNR->lsr', Phi_now, core_left, core_A, core_right)
+    return phi_bck_A(Phi_now, core_left, core_A, core_right)
 
 
 def compute_phi_fwd_A(Phi_now, core_left, core_A, core_right):
-    return cached_einsum('lsr,lML,sMNS,rNR->LSR',Phi_now, core_left, core_A, core_right)
+    return phi_fwd_A(Phi_now, core_left, core_A, core_right)
 
 
 def compute_phi_bck_rhs(Phi_now, core_b, core):
-    return cached_einsum('BR,bnB,rnR->br', Phi_now, core_b, core)
+    return phi_bck_rhs(Phi_now, core_b, core)
 
 
 def compute_phi_fwd_rhs(Phi_now, core_rhs, core):
-    return cached_einsum('br,bnB,rnR->BR', Phi_now, core_rhs, core)
+    return phi_fwd_rhs(Phi_now, core_rhs, core)
 
 
 
@@ -706,7 +727,7 @@ def _default_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, prev
     rhs = np.empty_like(previous_solution)
     x_shape = (x_shape[1], x_shape[0], x_shape[2], x_shape[3])
     for i in block_b_k:
-        rhs[:, i] = cached_einsum('br,bmB,BR->rmR', Xb_k[i], block_b_k[i], Xb_k1[i])
+        rhs[:, i] = rhs_contract(Xb_k[i], block_b_k[i], Xb_k1[i])
     norm_rhs = max(np.linalg.norm(rhs), 1e-10)
     block_res_old = np.linalg.norm(
         block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution) - rhs) / norm_rhs
@@ -719,8 +740,7 @@ def _default_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, prev
             B_blocks = [[None for _ in range(block_size)] for _ in range(block_size)]
 
             for (i, j) in block_A_k:
-                local_B = cached_einsum('lsr,smnS,LSR->lmLrnR',
-                                        XAX_k[i, j], block_A_k[i, j], XAX_k1[i, j]).reshape(m, m)
+                local_B = dense_core_matrix(XAX_k[i, j], block_A_k[i, j], XAX_k1[i, j])
                 local_B_sparse = scp.sparse.csc_matrix(local_B)
 
                 B_blocks[i][j] = local_B_sparse
@@ -1213,6 +1233,12 @@ def _safeguard_psd_step(step_size, eig_val, solution_now, min_eig_at_step, eps):
     return good_step, good_vec, good_val
 
 
+def _merge_two_core(left, right):
+    return (left.reshape(-1, left.shape[-1]) @ right.reshape(right.shape[0], -1)).reshape(
+        left.shape[0], left.shape[1], right.shape[1], right.shape[2]
+    )
+
+
 def _step_size_local_solve(
     previous_solution1, 
     previous_solution2, 
@@ -1234,15 +1260,15 @@ def _step_size_local_solve(
     if (not np.isfinite(step_size)) or step_size <= 0:
         return previous_solution1, previous_solution2, 0.0, np.inf
 
-    previous_solution = cached_einsum("rny, ytR -> rntR", previous_solution1, previous_solution2)
+    previous_solution = _merge_two_core(previous_solution1, previous_solution2)
     prev_sol_shape = previous_solution.shape
     m = np.prod(prev_sol_shape)
     previous_solution = previous_solution.reshape(-1, 1)
     residual_vec = None
     if prev_sol_shape[0]*prev_sol_shape[-1] <= size_limit:
-        D = scp.sparse.csr_matrix(cached_einsum("lsr, smnk, kptS, LSR->lmpLrntR", XDX_k, D_k, D_kp1, XDX_k2).reshape(m, m))
+        D = scp.sparse.csr_matrix(dense_two_core_matrix(XDX_k, D_k, D_kp1, XDX_k2))
         D = 0.5*(D + D.T)
-        A = scp.sparse.csr_matrix(cached_einsum("lsr, smnk, kptS, LSR->lmpLrntR", XAX_k, A_k, A_kp1, XAX_k2).reshape(m, m)) 
+        A = scp.sparse.csr_matrix(dense_two_core_matrix(XAX_k, A_k, A_kp1, XAX_k2))
         A = 0.5*(A + A.T)
         M = (1/step_size)*A + D
         try:
@@ -1409,12 +1435,9 @@ def _step_size_local_solve_last(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k
     m = np.prod(previous_solution.shape)
     if dense_solve:
         previous_solution = previous_solution.reshape(-1, 1)
-        D = scp.sparse.csr_matrix(cached_einsum(
-            "lsr,smnS,LSR->lmLrnR",
-            XDX_k, Delta_k, XDX_k1
-        ).reshape(m, m))
+        D = scp.sparse.csr_matrix(dense_core_matrix(XDX_k, Delta_k, XDX_k1))
         D = 0.5*(D + D.T)
-        A = scp.sparse.csr_matrix(cached_einsum("lsr,smnS,LSR->lmLrnR", XAX_k, A_k, XAX_k1).reshape(m, m))
+        A = scp.sparse.csr_matrix(dense_core_matrix(XAX_k, A_k, XAX_k1))
         A = 0.5*(A + A.T)
         M = (1/step_size)*A + D
         try:
@@ -1660,7 +1683,7 @@ def _eigen_local_solve(
     max_rank,
     bwd=True
     ):
-    previous_solution = cached_einsum("rny, ytR -> rntR", previous_solution1, previous_solution2)
+    previous_solution = _merge_two_core(previous_solution1, previous_solution2)
     prev_sol_shape = previous_solution.shape
     m = np.prod(prev_sol_shape)
     previous_solution = previous_solution.reshape(-1, 1)
@@ -1669,7 +1692,7 @@ def _eigen_local_solve(
     if diag_result is not None:
         solution_now, eig_val, old_res, residual_vec = diag_result
     elif previous_solution.shape[0]*previous_solution.shape[-1] <= size_limit:
-        A = scp.sparse.csr_matrix(cached_einsum("lsr, smnk, kptS, LSR->lmpLrntR", XAX_k, A_k, A_kp1, XAX_k2).reshape(m, m))
+        A = scp.sparse.csr_matrix(dense_two_core_matrix(XAX_k, A_k, A_kp1, XAX_k2))
         A = 0.5*(A.T + A)
         try:
             eig_val, solution_now = scp.sparse.linalg.eigsh(A, tol=eps, k=1, which="SA", ncv=_eigsh_ncv(m, lanczos_discount * m), maxiter=_eigsh_maxiter(m), v0=_eigsh_v0(previous_solution))
@@ -1726,7 +1749,7 @@ def _eigen_local_solve_last(previous_solution, XAX_k, A_k, XAX_k1, m, size_limit
 
     if previous_solution.shape[0]*previous_solution.shape[-1] <= size_limit:
         previous_solution = previous_solution_vec
-        A = scp.sparse.csr_matrix(cached_einsum("lsr,smnS,LSR->lmLrnR", XAX_k, A_k, XAX_k1).reshape(m, m))
+        A = scp.sparse.csr_matrix(dense_core_matrix(XAX_k, A_k, XAX_k1))
         try:
             eig_val, solution_now = scp.sparse.linalg.eigsh(A, tol=eps, k=1, which="SA", ncv=_eigsh_ncv(m), maxiter=_eigsh_maxiter(m), v0=_eigsh_v0(previous_solution))
             if np.linalg.norm(A @ solution_now - eig_val * solution_now) > eps:
@@ -1910,7 +1933,7 @@ def tt_approx_mat_mat_mul(A, D, x0=None, kick_rank=None, nswp=50, tol=1e-6, verb
         for k in range(d - 1, -1, -1):
             if swp > 0:
                 previous_solution = x_cores[k]
-                solution_now = cached_einsum('rab,amkA,bknB,RAB->rmnR',XADX[k], A[k], D[k], XADX[k+1])
+                solution_now = matmat_product_core(XADX[k], A[k], D[k], XADX[k + 1])
                 solution_now *= nrmsc
                 local_res = np.linalg.norm(solution_now - previous_solution) / max(np.linalg.norm(solution_now), 1e-8)
                 max_res = max(max_res, local_res)
@@ -1936,7 +1959,7 @@ def tt_approx_mat_mat_mul(A, D, x0=None, kick_rank=None, nswp=50, tol=1e-6, verb
                 x_cores[k - 1] /= norm_now
                 rx[k] = r
 
-                XADX[k] = cached_einsum('RAB,amkA,bknB,rmnR->rab', XADX[k+1], A[k], D[k], x_cores[k])
+                XADX[k] = matmat_phi_bck(XADX[k + 1], A[k], D[k], x_cores[k])
                 norm = np.linalg.norm(XADX[k])
                 norm = norm if norm > 0 else 1.0
                 XADX[k] /= norm
@@ -1952,7 +1975,7 @@ def tt_approx_mat_mat_mul(A, D, x0=None, kick_rank=None, nswp=50, tol=1e-6, verb
         max_res = 0
         for k in range(d):
             previous_solution = x_cores[k]
-            solution_now = cached_einsum('rab,amkA,bknB,RAB->rmnR', XADX[k], A[k], D[k], XADX[k + 1])
+            solution_now = matmat_product_core(XADX[k], A[k], D[k], XADX[k + 1])
             solution_now *= nrmsc
             local_res = np.linalg.norm(solution_now - previous_solution) / max(np.linalg.norm(solution_now), 1e-8)
             max_res = max(max_res, local_res)
@@ -1975,7 +1998,7 @@ def tt_approx_mat_mat_mul(A, D, x0=None, kick_rank=None, nswp=50, tol=1e-6, verb
                 x_cores[k + 1] /= norm_now
                 rx[k + 1] = r
 
-                XADX[k + 1] = cached_einsum('rab,amkA,bknB,rmnR->RAB', XADX[k], A[k], D[k], x_cores[k])
+                XADX[k + 1] = matmat_phi_fwd(XADX[k], A[k], D[k], x_cores[k])
                 norm = np.linalg.norm(XADX[k + 1])
                 norm = norm if np.greater(norm, 0) else 1.0
                 XADX[k + 1] /= norm
@@ -2044,7 +2067,7 @@ def tt_approx_mat_vec_mul(A, d_vec, x0=None, kick_rank=None, nswp=50, tol=1e-6, 
         for k in range(d - 1, -1, -1):
             if swp > 0:
                 previous_solution = x_cores[k]
-                solution_now = cached_einsum('rab,amkA,bkB,RAB->rmR', XAdX[k], A[k], d_vec[k], XAdX[k + 1])
+                solution_now = matmat_product_core(XAdX[k], A[k], d_vec[k][:, :, None, :], XAdX[k + 1])[:, :, 0, :]
                 solution_now *= nrmsc
                 local_res = np.linalg.norm(solution_now - previous_solution) / max(np.linalg.norm(solution_now), 1e-8)
                 max_res = max(max_res, local_res)
@@ -2070,7 +2093,7 @@ def tt_approx_mat_vec_mul(A, d_vec, x0=None, kick_rank=None, nswp=50, tol=1e-6, 
                 x_cores[k - 1] /= norm_now
                 rx[k] = r
 
-                XAdX[k] = cached_einsum('RAB,amkA,bkB,rmR->rab', XAdX[k+1], A[k], d_vec[k], x_cores[k])
+                XAdX[k] = matmat_phi_bck(XAdX[k + 1], A[k], d_vec[k][:, :, None, :], x_cores[k][:, :, None, :])
                 norm = np.linalg.norm(XAdX[k])
                 norm = norm if norm > 0 else 1.0
                 XAdX[k] /= norm
@@ -2086,7 +2109,7 @@ def tt_approx_mat_vec_mul(A, d_vec, x0=None, kick_rank=None, nswp=50, tol=1e-6, 
         max_res = 0
         for k in range(d):
             previous_solution = x_cores[k]
-            solution_now = cached_einsum('rab,amkA,bkB,RAB->rmR', XAdX[k], A[k], d_vec[k], XAdX[k + 1])
+            solution_now = matmat_product_core(XAdX[k], A[k], d_vec[k][:, :, None, :], XAdX[k + 1])[:, :, 0, :]
             solution_now *= nrmsc
             local_res = np.linalg.norm(solution_now - previous_solution) / max(np.linalg.norm(solution_now), 1e-8)
             max_res = max(max_res, local_res)
@@ -2109,7 +2132,7 @@ def tt_approx_mat_vec_mul(A, d_vec, x0=None, kick_rank=None, nswp=50, tol=1e-6, 
                 x_cores[k + 1] /= norm_now
                 rx[k + 1] = r
 
-                XAdX[k + 1] = cached_einsum('rab,amkA,bkB,rmR->RAB', XAdX[k], A[k], d_vec[k], x_cores[k])
+                XAdX[k + 1] = matmat_phi_fwd(XAdX[k], A[k], d_vec[k][:, :, None, :], x_cores[k][:, :, None, :])
                 norm = np.linalg.norm(XAdX[k + 1])
                 norm = norm if np.greater(norm, 0) else 1.0
                 XAdX[k + 1] /= norm

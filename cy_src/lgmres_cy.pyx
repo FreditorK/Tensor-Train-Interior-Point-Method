@@ -175,6 +175,39 @@ cdef void einsum(
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.nonecheck(False)
+cdef void einsum_general(
+        const double[:, ::1] XAX,
+        const double[:, ::1] block_A,
+        const double[:, ::1] XAX1,
+        const double[:, ::1] x_core,
+        double[:, ::1] out,
+        double[:, ::1] intermediate_mat1,
+        double[:, ::1] intermediate_mat1_2,
+        double[:, ::1] intermediate_mat2,
+        double[:, ::1] intermediate_mat2_2,
+        int r_in,
+        int n_in,
+        int R_in,
+        int l_out,
+        int m_out,
+        int L_out,
+        double alpha,
+        double beta
+) noexcept nogil:
+    cdef:
+        int S = int(block_A.shape[0] / n_in)
+        int s = int(block_A.shape[1] / m_out)
+
+    cy_dgemm(x_core, XAX1, intermediate_mat1)
+    _transpose_reshape_step2(intermediate_mat1, intermediate_mat1_2, r_in, L_out, n_in, S)
+    cy_dgemm(intermediate_mat1_2, block_A, intermediate_mat2)
+    _transpose_reshape_step3(intermediate_mat2, intermediate_mat2_2, r_in, L_out, s, m_out)
+    cy_dgemm(intermediate_mat2_2, XAX, out, alpha, beta)
+
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.nonecheck(False)
 @cython.inline
 cdef void pack_results(double[:, :] result0, double[:, :] result1, double[:] flat_result, int R, int n, int r) noexcept nogil:
     cdef int i, j, k
@@ -247,6 +280,21 @@ cdef void pack_result_shift(
             for k in range(R):
                 idx = (i * n + j) * R + k
                 flat_result[idx] = result[k * n + j, i] + shift * x[idx]
+
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.nonecheck(False)
+@cython.inline
+cdef void pack_result_general(double[:, :] result, double[:] flat_result, int L, int m, int l) noexcept nogil:
+    cdef int li, mi, Li
+    cdef int idx
+
+    for li in range(l):
+        for mi in range(m):
+            for Li in range(L):
+                idx = (li * m + mi) * L + Li
+                flat_result[idx] = result[Li * m + mi, li]
 
 
 cdef class BaseMatVec:
@@ -440,6 +488,561 @@ cdef class DiagOneCoreBlockWrapper:
                     for Li in range(self.Ldim):
                         out[(li * self.n0 + n) * self.Ldim + Li] = y_block[li * self.Ldim + Li]
         return out_arr
+
+
+cdef class CoreMatVecWrapper:
+    cdef double[:, ::1] result, workspace1, workspace1_2, workspace2, workspace2_2
+    cdef object flat_result_arr
+    cdef double[:] flat_result
+    cdef const double[:, ::1] XAX, block_A, XAX1
+    cdef int r, n, R, l, m, L, total_size
+
+    def __init__(
+            self,
+            cnp.ndarray[double, ndim=3] Phi_l,
+            cnp.ndarray[double, ndim=4] A_k,
+            cnp.ndarray[double, ndim=3] Phi_r
+    ):
+        self.r = Phi_l.shape[2]
+        self.n = A_k.shape[2]
+        self.R = Phi_r.shape[2]
+        self.l = Phi_l.shape[0]
+        self.m = A_k.shape[1]
+        self.L = Phi_r.shape[0]
+        self.total_size = self.l * self.m * self.L
+
+        self.XAX = np.ascontiguousarray(Phi_l.transpose(0, 2, 1).reshape(self.l, -1).T)
+        self.block_A = np.ascontiguousarray(A_k.reshape(A_k.shape[0] * self.m, self.n * A_k.shape[3]).T)
+        self.XAX1 = np.ascontiguousarray(Phi_r.reshape(-1, self.R).T)
+
+        self.result = np.empty((self.L * self.m, self.l), dtype=np.float64)
+        self.workspace1 = np.empty((self.r * self.n, self.L * A_k.shape[3]), dtype=np.float64)
+        self.workspace1_2 = np.empty((self.r * self.L, self.n * A_k.shape[3]), dtype=np.float64)
+        self.workspace2 = np.empty((self.r * self.L, A_k.shape[0] * self.m), dtype=np.float64)
+        self.workspace2_2 = np.empty((self.L * self.m, self.r * A_k.shape[0]), dtype=np.float64)
+        self.flat_result_arr = np.empty(self.total_size, dtype=np.float64)
+        self.flat_result = self.flat_result_arr
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.nonecheck(False)
+    cpdef cnp.ndarray[double, ndim=1] matvec(self, cnp.ndarray[double, ndim=1] x_core):
+        cdef const double[:, ::1] x_view = x_core.reshape(self.r * self.n, self.R)
+        with nogil:
+            einsum_general(
+                self.XAX, self.block_A, self.XAX1, x_view, self.result,
+                self.workspace1, self.workspace1_2, self.workspace2, self.workspace2_2,
+                self.r, self.n, self.R, self.l, self.m, self.L, 1.0, 0.0
+            )
+            pack_result_general(self.result, self.flat_result, self.L, self.m, self.l)
+        return self.flat_result_arr
+
+
+cpdef cnp.ndarray[double, ndim=3] core_matvec(
+        cnp.ndarray[double, ndim=3] Phi_l,
+        cnp.ndarray[double, ndim=4] A_k,
+        cnp.ndarray[double, ndim=3] Phi_r,
+        cnp.ndarray[double, ndim=3] x_core
+):
+    cdef CoreMatVecWrapper helper = CoreMatVecWrapper(Phi_l, A_k, Phi_r)
+    cdef cnp.ndarray[double, ndim=1] x_flat = np.ascontiguousarray(x_core.reshape(-1), dtype=np.float64)
+    return helper.matvec(x_flat).reshape(Phi_l.shape[0], A_k.shape[1], Phi_r.shape[0])
+
+
+cpdef cnp.ndarray[double, ndim=3] core_rmatvec(
+        cnp.ndarray[double, ndim=3] Phi_l,
+        cnp.ndarray[double, ndim=4] A_k,
+        cnp.ndarray[double, ndim=3] Phi_r,
+        cnp.ndarray[double, ndim=3] x_core
+):
+    cdef cnp.ndarray[double, ndim=3] Phi_l_T = np.ascontiguousarray(np.transpose(Phi_l, axes=(2, 1, 0)))
+    cdef cnp.ndarray[double, ndim=4] A_k_T = np.ascontiguousarray(np.transpose(A_k, axes=(0, 2, 1, 3)))
+    cdef cnp.ndarray[double, ndim=3] Phi_r_T = np.ascontiguousarray(np.transpose(Phi_r, axes=(2, 1, 0)))
+    return core_matvec(Phi_l_T, A_k_T, Phi_r_T, x_core)
+
+
+cpdef cnp.ndarray[double, ndim=3] rhs_contract(
+        cnp.ndarray[double, ndim=2] Phi_l,
+        cnp.ndarray[double, ndim=3] b_core,
+        cnp.ndarray[double, ndim=2] Phi_r,
+        double scale=1.0
+):
+    cdef int bdim = Phi_l.shape[0]
+    cdef int rdim = Phi_l.shape[1]
+    cdef int mdim = b_core.shape[1]
+    cdef int Bdim = Phi_r.shape[0]
+    cdef int Rdim = Phi_r.shape[1]
+    cdef cnp.ndarray[double, ndim=2] Phi_l_T_arr = np.ascontiguousarray(Phi_l.T)
+    cdef cnp.ndarray[double, ndim=3] b_arr = np.ascontiguousarray(np.transpose(b_core, (1, 0, 2)))
+    cdef cnp.ndarray[double, ndim=2] Phi_r_arr = np.ascontiguousarray(Phi_r)
+    cdef cnp.ndarray[double, ndim=2] tmp_arr = np.empty((rdim, Bdim), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] small_arr = np.empty((rdim, Rdim), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=3] out_arr = np.empty((rdim, mdim, Rdim), dtype=np.float64)
+    cdef const double[:, ::1] Phi_l_T = Phi_l_T_arr
+    cdef const double[:, :, ::1] b_by_m = b_arr
+    cdef const double[:, ::1] Phi_r_v = Phi_r_arr
+    cdef double[:, ::1] tmp = tmp_arr
+    cdef double[:, ::1] small = small_arr
+    cdef double[:, :, ::1] out = out_arr
+    cdef int mi, ri, Ri
+    with nogil:
+        for mi in range(mdim):
+            cy_dgemm(Phi_l_T, b_by_m[mi, :, :], tmp)
+            cy_dgemm(tmp, Phi_r_v, small, scale, 0.0)
+            for ri in range(rdim):
+                for Ri in range(Rdim):
+                    out[ri, mi, Ri] = small[ri, Ri]
+    return out_arr
+
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.nonecheck(False)
+cpdef cnp.ndarray[double, ndim=2] dense_core_matrix(
+        cnp.ndarray[double, ndim=3] Phi_l,
+        cnp.ndarray[double, ndim=4] A_k,
+        cnp.ndarray[double, ndim=3] Phi_r
+):
+    cdef int ldim = Phi_l.shape[0]
+    cdef int sdim = Phi_l.shape[1]
+    cdef int rdim = Phi_l.shape[2]
+    cdef int mdim = A_k.shape[1]
+    cdef int ndim = A_k.shape[2]
+    cdef int Sdim = A_k.shape[3]
+    cdef int Ldim = Phi_r.shape[0]
+    cdef int Rdim = Phi_r.shape[2]
+    cdef cnp.ndarray[double, ndim=3] left_by_r_arr = np.ascontiguousarray(np.transpose(Phi_l, (2, 0, 1)))
+    cdef cnp.ndarray[double, ndim=4] A_by_mn_arr = np.ascontiguousarray(np.transpose(A_k, (1, 2, 0, 3)))
+    cdef cnp.ndarray[double, ndim=3] right_by_R_T_arr = np.ascontiguousarray(np.transpose(Phi_r, (2, 1, 0)))
+    cdef cnp.ndarray[double, ndim=2] tmp_arr = np.empty((ldim, Sdim), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] small_arr = np.empty((ldim, Ldim), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] out_arr = np.empty((ldim * mdim * Ldim, rdim * ndim * Rdim), dtype=np.float64)
+    cdef const double[:, :, ::1] left_by_r = left_by_r_arr
+    cdef const double[:, :, :, ::1] A_by_mn = A_by_mn_arr
+    cdef const double[:, :, ::1] right_by_R_T = right_by_R_T_arr
+    cdef double[:, ::1] tmp = tmp_arr
+    cdef double[:, ::1] small = small_arr
+    cdef double[:, ::1] out = out_arr
+    cdef int mi, ni, ri, Ri, li, Li, row_base, col_idx
+    with nogil:
+        for mi in range(mdim):
+            for ni in range(ndim):
+                for ri in range(rdim):
+                    cy_dgemm(left_by_r[ri, :, :], A_by_mn[mi, ni, :, :], tmp)
+                    for Ri in range(Rdim):
+                        cy_dgemm(tmp, right_by_R_T[Ri, :, :], small)
+                        col_idx = (ri * ndim + ni) * Rdim + Ri
+                        for li in range(ldim):
+                            row_base = (li * mdim + mi) * Ldim
+                            for Li in range(Ldim):
+                                out[row_base + Li, col_idx] = small[li, Li]
+    return out_arr
+
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.nonecheck(False)
+cpdef cnp.ndarray[double, ndim=2] dense_two_core_matrix(
+        cnp.ndarray[double, ndim=3] Phi_l,
+        cnp.ndarray[double, ndim=4] A_l,
+        cnp.ndarray[double, ndim=4] A_r,
+        cnp.ndarray[double, ndim=3] Phi_r
+):
+    cdef int ldim = Phi_l.shape[0]
+    cdef int sdim = Phi_l.shape[1]
+    cdef int rdim = Phi_l.shape[2]
+    cdef int mdim = A_l.shape[1]
+    cdef int ndim = A_l.shape[2]
+    cdef int kdim = A_l.shape[3]
+    cdef int pdim = A_r.shape[1]
+    cdef int tdim = A_r.shape[2]
+    cdef int Sdim = A_r.shape[3]
+    cdef int Ldim = Phi_r.shape[0]
+    cdef int Rdim = Phi_r.shape[2]
+    cdef cnp.ndarray[double, ndim=3] left_by_r_arr = np.ascontiguousarray(np.transpose(Phi_l, (2, 0, 1)))
+    cdef cnp.ndarray[double, ndim=4] A_l_by_mn_arr = np.ascontiguousarray(np.transpose(A_l, (1, 2, 0, 3)))
+    cdef cnp.ndarray[double, ndim=4] A_r_by_pt_arr = np.ascontiguousarray(np.transpose(A_r, (1, 2, 0, 3)))
+    cdef cnp.ndarray[double, ndim=3] right_by_R_T_arr = np.ascontiguousarray(np.transpose(Phi_r, (2, 1, 0)))
+    cdef cnp.ndarray[double, ndim=2] coeff_arr = np.empty((sdim, Sdim), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] tmp_arr = np.empty((ldim, Sdim), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] small_arr = np.empty((ldim, Ldim), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] out_arr = np.empty(
+        (ldim * mdim * pdim * Ldim, rdim * ndim * tdim * Rdim),
+        dtype=np.float64
+    )
+    cdef const double[:, :, ::1] left_by_r = left_by_r_arr
+    cdef const double[:, :, :, ::1] A_l_by_mn = A_l_by_mn_arr
+    cdef const double[:, :, :, ::1] A_r_by_pt = A_r_by_pt_arr
+    cdef const double[:, :, ::1] right_by_R_T = right_by_R_T_arr
+    cdef double[:, ::1] coeff = coeff_arr
+    cdef double[:, ::1] tmp = tmp_arr
+    cdef double[:, ::1] small = small_arr
+    cdef double[:, ::1] out = out_arr
+    cdef int mi, pi, ni, ti, ri, Ri, li, Li, row_base, col_idx
+    with nogil:
+        for mi in range(mdim):
+            for pi in range(pdim):
+                for ni in range(ndim):
+                    for ti in range(tdim):
+                        cy_dgemm(A_l_by_mn[mi, ni, :, :], A_r_by_pt[pi, ti, :, :], coeff)
+                        for ri in range(rdim):
+                            cy_dgemm(left_by_r[ri, :, :], coeff, tmp)
+                            for Ri in range(Rdim):
+                                cy_dgemm(tmp, right_by_R_T[Ri, :, :], small)
+                                col_idx = ((ri * ndim + ni) * tdim + ti) * Rdim + Ri
+                                for li in range(ldim):
+                                    row_base = ((li * mdim + mi) * pdim + pi) * Ldim
+                                    for Li in range(Ldim):
+                                        out[row_base + Li, col_idx] = small[li, Li]
+    return out_arr
+
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.nonecheck(False)
+cpdef cnp.ndarray[double, ndim=3] core_sum_contract(
+        cnp.ndarray[double, ndim=3] Phi_l,
+        cnp.ndarray[double, ndim=4] A_k,
+        cnp.ndarray[double, ndim=3] Phi_r
+):
+    cdef int ldim = Phi_l.shape[0]
+    cdef int mdim = A_k.shape[1]
+    cdef int Sdim = A_k.shape[3]
+    cdef int Ldim = Phi_r.shape[0]
+    cdef cnp.ndarray[double, ndim=2] left_arr = np.ascontiguousarray(np.sum(Phi_l, axis=2))
+    cdef cnp.ndarray[double, ndim=3] A_by_m_arr = np.ascontiguousarray(np.transpose(np.sum(A_k, axis=2), (1, 0, 2)))
+    cdef cnp.ndarray[double, ndim=2] right_T_arr = np.ascontiguousarray(np.sum(Phi_r, axis=2).T)
+    cdef cnp.ndarray[double, ndim=2] tmp_arr = np.empty((ldim, Sdim), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] small_arr = np.empty((ldim, Ldim), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=3] out_arr = np.empty((ldim, mdim, Ldim), dtype=np.float64)
+    cdef const double[:, ::1] left = left_arr
+    cdef const double[:, :, ::1] A_by_m = A_by_m_arr
+    cdef const double[:, ::1] right_T = right_T_arr
+    cdef double[:, ::1] tmp = tmp_arr
+    cdef double[:, ::1] small = small_arr
+    cdef double[:, :, ::1] out = out_arr
+    cdef int mi, li, Li
+    with nogil:
+        for mi in range(mdim):
+            cy_dgemm(left, A_by_m[mi, :, :], tmp)
+            cy_dgemm(tmp, right_T, small)
+            for li in range(ldim):
+                for Li in range(Ldim):
+                    out[li, mi, Li] = small[li, Li]
+    return out_arr
+
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.nonecheck(False)
+cpdef cnp.ndarray[double, ndim=4] matmat_product_core(
+        cnp.ndarray[double, ndim=3] Phi_l,
+        cnp.ndarray[double, ndim=4] A_k,
+        cnp.ndarray[double, ndim=4] D_k,
+        cnp.ndarray[double, ndim=3] Phi_r
+):
+    cdef int rdim = Phi_l.shape[0]
+    cdef int adim = Phi_l.shape[1]
+    cdef int bdim = Phi_l.shape[2]
+    cdef int mdim = A_k.shape[1]
+    cdef int kdim = A_k.shape[2]
+    cdef int Adim = A_k.shape[3]
+    cdef int ndim = D_k.shape[2]
+    cdef int Bdim = D_k.shape[3]
+    cdef int Rdim = Phi_r.shape[0]
+    cdef cnp.ndarray[double, ndim=2] left_flat_arr = np.ascontiguousarray(Phi_l.reshape(rdim, adim * bdim))
+    cdef cnp.ndarray[double, ndim=4] A_by_mk_arr = np.ascontiguousarray(np.transpose(A_k, (1, 2, 0, 3)))
+    cdef cnp.ndarray[double, ndim=4] A_by_mk_T_arr = np.ascontiguousarray(np.transpose(A_k, (1, 2, 3, 0)))
+    cdef cnp.ndarray[double, ndim=4] D_by_kn_arr = np.ascontiguousarray(np.transpose(D_k, (1, 2, 0, 3)))
+    cdef cnp.ndarray[double, ndim=3] right_by_R_T_arr = np.ascontiguousarray(np.transpose(Phi_r, (0, 2, 1)))
+    cdef cnp.ndarray[double, ndim=2] d_right_arr = np.empty((bdim, Adim), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] q_ba_arr = np.empty((bdim, adim), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] q_flat_arr = np.empty((adim * bdim, Rdim), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] small_arr = np.empty((rdim, Rdim), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=4] out_arr = np.empty((rdim, mdim, ndim, Rdim), dtype=np.float64)
+    cdef const double[:, ::1] left_flat = left_flat_arr
+    cdef const double[:, :, :, ::1] A_by_mk = A_by_mk_arr
+    cdef const double[:, :, :, ::1] A_by_mk_T = A_by_mk_T_arr
+    cdef const double[:, :, :, ::1] D_by_kn = D_by_kn_arr
+    cdef const double[:, :, ::1] right_by_R_T = right_by_R_T_arr
+    cdef double[:, ::1] d_right = d_right_arr
+    cdef double[:, ::1] q_ba = q_ba_arr
+    cdef double[:, ::1] q_flat = q_flat_arr
+    cdef double[:, ::1] small = small_arr
+    cdef double[:, :, :, ::1] out = out_arr
+    cdef int mi, ni, ki, Ri, ai, bi, ri
+    cdef double beta
+    with nogil:
+        for mi in range(mdim):
+            for ni in range(ndim):
+                beta = 0.0
+                for ki in range(kdim):
+                    for Ri in range(Rdim):
+                        cy_dgemm(D_by_kn[ki, ni, :, :], right_by_R_T[Ri, :, :], d_right)
+                        cy_dgemm(d_right, A_by_mk_T[mi, ki, :, :], q_ba)
+                        for ai in range(adim):
+                            for bi in range(bdim):
+                                q_flat[ai * bdim + bi, Ri] = q_ba[bi, ai]
+                    cy_dgemm(left_flat, q_flat, small, 1.0, beta)
+                    beta = 1.0
+                for ri in range(rdim):
+                    for Ri in range(Rdim):
+                        out[ri, mi, ni, Ri] = small[ri, Ri]
+    return out_arr
+
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.nonecheck(False)
+cpdef cnp.ndarray[double, ndim=3] matmat_phi_bck(
+        cnp.ndarray[double, ndim=3] Phi_r,
+        cnp.ndarray[double, ndim=4] A_k,
+        cnp.ndarray[double, ndim=4] D_k,
+        cnp.ndarray[double, ndim=4] x_core
+):
+    cdef int Rdim = Phi_r.shape[0]
+    cdef int Adim = Phi_r.shape[1]
+    cdef int Bdim = Phi_r.shape[2]
+    cdef int adim = A_k.shape[0]
+    cdef int mdim = A_k.shape[1]
+    cdef int kdim = A_k.shape[2]
+    cdef int bdim = D_k.shape[0]
+    cdef int ndim = D_k.shape[2]
+    cdef int rdim = x_core.shape[0]
+    cdef cnp.ndarray[double, ndim=2] Phi_flat_arr = np.ascontiguousarray(Phi_r.reshape(Rdim, Adim * Bdim))
+    cdef cnp.ndarray[double, ndim=4] A_by_mk_T_arr = np.ascontiguousarray(np.transpose(A_k, (1, 2, 3, 0)))
+    cdef cnp.ndarray[double, ndim=4] D_by_kn_arr = np.ascontiguousarray(np.transpose(D_k, (1, 2, 0, 3)))
+    cdef cnp.ndarray[double, ndim=4] x_by_mn_arr = np.ascontiguousarray(np.transpose(x_core, (1, 2, 0, 3)))
+    cdef cnp.ndarray[double, ndim=2] T_arr = np.empty((rdim, Adim * Bdim), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] T_by_rA_arr = T_arr.reshape((rdim * Adim, Bdim))
+    cdef cnp.ndarray[double, ndim=1] tmp_vec_arr = np.empty(rdim * Adim, dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] tmp_mat_arr = tmp_vec_arr.reshape((rdim, Adim))
+    cdef cnp.ndarray[double, ndim=2] small_arr = np.empty((rdim, adim), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=3] out_arr = np.zeros((rdim, adim, bdim), dtype=np.float64)
+    cdef const double[:, ::1] Phi_flat = Phi_flat_arr
+    cdef const double[:, :, :, ::1] A_by_mk_T = A_by_mk_T_arr
+    cdef const double[:, :, :, ::1] D_by_kn = D_by_kn_arr
+    cdef const double[:, :, :, ::1] x_by_mn = x_by_mn_arr
+    cdef double[:, ::1] T = T_arr
+    cdef double[:, ::1] T_by_rA = T_by_rA_arr
+    cdef double[::1] tmp_vec = tmp_vec_arr
+    cdef double[:, ::1] tmp_mat = tmp_mat_arr
+    cdef double[:, ::1] small = small_arr
+    cdef double[:, :, ::1] out = out_arr
+    cdef int mi, ni, ki, bi, ri, ai
+    with nogil:
+        for mi in range(mdim):
+            for ni in range(ndim):
+                cy_dgemm(x_by_mn[mi, ni, :, :], Phi_flat, T)
+                for ki in range(kdim):
+                    for bi in range(bdim):
+                        cy_dgemv_row(T_by_rA, D_by_kn[ki, ni, bi, :], tmp_vec)
+                        cy_dgemm(tmp_mat, A_by_mk_T[mi, ki, :, :], small)
+                        for ri in range(rdim):
+                            for ai in range(adim):
+                                out[ri, ai, bi] += small[ri, ai]
+    return out_arr
+
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.nonecheck(False)
+cpdef cnp.ndarray[double, ndim=3] matmat_phi_fwd(
+        cnp.ndarray[double, ndim=3] Phi_l,
+        cnp.ndarray[double, ndim=4] A_k,
+        cnp.ndarray[double, ndim=4] D_k,
+        cnp.ndarray[double, ndim=4] x_core
+):
+    cdef int rdim = Phi_l.shape[0]
+    cdef int adim = Phi_l.shape[1]
+    cdef int bdim = Phi_l.shape[2]
+    cdef int mdim = A_k.shape[1]
+    cdef int kdim = A_k.shape[2]
+    cdef int Adim = A_k.shape[3]
+    cdef int ndim = D_k.shape[2]
+    cdef int Bdim = D_k.shape[3]
+    cdef int Rdim = x_core.shape[3]
+    cdef cnp.ndarray[double, ndim=2] left_flat_arr = np.ascontiguousarray(Phi_l.reshape(rdim, adim * bdim))
+    cdef cnp.ndarray[double, ndim=4] A_by_mk_arr = np.ascontiguousarray(np.transpose(A_k, (1, 2, 0, 3)))
+    cdef cnp.ndarray[double, ndim=4] D_by_kn_arr = np.ascontiguousarray(np.transpose(D_k, (1, 2, 0, 3)))
+    cdef cnp.ndarray[double, ndim=4] x_by_mn_T_arr = np.ascontiguousarray(np.transpose(x_core, (1, 2, 3, 0)))
+    cdef cnp.ndarray[double, ndim=2] T_arr = np.empty((Rdim, adim * bdim), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] U_arr = np.empty((Rdim, bdim), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] small_arr = np.empty((Rdim, Bdim), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=3] out_arr = np.zeros((Rdim, Adim, Bdim), dtype=np.float64)
+    cdef const double[:, ::1] left_flat = left_flat_arr
+    cdef const double[:, :, :, ::1] A_by_mk = A_by_mk_arr
+    cdef const double[:, :, :, ::1] D_by_kn = D_by_kn_arr
+    cdef const double[:, :, :, ::1] x_by_mn_T = x_by_mn_T_arr
+    cdef double[:, ::1] T = T_arr
+    cdef double[:, ::1] U = U_arr
+    cdef double[:, ::1] small = small_arr
+    cdef double[:, :, ::1] out = out_arr
+    cdef int mi, ni, ki, Ai, ai, bi, Ri, Bi
+    cdef double val
+    with nogil:
+        for mi in range(mdim):
+            for ni in range(ndim):
+                cy_dgemm(x_by_mn_T[mi, ni, :, :], left_flat, T)
+                for ki in range(kdim):
+                    for Ai in range(Adim):
+                        for Ri in range(Rdim):
+                            for bi in range(bdim):
+                                val = 0.0
+                                for ai in range(adim):
+                                    val += T[Ri, ai * bdim + bi] * A_by_mk[mi, ki, ai, Ai]
+                                U[Ri, bi] = val
+                        cy_dgemm(U, D_by_kn[ki, ni, :, :], small)
+                        for Ri in range(Rdim):
+                            for Bi in range(Bdim):
+                                out[Ri, Ai, Bi] += small[Ri, Bi]
+    return out_arr
+
+
+cpdef cnp.ndarray[double, ndim=2] phi_bck_rhs(
+        cnp.ndarray[double, ndim=2] Phi_now,
+        cnp.ndarray[double, ndim=3] b_core,
+        cnp.ndarray[double, ndim=3] core
+):
+    cdef int bdim = b_core.shape[0]
+    cdef int ndim = b_core.shape[1]
+    cdef int Bdim = b_core.shape[2]
+    cdef int rdim = core.shape[0]
+    cdef int Rdim = core.shape[2]
+    cdef cnp.ndarray[double, ndim=3] b_by_n_arr = np.ascontiguousarray(np.transpose(b_core, (1, 0, 2)))
+    cdef cnp.ndarray[double, ndim=3] core_by_n_T_arr = np.ascontiguousarray(np.transpose(core, (1, 2, 0)))
+    cdef cnp.ndarray[double, ndim=2] Phi_arr = np.ascontiguousarray(Phi_now)
+    cdef cnp.ndarray[double, ndim=2] tmp_arr = np.empty((bdim, Rdim), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] out_arr = np.zeros((bdim, rdim), dtype=np.float64)
+    cdef const double[:, :, ::1] b_by_n = b_by_n_arr
+    cdef const double[:, :, ::1] core_by_n_T = core_by_n_T_arr
+    cdef const double[:, ::1] Phi = Phi_arr
+    cdef double[:, ::1] tmp = tmp_arr
+    cdef double[:, ::1] out = out_arr
+    cdef int ni
+    with nogil:
+        for ni in range(ndim):
+            cy_dgemm(b_by_n[ni, :, :], Phi, tmp)
+            cy_dgemm(tmp, core_by_n_T[ni, :, :], out, 1.0, 1.0)
+    return out_arr
+
+
+cpdef cnp.ndarray[double, ndim=2] phi_fwd_rhs(
+        cnp.ndarray[double, ndim=2] Phi_now,
+        cnp.ndarray[double, ndim=3] b_core,
+        cnp.ndarray[double, ndim=3] core
+):
+    cdef int bdim = b_core.shape[0]
+    cdef int ndim = b_core.shape[1]
+    cdef int Bdim = b_core.shape[2]
+    cdef int rdim = core.shape[0]
+    cdef int Rdim = core.shape[2]
+    cdef cnp.ndarray[double, ndim=3] b_by_n_T_arr = np.ascontiguousarray(np.transpose(b_core, (1, 2, 0)))
+    cdef cnp.ndarray[double, ndim=3] core_by_n_arr = np.ascontiguousarray(np.transpose(core, (1, 0, 2)))
+    cdef cnp.ndarray[double, ndim=2] Phi_arr = np.ascontiguousarray(Phi_now)
+    cdef cnp.ndarray[double, ndim=2] tmp_arr = np.empty((Bdim, rdim), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] out_arr = np.zeros((Bdim, Rdim), dtype=np.float64)
+    cdef const double[:, :, ::1] b_by_n_T = b_by_n_T_arr
+    cdef const double[:, :, ::1] core_by_n = core_by_n_arr
+    cdef const double[:, ::1] Phi = Phi_arr
+    cdef double[:, ::1] tmp = tmp_arr
+    cdef double[:, ::1] out = out_arr
+    cdef int ni
+    with nogil:
+        for ni in range(ndim):
+            cy_dgemm(b_by_n_T[ni, :, :], Phi, tmp)
+            cy_dgemm(tmp, core_by_n[ni, :, :], out, 1.0, 1.0)
+    return out_arr
+
+
+cpdef cnp.ndarray[double, ndim=3] phi_bck_A(
+        cnp.ndarray[double, ndim=3] Phi_now,
+        cnp.ndarray[double, ndim=3] core_left,
+        cnp.ndarray[double, ndim=4] core_A,
+        cnp.ndarray[double, ndim=3] core_right
+):
+    cdef int ldim = core_left.shape[0]
+    cdef int Mdim = core_left.shape[1]
+    cdef int Ldim = core_left.shape[2]
+    cdef int sdim = core_A.shape[0]
+    cdef int Ndim = core_A.shape[2]
+    cdef int Sdim = core_A.shape[3]
+    cdef int rdim = core_right.shape[0]
+    cdef int Rdim = core_right.shape[2]
+    cdef cnp.ndarray[double, ndim=3] left_by_M_arr = np.ascontiguousarray(np.transpose(core_left, (1, 0, 2)))
+    cdef cnp.ndarray[double, ndim=3] Phi_by_S_arr = np.ascontiguousarray(np.transpose(Phi_now, (1, 0, 2)))
+    cdef cnp.ndarray[double, ndim=3] right_by_N_T_arr = np.ascontiguousarray(np.transpose(core_right, (1, 2, 0)))
+    cdef cnp.ndarray[double, ndim=4] A_by_MNS_arr = np.ascontiguousarray(np.transpose(core_A, (1, 2, 3, 0)))
+    cdef cnp.ndarray[double, ndim=2] tmp_arr = np.empty((ldim, Rdim), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] small_arr = np.empty((ldim, rdim), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=3] out_arr = np.zeros((ldim, sdim, rdim), dtype=np.float64)
+    cdef const double[:, :, ::1] left_by_M = left_by_M_arr
+    cdef const double[:, :, ::1] Phi_by_S = Phi_by_S_arr
+    cdef const double[:, :, ::1] right_by_N_T = right_by_N_T_arr
+    cdef const double[:, :, :, ::1] A_by_MNS = A_by_MNS_arr
+    cdef double[:, ::1] tmp = tmp_arr
+    cdef double[:, ::1] small = small_arr
+    cdef double[:, :, ::1] out = out_arr
+    cdef int Mi, Ni, Si, si, li, ri
+    cdef double coeff
+    with nogil:
+        for Mi in range(Mdim):
+            for Ni in range(Ndim):
+                for Si in range(Sdim):
+                    cy_dgemm(left_by_M[Mi, :, :], Phi_by_S[Si, :, :], tmp)
+                    cy_dgemm(tmp, right_by_N_T[Ni, :, :], small)
+                    for si in range(sdim):
+                        coeff = A_by_MNS[Mi, Ni, Si, si]
+                        if coeff != 0.0:
+                            for li in range(ldim):
+                                for ri in range(rdim):
+                                    out[li, si, ri] += coeff * small[li, ri]
+    return out_arr
+
+
+cpdef cnp.ndarray[double, ndim=3] phi_fwd_A(
+        cnp.ndarray[double, ndim=3] Phi_now,
+        cnp.ndarray[double, ndim=3] core_left,
+        cnp.ndarray[double, ndim=4] core_A,
+        cnp.ndarray[double, ndim=3] core_right
+):
+    cdef int ldim = core_left.shape[0]
+    cdef int Mdim = core_left.shape[1]
+    cdef int Ldim = core_left.shape[2]
+    cdef int sdim = core_A.shape[0]
+    cdef int Ndim = core_A.shape[2]
+    cdef int Sdim = core_A.shape[3]
+    cdef int rdim = core_right.shape[0]
+    cdef int Rdim = core_right.shape[2]
+    cdef cnp.ndarray[double, ndim=3] left_by_M_T_arr = np.ascontiguousarray(np.transpose(core_left, (1, 2, 0)))
+    cdef cnp.ndarray[double, ndim=3] Phi_by_s_arr = np.ascontiguousarray(np.transpose(Phi_now, (1, 0, 2)))
+    cdef cnp.ndarray[double, ndim=3] right_by_N_arr = np.ascontiguousarray(np.transpose(core_right, (1, 0, 2)))
+    cdef cnp.ndarray[double, ndim=4] A_arr = np.ascontiguousarray(core_A)
+    cdef cnp.ndarray[double, ndim=2] tmp_arr = np.empty((Ldim, rdim), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] small_arr = np.empty((Ldim, Rdim), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=3] out_arr = np.zeros((Ldim, Sdim, Rdim), dtype=np.float64)
+    cdef const double[:, :, ::1] left_by_M_T = left_by_M_T_arr
+    cdef const double[:, :, ::1] Phi_by_s = Phi_by_s_arr
+    cdef const double[:, :, ::1] right_by_N = right_by_N_arr
+    cdef const double[:, :, :, ::1] A = A_arr
+    cdef double[:, ::1] tmp = tmp_arr
+    cdef double[:, ::1] small = small_arr
+    cdef double[:, :, ::1] out = out_arr
+    cdef int si, Mi, Ni, Si, Li, Ri
+    cdef double coeff
+    with nogil:
+        for si in range(sdim):
+            for Mi in range(Mdim):
+                for Ni in range(Ndim):
+                    cy_dgemm(left_by_M_T[Mi, :, :], Phi_by_s[si, :, :], tmp)
+                    cy_dgemm(tmp, right_by_N[Ni, :, :], small)
+                    for Si in range(Sdim):
+                        coeff = A[si, Mi, Ni, Si]
+                        if coeff != 0.0:
+                            for Li in range(Ldim):
+                                for Ri in range(Rdim):
+                                    out[Li, Si, Ri] += coeff * small[Li, Ri]
+    return out_arr
 
 
 cdef class SymOneCoreMatVecWrapper:
