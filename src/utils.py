@@ -401,7 +401,10 @@ def run_and_record(seed, r_i, s_i, rank, config, args, create_problem_fn, memory
     np.random.seed(seed)
     t1 = time.time()
     problem = create_problem_fn(config["dim"], rank)
-    if len(problem) == 5:
+    problem_meta = {}
+    if len(problem) == 6:
+        obj_tt, L_op_tt, bias_tt, ineq_mask, lag_maps, problem_meta = problem
+    elif len(problem) == 5:
         obj_tt, L_op_tt, bias_tt, ineq_mask, lag_maps = problem
     else:
         obj_tt, L_op_tt, bias_tt, lag_y = problem
@@ -433,8 +436,10 @@ def run_and_record(seed, r_i, s_i, rank, config, args, create_problem_fn, memory
             lambdaStar=float(config.get("lambdaStar", 1)),
             lambdaStarIneq=float(config.get("lambdaStarIneq", 1)),
             r_max=int(config.get("r_max", 1000)),
-            delta_t_kkt_weight=float(config.get("delta_t_kkt_weight", 0.5)),
-            allow_freeze_delta_t=bool(config.get("allow_freeze_delta_t", False))
+            delta_mul_kkt_weight=float(config.get("delta_mul_kkt_weight", 0.9)),
+            max_corrector_steps=int(config.get("max_corrector_steps", 2)),
+            combine_ty=bool(problem_meta.get("combine_ty", False)),
+            eq_mask=problem_meta.get("eq_mask")
         )
     if args.track_mem:
         start_mem = memory_usage(max_usage=True, include_children=True)
@@ -447,7 +452,7 @@ def run_and_record(seed, r_i, s_i, rank, config, args, create_problem_fn, memory
     t3 = time.time()
     problem_creation_times[r_i, s_i] = t2 - t1
     runtimes[r_i, s_i] = t3 - t2
-    complementary_slackness[r_i, s_i] = abs(tt_inner_prod(X_tt, Z_tt))
+    complementary_slackness[r_i, s_i] = float(info.get("reported_gap", abs(tt_inner_prod(X_tt, Z_tt))))
     primal_res = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(L_op_tt, tt_reshape(X_tt, (4,))), bias_tt), eps=1e-12)
     feasibility_errors[r_i, s_i] = tt_inner_prod(primal_res, primal_res)
     dual_res = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(tt_transpose(L_op_tt), tt_reshape(Y_tt, (4, )), eps=1e-12), tt_rank_reduce(tt_add(tt_reshape(Z_tt, (4,)), obj_tt), eps=1e-12)), eps=1e-12)

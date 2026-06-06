@@ -12,7 +12,6 @@ seeds:
 - 493
 - 324
 - 325
-- 9299
+- 656
 verbose: true
-trace_verbose: true
 warm_up: 3
