@@ -696,16 +696,9 @@ def tt_infeasible_newton_system(
         lhs[2, 1] = tt_psd_rank_reduce(tt_MkronI(Z_tt), eps=status.rounding.operator_dual(status))
         lhs[2, 2] = tt_psd_rank_reduce(tt_IkronM(X_tt), eps=status.rounding.operator_primal(status))
 
-    finish_gap_only = status.is_last_iter and status.is_primal_feasible and status.is_dual_feasible
-    if finish_gap_only:
-        needs_primal_row = False
-        needs_dual_row = False
-        needs_central_row = True
-        _ipm_trace(status, "system", "finish_gap_only=true")
-    else:
-        needs_primal_row = not status.is_primal_feasible or status.is_last_iter
-        needs_dual_row = (not status.is_dual_feasible or status.is_last_iter) and not status.primal_restoration
-        needs_central_row = not status.is_central or status.is_last_iter
+    needs_primal_row = not status.is_primal_feasible or status.is_last_iter
+    needs_dual_row = (not status.is_dual_feasible or status.is_last_iter) and not status.primal_restoration
+    needs_central_row = not status.is_central or status.is_last_iter
 
     if getattr(status, "combine_ty", False) and status.ineq_status is IneqStatus.ACTIVE:
         masked_X_tt = tt_rank_reduce(
@@ -1495,6 +1488,7 @@ class IPMStatus:
     primal_restoration: bool = False
     primal_restoration_steps: int = 0
     max_primal_restoration_steps: int = 2
+    abs_tol: float = 1e-3
     trace_verbose: bool = False
     iteration: int = 0
     psd_slack: float = np.inf
@@ -1658,15 +1652,7 @@ def _tt_postprocess_gap_shrink(obj_tt, lin_op_tt_adj, X_tt, Y_tt, T_tt, Z_tt, st
         current_shifted_TX = 0.0
     current_gap = abs(current_ZX + current_TX)
     current_merit = max(current_gap, current_dual ** 2, status.primal_feas_norm ** 2)
-    dual_feas_limit = (
-        (1 + (status.ineq_status is IneqStatus.ACTIVE))
-        * status.feasibility_tol
-        * status.dual_error_normalisation
-    )
-    if current_dual <= dual_feas_limit:
-        dual_limit = min(dual_feas_limit, 1.05 * current_dual + 1e-10)
-    else:
-        dual_limit = current_dual
+    dual_limit = _tt_finish_residual_limit(status, current_dual, status.dual_error_normalisation)
     best = None
     best_merit = np.inf
 
@@ -1720,6 +1706,79 @@ def _tt_postprocess_gap_shrink(obj_tt, lin_op_tt_adj, X_tt, Y_tt, T_tt, Z_tt, st
     status.finish_gap = current_gap
     status.reported_gap = current_gap
     _ipm_trace(status, "post", f"rejected gap-shrink gap={current_gap:.2e} dual={current_dual:.2e}", t0)
+    return X_tt, Y_tt, T_tt, Z_tt, status
+
+
+def _tt_postprocess_feasible_gap_descent(obj_tt, lin_op_tt, lin_op_tt_adj, bias_tt,
+                                         X_tt, Y_tt, T_tt, Z_tt, ineq_mask, status):
+    if not status.is_last_iter:
+        return X_tt, Y_tt, T_tt, Z_tt, status
+
+    t0 = time.time()
+    current = _tt_finish_metrics(obj_tt, lin_op_tt, lin_op_tt_adj, bias_tt, X_tt, Y_tt, T_tt, Z_tt, status)
+    raw_gap = tt_inner_prod(X_tt, Z_tt)
+    if status.ineq_status is IneqStatus.ACTIVE and T_tt is not None:
+        raw_gap += tt_inner_prod(X_tt, T_tt)
+    if abs(raw_gap) <= max(status.op_tol, 1e-12):
+        return X_tt, Y_tt, T_tt, Z_tt, status
+
+    grad_tt = Z_tt if T_tt is None else tt_add(Z_tt, T_tt)
+    tangent_tt = tt_fast_matrix_vec_mul(status.lag_map_y, tt_reshape(grad_tt, (4,)), status.eps)
+    Delta_X_tt = _tt_symmetrise(
+        tt_reshape(tt_scale(-np.sign(raw_gap), tangent_tt), (2, 2)),
+        status.rounding.update_x_round_tol(status)
+    )
+    if tt_norm(tt_reshape(Delta_X_tt, (4,))) <= max(status.op_tol, status.eps):
+        return X_tt, Y_tt, T_tt, Z_tt, status
+
+    x_step_size, status.eigen_x0, _ = _tt_psd_step_size(X_tt, Delta_X_tt, status.eigen_x0, status)
+    if status.ineq_status is IneqStatus.ACTIVE and ineq_mask is not None and x_step_size > 0:
+        masked_X_tt = tt_fast_hadamard(ineq_mask, X_tt, status.eps)
+        masked_Delta_X_tt = tt_fast_hadamard(ineq_mask, Delta_X_tt, status.eps)
+        ineq_step_size, status.eigen_xt0 = _ineq_step_size(
+            tt_add(masked_X_tt, tt_scale(status.ineq_boundary_val, ineq_mask)),
+            tt_scale(x_step_size, masked_Delta_X_tt),
+            status.eigen_xt0,
+            ineq_mask,
+            status
+        )
+        x_step_size *= ineq_step_size
+    if not np.isfinite(x_step_size) or x_step_size <= 0:
+        _ipm_trace(status, "post", "rejected feasible-gap alpha=0", t0)
+        return X_tt, Y_tt, T_tt, Z_tt, status
+
+    primal_limit = _tt_finish_residual_limit(status, current["primal"], status.primal_error_normalisation)
+    dual_limit = _tt_finish_residual_limit(status, current["dual"], status.dual_error_normalisation)
+    best = None
+    best_metrics = current
+
+    for scale in (0.95, 0.75, 0.5, 0.25, 0.1, 0.03):
+        X_cand = _tt_budgeted_psd_symmetrise(
+            tt_add(X_tt, tt_scale(scale * x_step_size, Delta_X_tt)),
+            status.rounding.update_x_round_tol(status)
+        )
+        metrics = _tt_finish_metrics(obj_tt, lin_op_tt, lin_op_tt_adj, bias_tt, X_cand, Y_tt, T_tt, Z_tt, status)
+        if metrics["primal"] > primal_limit * (1 + 1e-8) + 1e-12:
+            continue
+        if metrics["dual"] > dual_limit * (1 + 1e-8) + 1e-12:
+            continue
+        if metrics["finish"] < best_metrics["finish"] - max(1e-12, 1e-8 * best_metrics["finish"]):
+            best = scale, X_cand
+            best_metrics = metrics
+
+    if best is None:
+        _ipm_trace(status, "post", f"rejected feasible-gap gap={current['finish']:.2e}", t0)
+        return X_tt, Y_tt, T_tt, Z_tt, status
+
+    scale, X_tt = best
+    _tt_apply_finish_metrics(status, best_metrics)
+    _ipm_trace(
+        status,
+        "post",
+        f"accepted feasible-gap scale={scale:.2e} gap={current['finish']:.2e}->{best_metrics['finish']:.2e} "
+        f"primal={current['primal']:.2e}->{best_metrics['primal']:.2e}",
+        t0
+    )
     return X_tt, Y_tt, T_tt, Z_tt, status
 
 
@@ -1793,17 +1852,21 @@ def _tt_finish_limit(current, feasible_limit):
     return current
 
 
+def _tt_finish_residual_limit(status, current, normalisation):
+    final_limit = status.abs_tol * normalisation
+    if current > final_limit:
+        return current
+    return max(final_limit, _tt_finish_limit(current, status.feasibility_tol * normalisation))
+
+
 def _tt_finish_line_search_update(obj_tt, lin_op_tt, lin_op_tt_adj, bias_tt,
                                   X_tt, Y_tt, T_tt, Z_tt,
                                   Delta_X_tt, Delta_Y_tt, Delta_T_tt, Delta_Z_tt,
                                   x_step_size, z_step_size, ineq_mask, status):
     t0 = time.time()
     current = _tt_finish_metrics(obj_tt, lin_op_tt, lin_op_tt_adj, bias_tt, X_tt, Y_tt, T_tt, Z_tt, status)
-    primal_limit = _tt_finish_limit(current["primal"], status.feasibility_tol * status.primal_error_normalisation)
-    dual_limit = _tt_finish_limit(
-        current["dual"],
-        (1 + (status.ineq_status is IneqStatus.ACTIVE)) * status.feasibility_tol * status.dual_error_normalisation
-    )
+    primal_limit = _tt_finish_residual_limit(status, current["primal"], status.primal_error_normalisation)
+    dual_limit = _tt_finish_residual_limit(status, current["dual"], status.dual_error_normalisation)
     best = None
     best_metrics = current
 
@@ -1957,6 +2020,7 @@ def tt_ipm(
         r_max
     )
     status.trace_verbose = trace_verbose
+    status.abs_tol = abs_tol
     status.max_corrector_steps = min(2, max(1, int(max_corrector_steps)))
     status.rounding = RoundingController(update_budget_growth=rounding_update_budget_growth)
     delta_mul_kkt_weight = float(delta_mul_kkt_weight)
@@ -2173,6 +2237,12 @@ def tt_ipm(
                     x_step_size, z_step_size, ineq_mask, status
                 )
                 if not accepted_update:
+                    if status.aho_direction:
+                        status.force_xz_steps = max(status.force_xz_steps, 1)
+                        _tt_reset_solver_warm_starts(status)
+                        _ipm_trace(status, "finish-line", "retry=xz")
+                        _ipm_trace(status, "iter", f"done it={iteration - 1:03d}", iter_t0)
+                        continue
                     break
             else:
                 X_tt, Y_tt, T_tt, Z_tt = _tt_apply_update(
@@ -2197,5 +2267,8 @@ def tt_ipm(
     if status.is_primal_feasible and status.is_dual_feasible:
         X_tt, Y_tt, T_tt, Z_tt, status = _tt_postprocess_gap_shrink(
             obj_tt, lin_op_tt_adj, X_tt, Y_tt, T_tt, Z_tt, status
+        )
+        X_tt, Y_tt, T_tt, Z_tt, status = _tt_postprocess_feasible_gap_descent(
+            obj_tt, lin_op_tt, lin_op_tt_adj, bias_tt, X_tt, Y_tt, T_tt, Z_tt, ineq_mask, status
         )
     return _ipm_format_output(X_tt, Y_tt, T_tt, Z_tt, iteration, status)
