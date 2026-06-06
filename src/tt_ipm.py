@@ -773,6 +773,10 @@ def _tt_copy(train_tt):
     return [np.array(core, copy=True) for core in train_tt]
 
 
+def _tt_copy_optional(train_tt):
+    return None if train_tt is None else _tt_copy(train_tt)
+
+
 def _tt_scale_nondestructive(train_tt, scale):
     if train_tt is None or np.isclose(scale, 1.0):
         return train_tt
@@ -889,6 +893,84 @@ def _tt_clone_block_vector(block_vec_tt):
     return clone
 
 
+def _tt_add_rhs_row(rhs_vec_tt, row, addition_tt, eps):
+    current = rhs_vec_tt.get_row(row)
+    rhs_vec_tt[row] = tt_rank_reduce(addition_tt if current is None else tt_add(current, addition_tt), eps)
+
+
+def _tt_corrector_sigma(X_tt, Z_tt, T_tt, Delta_X_tt, Delta_Z_tt, Delta_T_tt,
+                        x_step_size, z_step_size, ZX, TX, status):
+    DXZ = tt_inner_prod(Delta_X_tt, Delta_Z_tt)
+
+    if status.ineq_status is IneqStatus.ACTIVE:
+        mu_aff = (
+            ZX + x_step_size * z_step_size * DXZ
+            + z_step_size * tt_inner_prod(X_tt, Delta_Z_tt)
+            + x_step_size * tt_inner_prod(Delta_X_tt, Z_tt)
+            + TX
+            + x_step_size * tt_inner_prod(Delta_X_tt, T_tt)
+        )
+        mu_aff += (
+            x_step_size * z_step_size * tt_inner_prod(Delta_T_tt, Delta_X_tt)
+            + z_step_size * (
+                tt_inner_prod(X_tt, Delta_T_tt)
+                + status.ineq_boundary_val * tt_entrywise_sum(Delta_T_tt)
+            )
+        )
+        e = max(1, 3 * min(x_step_size, z_step_size) ** 2)
+        sigma = min(0.99, max(mu_aff / (ZX + TX), 0) ** e)
+    else:
+        mu_aff = (
+            ZX + x_step_size * z_step_size * DXZ
+            + z_step_size * tt_inner_prod(X_tt, Delta_Z_tt)
+            + x_step_size * tt_inner_prod(Delta_X_tt, Z_tt)
+        )
+        e = max(1, 3 * min(x_step_size, z_step_size) ** 2)
+        sigma = min(0.99, max(mu_aff / ZX, 0) ** e)
+
+    return sigma, DXZ
+
+
+def _tt_build_corrector_rhs(base_rhs_vec_tt, correction_only, X_tt, Z_tt, T_tt,
+                            Delta_X_tt, Delta_Z_tt, Delta_T_tt, x_step_size,
+                            z_step_size, ZX, TX, ineq_mask, status):
+    rhs_corr_tt = TTBlockVector() if correction_only else _tt_clone_block_vector(base_rhs_vec_tt)
+    sigma, DXZ = _tt_corrector_sigma(
+        X_tt, Z_tt, T_tt, Delta_X_tt, Delta_Z_tt, Delta_T_tt,
+        x_step_size, z_step_size, ZX, TX, status
+    )
+    corrector_needed = False
+
+    if status.ineq_status is IneqStatus.ACTIVE and sigma > 1e-4:
+        row = 0 if getattr(status, "combine_ty", False) else 3
+        sigma_rhs = tt_scale(sigma * status.mu, tt_reshape(ineq_mask, (4,)))
+        _tt_add_rhs_row(rhs_corr_tt, row, sigma_rhs, status.rounding.operator_centrality(status))
+        corrector_needed = True
+
+    if DXZ > 0.1 * status.centrality_tol:
+        central_rhs = tt_compute_centrality(Delta_X_tt, Delta_Z_tt, status)
+        if sigma > 1e-4:
+            central_rhs = tt_add(
+                tt_scale(sigma * status.mu, tt_reshape(tt_identity(len(X_tt)), (4,))),
+                central_rhs
+            )
+        _tt_add_rhs_row(rhs_corr_tt, 2, central_rhs, status.rounding.operator_centrality(status))
+        corrector_needed = True
+    elif sigma > 1e-4:
+        central_rhs = tt_scale(sigma * status.mu, tt_reshape(tt_identity(len(X_tt)), (4,)))
+        _tt_add_rhs_row(rhs_corr_tt, 2, central_rhs, status.rounding.operator_centrality(status))
+        corrector_needed = True
+
+    return rhs_corr_tt, sigma, DXZ, corrector_needed
+
+
+def _tt_extra_corrector_needed(corr_idx, x_step_size, z_step_size, sigma):
+    if corr_idx == 0:
+        return True
+    alpha = min(x_step_size, z_step_size)
+    return sigma > 0.8 and 1e-4 < alpha < 0.1
+
+
 def _tt_xz_fallback_kkt(lhs_matrix_tt, rhs_vec_tt, X_tt, Z_tt, status):
     if status.verbose:
         print("\tAHO KKT solve missed target residual; retrying predictor with XZ direction.", flush=True)
@@ -992,79 +1074,106 @@ def _tt_ipm_newton_step(
             z_step_size *= 0.5
 
         if not status.primal_restoration and not status.is_central and not status.is_last_iter:
-
-            DXZ = tt_inner_prod(Delta_X_tt, Delta_Z_tt)
-            corrector_needed = False
-            # Corrector
             if status.verbose:
                 print(f"\n--- Centering-Corrector  step ---", flush=True)
 
-            if status.ineq_status is IneqStatus.ACTIVE:
-                mu_aff = (
-                    ZX + x_step_size * z_step_size * DXZ
-                    + z_step_size * tt_inner_prod(X_tt, Delta_Z_tt)
-                    + x_step_size * tt_inner_prod(Delta_X_tt, Z_tt)
-                    + TX
-                    + x_step_size * tt_inner_prod(Delta_X_tt, T_tt)
-                )
-                mu_aff += (
-                    x_step_size * z_step_size * tt_inner_prod(Delta_T_tt, Delta_X_tt)
-                    + z_step_size * (tt_inner_prod(X_tt, Delta_T_tt) + status.ineq_boundary_val*tt_entrywise_sum(Delta_T_tt))
-                )
-                e = max(1, 3 * min(x_step_size, z_step_size) ** 2)
-                status.sigma = min(0.99, max(mu_aff/(ZX + TX), 0)**e)
-                if status.sigma > 1e-4:
-                    sigma_rhs = tt_scale(status.sigma * status.mu, tt_reshape(ineq_mask, (4,)))
-                    row = 0 if getattr(status, "combine_ty", False) else 3
-                    rhs_vec_tt[row] = tt_rank_reduce(tt_add(
-                            sigma_rhs,
-                            rhs_vec_tt.get_row(row),
-                            ), status.rounding.operator_centrality(status)
-                            )
-                    corrector_needed = True
-            else:
-                mu_aff = (
-                    ZX + x_step_size * z_step_size * DXZ
-                    + z_step_size * tt_inner_prod(X_tt,Delta_Z_tt)
-                    + x_step_size * tt_inner_prod(Delta_X_tt, Z_tt)
-                )
-                e = max(1, 3*min(x_step_size, z_step_size)**2)
-                status.sigma = min(0.99, max(mu_aff/ZX, 0) ** e)
-
-
-            if DXZ > 0.1*status.centrality_tol:
-                Delta_XZ_term = tt_compute_centrality(Delta_X_tt, Delta_Z_tt, status)
-                rhs_vec_tt[2] = tt_rank_reduce(
-                    tt_add(
-                        tt_scale(status.sigma * status.mu, tt_reshape(tt_identity(len(X_tt)), (4,))),
-                        tt_add(
-                            rhs_vec_tt.get_row(2),
-                            Delta_XZ_term
+            for corr_idx in range(max(1, status.max_corrector_steps)):
+                speculative_state = None
+                build_Delta_X_tt = Delta_X_tt
+                build_Delta_Z_tt = Delta_Z_tt
+                build_Delta_T_tt = Delta_T_tt
+                if corr_idx > 0:
+                    corr_sigma, DXZ = _tt_corrector_sigma(
+                        X_tt,
+                        Z_tt,
+                        T_tt,
+                        Delta_X_tt,
+                        Delta_Z_tt,
+                        Delta_T_tt,
+                        x_step_size,
+                        z_step_size,
+                        ZX,
+                        TX,
+                        status
+                    )
+                    corrector_needed = (
+                        corr_sigma > 1e-4
+                        or DXZ > 0.1 * status.centrality_tol
+                    )
+                    if not corrector_needed:
+                        _ipm_trace(status, "corrector", f"skipped sigma={corr_sigma:.2e} dxz={DXZ:.2e}")
+                        break
+                    if not _tt_extra_corrector_needed(corr_idx, x_step_size, z_step_size, corr_sigma):
+                        _ipm_trace(
+                            status,
+                            "corrector",
+                            f"extra skipped sigma={corr_sigma:.2e} alpha={min(x_step_size, z_step_size):.2e}"
                         )
-                    ),
-                    status.rounding.operator_centrality(status)
-                ) if status.sigma > 1e-4 else tt_rank_reduce(tt_add(rhs_vec_tt.get_row(2), Delta_XZ_term), status.rounding.operator_centrality(status))
-                corrector_needed = True
-            elif status.sigma > 1e-4:
-                rhs_vec_tt[2] = tt_rank_reduce(
-                    tt_add(
-                        tt_scale(status.sigma * status.mu, tt_reshape(tt_identity(len(X_tt)), (4,))),
-                        rhs_vec_tt.get_row(2)
-                    ),
-                    status.rounding.operator_centrality(status)
-                )
-                corrector_needed = True
+                        break
+                    speculative_state = (
+                        _tt_copy_optional(Delta_X_tt), _tt_copy_optional(Delta_Y_tt),
+                        _tt_copy_optional(Delta_Z_tt), _tt_copy_optional(Delta_T_tt),
+                        x_step_size, z_step_size, _tt_copy_optional(status.mals_delta0),
+                        _tt_copy_optional(status.eigen_x0), _tt_copy_optional(status.eigen_z0),
+                        _tt_copy_optional(status.eigen_xt0), _tt_copy_optional(status.eigen_zt0),
+                        status.sigma, np.random.get_state()
+                    )
+                    build_Delta_X_tt = _tt_copy_optional(Delta_X_tt)
+                    build_Delta_Z_tt = _tt_copy_optional(Delta_Z_tt)
+                    build_Delta_T_tt = _tt_copy_optional(Delta_T_tt)
 
-            if corrector_needed:
-                _ipm_trace(status, "corrector", f"needed sigma={status.sigma:.2e} dxz={DXZ:.2e}")
+                rhs_corr_tt, corr_sigma, DXZ, corrector_needed = _tt_build_corrector_rhs(
+                    rhs_vec_tt,
+                    corr_idx > 0,
+                    X_tt,
+                    Z_tt,
+                    T_tt,
+                    build_Delta_X_tt,
+                    build_Delta_Z_tt,
+                    build_Delta_T_tt,
+                    x_step_size,
+                    z_step_size,
+                    ZX,
+                    TX,
+                    ineq_mask,
+                    status
+                )
+                if corr_idx == 0:
+                    status.sigma = corr_sigma
+                if not corrector_needed:
+                    _ipm_trace(status, "corrector", f"skipped sigma={corr_sigma:.2e} dxz={DXZ:.2e}")
+                    break
+
+                label = "corrector" if corr_idx == 0 else f"corrector-{corr_idx + 1}"
+                _ipm_trace(status, "corrector", f"{label} needed sigma={corr_sigma:.2e} dxz={DXZ:.2e}")
                 lhs_cc_tt = lhs_pred_tt
+                old_sigma = corr_sigma
+                old_step = min(x_step_size, z_step_size)
+                old_state = speculative_state or (
+                    Delta_X_tt, Delta_Y_tt, Delta_Z_tt, Delta_T_tt,
+                    x_step_size, z_step_size, status.mals_delta0,
+                    status.eigen_x0, status.eigen_z0, status.eigen_xt0, status.eigen_zt0,
+                    status.sigma, np.random.get_state()
+                )
                 t0 = time.time()
-                rhs_cc_tt = _tt_scale_kkt_rhs(rhs_vec_tt, row_scales)
-                _ipm_trace(status, "rhs-scale", "corrector", t0)
+                rhs_cc_tt = _tt_scale_kkt_rhs(rhs_corr_tt, row_scales)
+                _ipm_trace(status, "rhs-scale", label, t0)
                 t0 = time.time()
-                _ipm_trace(status, "kkt-corr", f"start nswp={status.kkt_iterations + status.is_last_iter} rank_cap={status.mals_rank_restriction}")
-                Delta_tt_cc, _ = solver(lhs_cc_tt, rhs_cc_tt, status.mals_delta0, status.kkt_iterations + status.is_last_iter, status.mals_rank_restriction, status.eta)
-                _ipm_trace(status, "kkt-corr", "done", t0)
+                _ipm_trace(
+                    status,
+                    "kkt-corr",
+                    f"{label} start nswp={status.kkt_iterations + status.is_last_iter} "
+                    f"rank_cap={status.mals_rank_restriction}"
+                )
+                Delta_tt_cc, _ = solver(
+                    lhs_cc_tt,
+                    rhs_cc_tt,
+                    status.mals_delta0,
+                    status.kkt_iterations + status.is_last_iter,
+                    status.mals_rank_restriction,
+                    status.eta
+                )
+                _ipm_trace(status, "kkt-corr", f"{label} done", t0)
                 status.mals_delta0 = Delta_tt_cc
                 Delta_X_tt_cc = _tt_symmetrise(tt_reshape(_tt_get_block(1, Delta_tt_cc), (2, 2)), status.eps)
                 Delta_Z_tt_cc = _tt_symmetrise(tt_reshape(_tt_get_block(2, Delta_tt_cc), (2, 2)), status.eps)
@@ -1079,20 +1188,60 @@ def _tt_ipm_newton_step(
                     Delta_T_tt = tt_rank_reduce(tt_add(Delta_T_tt_cc, Delta_T_tt), eps=status.eps)
 
                 t0 = time.time()
-                _ipm_trace(status, "step-size", "corrector start")
+                _ipm_trace(status, "step-size", f"{label} start")
+                step_X_tt = _tt_copy_optional(X_tt) if corr_idx > 0 else X_tt
+                step_Z_tt = _tt_copy_optional(Z_tt) if corr_idx > 0 else Z_tt
+                step_T_tt = _tt_copy_optional(T_tt) if corr_idx > 0 else T_tt
+                step_Delta_X_tt = _tt_copy_optional(Delta_X_tt) if corr_idx > 0 else Delta_X_tt
+                step_Delta_Z_tt = _tt_copy_optional(Delta_Z_tt) if corr_idx > 0 else Delta_Z_tt
+                step_Delta_T_tt = _tt_copy_optional(Delta_T_tt) if corr_idx > 0 else Delta_T_tt
                 x_step_size, z_step_size = _tt_get_step_sizes(
-                    X_tt,
-                    Z_tt,
-                    T_tt,
-                    Delta_X_tt,
-                    Delta_Z_tt,
-                    Delta_T_tt,
+                    step_X_tt,
+                    step_Z_tt,
+                    step_T_tt,
+                    step_Delta_X_tt,
+                    step_Delta_Z_tt,
+                    step_Delta_T_tt,
                     ineq_mask,
                     status
                 )
-                _ipm_trace(status, "step-size", f"corrector alpha_x={x_step_size:.2e} alpha_z={z_step_size:.2e}", t0)
-            else:
-                _ipm_trace(status, "corrector", f"skipped sigma={status.sigma:.2e} dxz={DXZ:.2e}")
+                _ipm_trace(status, "step-size", f"{label} alpha_x={x_step_size:.2e} alpha_z={z_step_size:.2e}", t0)
+                if corr_idx > 0:
+                    next_sigma, _ = _tt_corrector_sigma(
+                        X_tt,
+                        Z_tt,
+                        T_tt,
+                        Delta_X_tt,
+                        Delta_Z_tt,
+                        Delta_T_tt,
+                        x_step_size,
+                        z_step_size,
+                        ZX,
+                        TX,
+                        status
+                    )
+                    new_step = min(x_step_size, z_step_size)
+                    accept_extra = (
+                        new_step > 1.05 * old_step
+                        or (next_sigma < 0.7 * old_sigma and new_step > 0.5 * old_step)
+                    )
+                    if accept_extra:
+                        status.sigma = next_sigma
+                    else:
+                        (
+                            Delta_X_tt, Delta_Y_tt, Delta_Z_tt, Delta_T_tt,
+                            x_step_size, z_step_size, status.mals_delta0,
+                            status.eigen_x0, status.eigen_z0, status.eigen_xt0, status.eigen_zt0,
+                            status.sigma, rng_state
+                        ) = old_state
+                        np.random.set_state(rng_state)
+                        _ipm_trace(
+                            status,
+                            "corrector",
+                            f"{label} rejected alpha={new_step:.2e}->{old_step:.2e} "
+                            f"sigma={old_sigma:.2e}->{next_sigma:.2e}"
+                        )
+                        break
         else:
             status.sigma = 0
             _ipm_trace(status, "corrector", "skipped by phase/centrality")
@@ -1350,6 +1499,7 @@ class IPMStatus:
     reported_gap: float = np.inf
     combine_ty: bool = False
     force_xz_steps: int = 0
+    max_corrector_steps: int = 2
 
 
 def _ipm_format_output(X_tt, Y_tt, T_tt, Z_tt, iteration, status):
@@ -1773,6 +1923,7 @@ def tt_ipm(
     trace_verbose=False,
     rounding_update_budget_growth=1.25,
     delta_mul_kkt_weight=0.25,
+    max_corrector_steps=2,
     combine_ty=False,
     eq_mask=None
 ):
@@ -1801,6 +1952,7 @@ def tt_ipm(
         r_max
     )
     status.trace_verbose = trace_verbose
+    status.max_corrector_steps = min(2, max(1, int(max_corrector_steps)))
     status.rounding = RoundingController(update_budget_growth=rounding_update_budget_growth)
     delta_mul_kkt_weight = float(delta_mul_kkt_weight)
     if not np.isfinite(delta_mul_kkt_weight) or delta_mul_kkt_weight <= 0:

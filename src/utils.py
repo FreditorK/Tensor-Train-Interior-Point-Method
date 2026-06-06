@@ -437,6 +437,7 @@ def run_and_record(seed, r_i, s_i, rank, config, args, create_problem_fn, memory
             lambdaStarIneq=float(config.get("lambdaStarIneq", 1)),
             r_max=int(config.get("r_max", 1000)),
             delta_mul_kkt_weight=float(config.get("delta_mul_kkt_weight", 0.9)),
+            max_corrector_steps=int(config.get("max_corrector_steps", 2)),
             combine_ty=bool(problem_meta.get("combine_ty", False)),
             eq_mask=problem_meta.get("eq_mask")
         )
