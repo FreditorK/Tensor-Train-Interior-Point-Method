@@ -1019,6 +1019,15 @@ def _diag_two_core_local_solve(previous_solution, x_shape, XAX_k, A_k, A_kp1, XA
         return None
 
     helper = DiagTwoCoreBlockWrapper(XAX_k, A_diag_k, A_diag_kp1, XAX_k2)
+    fast_result = helper.best_block_eig(previous_solution.reshape(-1), eps)
+    if fast_result is not None:
+        best_val, solution_flat = fast_result
+        solution_now = solution_flat.reshape(-1, 1)
+        matvec = lambda z: helper.matvec(np.asarray(z, dtype=np.float64).reshape(-1)).reshape(-1, 1)
+        old_res = np.linalg.norm(best_val * previous_solution - matvec(previous_solution))
+        residual_vec = _ritz_residual_vec(matvec, solution_now, best_val)
+        return solution_now, best_val, old_res, residual_vec
+
     x = previous_solution.reshape(*x_shape)
     solution = np.zeros_like(x)
     best_val = None
@@ -1048,6 +1057,14 @@ def _diag_one_core_local_solve(previous_solution, x_shape, XAX_k, A_k, XAX_k1, e
         return None
 
     helper = DiagOneCoreBlockWrapper(XAX_k, A_diag_k, XAX_k1)
+    fast_result = helper.best_block_eig(previous_solution.reshape(-1), eps)
+    if fast_result is not None:
+        best_val, solution_flat = fast_result
+        solution_now = solution_flat.reshape(-1, 1)
+        matvec = lambda z: helper.matvec(np.asarray(z, dtype=np.float64).reshape(-1)).reshape(-1, 1)
+        old_res = np.linalg.norm(best_val * previous_solution - matvec(previous_solution))
+        return solution_now, old_res
+
     x = previous_solution.reshape(*x_shape)
     solution = np.zeros_like(x)
     best_val = None

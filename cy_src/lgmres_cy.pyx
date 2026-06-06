@@ -12,7 +12,9 @@ import numpy as np
 cimport numpy as cnp
 cimport cython
 cimport scipy.linalg.cython_blas as blas
+cimport scipy.linalg.cython_lapack as lapack
 from libc.string cimport memcpy
+from libc.math cimport fabs, sqrt
 from scipy.linalg.cython_blas cimport dcopy
 
 cnp.import_array() # Initialize NumPy C-API
@@ -20,6 +22,65 @@ cnp.import_array() # Initialize NumPy C-API
 cdef:
     int inc = 1  # typical unit stride
     double global_alpha = 1.0
+
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.nonecheck(False)
+@cython.inline
+cdef bint _prefer_block_c(
+        double val,
+        double warm_norm,
+        double best_val,
+        double best_warm_norm,
+        bint has_best,
+        double eps
+) noexcept nogil:
+    cdef double scale = fabs(val)
+    cdef double best_abs = fabs(best_val)
+    cdef double tol
+    if not has_best:
+        return True
+    if best_abs > scale:
+        scale = best_abs
+    if scale < 1.0:
+        scale = 1.0
+    tol = 10.0 * eps
+    if tol < 1e-12:
+        tol = 1e-12
+    tol *= scale
+    return val < best_val - tol or (fabs(val - best_val) <= tol and warm_norm > best_warm_norm)
+
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.nonecheck(False)
+cdef int _sym_smallest_eigh(
+        double[:, ::1] block,
+        double[::1] eigvals,
+        double[::1] work,
+        double* value
+) noexcept nogil:
+    cdef int n = block.shape[0]
+    cdef int lda = n
+    cdef int lwork = work.shape[0]
+    cdef int info = 0
+    cdef int i, j
+    cdef double v
+    cdef char jobz = 86
+    cdef char uplo = 85
+    if n == 1:
+        value[0] = block[0, 0]
+        block[0, 0] = 1.0
+        return 0
+    for i in range(n):
+        for j in range(i + 1, n):
+            v = 0.5 * (block[i, j] + block[j, i])
+            block[i, j] = v
+            block[j, i] = v
+    lapack.dsyev(&jobz, &uplo, &n, &block[0, 0], &lda, &eigvals[0], &work[0], &lwork, &info)
+    value[0] = eigvals[0]
+    return info
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
@@ -352,11 +413,7 @@ cdef class DiagTwoCoreBlockWrapper:
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.nonecheck(False)
-    cpdef cnp.ndarray[double, ndim=2] block(self, int n, int p):
-        cdef cnp.ndarray[double, ndim=2] out_arr = np.empty(
-            (self.ldim * self.Ldim, self.rdim * self.Rdim), dtype=np.float64
-        )
-        cdef double[:, ::1] out = out_arr
+    cdef void _fill_block(self, int n, int p, double[:, ::1] out) noexcept nogil:
         cdef const double[:, :, ::1] XAX_by_r = self.XAX_by_r
         cdef const double[:, :, ::1] A0_by_n = self.A0_by_n
         cdef const double[:, :, ::1] A1_by_p = self.A1_by_p
@@ -365,16 +422,101 @@ cdef class DiagTwoCoreBlockWrapper:
         cdef double[:, ::1] tmp = self.tmp
         cdef double[:, ::1] small = self.small
         cdef int li, Li, ri, Ri
+        cy_dgemm(A0_by_n[n, :, :], A1_by_p[p, :, :], coeff)
+        for ri in range(self.rdim):
+            cy_dgemm(XAX_by_r[ri, :, :], coeff, tmp)
+            for Ri in range(self.Rdim):
+                cy_dgemm(tmp, XAX2_by_R_T[Ri, :, :], small)
+                for li in range(self.ldim):
+                    for Li in range(self.Ldim):
+                        out[li * self.Ldim + Li, ri * self.Rdim + Ri] = small[li, Li]
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.nonecheck(False)
+    cpdef cnp.ndarray[double, ndim=2] block(self, int n, int p):
+        cdef cnp.ndarray[double, ndim=2] out_arr = np.empty(
+            (self.ldim * self.Ldim, self.rdim * self.Rdim), dtype=np.float64
+        )
+        cdef double[:, ::1] out = out_arr
         with nogil:
-            cy_dgemm(A0_by_n[n, :, :], A1_by_p[p, :, :], coeff)
-            for ri in range(self.rdim):
-                cy_dgemm(XAX_by_r[ri, :, :], coeff, tmp)
-                for Ri in range(self.Rdim):
-                    cy_dgemm(tmp, XAX2_by_R_T[Ri, :, :], small)
-                    for li in range(self.ldim):
-                        for Li in range(self.Ldim):
-                            out[li * self.Ldim + Li, ri * self.Rdim + Ri] = small[li, Li]
+            self._fill_block(n, p, out)
         return out_arr
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.nonecheck(False)
+    cpdef object best_block_eig(self, cnp.ndarray[double, ndim=1] previous, double eps, int max_dense=128):
+        cdef int m = self.rdim * self.Rdim
+        cdef int work_size = 3 * m - 1
+        cdef cnp.ndarray[double, ndim=1] previous_arr
+        cdef cnp.ndarray[double, ndim=2] block_arr
+        cdef cnp.ndarray[double, ndim=1] eigvals_arr
+        cdef cnp.ndarray[double, ndim=1] work_arr
+        cdef cnp.ndarray[double, ndim=1] best_vec_arr
+        cdef cnp.ndarray[double, ndim=1] solution_arr
+        cdef const double[::1] previous_v
+        cdef double[:, ::1] block
+        cdef double[::1] eigvals, work, best_vec, solution
+        cdef double val = 0.0
+        cdef double best_val = 0.0
+        cdef double warm_norm = 0.0
+        cdef double best_warm_norm = -1.0
+        cdef double entry
+        cdef bint has_best = False
+        cdef bint failed = False
+        cdef int info = 0
+        cdef int n, p, ri, Ri, idx, best_n = 0, best_p = 0
+        if self.ldim != self.rdim or self.Ldim != self.Rdim or m > max_dense:
+            return None
+        if work_size < 1:
+            work_size = 1
+        previous_arr = np.ascontiguousarray(previous, dtype=np.float64)
+        if previous_arr.shape[0] != self.in_size:
+            return None
+        block_arr = np.empty((m, m), dtype=np.float64)
+        eigvals_arr = np.empty(m, dtype=np.float64)
+        work_arr = np.empty(work_size, dtype=np.float64)
+        best_vec_arr = np.empty(m, dtype=np.float64)
+        solution_arr = np.zeros(self.in_size, dtype=np.float64)
+        previous_v = previous_arr
+        block = block_arr
+        eigvals = eigvals_arr
+        work = work_arr
+        best_vec = best_vec_arr
+        solution = solution_arr
+        with nogil:
+            for n in range(self.n0):
+                for p in range(self.n1):
+                    self._fill_block(n, p, block)
+                    info = _sym_smallest_eigh(block, eigvals, work, &val)
+                    if info != 0:
+                        failed = True
+                        break
+                    warm_norm = 0.0
+                    for ri in range(self.rdim):
+                        for Ri in range(self.Rdim):
+                            entry = previous_v[((ri * self.n0 + n) * self.n1 + p) * self.Rdim + Ri]
+                            warm_norm += entry * entry
+                    warm_norm = sqrt(warm_norm)
+                    if _prefer_block_c(val, warm_norm, best_val, best_warm_norm, has_best, eps):
+                        has_best = True
+                        best_val = val
+                        best_warm_norm = warm_norm
+                        best_n = n
+                        best_p = p
+                        for idx in range(m):
+                            best_vec[idx] = block[0, idx]
+                if failed:
+                    break
+            if not failed:
+                for ri in range(self.rdim):
+                    for Ri in range(self.Rdim):
+                        idx = ri * self.Rdim + Ri
+                        solution[((ri * self.n0 + best_n) * self.n1 + best_p) * self.Rdim + Ri] = best_vec[idx]
+        if failed:
+            return None
+        return best_val, solution_arr
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -440,26 +582,103 @@ cdef class DiagOneCoreBlockWrapper:
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.nonecheck(False)
-    cpdef cnp.ndarray[double, ndim=2] block(self, int n):
-        cdef cnp.ndarray[double, ndim=2] out_arr = np.empty(
-            (self.ldim * self.Ldim, self.rdim * self.Rdim), dtype=np.float64
-        )
-        cdef double[:, ::1] out = out_arr
+    cdef void _fill_block(self, int n, double[:, ::1] out) noexcept nogil:
         cdef const double[:, :, ::1] XAX_by_r = self.XAX_by_r
         cdef const double[:, :, ::1] A0_by_n = self.A0_by_n
         cdef const double[:, :, ::1] XAX1_by_R_T = self.XAX1_by_R_T
         cdef double[:, ::1] tmp = self.tmp
         cdef double[:, ::1] small = self.small
         cdef int li, Li, ri, Ri
+        for ri in range(self.rdim):
+            cy_dgemm(XAX_by_r[ri, :, :], A0_by_n[n, :, :], tmp)
+            for Ri in range(self.Rdim):
+                cy_dgemm(tmp, XAX1_by_R_T[Ri, :, :], small)
+                for li in range(self.ldim):
+                    for Li in range(self.Ldim):
+                        out[li * self.Ldim + Li, ri * self.Rdim + Ri] = small[li, Li]
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.nonecheck(False)
+    cpdef cnp.ndarray[double, ndim=2] block(self, int n):
+        cdef cnp.ndarray[double, ndim=2] out_arr = np.empty(
+            (self.ldim * self.Ldim, self.rdim * self.Rdim), dtype=np.float64
+        )
+        cdef double[:, ::1] out = out_arr
         with nogil:
-            for ri in range(self.rdim):
-                cy_dgemm(XAX_by_r[ri, :, :], A0_by_n[n, :, :], tmp)
-                for Ri in range(self.Rdim):
-                    cy_dgemm(tmp, XAX1_by_R_T[Ri, :, :], small)
-                    for li in range(self.ldim):
-                        for Li in range(self.Ldim):
-                            out[li * self.Ldim + Li, ri * self.Rdim + Ri] = small[li, Li]
+            self._fill_block(n, out)
         return out_arr
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.nonecheck(False)
+    cpdef object best_block_eig(self, cnp.ndarray[double, ndim=1] previous, double eps, int max_dense=128):
+        cdef int m = self.rdim * self.Rdim
+        cdef int work_size = 3 * m - 1
+        cdef cnp.ndarray[double, ndim=1] previous_arr
+        cdef cnp.ndarray[double, ndim=2] block_arr
+        cdef cnp.ndarray[double, ndim=1] eigvals_arr
+        cdef cnp.ndarray[double, ndim=1] work_arr
+        cdef cnp.ndarray[double, ndim=1] best_vec_arr
+        cdef cnp.ndarray[double, ndim=1] solution_arr
+        cdef const double[::1] previous_v
+        cdef double[:, ::1] block
+        cdef double[::1] eigvals, work, best_vec, solution
+        cdef double val = 0.0
+        cdef double best_val = 0.0
+        cdef double warm_norm = 0.0
+        cdef double best_warm_norm = -1.0
+        cdef double entry
+        cdef bint has_best = False
+        cdef bint failed = False
+        cdef int info = 0
+        cdef int n, ri, Ri, idx, best_n = 0
+        if self.ldim != self.rdim or self.Ldim != self.Rdim or m > max_dense:
+            return None
+        if work_size < 1:
+            work_size = 1
+        previous_arr = np.ascontiguousarray(previous, dtype=np.float64)
+        if previous_arr.shape[0] != self.in_size:
+            return None
+        block_arr = np.empty((m, m), dtype=np.float64)
+        eigvals_arr = np.empty(m, dtype=np.float64)
+        work_arr = np.empty(work_size, dtype=np.float64)
+        best_vec_arr = np.empty(m, dtype=np.float64)
+        solution_arr = np.zeros(self.in_size, dtype=np.float64)
+        previous_v = previous_arr
+        block = block_arr
+        eigvals = eigvals_arr
+        work = work_arr
+        best_vec = best_vec_arr
+        solution = solution_arr
+        with nogil:
+            for n in range(self.n0):
+                self._fill_block(n, block)
+                info = _sym_smallest_eigh(block, eigvals, work, &val)
+                if info != 0:
+                    failed = True
+                    break
+                warm_norm = 0.0
+                for ri in range(self.rdim):
+                    for Ri in range(self.Rdim):
+                        entry = previous_v[(ri * self.n0 + n) * self.Rdim + Ri]
+                        warm_norm += entry * entry
+                warm_norm = sqrt(warm_norm)
+                if _prefer_block_c(val, warm_norm, best_val, best_warm_norm, has_best, eps):
+                    has_best = True
+                    best_val = val
+                    best_warm_norm = warm_norm
+                    best_n = n
+                    for idx in range(m):
+                        best_vec[idx] = block[0, idx]
+            if not failed:
+                for ri in range(self.rdim):
+                    for Ri in range(self.Rdim):
+                        idx = ri * self.Rdim + Ri
+                        solution[(ri * self.n0 + best_n) * self.Rdim + Ri] = best_vec[idx]
+        if failed:
+            return None
+        return best_val, solution_arr
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
