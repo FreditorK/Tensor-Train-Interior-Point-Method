@@ -58,7 +58,7 @@ cpdef list tt_zero_matrix(int dim):
         result[i] = zeros_array
 
     return result
- 
+
 @cython.boundscheck(False)
 @cython.wraparound(False)
 cpdef list tt_one_matrix(int dim):
@@ -502,6 +502,170 @@ cdef tuple swap_cores(cnp.ndarray core_a, cnp.ndarray core_b, double eps):
 
     return core_a_new, core_b_new
 
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cdef cnp.ndarray[double, ndim=3] front_matvec_core(
+        cnp.ndarray[double, ndim=4] matrix_core,
+        cnp.ndarray[double, ndim=3] vec_core
+):
+    cdef int ra = matrix_core.shape[0]
+    cdef int mdim = matrix_core.shape[1]
+    cdef int ndim = matrix_core.shape[2]
+    cdef int kdim = matrix_core.shape[3]
+    cdef int rb = vec_core.shape[2]
+    cdef cnp.ndarray[double, ndim=4] A_arr = np.ascontiguousarray(matrix_core)
+    cdef cnp.ndarray[double, ndim=3] B_arr = np.ascontiguousarray(vec_core)
+    cdef cnp.ndarray[double, ndim=2] A_pair_arr = np.empty((mdim, kdim * ndim), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] B_pair_arr = np.empty((kdim * ndim, rb), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] work_arr = np.empty((mdim, rb), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=3] out_arr = np.empty((ra, mdim, rb), dtype=np.float64)
+    cdef const double[:, :, :, ::1] A = A_arr
+    cdef const double[:, :, ::1] B = B_arr
+    cdef double[:, ::1] A_pair = A_pair_arr
+    cdef double[:, ::1] B_pair = B_pair_arr
+    cdef double[:, ::1] work = work_arr
+    cdef double[:, :, ::1] out = out_arr
+    cdef int ai, mi, ni, ki, ri
+    with nogil:
+        for ki in range(kdim):
+            for ni in range(ndim):
+                for ri in range(rb):
+                    B_pair[ki * ndim + ni, ri] = B[ki, ni, ri]
+        for ai in range(ra):
+            for mi in range(mdim):
+                for ki in range(kdim):
+                    for ni in range(ndim):
+                        A_pair[mi, ki * ndim + ni] = A[ai, mi, ni, ki]
+            cy_dgemm_row(A_pair, B_pair, work)
+            for mi in range(mdim):
+                for ri in range(rb):
+                    out[ai, mi, ri] = work[mi, ri]
+    return out_arr
+
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cdef cnp.ndarray[double, ndim=4] front_matmat_core(
+        cnp.ndarray[double, ndim=4] matrix_core,
+        cnp.ndarray[double, ndim=4] rhs_core
+):
+    cdef int ra = matrix_core.shape[0]
+    cdef int mdim = matrix_core.shape[1]
+    cdef int ndim = matrix_core.shape[2]
+    cdef int kdim = matrix_core.shape[3]
+    cdef int odim = rhs_core.shape[2]
+    cdef int rb = rhs_core.shape[3]
+    cdef cnp.ndarray[double, ndim=4] A_arr = np.ascontiguousarray(matrix_core)
+    cdef cnp.ndarray[double, ndim=4] B_arr = np.ascontiguousarray(rhs_core)
+    cdef cnp.ndarray[double, ndim=2] A_pair_arr = np.empty((mdim, kdim * ndim), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] B_pair_arr = np.empty((kdim * ndim, odim * rb), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] work_arr = np.empty((mdim, odim * rb), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=4] out_arr = np.empty((ra, mdim, odim, rb), dtype=np.float64)
+    cdef const double[:, :, :, ::1] A = A_arr
+    cdef const double[:, :, :, ::1] B = B_arr
+    cdef double[:, ::1] A_pair = A_pair_arr
+    cdef double[:, ::1] B_pair = B_pair_arr
+    cdef double[:, ::1] work = work_arr
+    cdef double[:, :, :, ::1] out = out_arr
+    cdef int ai, mi, ni, ki, oi, ri
+    with nogil:
+        for ki in range(kdim):
+            for ni in range(ndim):
+                for oi in range(odim):
+                    for ri in range(rb):
+                        B_pair[ki * ndim + ni, oi * rb + ri] = B[ki, ni, oi, ri]
+        for ai in range(ra):
+            for mi in range(mdim):
+                for ki in range(kdim):
+                    for ni in range(ndim):
+                        A_pair[mi, ki * ndim + ni] = A[ai, mi, ni, ki]
+            cy_dgemm_row(A_pair, B_pair, work)
+            for mi in range(mdim):
+                for oi in range(odim):
+                    for ri in range(rb):
+                        out[ai, mi, oi, ri] = work[mi, oi * rb + ri]
+    return out_arr
+
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cdef cnp.ndarray[double, ndim=3] front_hadamard_vec_core(
+        cnp.ndarray[double, ndim=3] left_core,
+        cnp.ndarray[double, ndim=3] right_core
+):
+    cdef int ra = left_core.shape[0]
+    cdef int ndim = left_core.shape[1]
+    cdef int kdim = left_core.shape[2]
+    cdef int rb = right_core.shape[2]
+    cdef cnp.ndarray[double, ndim=3] A_arr = np.ascontiguousarray(left_core)
+    cdef cnp.ndarray[double, ndim=3] B_arr = np.ascontiguousarray(right_core)
+    cdef cnp.ndarray[double, ndim=2] A_slice_arr = np.empty((ra, kdim), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] B_slice_arr = np.empty((kdim, rb), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] work_arr = np.empty((ra, rb), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=3] out_arr = np.empty((ra, ndim, rb), dtype=np.float64)
+    cdef const double[:, :, ::1] A = A_arr
+    cdef const double[:, :, ::1] B = B_arr
+    cdef double[:, ::1] A_slice = A_slice_arr
+    cdef double[:, ::1] B_slice = B_slice_arr
+    cdef double[:, ::1] work = work_arr
+    cdef double[:, :, ::1] out = out_arr
+    cdef int ni, ai, ki, ri
+    with nogil:
+        for ni in range(ndim):
+            for ai in range(ra):
+                for ki in range(kdim):
+                    A_slice[ai, ki] = A[ai, ni, ki]
+            for ki in range(kdim):
+                for ri in range(rb):
+                    B_slice[ki, ri] = B[ki, ni, ri]
+            cy_dgemm_row(A_slice, B_slice, work)
+            for ai in range(ra):
+                for ri in range(rb):
+                    out[ai, ni, ri] = work[ai, ri]
+    return out_arr
+
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cdef cnp.ndarray[double, ndim=4] front_hadamard_mat_core(
+        cnp.ndarray[double, ndim=4] left_core,
+        cnp.ndarray[double, ndim=4] right_core
+):
+    cdef int ra = left_core.shape[0]
+    cdef int mdim = left_core.shape[1]
+    cdef int ndim = left_core.shape[2]
+    cdef int kdim = left_core.shape[3]
+    cdef int rb = right_core.shape[3]
+    cdef cnp.ndarray[double, ndim=4] A_arr = np.ascontiguousarray(left_core)
+    cdef cnp.ndarray[double, ndim=4] B_arr = np.ascontiguousarray(right_core)
+    cdef cnp.ndarray[double, ndim=2] A_slice_arr = np.empty((ra, kdim), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] B_slice_arr = np.empty((kdim, rb), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] work_arr = np.empty((ra, rb), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=4] out_arr = np.empty((ra, mdim, ndim, rb), dtype=np.float64)
+    cdef const double[:, :, :, ::1] A = A_arr
+    cdef const double[:, :, :, ::1] B = B_arr
+    cdef double[:, ::1] A_slice = A_slice_arr
+    cdef double[:, ::1] B_slice = B_slice_arr
+    cdef double[:, ::1] work = work_arr
+    cdef double[:, :, :, ::1] out = out_arr
+    cdef int mi, ni, ai, ki, ri
+    with nogil:
+        for mi in range(mdim):
+            for ni in range(ndim):
+                for ai in range(ra):
+                    for ki in range(kdim):
+                        A_slice[ai, ki] = A[ai, mi, ni, ki]
+                for ki in range(kdim):
+                    for ri in range(rb):
+                        B_slice[ki, ri] = B[ki, mi, ni, ri]
+                cy_dgemm_row(A_slice, B_slice, work)
+                for ai in range(ra):
+                    for ri in range(rb):
+                        out[ai, mi, ni, ri] = work[ai, ri]
+    return out_arr
+
+
 @cython.boundscheck(False)
 @cython.wraparound(False)
 cpdef list tt_fast_matrix_vec_mul(list matrix_tt, list vec_tt, double eps=1e-18):
@@ -515,7 +679,7 @@ cpdef list tt_fast_matrix_vec_mul(list matrix_tt, list vec_tt, double eps=1e-18)
 
     cdef int i, j
     for i in range(dim):
-        cores[0] = np.tensordot(matrix_tt[dim - i - 1], cores[0], axes=([3, 2], [0, 1]))
+        cores[0] = front_matvec_core(matrix_tt[dim - i - 1], cores[0])
 
         if i != dim - 1:
             for j in range(i, -1, -1):
@@ -532,7 +696,7 @@ cpdef list tt_fast_mat_mat_mul(list matrix_tt_1, list matrix_tt_2, double eps=1e
 
     cdef int i, j
     for i in range(dim):
-        cores[0] = np.tensordot(matrix_tt_1[dim - i - 1], cores[0], axes=([3, 2], [0, 1]))
+        cores[0] = front_matmat_core(matrix_tt_1[dim - i - 1], cores[0])
 
         if i != dim - 1:
             for j in range(i, -1, -1):
@@ -547,16 +711,13 @@ cpdef list tt_fast_hadamard(list train_tt_1, list train_tt_2, double eps=1e-18):
     cdef double loop_eps = eps / np.sqrt(dim - 1) if dim > 1 else eps
     cdef list cores
     cdef int i, j
-    cdef cnp.ndarray current_core_1, current_core_2, tensor_contraction, diag_contraction
+    cdef cnp.ndarray current_core_1, current_core_2
     if len(train_tt_1[0].shape) == 4 and len(train_tt_2[0].shape) == 4:
         cores = [np.transpose(c, (3, 1, 2, 0)) for c in reversed(train_tt_2)]
         for i in range(dim):
             current_core_1 = train_tt_1[dim - i - 1]
             current_core_2 = cores[0]
-            tensor_contraction = np.tensordot(current_core_1, current_core_2, axes=([3], [0]))
-            diag_contraction = np.diagonal(tensor_contraction, axis1=1, axis2=3)
-            diag_contraction = np.diagonal(diag_contraction, axis1=1, axis2=2)
-            cores[0] = diag_contraction.transpose(0, 2, 3, 1)
+            cores[0] = front_hadamard_mat_core(current_core_1, current_core_2)
 
             if i != dim - 1:
                 for j in range(i, -1, -1):
@@ -568,9 +729,7 @@ cpdef list tt_fast_hadamard(list train_tt_1, list train_tt_2, double eps=1e-18):
         for i in range(dim):
             current_core_1 = train_tt_1[dim - i - 1]
             current_core_2 = cores[0]
-            tensor_contraction = np.tensordot(current_core_1, current_core_2, axes=([2],[0]))
-            diag_contraction = np.diagonal(tensor_contraction, axis1=1, axis2=2)
-            cores[0] = diag_contraction.transpose(0, 2, 1)
+            cores[0] = front_hadamard_vec_core(current_core_1, current_core_2)
 
             if i != dim - 1:
                 for j in range(i, -1, -1):
@@ -667,7 +826,7 @@ cpdef cnp.ndarray[cnp.int64_t, ndim=1] symmetric_powers_of_two(int length):
 
     for i in range(half):
         result[length - 1 - i] = result[i]
-            
+
     return result
 
 

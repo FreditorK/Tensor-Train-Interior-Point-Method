@@ -11,6 +11,7 @@ from cy_src.lgmres_cy import (
     core_matvec,
     core_rmatvec,
     dense_core_matrix,
+    dense_scaled_min_eig,
     dense_two_core_matrix,
     DiagOneCoreBlockWrapper,
     DiagTwoCoreBlockWrapper,
@@ -60,17 +61,17 @@ class TTBlockVector:
 
     def __repr__(self):
         return repr(self._data)
-    
+
     @property
     def norm(self):
         return np.sqrt(sum(tt_inner_prod(v, v) for v in self._data.values()))
-    
+
     def __sub__(self, other):
         block_vec = TTBlockVector()
         for i in self._data.keys():
             block_vec[i] = tt_rank_reduce(tt_sub(self.get_row(i), other.get_row(i)), 1e-12)
         return block_vec
-    
+
     def scale(self, s):
         self._data = {key: tt_rank_reduce(tt_scale(s, value), 1e-12) for (key, value) in self._data.items()}
 
@@ -172,7 +173,7 @@ class TTBlockMatrix:
                 else:
                     result[k] = tt_mat_vec_mul(self._data[i, j], _tt_get_block(t, x_cores), op_tol, eps)
         return result
-    
+
     def get_submatrix(self, row_index, col_index):
         submatrix = TTBlockMatrix()
         submatrix._data = {(i, j): v for (i, j), v in self._data.items() if i <= row_index and j <= col_index}
@@ -431,7 +432,7 @@ def _bck_sweep(
             if amen and not last:
                 z_cores[k] = np.reshape(resz.T, (rz[k], block_size, N[k], rz[k + 1])) * scales
 
-    return x_cores, z_cores, XAX, Xb, rx, local_res, local_dx, direct_solve_failure 
+    return x_cores, z_cores, XAX, Xb, rx, local_res, local_dx, direct_solve_failure
 
 
 def _fwd_sweep(
@@ -457,7 +458,7 @@ def _fwd_sweep(
         last,
         amen,
         block_weights,
-        direct_solve_failure 
+        direct_solve_failure
 ):
     local_res = np.inf if swp == 0 else 0
     local_dx = np.inf if swp == 0 else 0
@@ -560,8 +561,8 @@ def _fwd_sweep(
                 z_cores[k] = np.reshape(resz, (rz[k], N[k], block_size, rz[k + 1])).transpose(0, 2, 1, 3) * scales
 
 
-    return x_cores, z_cores, XAX, Xb, rx, local_res, local_dx, direct_solve_failure 
-            
+    return x_cores, z_cores, XAX, Xb, rx, local_res, local_dx, direct_solve_failure
+
 
 def tt_block_amen(block_A, block_b, term_tol, r_max=100, eps=1e-12, nswp=22, x0=None, local_solver=None, kick_rank=2, amen=False, verbose=False, block_weights=None):
 
@@ -663,7 +664,7 @@ def tt_block_amen(block_A, block_b, term_tol, r_max=100, eps=1e-12, nswp=22, x0=
                 last,
                 amen,
                 block_weights,
-                direct_solve_failure 
+                direct_solve_failure
             )
         else:
             x_cores, z_cores, XAX, Xb, rx, local_res, local_dx, direct_solve_failure = _fwd_sweep(
@@ -689,7 +690,7 @@ def tt_block_amen(block_A, block_b, term_tol, r_max=100, eps=1e-12, nswp=22, x0=
                 last,
                 amen,
                 block_weights,
-                direct_solve_failure 
+                direct_solve_failure
             )
 
         if last:
@@ -731,7 +732,7 @@ def _default_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, prev
     norm_rhs = max(np.linalg.norm(rhs), 1e-10)
     block_res_old = np.linalg.norm(
         block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution) - rhs) / norm_rhs
-    
+
     dense_solve = (np.sqrt(x_shape[0]*x_shape[3]) <= size_limit) and dense_solve
     direct_solve_failure = False
 
@@ -860,7 +861,7 @@ def tt_restarted_block_amen(
     for i in range(1, num_restarts):
         if verbose:
             print(f"\n\t--- Restart {i}")
-        
+
         dim = len(x_cores)
         x_cores = tt_rank_retraction(x_cores, [2*dim]*(dim-1))
         x_cores, res = solve_als(rhs, rank_restriction, x_cores, inner_m, 4)
@@ -1257,20 +1258,20 @@ def _merge_two_core(left, right):
 
 
 def _step_size_local_solve(
-    previous_solution1, 
-    previous_solution2, 
-    XAX_k, 
-    A_k, 
-    A_kp1, 
-    XAX_k2, 
+    previous_solution1,
+    previous_solution2,
+    XAX_k,
+    A_k,
+    A_kp1,
+    XAX_k2,
     XDX_k,
     D_k,
     D_kp1,
     XDX_k2,
     step_size,
-    size_limit, 
-    trunc_tol, 
-    eps, 
+    size_limit,
+    trunc_tol,
+    eps,
     max_rank,
     bwd=True
     ):
@@ -1283,47 +1284,32 @@ def _step_size_local_solve(
     previous_solution = previous_solution.reshape(-1, 1)
     residual_vec = None
     if prev_sol_shape[0]*prev_sol_shape[-1] <= size_limit:
-        D = scp.sparse.csr_matrix(dense_two_core_matrix(XDX_k, D_k, D_kp1, XDX_k2))
-        D = 0.5*(D + D.T)
-        A = scp.sparse.csr_matrix(dense_two_core_matrix(XAX_k, A_k, A_kp1, XAX_k2))
-        A = 0.5*(A + A.T)
-        M = (1/step_size)*A + D
-        try:
-            eig_val, solution_now = scp.sparse.linalg.eigsh(M, tol=eps, k=1, ncv=_eigsh_ncv(m), maxiter=_eigsh_maxiter(m), which="SA", v0=_eigsh_v0(previous_solution))
-            if _relative_eigen_residual(lambda x: M @ x, solution_now, eig_val) > eps:
-                sigma = eig_val.squeeze()
-                M_shift = M - sigma * scp.sparse.eye(M.shape[1], format=M.format)
-                lu = scp.sparse.linalg.splu(M_shift.tocsc())
-                shift_inv_op = scp.sparse.linalg.LinearOperator(M.shape, matvec=lambda x: lu.solve(x))
-                # Solve using shift-invert
-                eig_val_shift, solution_now = scp.sparse.linalg.eigsh(
-                    shift_inv_op,
-                    k=1,
-                    which="LM",  # largest magnitude in shift-invert corresponds to eigenvalue near sigma
-                    v0=_eigsh_v0(solution_now),  # use previous solution as initial guess
-                    ncv=_eigsh_ncv(m),
-                    maxiter=_eigsh_maxiter(m),
-                    tol=eps
-                )
-                # Convert back to original eigenvalue
-                eig_val = sigma + 1 / eig_val_shift
-        except Exception as e:
-            _print_attention(e)
-            eig_val = previous_solution.T @ (M @ previous_solution)
-            solution_now = previous_solution
+        D = dense_two_core_matrix(XDX_k, D_k, D_kp1, XDX_k2)
+        D = 0.5 * (D + D.T)
+        A = dense_two_core_matrix(XAX_k, A_k, A_kp1, XAX_k2)
+        A = 0.5 * (A + A.T)
+        eig_result = dense_scaled_min_eig(A, D, 1.0 / step_size)
+        if eig_result is None:
+            M = (1.0 / step_size) * A + D
+            try:
+                vals, vecs = scp.linalg.eigh(M, check_finite=False, overwrite_a=True)
+                eig_val = float(vals[0])
+                solution_now = vecs[:, :1]
+            except Exception as e:
+                _print_attention(e)
+                solution_now = previous_solution
+                eig_val = _rayleigh_value(lambda x: M @ x, solution_now)
+        else:
+            eig_val, solution_now, _ = eig_result
         solution_now /= np.linalg.norm(solution_now)
         if eig_val < 0:
             def min_eig_at_step(alpha, v0):
-                M_alpha = (1/alpha)*A + D
-                try:
-                    eig_val_alpha, vec_alpha = scp.sparse.linalg.eigsh(
-                        M_alpha, tol=eps, k=1, ncv=_eigsh_ncv(m),
-                        maxiter=_eigsh_maxiter(m), which="SA", v0=_eigsh_v0(v0)
-                    )
-                    return _eig_scalar(eig_val_alpha), vec_alpha
-                except Exception:
-                    vec_alpha = _normalised_column(v0, m)
-                    return _rayleigh_value(lambda x: M_alpha @ x, vec_alpha), vec_alpha
+                eig_alpha = dense_scaled_min_eig(A, D, 1.0 / alpha)
+                if eig_alpha is not None:
+                    return float(eig_alpha[0]), eig_alpha[1]
+                M_alpha = (1.0 / alpha) * A + D
+                vec_alpha = _normalised_column(v0, m)
+                return _rayleigh_value(lambda x: M_alpha @ x, vec_alpha), vec_alpha
 
             step_size, solution_now, eig_val = _safeguard_psd_step(
                 step_size, eig_val, solution_now, min_eig_at_step, eps
@@ -1331,7 +1317,7 @@ def _step_size_local_solve(
             if step_size <= 0:
                 return previous_solution1, previous_solution2, 0.0, np.inf
 
-        M_now = (1/step_size)*A + D
+        M_now = (1.0 / step_size) * A + D
         step_matvec = lambda x: M_now @ x
         old_res = _relative_eigen_residual(step_matvec, solution_now)
         residual_vec = _ritz_residual_vec(step_matvec, solution_now)
@@ -1452,46 +1438,31 @@ def _step_size_local_solve_last(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k
     m = np.prod(previous_solution.shape)
     if dense_solve:
         previous_solution = previous_solution.reshape(-1, 1)
-        D = scp.sparse.csr_matrix(dense_core_matrix(XDX_k, Delta_k, XDX_k1))
-        D = 0.5*(D + D.T)
-        A = scp.sparse.csr_matrix(dense_core_matrix(XAX_k, A_k, XAX_k1))
-        A = 0.5*(A + A.T)
-        M = (1/step_size)*A + D
-        try:
-            eig_val, solution_now = scp.sparse.linalg.eigsh(M, tol=eps, k=1, ncv=_eigsh_ncv(m), maxiter=_eigsh_maxiter(m), which="SA", v0=_eigsh_v0(previous_solution))
-            if _relative_eigen_residual(lambda x: M @ x, solution_now, eig_val) > eps:
-                sigma = eig_val.squeeze()
-                M_shift = M - sigma * scp.sparse.eye(M.shape[1], format=M.format)
-                lu = scp.sparse.linalg.splu(M_shift.tocsc())
-                shift_inv_op = scp.sparse.linalg.LinearOperator(M.shape, matvec=lambda x: lu.solve(x))
-                # Solve using shift-invert
-                eig_val_shift, solution_now = scp.sparse.linalg.eigsh(
-                    shift_inv_op,
-                    k=1,
-                    which="LM",  # largest magnitude in shift-invert corresponds to eigenvalue near sigma
-                    v0=_eigsh_v0(solution_now),  # use previous solution as initial guess
-                    ncv=_eigsh_ncv(m),
-                    maxiter=_eigsh_maxiter(m),
-                    tol=eps
-                )
-                # Convert back to original eigenvalue
-                eig_val = sigma + 1 / eig_val_shift
-        except Exception as e:
-            _print_attention(e)
-            eig_val = previous_solution.T @ ((1/step_size)*A + D)  @ previous_solution
-            solution_now = previous_solution
+        D = dense_core_matrix(XDX_k, Delta_k, XDX_k1)
+        D = 0.5 * (D + D.T)
+        A = dense_core_matrix(XAX_k, A_k, XAX_k1)
+        A = 0.5 * (A + A.T)
+        eig_result = dense_scaled_min_eig(A, D, 1.0 / step_size)
+        if eig_result is None:
+            M = (1.0 / step_size) * A + D
+            try:
+                vals, vecs = scp.linalg.eigh(M, check_finite=False, overwrite_a=True)
+                eig_val = float(vals[0])
+                solution_now = vecs[:, :1]
+            except Exception as e:
+                _print_attention(e)
+                solution_now = previous_solution
+                eig_val = _rayleigh_value(lambda x: M @ x, solution_now)
+        else:
+            eig_val, solution_now, _ = eig_result
         if eig_val < 0:
             def min_eig_at_step(alpha, v0):
-                M_alpha = (1/alpha)*A + D
-                try:
-                    eig_val_alpha, vec_alpha = scp.sparse.linalg.eigsh(
-                        M_alpha, tol=eps, k=1, ncv=_eigsh_ncv(m),
-                        maxiter=_eigsh_maxiter(m), which="SA", v0=_eigsh_v0(v0)
-                    )
-                    return _eig_scalar(eig_val_alpha), vec_alpha
-                except Exception:
-                    vec_alpha = _normalised_column(v0, m)
-                    return _rayleigh_value(lambda x: M_alpha @ x, vec_alpha), vec_alpha
+                eig_alpha = dense_scaled_min_eig(A, D, 1.0 / alpha)
+                if eig_alpha is not None:
+                    return float(eig_alpha[0]), eig_alpha[1]
+                M_alpha = (1.0 / alpha) * A + D
+                vec_alpha = _normalised_column(v0, m)
+                return _rayleigh_value(lambda x: M_alpha @ x, vec_alpha), vec_alpha
 
             step_size, solution_now, eig_val = _safeguard_psd_step(
                 step_size, eig_val, solution_now, min_eig_at_step, eps
@@ -1499,7 +1470,7 @@ def _step_size_local_solve_last(previous_solution, XDX_k, Delta_k, XDX_k1, XAX_k
             if step_size <= 0:
                 return previous_solution.reshape(-1, 1), 0.0, np.inf
 
-        M_now = (1/step_size)*A + D
+        M_now = (1.0 / step_size) * A + D
         old_res = _relative_eigen_residual(lambda x: M_now @ x, solution_now)
     else:
         x_shape = previous_solution.shape
@@ -1556,9 +1527,9 @@ def tt_max_generalised_eigen(A, Delta, x0=None, nswp=10, tol=1e-8, size_limit = 
         for k in range(d - 1, 0, -1):
             if swp > 0:
                 x_cores[k-1], x_cores[k], step_size, res = _step_size_local_solve(
-                    x_cores[k-1], x_cores[k], 
-                    XAX[k-1], A[k-1], A[k], XAX[k+1], 
-                    XDX[k-1], Delta[k-1], Delta[k], XDX[k+1], 
+                    x_cores[k-1], x_cores[k],
+                    XAX[k-1], A[k-1], A[k], XAX[k+1],
+                    XDX[k-1], Delta[k-1], Delta[k], XDX[k+1],
                     step_size,
                     size_limit, trunc_tol, tol, max_rank, bwd=True
                     )
@@ -1587,7 +1558,7 @@ def tt_max_generalised_eigen(A, Delta, x0=None, nswp=10, tol=1e-8, size_limit = 
                 previous_solution = x_cores[k]
                 solution_now, step_size, _ = _step_size_local_solve_last(previous_solution, XDX[k], Delta[k], XDX[k+1], XAX[k], A[k], XAX[k+1], previous_solution.size <= size_limit, step_size, tol)
                 solution_now = np.reshape(solution_now, (rx[k] * N[k], rx[k + 1]))
-                    
+
                 if k < d - 1:
                     u, s, v = scp.linalg.svd(solution_now, full_matrices=False, check_finite=False, overwrite_a=True, lapack_driver="gesvd")
                     v = s.reshape(-1, 1) * v
@@ -1611,9 +1582,9 @@ def tt_max_generalised_eigen(A, Delta, x0=None, nswp=10, tol=1e-8, size_limit = 
             print(f"\tTT-sol rank: {tt_ranks(x_cores)}", flush=True)
         for k in range(d-1):
             x_cores[k], x_cores[k+1], step_size, res = _step_size_local_solve(
-                x_cores[k], x_cores[k+1], 
-                XAX[k], A[k], A[k+1], XAX[k+2], 
-                XDX[k], Delta[k], Delta[k+1], XDX[k+2], 
+                x_cores[k], x_cores[k+1],
+                XAX[k], A[k], A[k+1], XAX[k+2],
+                XDX[k], Delta[k], Delta[k+1], XDX[k+2],
                 step_size,
                 size_limit, trunc_tol, tol, max_rank, bwd=False
                 )
@@ -1687,15 +1658,15 @@ def tt_max_generalised_eigen(A, Delta, x0=None, nswp=10, tol=1e-8, size_limit = 
 
 
 def _eigen_local_solve(
-    previous_solution1, 
-    previous_solution2, 
-    XAX_k, 
-    A_k, 
-    A_kp1, 
-    XAX_k2, 
-    size_limit, 
-    trunc_tol, 
-    eps, 
+    previous_solution1,
+    previous_solution2,
+    XAX_k,
+    A_k,
+    A_kp1,
+    XAX_k2,
+    size_limit,
+    trunc_tol,
+    eps,
     lanczos_discount,
     max_rank,
     bwd=True

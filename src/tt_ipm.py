@@ -10,7 +10,15 @@ sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
 from src.tt_als import TTBlockMatrix, TTBlockVector, tt_mat_vec_mul, tt_max_generalised_eigen, tt_min_eig, tt_mat_mat_mul,tt_restarted_block_amen
-from cy_src.lgmres_cy import core_matvec, core_rmatvec, core_sum_contract, dense_core_matrix, rhs_contract
+from cy_src.lgmres_cy import (
+    core_matvec,
+    core_rmatvec,
+    core_sum_contract,
+    dense_core_matrix,
+    dense_schur_3block,
+    dense_schur_4block,
+    rhs_contract,
+)
 from dataclasses import dataclass
 from enum import Enum
 from petsc4py import PETSc
@@ -76,8 +84,8 @@ class ApproxBlockKyInv:
 
 class BlockJacPrec:
     def __init__(
-        self, 
-        XAX_k_00, block_A_k_00, XAX_k1_00, 
+        self,
+        XAX_k_00, block_A_k_00, XAX_k1_00,
         XAX_k_21, block_A_k_21, XAX_k1_21,
         nblocks,
         eps=1e-11
@@ -124,7 +132,7 @@ class LGMRESSolver:
         opts.setValue('-ksp_rtol', rtol)
         opts.setValue('-ksp_max_it', max_iter)
         opts.setValue('-ksp_gmres_restart', restart)
-        self.ksp.setFromOptions() 
+        self.ksp.setFromOptions()
 
     def mult(self, _, x, y):
         x_np = x.array_r
@@ -211,7 +219,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
     norm_rhs = max(np.linalg.norm(rhs), 1e-10)
     inv_I = np.divide(1, core_sum_contract(XAX_k[1, 2], block_A_k[1, 2], XAX_k1[1, 2]))
     block_res_old = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution).__isub__(rhs)) / norm_rhs
-    dense_solve = (np.sqrt(x_shape[0]*x_shape[3]) <= size_limit) and dense_solve and (block_res_old >= rtol)
+    dense_solve = (np.sqrt(x_shape[0]*x_shape[3]) <= (4.0 / 3.0) * size_limit) and dense_solve and (block_res_old >= rtol)
     direct_solve_failure = not dense_solve
 
     if dense_solve:
@@ -226,11 +234,16 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
                 dense_core_matrix(XAX_k[2, 1], block_A_k[2, 1], XAX_k1[2, 1]),
                 lower=True
             )
-            b = mR_p - mL_eq @ forward_backward_sub(L_L_Z, mR_c - L_X_I_inv @ mR_d, overwrite_b=True)
-            A = forward_backward_sub(L_L_Z, L_X_I_inv, overwrite_b=True)
-            np.matmul(A, mL_eq.T, out=A)
-            np.matmul(mL_eq, A, out=A)
-            A += dense_core_matrix(XAX_k[0, 0], block_A_k[0, 0], XAX_k1[0, 0])
+            rhs_x = forward_backward_sub(L_L_Z, mR_c - L_X_I_inv @ mR_d, overwrite_b=True)
+            A_base = forward_backward_sub(L_L_Z, L_X_I_inv, overwrite_b=True)
+            A, b = dense_schur_3block(
+                dense_core_matrix(XAX_k[0, 0], block_A_k[0, 0], XAX_k1[0, 0]),
+                mL_eq,
+                mL_eq.T,
+                A_base,
+                mR_p,
+                rhs_x,
+            )
             A.flat[::A.shape[1] + 1] += 1e-11
             solution_now = np.empty(x_shape)
             solution_now[:, 0] = scp.linalg.solve(A, b, check_finite=False, overwrite_a=True, overwrite_b=True, assume_a="gen").reshape(x_shape[0], x_shape[2], x_shape[3])
@@ -238,7 +251,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
                 mR_d - core_rmatvec(XAX_k[0, 1], block_A_k[0, 1], XAX_k1[0, 1], solution_now[:, 0]).reshape(-1, 1)
                 ).__imul__(inv_I.reshape(-1, 1)).reshape(x_shape[0], x_shape[2], x_shape[3])
             solution_now[:, 1] = forward_backward_sub(
-                L_L_Z, 
+                L_L_Z,
                 mR_c - core_matvec(XAX_k[2, 2], block_A_k[2, 2], XAX_k1[2, 2], solution_now[:, 2]).reshape(-1, 1),
                 overwrite_b=True
                 ).reshape(x_shape[0], x_shape[2], x_shape[3])
@@ -267,7 +280,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
         use_prev_sol = (local_rhs_norm_prime < local_rhs_norm)
         if use_prev_sol:
             local_rhs -= local_vec
-        
+
         num_iters = min(m, 100)
         outer_k = max(num_iters // 10, 3)
         large_scale_solver = LGMRESSolver(rtol=rtol, restart=num_iters, outer_k=outer_k)
@@ -299,7 +312,7 @@ def _ipm_local_solver(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previous
     block_res_new = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, solution_now).__isub__(rhs)) / norm_rhs
 
     if block_res_old < block_res_new:
-        solution_now = previous_solution        
+        solution_now = previous_solution
 
     return solution_now, block_res_old, min(block_res_old, block_res_new), rhs, norm_rhs, direct_solve_failure
 
@@ -313,7 +326,7 @@ def _ipm_local_solver_ty(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previ
     norm_rhs = max(np.linalg.norm(rhs), 1e-10)
     inv_I = np.divide(1, core_sum_contract(XAX_k[1, 2], block_A_k[1, 2], XAX_k1[1, 2]))
     block_res_old = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, previous_solution).__isub__(rhs)) / norm_rhs
-    dense_solve = (np.sqrt(x_shape[0]*x_shape[3]) <= size_limit) and dense_solve and (block_res_old >= rtol)
+    dense_solve = (np.sqrt(x_shape[0]*x_shape[3]) <= (4.0 / 3.0) * size_limit) and dense_solve and (block_res_old >= rtol)
     direct_solve_failure = not dense_solve
 
     if dense_solve:
@@ -330,12 +343,18 @@ def _ipm_local_solver_ty(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, previ
                 lower=True
             )
             rhs_x = forward_backward_sub(L_L_Z, mR_c - L_X_I_inv @ mR_d, overwrite_b=True)
-            A = forward_backward_sub(L_L_Z, L_X_I_inv, overwrite_b=True)
-            A = A01 @ A @ A10
-            A += dense_core_matrix(XAX_k[0, 0], block_A_k[0, 0], XAX_k1[0, 0])
+            A_base = forward_backward_sub(L_L_Z, L_X_I_inv, overwrite_b=True)
+            A, b = dense_schur_3block(
+                dense_core_matrix(XAX_k[0, 0], block_A_k[0, 0], XAX_k1[0, 0]),
+                A01,
+                A10,
+                A_base,
+                mR_p,
+                rhs_x,
+            )
             A.flat[::A.shape[1] + 1] += 1e-11
             solution_now = np.empty(x_shape)
-            solution_now[:, 0] = scp.linalg.solve(A, mR_p - A01 @ rhs_x, check_finite=False, overwrite_a=True, overwrite_b=True, assume_a="gen").reshape(x_shape[0], x_shape[2], x_shape[3])
+            solution_now[:, 0] = scp.linalg.solve(A, b, check_finite=False, overwrite_a=True, overwrite_b=True, assume_a="gen").reshape(x_shape[0], x_shape[2], x_shape[3])
             solution_now[:, 2] = (
                 mR_d - core_rmatvec(XAX_k[1, 0], block_A_k[1, 0], XAX_k1[1, 0], solution_now[:, 0]).reshape(-1, 1)
                 ).__imul__(inv_I.reshape(-1, 1)).reshape(x_shape[0], x_shape[2], x_shape[3])
@@ -432,18 +451,19 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
             )
             mL_eq = dense_core_matrix(XAX_k[0, 1], block_A_k[0, 1], XAX_k1[0, 1])
             T_op = dense_core_matrix(XAX_k[3, 1], block_A_k[3, 1], XAX_k1[3, 1])
-            u = mR_p - mL_eq @ (L_L_Z_inv_mR_c - (L_L_Z_inv_L_X * inv_I.reshape(1, -1)) @ mR_d)
-            v = mR_t - T_op @ (L_L_Z_inv_mR_c - (L_L_Z_inv_L_X * inv_I.reshape(1, -1)) @ mR_d)
-            A = dense_core_matrix(XAX_k[0, 0], block_A_k[0, 0], XAX_k1[0, 0]).__iadd__(
-                mL_eq @ (L_L_Z_inv_L_X * inv_I.reshape(1, -1)) @ mL_eq.T
-            )
-            D = dense_core_matrix(XAX_k[3, 3], block_A_k[3, 3], XAX_k1[3, 3]).__iadd__(
-                T_op @ L_L_Z_inv_L_X
+            A, D, T_op, mL_eq, u, v = dense_schur_4block(
+                dense_core_matrix(XAX_k[0, 0], block_A_k[0, 0], XAX_k1[0, 0]),
+                dense_core_matrix(XAX_k[3, 3], block_A_k[3, 3], XAX_k1[3, 3]),
+                mL_eq,
+                T_op,
+                L_L_Z_inv_mR_c,
+                L_L_Z_inv_L_X,
+                inv_I.reshape(-1),
+                mR_p,
+                mR_d,
+                mR_t,
             )
             D.flat[::D.shape[1] + 1] += 1e-11
-            np.matmul(T_op, L_L_Z_inv_L_X * inv_I.reshape(1, -1), out=T_op)
-            np.matmul(T_op, mL_eq.T, out=T_op)
-            np.matmul(mL_eq, L_L_Z_inv_L_X, out=mL_eq)
             Dlu, Dpiv = scp.linalg.lu_factor(D, check_finite=False, overwrite_a=True)
             rhs_l = u.__isub__(mL_eq @ scp.linalg.lu_solve((Dlu, Dpiv), v, check_finite=False))
             lhs_l = A.__isub__(mL_eq.__imatmul__(scp.linalg.lu_solve((Dlu, Dpiv), T_op, check_finite=False)))
@@ -455,7 +475,7 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
                 mR_d - core_rmatvec(XAX_k[0, 1], block_A_k[0, 1], XAX_k1[0, 1], solution_now[:, 0]).reshape(-1, 1)
                 ).__imul__(inv_I.reshape(-1, 1)).reshape(x_shape[0], x_shape[2], x_shape[3]).__isub__(solution_now[:, 3])
             solution_now[:, 1] = forward_backward_sub(
-                L_L_Z, 
+                L_L_Z,
                 mR_c - core_matvec(XAX_k[2, 2], block_A_k[2, 2], XAX_k1[2, 2], solution_now[:, 2]).reshape(-1, 1),
                 overwrite_b=True
                 ).reshape(x_shape[0], x_shape[2], x_shape[3])
@@ -510,7 +530,7 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
 
         if not iterative_failure:
             solution_now = np.transpose(local_solution.reshape(3, x_shape[0], x_shape[2], x_shape[3]),
-                                        (1, 0, 2, 3)) 
+                                        (1, 0, 2, 3))
 
             if use_prev_sol:
                 solution_now[:, 0] += previous_solution[:, 0]
@@ -522,7 +542,7 @@ def _ipm_local_solver_ineq(XAX_k, block_A_k, XAX_k1, Xb_k, block_b_k, Xb_k1, pre
                                                  solution_now[:, 0])) - solution_now[:, 2]
             solution_now = np.concatenate(
                 (solution_now[:, :2], z.reshape(x_shape[0], 1, x_shape[2], x_shape[3]), solution_now[:, None, 2]), axis=1)
-        
+
     block_res_new = np.linalg.norm(block_A_k.block_local_product(XAX_k, XAX_k1, solution_now) - rhs) / norm_rhs
 
     if block_res_old < block_res_new:
@@ -1312,11 +1332,11 @@ def _ipm_format_output(X_tt, Y_tt, T_tt, Z_tt, iteration, status):
     ranksZ = tt_ranks(Z_tt)
     ranksY = tt_ranks(Y_tt)
     ranksT = tt_ranks(T_tt) if T_tt else [0] * (status.dim - 1)
-    
+
     print("---Terminated---")
     print(f"Terminated in {iteration} iterations.")
     print(f"Ranks: X={ranksX}, Z={ranksZ}, Y={ranksY}, T={ranksT}")
-    
+
     results = {"num_iters": iteration, "ranksX": ranksX, "ranksY": ranksY, "ranksZ": ranksZ, "ranksT": ranksT, "status": status}
     return X_tt, Y_tt, T_tt, Z_tt, results
 
@@ -1325,11 +1345,11 @@ def _ipm_check_for_stalled_progress(prev_errors, status, gap_tol):
     """Checks if the optimization has stalled."""
     if status.is_last_iter:
         return False
-        
+
     primal_stalled = abs(prev_errors['primal'] - status.primal_error) < 0.04 * gap_tol
     dual_stalled = abs(prev_errors['dual'] - status.dual_error) < 0.04 * gap_tol
     centrality_stalled = abs(prev_errors['centrality'] - status.centrality_error) < 0.02 * gap_tol
-    
+
     if primal_stalled and dual_stalled and centrality_stalled:
         if status.verbose:
             print("============================================\n Progress stalled! Entering finishing phase.\n============================================")
@@ -1506,7 +1526,7 @@ def tt_ipm(
     solver_verbose=False,
     trace_verbose=False,
     rounding_update_budget_growth=1.25,
-    delta_t_kkt_weight=0.25,
+    delta_mul_kkt_weight=0.25,
     combine_ty=False,
     eq_mask=None
 ):
@@ -1536,10 +1556,11 @@ def tt_ipm(
     )
     status.trace_verbose = trace_verbose
     status.rounding = RoundingController(update_budget_growth=rounding_update_budget_growth)
-    delta_t_kkt_weight = float(delta_t_kkt_weight)
-    if not np.isfinite(delta_t_kkt_weight) or delta_t_kkt_weight <= 0:
-        raise ValueError("delta_t_kkt_weight must be finite and positive")
-    ineq_block_weights = np.array([1.0, 1.0, 1.0, delta_t_kkt_weight], dtype=np.float64)
+    delta_mul_kkt_weight = float(delta_mul_kkt_weight)
+    if not np.isfinite(delta_mul_kkt_weight) or delta_mul_kkt_weight <= 0:
+        raise ValueError("Lagrange multiplier KKT weight must be finite and positive")
+    multiplier_block_weights = np.array([delta_mul_kkt_weight, 1.0, 1.0], dtype=np.float64)
+    ineq_block_weights = np.array([delta_mul_kkt_weight, 1.0, 1.0, delta_mul_kkt_weight], dtype=np.float64)
     lag_maps = {key: tt_rank_reduce(value, eps=eps) for key, value in lag_maps.items()}
     obj_tt = tt_rank_reduce(obj_tt, eps=eps)
     lin_op_tt = tt_rank_reduce(lin_op_tt, eps=eps)
@@ -1590,7 +1611,8 @@ def tt_ipm(
         num_restarts=mals_restarts,
         inner_m=nwsp,
         verbose=solver_verbose,
-        strict_first_attempt=strict_first_attempt
+        strict_first_attempt=strict_first_attempt,
+        block_weights=multiplier_block_weights
     )
     solver_eq = lambda lhs, rhs, x0, nwsp, restriction, termination_tol, strict_first_attempt=False: tt_restarted_block_amen(
         lhs,
@@ -1600,10 +1622,11 @@ def tt_ipm(
         local_solver=_ipm_local_solver,
         op_tol=op_tol,
         termination_tol=termination_tol,
-        num_restarts=mals_restarts, 
+        num_restarts=mals_restarts,
         inner_m=nwsp,
         verbose=solver_verbose,
-        strict_first_attempt=strict_first_attempt
+        strict_first_attempt=strict_first_attempt,
+        block_weights=multiplier_block_weights
     )
     if status.ineq_status is IneqStatus.ACTIVE:
         solver = solver_ty if combine_ty else solver_ineq

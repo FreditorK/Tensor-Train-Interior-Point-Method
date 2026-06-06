@@ -132,23 +132,220 @@ cdef void cy_dgemv_row(
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.nonecheck(False)
+cpdef object dense_scaled_min_eig(
+        cnp.ndarray[double, ndim=2] A_in,
+        cnp.ndarray[double, ndim=2] D_in,
+        double scale
+):
+    cdef int n = A_in.shape[0]
+    cdef int work_size = 3 * n - 1
+    cdef cnp.ndarray[double, ndim=2] A_arr
+    cdef cnp.ndarray[double, ndim=2] D_arr
+    cdef cnp.ndarray[double, ndim=2] block_arr
+    cdef cnp.ndarray[double, ndim=1] eigvals_arr
+    cdef cnp.ndarray[double, ndim=1] work_arr
+    cdef cnp.ndarray[double, ndim=1] sol_arr
+    cdef cnp.ndarray[double, ndim=1] y_arr
+    cdef const double[:, ::1] A, D
+    cdef double[:, ::1] block
+    cdef double[::1] eigvals, work, sol, y
+    cdef double eig_val = 0.0
+    cdef double residual = 0.0
+    cdef double y_norm = 0.0
+    cdef double vec_norm = 0.0
+    cdef double entry
+    cdef int i, j, info
+    if n <= 0 or A_in.shape[1] != n or D_in.shape[0] != n or D_in.shape[1] != n:
+        return None
+    if work_size < 1:
+        work_size = 1
+    A_arr = np.ascontiguousarray(A_in, dtype=np.float64)
+    D_arr = np.ascontiguousarray(D_in, dtype=np.float64)
+    block_arr = np.empty((n, n), dtype=np.float64)
+    eigvals_arr = np.empty(n, dtype=np.float64)
+    work_arr = np.empty(work_size, dtype=np.float64)
+    sol_arr = np.empty(n, dtype=np.float64)
+    y_arr = np.empty(n, dtype=np.float64)
+    A = A_arr
+    D = D_arr
+    block = block_arr
+    eigvals = eigvals_arr
+    work = work_arr
+    sol = sol_arr
+    y = y_arr
+    with nogil:
+        for i in range(n):
+            for j in range(n):
+                block[i, j] = scale * A[i, j] + D[i, j]
+        info = _sym_smallest_eigh(block, eigvals, work, &eig_val)
+        if info == 0:
+            for i in range(n):
+                sol[i] = block[0, i]
+            cy_dgemv_row(A, sol, y, scale, 0.0)
+            cy_dgemv_row(D, sol, y, 1.0, 1.0)
+            for i in range(n):
+                entry = y[i] - eig_val * sol[i]
+                residual += entry * entry
+                y_norm += y[i] * y[i]
+                vec_norm += sol[i] * sol[i]
+    if info != 0:
+        return None
+    residual = sqrt(residual)
+    y_norm = sqrt(y_norm)
+    vec_norm = sqrt(vec_norm)
+    y_norm = max(y_norm, fabs(eig_val) * vec_norm, 1.0)
+    return eig_val, sol_arr.reshape(n, 1), residual / y_norm
+
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.nonecheck(False)
+cpdef tuple dense_schur_3block(
+        cnp.ndarray[double, ndim=2] A00_in,
+        cnp.ndarray[double, ndim=2] A01_in,
+        cnp.ndarray[double, ndim=2] A10_in,
+        cnp.ndarray[double, ndim=2] base_in,
+        cnp.ndarray[double, ndim=2] rhs_p_in,
+        cnp.ndarray[double, ndim=2] rhs_x_in
+):
+    cdef int n = A00_in.shape[0]
+    cdef int nrhs = rhs_p_in.shape[1]
+    cdef cnp.ndarray[double, ndim=2] A00_arr = np.ascontiguousarray(A00_in, dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] A01_arr = np.ascontiguousarray(A01_in, dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] A10_arr = np.ascontiguousarray(A10_in, dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] base_arr = np.ascontiguousarray(base_in, dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] rhs_p_arr = np.ascontiguousarray(rhs_p_in, dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] rhs_x_arr = np.ascontiguousarray(rhs_x_in, dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] tmp_arr = np.empty((n, n), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] lhs_arr = np.empty((n, n), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] b_arr = np.empty((n, nrhs), dtype=np.float64)
+    cdef const double[:, ::1] A00 = A00_arr
+    cdef const double[:, ::1] A01 = A01_arr
+    cdef const double[:, ::1] A10 = A10_arr
+    cdef const double[:, ::1] base = base_arr
+    cdef const double[:, ::1] rhs_p = rhs_p_arr
+    cdef const double[:, ::1] rhs_x = rhs_x_arr
+    cdef double[:, ::1] tmp = tmp_arr
+    cdef double[:, ::1] lhs = lhs_arr
+    cdef double[:, ::1] b = b_arr
+    cdef int i, j
+    with nogil:
+        cy_dgemm(A01, base, tmp)
+        cy_dgemm(tmp, A10, lhs)
+        for i in range(n):
+            for j in range(n):
+                lhs[i, j] += A00[i, j]
+        cy_dgemm(A01, rhs_x, b)
+        for i in range(n):
+            for j in range(nrhs):
+                b[i, j] = rhs_p[i, j] - b[i, j]
+    return lhs_arr, b_arr
+
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.nonecheck(False)
+cpdef tuple dense_schur_4block(
+        cnp.ndarray[double, ndim=2] A00_in,
+        cnp.ndarray[double, ndim=2] D33_in,
+        cnp.ndarray[double, ndim=2] Aeq_in,
+        cnp.ndarray[double, ndim=2] Top_in,
+        cnp.ndarray[double, ndim=2] Linv_rhs_in,
+        cnp.ndarray[double, ndim=2] Linv_X_in,
+        cnp.ndarray[double, ndim=1] inv_I_in,
+        cnp.ndarray[double, ndim=2] rhs_p_in,
+        cnp.ndarray[double, ndim=2] rhs_d_in,
+        cnp.ndarray[double, ndim=2] rhs_t_in
+):
+    cdef int n = A00_in.shape[0]
+    cdef cnp.ndarray[double, ndim=2] A00_arr = np.ascontiguousarray(A00_in, dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] D33_arr = np.ascontiguousarray(D33_in, dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] Aeq_arr = np.ascontiguousarray(Aeq_in, dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] Top_arr = np.ascontiguousarray(Top_in, dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] Linv_rhs_arr = np.ascontiguousarray(Linv_rhs_in, dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] Linv_X_arr = np.ascontiguousarray(Linv_X_in, dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=1] inv_arr = np.ascontiguousarray(inv_I_in, dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] rhs_p_arr = np.ascontiguousarray(rhs_p_in, dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] rhs_d_arr = np.ascontiguousarray(rhs_d_in, dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] rhs_t_arr = np.ascontiguousarray(rhs_t_in, dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] Aeq_T_arr = np.ascontiguousarray(Aeq_arr.T)
+    cdef cnp.ndarray[double, ndim=2] scaled_arr = np.empty((n, n), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] tmp_mat_arr = np.empty((n, n), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] tmp_rhs_arr = np.empty((n, 1), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] lhs_a_arr = np.empty((n, n), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] lhs_d_arr = np.empty((n, n), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] lhs_t_arr = np.empty((n, n), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] lhs_l_arr = np.empty((n, n), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] u_arr = np.empty((n, 1), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] v_arr = np.empty((n, 1), dtype=np.float64)
+    cdef const double[:, ::1] A00 = A00_arr
+    cdef const double[:, ::1] D33 = D33_arr
+    cdef const double[:, ::1] Aeq = Aeq_arr
+    cdef const double[:, ::1] Top = Top_arr
+    cdef const double[:, ::1] Linv_rhs = Linv_rhs_arr
+    cdef const double[:, ::1] Linv_X = Linv_X_arr
+    cdef const double[::1] inv = inv_arr
+    cdef const double[:, ::1] rhs_p = rhs_p_arr
+    cdef const double[:, ::1] rhs_d = rhs_d_arr
+    cdef const double[:, ::1] rhs_t = rhs_t_arr
+    cdef const double[:, ::1] Aeq_T = Aeq_T_arr
+    cdef double[:, ::1] scaled = scaled_arr
+    cdef double[:, ::1] tmp_mat = tmp_mat_arr
+    cdef double[:, ::1] tmp_rhs = tmp_rhs_arr
+    cdef double[:, ::1] lhs_a = lhs_a_arr
+    cdef double[:, ::1] lhs_d = lhs_d_arr
+    cdef double[:, ::1] lhs_t = lhs_t_arr
+    cdef double[:, ::1] lhs_l = lhs_l_arr
+    cdef double[:, ::1] u = u_arr
+    cdef double[:, ::1] v = v_arr
+    cdef int i, j
+    with nogil:
+        for i in range(n):
+            for j in range(n):
+                scaled[i, j] = Linv_X[i, j] * inv[j]
+        cy_dgemm(scaled, rhs_d, tmp_rhs)
+        for i in range(n):
+            tmp_rhs[i, 0] = Linv_rhs[i, 0] - tmp_rhs[i, 0]
+        cy_dgemm(Aeq, tmp_rhs, u)
+        cy_dgemm(Top, tmp_rhs, v)
+        for i in range(n):
+            u[i, 0] = rhs_p[i, 0] - u[i, 0]
+            v[i, 0] = rhs_t[i, 0] - v[i, 0]
+        cy_dgemm(Aeq, scaled, tmp_mat)
+        cy_dgemm(tmp_mat, Aeq_T, lhs_a)
+        for i in range(n):
+            for j in range(n):
+                lhs_a[i, j] += A00[i, j]
+        cy_dgemm(Top, Linv_X, lhs_d)
+        for i in range(n):
+            for j in range(n):
+                lhs_d[i, j] += D33[i, j]
+        cy_dgemm(Top, scaled, tmp_mat)
+        cy_dgemm(tmp_mat, Aeq_T, lhs_t)
+        cy_dgemm(Aeq, Linv_X, lhs_l)
+    return lhs_a_arr, lhs_d_arr, lhs_t_arr, lhs_l_arr, u_arr, v_arr
+
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.nonecheck(False)
 @cython.inline
 cdef void _transpose_reshape_step2(
     const double[:, ::1] src_2d, # Input: (r* n, R*S)
     double[:, ::1] dest, # Output: (r * R, n * S)
-    int r, 
-    int R, 
-    int n, 
+    int r,
+    int R,
+    int n,
     int S
 ) noexcept nogil:
     cdef int i, j, k
     cdef size_t block_size = S * sizeof(double)
-    
+
     for i in range(r):
         for j in range(R):
             for k in range(n):
                 memcpy(
-                    &dest[i * R + j, k * S], 
+                    &dest[i * R + j, k * S],
                     &src_2d[i * n + k, j * S],
                     block_size
                 )
@@ -193,7 +390,7 @@ cdef void _transpose_reshape_multiply_inplace(
     int R
 ) noexcept nogil:
     cdef int i, j, k
-    
+
     for i in range(r):
         for j in range(n):
             for k in range(R):
@@ -1041,8 +1238,9 @@ cpdef cnp.ndarray[double, ndim=3] matmat_phi_bck(
     cdef cnp.ndarray[double, ndim=4] x_by_mn_arr = np.ascontiguousarray(np.transpose(x_core, (1, 2, 0, 3)))
     cdef cnp.ndarray[double, ndim=2] T_arr = np.empty((rdim, Adim * Bdim), dtype=np.float64)
     cdef cnp.ndarray[double, ndim=2] T_by_rA_arr = T_arr.reshape((rdim * Adim, Bdim))
-    cdef cnp.ndarray[double, ndim=1] tmp_vec_arr = np.empty(rdim * Adim, dtype=np.float64)
-    cdef cnp.ndarray[double, ndim=2] tmp_mat_arr = tmp_vec_arr.reshape((rdim, Adim))
+    cdef cnp.ndarray[double, ndim=2] D_T_arr = np.empty((Bdim, bdim), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] tmp_all_arr = np.empty((rdim * Adim, bdim), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] tmp_mat_arr = np.empty((rdim, Adim), dtype=np.float64)
     cdef cnp.ndarray[double, ndim=2] small_arr = np.empty((rdim, adim), dtype=np.float64)
     cdef cnp.ndarray[double, ndim=3] out_arr = np.zeros((rdim, adim, bdim), dtype=np.float64)
     cdef const double[:, ::1] Phi_flat = Phi_flat_arr
@@ -1051,18 +1249,25 @@ cpdef cnp.ndarray[double, ndim=3] matmat_phi_bck(
     cdef const double[:, :, :, ::1] x_by_mn = x_by_mn_arr
     cdef double[:, ::1] T = T_arr
     cdef double[:, ::1] T_by_rA = T_by_rA_arr
-    cdef double[::1] tmp_vec = tmp_vec_arr
+    cdef double[:, ::1] D_T = D_T_arr
+    cdef double[:, ::1] tmp_all = tmp_all_arr
     cdef double[:, ::1] tmp_mat = tmp_mat_arr
     cdef double[:, ::1] small = small_arr
     cdef double[:, :, ::1] out = out_arr
-    cdef int mi, ni, ki, bi, ri, ai
+    cdef int mi, ni, ki, bi, ri, ai, Ai, Bi
     with nogil:
         for mi in range(mdim):
             for ni in range(ndim):
                 cy_dgemm(x_by_mn[mi, ni, :, :], Phi_flat, T)
                 for ki in range(kdim):
+                    for Bi in range(Bdim):
+                        for bi in range(bdim):
+                            D_T[Bi, bi] = D_by_kn[ki, ni, bi, Bi]
+                    cy_dgemm(T_by_rA, D_T, tmp_all)
                     for bi in range(bdim):
-                        cy_dgemv_row(T_by_rA, D_by_kn[ki, ni, bi, :], tmp_vec)
+                        for ri in range(rdim):
+                            for Ai in range(Adim):
+                                tmp_mat[ri, Ai] = tmp_all[ri * Adim + Ai, bi]
                         cy_dgemm(tmp_mat, A_by_mk_T[mi, ki, :, :], small)
                         for ri in range(rdim):
                             for ai in range(adim):
@@ -1093,6 +1298,8 @@ cpdef cnp.ndarray[double, ndim=3] matmat_phi_fwd(
     cdef cnp.ndarray[double, ndim=4] D_by_kn_arr = np.ascontiguousarray(np.transpose(D_k, (1, 2, 0, 3)))
     cdef cnp.ndarray[double, ndim=4] x_by_mn_T_arr = np.ascontiguousarray(np.transpose(x_core, (1, 2, 3, 0)))
     cdef cnp.ndarray[double, ndim=2] T_arr = np.empty((Rdim, adim * bdim), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] T_ba_arr = np.empty((Rdim * bdim, adim), dtype=np.float64)
+    cdef cnp.ndarray[double, ndim=2] U_all_arr = np.empty((Rdim * bdim, Adim), dtype=np.float64)
     cdef cnp.ndarray[double, ndim=2] U_arr = np.empty((Rdim, bdim), dtype=np.float64)
     cdef cnp.ndarray[double, ndim=2] small_arr = np.empty((Rdim, Bdim), dtype=np.float64)
     cdef cnp.ndarray[double, ndim=3] out_arr = np.zeros((Rdim, Adim, Bdim), dtype=np.float64)
@@ -1101,23 +1308,26 @@ cpdef cnp.ndarray[double, ndim=3] matmat_phi_fwd(
     cdef const double[:, :, :, ::1] D_by_kn = D_by_kn_arr
     cdef const double[:, :, :, ::1] x_by_mn_T = x_by_mn_T_arr
     cdef double[:, ::1] T = T_arr
+    cdef double[:, ::1] T_ba = T_ba_arr
+    cdef double[:, ::1] U_all = U_all_arr
     cdef double[:, ::1] U = U_arr
     cdef double[:, ::1] small = small_arr
     cdef double[:, :, ::1] out = out_arr
     cdef int mi, ni, ki, Ai, ai, bi, Ri, Bi
-    cdef double val
     with nogil:
         for mi in range(mdim):
             for ni in range(ndim):
                 cy_dgemm(x_by_mn_T[mi, ni, :, :], left_flat, T)
+                for Ri in range(Rdim):
+                    for bi in range(bdim):
+                        for ai in range(adim):
+                            T_ba[Ri * bdim + bi, ai] = T[Ri, ai * bdim + bi]
                 for ki in range(kdim):
+                    cy_dgemm(T_ba, A_by_mk[mi, ki, :, :], U_all)
                     for Ai in range(Adim):
                         for Ri in range(Rdim):
                             for bi in range(bdim):
-                                val = 0.0
-                                for ai in range(adim):
-                                    val += T[Ri, ai * bdim + bi] * A_by_mk[mi, ki, ai, Ai]
-                                U[Ri, bi] = val
+                                U[Ri, bi] = U_all[Ri * bdim + bi, Ai]
                         cy_dgemm(U, D_by_kn[ki, ni, :, :], small)
                         for Ri in range(Rdim):
                             for Bi in range(Bdim):
@@ -1444,7 +1654,7 @@ cdef class MatVecWrapper(BaseMatVec):
         self.A_22_workspace2 = np.empty((r * R, block_A_k_22.shape[0] * n)) # rL x sm
         self.A_22_workspace2_2 = np.empty((R*n, r*block_A_k_22.shape[0]))
 
-        
+
         self.XAX_kp1_00 = np.ascontiguousarray(XAX_kp1_00.reshape(-1, R).T) # R x LS
         self.XAX_kp1_01 = np.ascontiguousarray(XAX_kp1_01.reshape(-1, R).T)
         self.XAX_kp1_01T = np.ascontiguousarray(np.transpose(XAX_kp1_01,  axes=(2, 1, 0)).reshape(-1, R).T)
@@ -1478,33 +1688,33 @@ cdef class MatVecWrapper(BaseMatVec):
             memcpy(&self.x_reshaped_0[0, 0], &x_reshaped_view[0, 0, 0], self.block_size)
             memcpy(&self.x_reshaped_1[0, 0], &x_reshaped_view[1, 0, 0], self.block_size)
             einsum(
-                self.XAX_k_00, self.block_A_k_00, self.XAX_kp1_00, 
-                self.x_reshaped_0, self.result0, 
+                self.XAX_k_00, self.block_A_k_00, self.XAX_kp1_00,
+                self.x_reshaped_0, self.result0,
                 self.A_00_workspace1, self.A_00_workspace1_2, self.A_00_workspace2, self.A_00_workspace2_2,
                 self.r, self.n, self.R, 1.0, 0.0
                 )
             einsum(
-                self.XAX_k_01, self.block_A_k_01, self.XAX_kp1_01, 
-                self.x_reshaped_1, self.result0, 
+                self.XAX_k_01, self.block_A_k_01, self.XAX_kp1_01,
+                self.x_reshaped_1, self.result0,
                 self.A_01_workspace1, self.A_01_workspace1_2, self.A_01_workspace2, self.A_01_workspace2_2,
                 self.r, self.n, self.R, 1.0, 1.0
                 )
             einsum(
-                self.XAX_k_21, self.block_A_k_21, self.XAX_kp1_21, 
-                self.x_reshaped_1, self.result1, 
+                self.XAX_k_21, self.block_A_k_21, self.XAX_kp1_21,
+                self.x_reshaped_1, self.result1,
                 self.A_21_workspace1, self.A_21_workspace1_2, self.A_21_workspace2, self.A_21_workspace2_2,
                 self.r, self.n, self.R, 1.0, 0.0
                 )
             einsum(
-                self.XAX_k_01T, self.block_A_k_01T, self.XAX_kp1_01T, 
-                self.x_reshaped_0, self.temp, 
+                self.XAX_k_01T, self.block_A_k_01T, self.XAX_kp1_01T,
+                self.x_reshaped_0, self.temp,
                 self.A_01_workspace1, self.A_01_workspace1_2, self.A_01_workspace2, self.A_01_workspace2_2,
                 self.r, self.n, self.R, 1.0, 0.0
                 )
             _transpose_reshape_multiply_inplace(self.temp, self.x_reshaped_0, self.inv_I, self.r, self.n, self.R)
             einsum(
-                self.XAX_k_22, self.block_A_k_22, self.XAX_kp1_22, 
-                self.x_reshaped_0, self.result1, 
+                self.XAX_k_22, self.block_A_k_22, self.XAX_kp1_22,
+                self.x_reshaped_0, self.result1,
                 self.A_22_workspace1, self.A_22_workspace1_2, self.A_22_workspace2, self.A_22_workspace2_2,
                 self.r, self.n, self.R, -1.0,  1.0
                 )
@@ -1527,33 +1737,33 @@ cdef class MatVecWrapper(BaseMatVec):
             memcpy(&self.x_reshaped_0[0, 0], &x_reshaped_view[0, 0, 0], self.block_size)
             memcpy(&self.x_reshaped_1[0, 0], &x_reshaped_view[1, 0, 0], self.block_size)
             einsum(
-                self.XAX_k_00, self.block_A_k_00, self.XAX_kp1_00, 
-                self.x_reshaped_0, self.result0, 
+                self.XAX_k_00, self.block_A_k_00, self.XAX_kp1_00,
+                self.x_reshaped_0, self.result0,
                 self.A_00_workspace1, self.A_00_workspace1_2, self.A_00_workspace2, self.A_00_workspace2_2,
                 self.r, self.n, self.R, 1.0, 0.0
                 )
             einsum(
-                self.XAX_k_21, self.block_A_k_21, self.XAX_kp1_21, 
-                self.x_reshaped_1, self.result1, 
+                self.XAX_k_21, self.block_A_k_21, self.XAX_kp1_21,
+                self.x_reshaped_1, self.result1,
                 self.A_21_workspace1, self.A_21_workspace1_2, self.A_21_workspace2, self.A_21_workspace2_2,
                 self.r, self.n, self.R, 1.0, 0.0
                 )
             einsum(
-                self.XAX_k_01T, self.block_A_k_01T, self.XAX_kp1_01T, 
-                self.x_reshaped_0, self.result1, 
+                self.XAX_k_01T, self.block_A_k_01T, self.XAX_kp1_01T,
+                self.x_reshaped_0, self.result1,
                 self.A_01_workspace1, self.A_01_workspace1_2, self.A_01_workspace2, self.A_01_workspace2_2,
                 self.r, self.n, self.R, 1.0, 1.0
                 )
             einsum(
-                self.XAX_k_22, self.block_A_k_22, self.XAX_kp1_22, 
-                self.x_reshaped_1, self.temp, 
+                self.XAX_k_22, self.block_A_k_22, self.XAX_kp1_22,
+                self.x_reshaped_1, self.temp,
                 self.A_22_workspace1, self.A_22_workspace1_2, self.A_22_workspace2, self.A_22_workspace2_2,
                 self.r, self.n, self.R, 1.0, 0.0
                 )
             _transpose_reshape_multiply_inplace(self.temp, self.x_reshaped_1, self.inv_I, self.r, self.n, self.R)
             einsum(
-                self.XAX_k_01, self.block_A_k_01, self.XAX_kp1_01, 
-                self.x_reshaped_1, self.result0, 
+                self.XAX_k_01, self.block_A_k_01, self.XAX_kp1_01,
+                self.x_reshaped_1, self.result0,
                 self.A_01_workspace1, self.A_01_workspace1_2, self.A_01_workspace2, self.A_01_workspace2_2,
                 self.r, self.n, self.R, -1.0,  1.0
                 )
@@ -1763,7 +1973,7 @@ cdef class IneqMatVecWrapper(BaseMatVec):
         self.A_33_workspace1_2 = np.empty((r * R, n * block_A_k_33.shape[3]))
         self.A_33_workspace2 = np.empty((r * R, block_A_k_33.shape[0] * n)) # rL x sm
         self.A_33_workspace2_2 = np.empty((R*n, r*block_A_k_33.shape[0]))
-        
+
         self.XAX_kp1_00 = np.ascontiguousarray(XAX_kp1_00.reshape(-1, R).T)
         self.XAX_kp1_01 = np.ascontiguousarray(XAX_kp1_01.reshape(-1, R).T)
         self.XAX_kp1_01T = np.ascontiguousarray(np.transpose(XAX_kp1_01,  axes=(2, 1, 0)).reshape(-1, R).T)
@@ -1803,13 +2013,13 @@ cdef class IneqMatVecWrapper(BaseMatVec):
 
             einsum(self.XAX_k_00, self.block_A_k_00, self.XAX_kp1_00, self.x_reshaped_0, self.result0, self.A_00_workspace1, self.A_00_workspace1_2, self.A_00_workspace2, self.A_00_workspace2_2, self.r, self.n, self.R, 1.0, 0.0)
             einsum(self.XAX_k_01, self.block_A_k_01, self.XAX_kp1_01, self.x_reshaped_1, self.result0, self.A_01_workspace1, self.A_01_workspace1_2, self.A_01_workspace2, self.A_01_workspace2_2, self.r, self.n, self.R, 1.0, 1.0)
-            
+
             einsum(self.XAX_k_21, self.block_A_k_21, self.XAX_kp1_21, self.x_reshaped_1, self.result1, self.A_21_workspace1, self.A_21_workspace1_2, self.A_21_workspace2, self.A_21_workspace2_2, self.r, self.n, self.R, 1.0, 0.0)
             einsum(self.XAX_k_01T, self.block_A_k_01T, self.XAX_kp1_01T, self.x_reshaped_0, self.temp, self.A_01_workspace1, self.A_01_workspace1_2, self.A_01_workspace2, self.A_01_workspace2_2, self.r, self.n, self.R, 1.0, 0.0)
             _transpose_reshape_multiply_inplace(self.temp, self.x_reshaped_0, self.inv_I, self.r, self.n, self.R)
             cy_maxpy(self.x_reshaped_2, self.x_reshaped_0)
             einsum(self.XAX_k_22, self.block_A_k_22, self.XAX_kp1_22, self.x_reshaped_0, self.result1, self.A_22_workspace1, self.A_22_workspace1_2, self.A_22_workspace2, self.A_22_workspace2_2, self.r, self.n, self.R, -1.0, 1.0)
-            
+
             einsum(self.XAX_k_31, self.block_A_k_31, self.XAX_kp1_31, self.x_reshaped_1, self.result2, self.A_31_workspace1, self.A_31_workspace1_2, self.A_31_workspace2, self.A_31_workspace2_2, self.r, self.n, self.R, 1.0, 0.0)
             einsum(self.XAX_k_33, self.block_A_k_33, self.XAX_kp1_33, self.x_reshaped_2, self.result2, self.A_33_workspace1, self.A_33_workspace1_2, self.A_33_workspace2, self.A_33_workspace2_2, self.r, self.n, self.R, 1.0, 1.0)
         pack_results3(self.result0, self.result1, self.result2, out_view, self.R, self.n, self.r)
