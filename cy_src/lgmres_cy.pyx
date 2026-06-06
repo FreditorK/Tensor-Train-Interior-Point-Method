@@ -206,6 +206,173 @@ cdef class BaseMatVec:
     cpdef matvec_into(self, cnp.ndarray[double, ndim=1] x_core, cnp.ndarray[double, ndim=1] out):
         raise NotImplementedError("BaseMatVec.matvec_into must be implemented by subclass")
 
+
+cdef class DiagTwoCoreBlockWrapper:
+    cdef const double[:, :, ::1] XAX, A0, A1, XAX2
+    cdef int ldim, sdim, rdim, n0, kdim, n1, Sdim, Ldim, Rdim
+    cdef int out_size, in_size
+
+    def __init__(
+            self,
+            cnp.ndarray[double, ndim=3] XAX,
+            cnp.ndarray[double, ndim=3] A0,
+            cnp.ndarray[double, ndim=3] A1,
+            cnp.ndarray[double, ndim=3] XAX2
+    ):
+        self.XAX = np.ascontiguousarray(XAX)
+        self.A0 = np.ascontiguousarray(A0)
+        self.A1 = np.ascontiguousarray(A1)
+        self.XAX2 = np.ascontiguousarray(XAX2)
+        self.ldim = XAX.shape[0]
+        self.sdim = XAX.shape[1]
+        self.rdim = XAX.shape[2]
+        self.n0 = A0.shape[1]
+        self.kdim = A0.shape[2]
+        self.n1 = A1.shape[1]
+        self.Sdim = A1.shape[2]
+        self.Ldim = XAX2.shape[0]
+        self.Rdim = XAX2.shape[2]
+        self.out_size = self.ldim * self.n0 * self.n1 * self.Ldim
+        self.in_size = self.rdim * self.n0 * self.n1 * self.Rdim
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.nonecheck(False)
+    cpdef cnp.ndarray[double, ndim=2] block(self, int n, int p):
+        cdef cnp.ndarray[double, ndim=2] out_arr = np.empty(
+            (self.ldim * self.Ldim, self.rdim * self.Rdim), dtype=np.float64
+        )
+        cdef double[:, ::1] out = out_arr
+        cdef const double[:, :, ::1] XAX = self.XAX
+        cdef const double[:, :, ::1] A0 = self.A0
+        cdef const double[:, :, ::1] A1 = self.A1
+        cdef const double[:, :, ::1] XAX2 = self.XAX2
+        cdef int li, Li, ri, Ri, s, k, S
+        cdef double acc
+        with nogil:
+            for li in range(self.ldim):
+                for Li in range(self.Ldim):
+                    for ri in range(self.rdim):
+                        for Ri in range(self.Rdim):
+                            acc = 0.0
+                            for s in range(self.sdim):
+                                for k in range(self.kdim):
+                                    for S in range(self.Sdim):
+                                        acc += XAX[li, s, ri] * A0[s, n, k] * A1[k, p, S] * XAX2[Li, S, Ri]
+                            out[li * self.Ldim + Li, ri * self.Rdim + Ri] = acc
+        return out_arr
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.nonecheck(False)
+    cpdef cnp.ndarray[double, ndim=1] matvec(self, cnp.ndarray[double, ndim=1] x_vec):
+        cdef cnp.ndarray[double, ndim=1] x_arr = np.ascontiguousarray(x_vec, dtype=np.float64)
+        cdef cnp.ndarray[double, ndim=1] out_arr = np.zeros(self.out_size, dtype=np.float64)
+        cdef const double[::1] x = x_arr
+        cdef double[::1] out = out_arr
+        cdef const double[:, :, ::1] XAX = self.XAX
+        cdef const double[:, :, ::1] A0 = self.A0
+        cdef const double[:, :, ::1] A1 = self.A1
+        cdef const double[:, :, ::1] XAX2 = self.XAX2
+        cdef int li, Li, ri, Ri, s, k, S, n, p
+        cdef int out_idx, in_idx
+        cdef double coeff
+        with nogil:
+            for n in range(self.n0):
+                for p in range(self.n1):
+                    for li in range(self.ldim):
+                        for Li in range(self.Ldim):
+                            out_idx = ((li * self.n0 + n) * self.n1 + p) * self.Ldim + Li
+                            for ri in range(self.rdim):
+                                for Ri in range(self.Rdim):
+                                    in_idx = ((ri * self.n0 + n) * self.n1 + p) * self.Rdim + Ri
+                                    coeff = 0.0
+                                    for s in range(self.sdim):
+                                        for k in range(self.kdim):
+                                            for S in range(self.Sdim):
+                                                coeff += XAX[li, s, ri] * A0[s, n, k] * A1[k, p, S] * XAX2[Li, S, Ri]
+                                    out[out_idx] += coeff * x[in_idx]
+        return out_arr
+
+
+cdef class DiagOneCoreBlockWrapper:
+    cdef const double[:, :, ::1] XAX, A0, XAX1
+    cdef int ldim, sdim, rdim, n0, Sdim, Ldim, Rdim
+    cdef int out_size, in_size
+
+    def __init__(
+            self,
+            cnp.ndarray[double, ndim=3] XAX,
+            cnp.ndarray[double, ndim=3] A0,
+            cnp.ndarray[double, ndim=3] XAX1
+    ):
+        self.XAX = np.ascontiguousarray(XAX)
+        self.A0 = np.ascontiguousarray(A0)
+        self.XAX1 = np.ascontiguousarray(XAX1)
+        self.ldim = XAX.shape[0]
+        self.sdim = XAX.shape[1]
+        self.rdim = XAX.shape[2]
+        self.n0 = A0.shape[1]
+        self.Sdim = A0.shape[2]
+        self.Ldim = XAX1.shape[0]
+        self.Rdim = XAX1.shape[2]
+        self.out_size = self.ldim * self.n0 * self.Ldim
+        self.in_size = self.rdim * self.n0 * self.Rdim
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.nonecheck(False)
+    cpdef cnp.ndarray[double, ndim=2] block(self, int n):
+        cdef cnp.ndarray[double, ndim=2] out_arr = np.empty(
+            (self.ldim * self.Ldim, self.rdim * self.Rdim), dtype=np.float64
+        )
+        cdef double[:, ::1] out = out_arr
+        cdef const double[:, :, ::1] XAX = self.XAX
+        cdef const double[:, :, ::1] A0 = self.A0
+        cdef const double[:, :, ::1] XAX1 = self.XAX1
+        cdef int li, Li, ri, Ri, s, S
+        cdef double acc
+        with nogil:
+            for li in range(self.ldim):
+                for Li in range(self.Ldim):
+                    for ri in range(self.rdim):
+                        for Ri in range(self.Rdim):
+                            acc = 0.0
+                            for s in range(self.sdim):
+                                for S in range(self.Sdim):
+                                    acc += XAX[li, s, ri] * A0[s, n, S] * XAX1[Li, S, Ri]
+                            out[li * self.Ldim + Li, ri * self.Rdim + Ri] = acc
+        return out_arr
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.nonecheck(False)
+    cpdef cnp.ndarray[double, ndim=1] matvec(self, cnp.ndarray[double, ndim=1] x_vec):
+        cdef cnp.ndarray[double, ndim=1] x_arr = np.ascontiguousarray(x_vec, dtype=np.float64)
+        cdef cnp.ndarray[double, ndim=1] out_arr = np.zeros(self.out_size, dtype=np.float64)
+        cdef const double[::1] x = x_arr
+        cdef double[::1] out = out_arr
+        cdef const double[:, :, ::1] XAX = self.XAX
+        cdef const double[:, :, ::1] A0 = self.A0
+        cdef const double[:, :, ::1] XAX1 = self.XAX1
+        cdef int li, Li, ri, Ri, s, S, n
+        cdef int out_idx, in_idx
+        cdef double coeff
+        with nogil:
+            for n in range(self.n0):
+                for li in range(self.ldim):
+                    for Li in range(self.Ldim):
+                        out_idx = (li * self.n0 + n) * self.Ldim + Li
+                        for ri in range(self.rdim):
+                            for Ri in range(self.Rdim):
+                                in_idx = (ri * self.n0 + n) * self.Rdim + Ri
+                                coeff = 0.0
+                                for s in range(self.sdim):
+                                    for S in range(self.Sdim):
+                                        coeff += XAX[li, s, ri] * A0[s, n, S] * XAX1[Li, S, Ri]
+                                out[out_idx] += coeff * x[in_idx]
+        return out_arr
+
 cdef class MatVecWrapper(BaseMatVec):
     cdef double[:,  ::1] result0, result1, temp, x_reshaped_0, x_reshaped_1
     cdef object flat_result_arr

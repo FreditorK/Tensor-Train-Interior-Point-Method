@@ -7,6 +7,7 @@ import numpy as np
 sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
+from cy_src.lgmres_cy import DiagOneCoreBlockWrapper, DiagTwoCoreBlockWrapper
 from opt_einsum import contract as einsum
 from sksparse.cholmod import cholesky as sparse_cholesky
 
@@ -946,6 +947,102 @@ def _lobpcg_min(op, x0, tol, maxiter):
         return scp.sparse.linalg.lobpcg(op, X=x0, tol=tol, largest=False, maxiter=maxiter)
 
 
+def _diag_core_entries(A_k):
+    if A_k.ndim != 4 or A_k.shape[1] != A_k.shape[2]:
+        return None
+    n = A_k.shape[1]
+    diag = np.diagonal(A_k, axis1=1, axis2=2).transpose(0, 2, 1).copy()
+    off_norm = np.linalg.norm(A_k[:, ~np.eye(n, dtype=bool), :])
+    if off_norm > 1e-10 * max(np.linalg.norm(diag), 1.0):
+        return None
+    return diag
+
+
+def _smallest_block_eig(block, warm_start, eps):
+    block = 0.5 * (block + block.T)
+    m = block.shape[0]
+    if m == 1:
+        return float(block[0, 0]), np.array([[1.0]])
+    if m <= 128:
+        vals, vecs = scp.linalg.eigh(block, check_finite=False, overwrite_a=True)
+        idx = int(np.argmin(vals))
+        return float(vals[idx]), vecs[:, idx:idx + 1]
+    try:
+        val, vec = scp.sparse.linalg.eigsh(
+            scp.sparse.csr_matrix(block), tol=eps, k=1, which="SA",
+            ncv=_eigsh_ncv(m), maxiter=_eigsh_maxiter(m), v0=_eigsh_v0(warm_start)
+        )
+        return _eig_scalar(val), vec.reshape(-1, 1)
+    except Exception as e:
+        _print_attention(e)
+        vec = _normalised_column(warm_start, m)
+        return _rayleigh_value(lambda x: block @ x, vec), vec
+
+
+def _prefer_block(val, warm_norm, best_val, best_warm_norm, eps):
+    if best_val is None:
+        return True
+    scale = max(abs(val), abs(best_val), 1.0)
+    tol = max(10 * eps, 1e-12) * scale
+    return val < best_val - tol or (abs(val - best_val) <= tol and warm_norm > best_warm_norm)
+
+
+def _diag_two_core_local_solve(previous_solution, x_shape, XAX_k, A_k, A_kp1, XAX_k2, eps):
+    A_diag_k = _diag_core_entries(A_k)
+    A_diag_kp1 = _diag_core_entries(A_kp1)
+    if A_diag_k is None or A_diag_kp1 is None:
+        return None
+
+    helper = DiagTwoCoreBlockWrapper(XAX_k, A_diag_k, A_diag_kp1, XAX_k2)
+    x = previous_solution.reshape(*x_shape)
+    solution = np.zeros_like(x)
+    best_val = None
+    best_vec = None
+    best_pos = None
+    best_warm_norm = -np.inf
+    for n in range(x_shape[1]):
+        for p in range(x_shape[2]):
+            warm = x[:, n, p, :].reshape(-1, 1)
+            val, vec = _smallest_block_eig(helper.block(n, p), warm, eps)
+            warm_norm = np.linalg.norm(warm)
+            if _prefer_block(val, warm_norm, best_val, best_warm_norm, eps):
+                best_val, best_vec, best_pos, best_warm_norm = val, vec, (n, p), warm_norm
+
+    n, p = best_pos
+    solution[:, n, p, :] = best_vec.reshape(x_shape[0], x_shape[3])
+    solution_now = solution.reshape(-1, 1)
+    matvec = lambda z: helper.matvec(np.asarray(z, dtype=np.float64).reshape(-1)).reshape(-1, 1)
+    old_res = np.linalg.norm(best_val * previous_solution - matvec(previous_solution))
+    residual_vec = _ritz_residual_vec(matvec, solution_now, best_val)
+    return solution_now, best_val, old_res, residual_vec
+
+
+def _diag_one_core_local_solve(previous_solution, x_shape, XAX_k, A_k, XAX_k1, eps):
+    A_diag_k = _diag_core_entries(A_k)
+    if A_diag_k is None:
+        return None
+
+    helper = DiagOneCoreBlockWrapper(XAX_k, A_diag_k, XAX_k1)
+    x = previous_solution.reshape(*x_shape)
+    solution = np.zeros_like(x)
+    best_val = None
+    best_vec = None
+    best_n = None
+    best_warm_norm = -np.inf
+    for n in range(x_shape[1]):
+        warm = x[:, n, :].reshape(-1, 1)
+        val, vec = _smallest_block_eig(helper.block(n), warm, eps)
+        warm_norm = np.linalg.norm(warm)
+        if _prefer_block(val, warm_norm, best_val, best_warm_norm, eps):
+            best_val, best_vec, best_n, best_warm_norm = val, vec, n, warm_norm
+
+    solution[:, best_n, :] = best_vec.reshape(x_shape[0], x_shape[2])
+    solution_now = solution.reshape(-1, 1)
+    matvec = lambda z: helper.matvec(np.asarray(z, dtype=np.float64).reshape(-1)).reshape(-1, 1)
+    old_res = np.linalg.norm(best_val * previous_solution - matvec(previous_solution))
+    return solution_now, old_res
+
+
 def _eigen_residual_stalled(prev_res, res, tol):
     return (
         np.isfinite(prev_res)
@@ -1588,7 +1685,10 @@ def _eigen_local_solve(
     m = np.prod(prev_sol_shape)
     previous_solution = previous_solution.reshape(-1, 1)
     residual_vec = None
-    if previous_solution.shape[0]*previous_solution.shape[-1] <= size_limit:
+    diag_result = _diag_two_core_local_solve(previous_solution, prev_sol_shape, XAX_k, A_k, A_kp1, XAX_k2, eps)
+    if diag_result is not None:
+        solution_now, eig_val, old_res, residual_vec = diag_result
+    elif previous_solution.shape[0]*previous_solution.shape[-1] <= size_limit:
         A = scp.sparse.csr_matrix(cached_einsum("lsr, smnk, kptS, LSR->lmpLrntR", XAX_k, A_k, A_kp1, XAX_k2).reshape(m, m))
         A = 0.5*(A.T + A)
         try:
@@ -1638,8 +1738,14 @@ def _eigen_local_solve(
 
 
 def _eigen_local_solve_last(previous_solution, XAX_k, A_k, XAX_k1, m, size_limit, eps):
+    x_shape = previous_solution.shape
+    previous_solution_vec = previous_solution.reshape(-1, 1)
+    diag_result = _diag_one_core_local_solve(previous_solution_vec, x_shape, XAX_k, A_k, XAX_k1, eps)
+    if diag_result is not None:
+        return diag_result
+
     if previous_solution.shape[0]*previous_solution.shape[-1] <= size_limit:
-        previous_solution = previous_solution.reshape(-1, 1)
+        previous_solution = previous_solution_vec
         A = scp.sparse.csr_matrix(cached_einsum("lsr,smnS,LSR->lmLrnR", XAX_k, A_k, XAX_k1).reshape(m, m))
         try:
             eig_val, solution_now = scp.sparse.linalg.eigsh(A, tol=eps, k=1, which="SA", ncv=_eigsh_ncv(m), maxiter=_eigsh_maxiter(m), v0=_eigsh_v0(previous_solution))
@@ -1667,8 +1773,7 @@ def _eigen_local_solve_last(previous_solution, XAX_k, A_k, XAX_k1, m, size_limit
         old_res = np.linalg.norm(eig_val * previous_solution - A @ previous_solution)
         return solution_now, old_res
 
-    x_shape = previous_solution.shape
-    previous_solution = previous_solution.reshape(-1, 1)
+    previous_solution = previous_solution_vec
     mat_vec_A = _sym_one_core_matvec(XAX_k, A_k, XAX_k1, x_shape)
     A_op = scp.sparse.linalg.LinearOperator((m, m), matvec=mat_vec_A)
     try:
