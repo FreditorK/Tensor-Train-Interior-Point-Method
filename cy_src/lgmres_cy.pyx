@@ -226,6 +226,29 @@ cdef void pack_result(double[:, :] result, double[:] flat_result, int R, int n, 
                 flat_result[idx] = result[k * n + j, i]
 
 
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.nonecheck(False)
+@cython.inline
+cdef void pack_result_shift(
+        double[:, :] result,
+        double[:] flat_result,
+        const double[:] x,
+        int R,
+        int n,
+        int r,
+        double shift
+) noexcept nogil:
+    cdef int i, j, k
+    cdef int idx
+
+    for i in range(r):
+        for j in range(n):
+            for k in range(R):
+                idx = (i * n + j) * R + k
+                flat_result[idx] = result[k * n + j, i] + shift * x[idx]
+
+
 cdef class BaseMatVec:
 
     @cython.boundscheck(False)
@@ -420,13 +443,12 @@ cdef class DiagOneCoreBlockWrapper:
 
 
 cdef class SymOneCoreMatVecWrapper:
-    cdef double[:, ::1] result, x_reshaped
+    cdef double[:, ::1] result
     cdef object flat_result_arr
     cdef double[:] flat_result
     cdef const double[:, ::1] XAX, XAX_T, block_A, block_A_T, XAX1, XAX1_T
     cdef double[:, ::1] workspace1, workspace1_2, workspace2, workspace2_2
     cdef int r, n, R, total_size
-    cdef size_t block_size
     cdef double diagonal_shift
 
     def __init__(
@@ -455,9 +477,7 @@ cdef class SymOneCoreMatVecWrapper:
         self.R = R
         self.diagonal_shift = diagonal_shift
         self.total_size = r * n * R
-        self.block_size = self.total_size * sizeof(double)
         self.result = np.empty((R * n, r), dtype=np.float64)
-        self.x_reshaped = np.empty((r * n, R), dtype=np.float64)
         self.workspace1 = np.empty((r * n, R * A_k.shape[3]), dtype=np.float64)
         self.workspace1_2 = np.empty((r * R, n * A_k.shape[3]), dtype=np.float64)
         self.workspace2 = np.empty((r * R, A_k.shape[0] * n), dtype=np.float64)
@@ -469,28 +489,26 @@ cdef class SymOneCoreMatVecWrapper:
     @cython.wraparound(False)
     @cython.nonecheck(False)
     cpdef cnp.ndarray[double, ndim=1] matvec(self, cnp.ndarray[double, ndim=1] x_core):
-        cdef const double[:, :] x_view = x_core.reshape(self.r * self.n, self.R)
+        cdef const double[:, ::1] x_view = x_core.reshape(self.r * self.n, self.R)
         cdef const double[:] x_flat = x_core
-        cdef int i
 
         with nogil:
-            memcpy(&self.x_reshaped[0, 0], &x_view[0, 0], self.block_size)
             einsum(
                 self.XAX, self.block_A, self.XAX1,
-                self.x_reshaped, self.result,
+                x_view, self.result,
                 self.workspace1, self.workspace1_2, self.workspace2, self.workspace2_2,
                 self.r, self.n, self.R, 0.5, 0.0
             )
             einsum(
                 self.XAX_T, self.block_A_T, self.XAX1_T,
-                self.x_reshaped, self.result,
+                x_view, self.result,
                 self.workspace1, self.workspace1_2, self.workspace2, self.workspace2_2,
                 self.r, self.n, self.R, 0.5, 1.0
             )
-            pack_result(self.result, self.flat_result, self.R, self.n, self.r)
             if self.diagonal_shift != 0.0:
-                for i in range(self.total_size):
-                    self.flat_result[i] += self.diagonal_shift * x_flat[i]
+                pack_result_shift(self.result, self.flat_result, x_flat, self.R, self.n, self.r, self.diagonal_shift)
+            else:
+                pack_result(self.result, self.flat_result, self.R, self.n, self.r)
         return self.flat_result_arr
 
 

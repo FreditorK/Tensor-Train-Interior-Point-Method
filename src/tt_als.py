@@ -1074,7 +1074,7 @@ def _sym_two_core_matvec(Phi_l, A_l, A_r, Phi_r, x_shape, diagonal_shift=0.0):
     )
 
     def apply(x_vec):
-        return helper.matvec(np.asarray(x_vec, dtype=np.float64).reshape(-1)).reshape(-1, 1)
+        return helper.matvec(np.ascontiguousarray(x_vec, dtype=np.float64).reshape(-1)).reshape(-1, 1)
 
     return apply
 
@@ -1083,7 +1083,7 @@ def _sym_one_core_matvec(Phi_l, A_k, Phi_r, x_shape, diagonal_shift=0.0):
     helper = SymOneCoreMatVecWrapper(Phi_l, A_k, Phi_r, x_shape[0], x_shape[1], x_shape[2], diagonal_shift)
 
     def apply(x_vec):
-        return helper.matvec(np.asarray(x_vec, dtype=np.float64).reshape(-1)).reshape(-1, 1)
+        return helper.matvec(np.ascontiguousarray(x_vec, dtype=np.float64).reshape(-1)).reshape(-1, 1)
 
     return apply
 
