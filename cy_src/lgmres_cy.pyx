@@ -538,6 +538,9 @@ cdef class CoreMatVecWrapper:
         return self.flat_result_arr
 
 
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.nonecheck(False)
 cpdef cnp.ndarray[double, ndim=3] core_matvec(
         cnp.ndarray[double, ndim=3] Phi_l,
         cnp.ndarray[double, ndim=4] A_k,
@@ -549,6 +552,9 @@ cpdef cnp.ndarray[double, ndim=3] core_matvec(
     return helper.matvec(x_flat).reshape(Phi_l.shape[0], A_k.shape[1], Phi_r.shape[0])
 
 
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.nonecheck(False)
 cpdef cnp.ndarray[double, ndim=3] core_rmatvec(
         cnp.ndarray[double, ndim=3] Phi_l,
         cnp.ndarray[double, ndim=4] A_k,
@@ -561,6 +567,9 @@ cpdef cnp.ndarray[double, ndim=3] core_rmatvec(
     return core_matvec(Phi_l_T, A_k_T, Phi_r_T, x_core)
 
 
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.nonecheck(False)
 cpdef cnp.ndarray[double, ndim=3] rhs_contract(
         cnp.ndarray[double, ndim=2] Phi_l,
         cnp.ndarray[double, ndim=3] b_core,
@@ -751,7 +760,6 @@ cpdef cnp.ndarray[double, ndim=4] matmat_product_core(
     cdef int Bdim = D_k.shape[3]
     cdef int Rdim = Phi_r.shape[0]
     cdef cnp.ndarray[double, ndim=2] left_flat_arr = np.ascontiguousarray(Phi_l.reshape(rdim, adim * bdim))
-    cdef cnp.ndarray[double, ndim=4] A_by_mk_arr = np.ascontiguousarray(np.transpose(A_k, (1, 2, 0, 3)))
     cdef cnp.ndarray[double, ndim=4] A_by_mk_T_arr = np.ascontiguousarray(np.transpose(A_k, (1, 2, 3, 0)))
     cdef cnp.ndarray[double, ndim=4] D_by_kn_arr = np.ascontiguousarray(np.transpose(D_k, (1, 2, 0, 3)))
     cdef cnp.ndarray[double, ndim=3] right_by_R_T_arr = np.ascontiguousarray(np.transpose(Phi_r, (0, 2, 1)))
@@ -761,7 +769,6 @@ cpdef cnp.ndarray[double, ndim=4] matmat_product_core(
     cdef cnp.ndarray[double, ndim=2] small_arr = np.empty((rdim, Rdim), dtype=np.float64)
     cdef cnp.ndarray[double, ndim=4] out_arr = np.empty((rdim, mdim, ndim, Rdim), dtype=np.float64)
     cdef const double[:, ::1] left_flat = left_flat_arr
-    cdef const double[:, :, :, ::1] A_by_mk = A_by_mk_arr
     cdef const double[:, :, :, ::1] A_by_mk_T = A_by_mk_T_arr
     cdef const double[:, :, :, ::1] D_by_kn = D_by_kn_arr
     cdef const double[:, :, ::1] right_by_R_T = right_by_R_T_arr
@@ -899,6 +906,9 @@ cpdef cnp.ndarray[double, ndim=3] matmat_phi_fwd(
     return out_arr
 
 
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.nonecheck(False)
 cpdef cnp.ndarray[double, ndim=2] phi_bck_rhs(
         cnp.ndarray[double, ndim=2] Phi_now,
         cnp.ndarray[double, ndim=3] b_core,
@@ -927,6 +937,9 @@ cpdef cnp.ndarray[double, ndim=2] phi_bck_rhs(
     return out_arr
 
 
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.nonecheck(False)
 cpdef cnp.ndarray[double, ndim=2] phi_fwd_rhs(
         cnp.ndarray[double, ndim=2] Phi_now,
         cnp.ndarray[double, ndim=3] b_core,
@@ -955,6 +968,9 @@ cpdef cnp.ndarray[double, ndim=2] phi_fwd_rhs(
     return out_arr
 
 
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.nonecheck(False)
 cpdef cnp.ndarray[double, ndim=3] phi_bck_A(
         cnp.ndarray[double, ndim=3] Phi_now,
         cnp.ndarray[double, ndim=3] core_left,
@@ -987,9 +1003,9 @@ cpdef cnp.ndarray[double, ndim=3] phi_bck_A(
     cdef double coeff
     with nogil:
         for Mi in range(Mdim):
-            for Ni in range(Ndim):
-                for Si in range(Sdim):
-                    cy_dgemm(left_by_M[Mi, :, :], Phi_by_S[Si, :, :], tmp)
+            for Si in range(Sdim):
+                cy_dgemm(left_by_M[Mi, :, :], Phi_by_S[Si, :, :], tmp)
+                for Ni in range(Ndim):
                     cy_dgemm(tmp, right_by_N_T[Ni, :, :], small)
                     for si in range(sdim):
                         coeff = A_by_MNS[Mi, Ni, Si, si]
@@ -1000,6 +1016,9 @@ cpdef cnp.ndarray[double, ndim=3] phi_bck_A(
     return out_arr
 
 
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.nonecheck(False)
 cpdef cnp.ndarray[double, ndim=3] phi_fwd_A(
         cnp.ndarray[double, ndim=3] Phi_now,
         cnp.ndarray[double, ndim=3] core_left,
@@ -1033,8 +1052,8 @@ cpdef cnp.ndarray[double, ndim=3] phi_fwd_A(
     with nogil:
         for si in range(sdim):
             for Mi in range(Mdim):
+                cy_dgemm(left_by_M_T[Mi, :, :], Phi_by_s[si, :, :], tmp)
                 for Ni in range(Ndim):
-                    cy_dgemm(left_by_M_T[Mi, :, :], Phi_by_s[si, :, :], tmp)
                     cy_dgemm(tmp, right_by_N[Ni, :, :], small)
                     for Si in range(Sdim):
                         coeff = A[si, Mi, Ni, Si]
