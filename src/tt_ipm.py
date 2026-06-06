@@ -898,6 +898,17 @@ def _tt_add_rhs_row(rhs_vec_tt, row, addition_tt, eps):
     rhs_vec_tt[row] = tt_rank_reduce(addition_tt if current is None else tt_add(current, addition_tt), eps)
 
 
+def _tt_adaptive_sigma_floor(x_step_size, z_step_size):
+    alpha = min(x_step_size, z_step_size)
+    if alpha < 1e-5:
+        return 0.99
+    if alpha < 1e-3:
+        return 0.95
+    if alpha < 5e-2:
+        return 0.85
+    return 0.0
+
+
 def _tt_corrector_sigma(X_tt, Z_tt, T_tt, Delta_X_tt, Delta_Z_tt, Delta_T_tt,
                         x_step_size, z_step_size, ZX, TX, status):
     DXZ = tt_inner_prod(Delta_X_tt, Delta_Z_tt)
@@ -928,7 +939,7 @@ def _tt_corrector_sigma(X_tt, Z_tt, T_tt, Delta_X_tt, Delta_Z_tt, Delta_T_tt,
         e = max(1, 3 * min(x_step_size, z_step_size) ** 2)
         sigma = min(0.99, max(mu_aff / ZX, 0) ** e)
 
-    return sigma, DXZ
+    return max(sigma, _tt_adaptive_sigma_floor(x_step_size, z_step_size)), DXZ
 
 
 def _tt_build_corrector_rhs(base_rhs_vec_tt, correction_only, X_tt, Z_tt, T_tt,
@@ -964,11 +975,32 @@ def _tt_build_corrector_rhs(base_rhs_vec_tt, correction_only, X_tt, Z_tt, T_tt,
     return rhs_corr_tt, sigma, DXZ, corrector_needed
 
 
-def _tt_extra_corrector_needed(corr_idx, x_step_size, z_step_size, sigma):
-    if corr_idx == 0:
-        return True
+def _tt_build_boundary_rescue_rhs(X_tt, ineq_mask, status):
+    rhs_rescue_tt = TTBlockVector()
+    sigma = max(status.sigma, _tt_adaptive_sigma_floor(0.0, 0.0))
+    sigma_mu = sigma * status.mu
+    central_rhs = tt_scale(sigma_mu, tt_reshape(tt_identity(len(X_tt)), (4,)))
+    rhs_rescue_tt[2] = tt_rank_reduce(central_rhs, status.rounding.operator_centrality(status))
+
+    if status.ineq_status is IneqStatus.ACTIVE:
+        ineq_rhs = tt_scale(sigma_mu, tt_reshape(ineq_mask, (4,)))
+        row = 0 if getattr(status, "combine_ty", False) else 3
+        rhs_rescue_tt[row] = tt_rank_reduce(ineq_rhs, status.rounding.operator_centrality(status))
+    return rhs_rescue_tt, sigma
+
+
+def _tt_boundary_rescue_needed(pred_x_step, pred_z_step, x_step_size, z_step_size):
+    pred_alpha = min(pred_x_step, pred_z_step)
     alpha = min(x_step_size, z_step_size)
-    return sigma > 0.8 and 1e-4 < alpha < 0.1
+    return alpha < 5e-2 and pred_alpha > max(1e-1, 2.0 * alpha)
+
+
+def _tt_accept_boundary_rescue(old_x_step, old_z_step, new_x_step, new_z_step):
+    old_step = min(old_x_step, old_z_step)
+    new_step = min(new_x_step, new_z_step)
+    if old_step < 1e-8:
+        return new_step > 1e-4
+    return new_step > max(1.25 * old_step, old_step + 1e-4)
 
 
 def _tt_xz_fallback_kkt(lhs_matrix_tt, rhs_vec_tt, X_tt, Z_tt, status):
@@ -1077,37 +1109,19 @@ def _tt_ipm_newton_step(
             if status.verbose:
                 print(f"\n--- Centering-Corrector  step ---", flush=True)
 
+            pred_x_step = x_step_size
+            pred_z_step = z_step_size
             for corr_idx in range(max(1, status.max_corrector_steps)):
                 speculative_state = None
                 build_Delta_X_tt = Delta_X_tt
                 build_Delta_Z_tt = Delta_Z_tt
                 build_Delta_T_tt = Delta_T_tt
                 if corr_idx > 0:
-                    corr_sigma, DXZ = _tt_corrector_sigma(
-                        X_tt,
-                        Z_tt,
-                        T_tt,
-                        Delta_X_tt,
-                        Delta_Z_tt,
-                        Delta_T_tt,
-                        x_step_size,
-                        z_step_size,
-                        ZX,
-                        TX,
-                        status
-                    )
-                    corrector_needed = (
-                        corr_sigma > 1e-4
-                        or DXZ > 0.1 * status.centrality_tol
-                    )
-                    if not corrector_needed:
-                        _ipm_trace(status, "corrector", f"skipped sigma={corr_sigma:.2e} dxz={DXZ:.2e}")
-                        break
-                    if not _tt_extra_corrector_needed(corr_idx, x_step_size, z_step_size, corr_sigma):
+                    if not _tt_boundary_rescue_needed(pred_x_step, pred_z_step, x_step_size, z_step_size):
                         _ipm_trace(
                             status,
                             "corrector",
-                            f"extra skipped sigma={corr_sigma:.2e} alpha={min(x_step_size, z_step_size):.2e}"
+                            f"rescue skipped alpha={min(x_step_size, z_step_size):.2e}"
                         )
                         break
                     speculative_state = (
@@ -1118,37 +1132,46 @@ def _tt_ipm_newton_step(
                         _tt_copy_optional(status.eigen_xt0), _tt_copy_optional(status.eigen_zt0),
                         status.sigma, np.random.get_state()
                     )
-                    build_Delta_X_tt = _tt_copy_optional(Delta_X_tt)
-                    build_Delta_Z_tt = _tt_copy_optional(Delta_Z_tt)
-                    build_Delta_T_tt = _tt_copy_optional(Delta_T_tt)
 
-                rhs_corr_tt, corr_sigma, DXZ, corrector_needed = _tt_build_corrector_rhs(
-                    rhs_vec_tt,
-                    corr_idx > 0,
-                    X_tt,
-                    Z_tt,
-                    T_tt,
-                    build_Delta_X_tt,
-                    build_Delta_Z_tt,
-                    build_Delta_T_tt,
-                    x_step_size,
-                    z_step_size,
-                    ZX,
-                    TX,
-                    ineq_mask,
-                    status
-                )
-                if corr_idx == 0:
+                if corr_idx > 0:
+                    rhs_corr_tt, corr_sigma = _tt_build_boundary_rescue_rhs(
+                        X_tt, ineq_mask, status
+                    )
+                    DXZ = 0.0
+                    corrector_needed = True
+                else:
+                    rhs_corr_tt, corr_sigma, DXZ, corrector_needed = _tt_build_corrector_rhs(
+                        rhs_vec_tt,
+                        False,
+                        X_tt,
+                        Z_tt,
+                        T_tt,
+                        build_Delta_X_tt,
+                        build_Delta_Z_tt,
+                        build_Delta_T_tt,
+                        x_step_size,
+                        z_step_size,
+                        ZX,
+                        TX,
+                        ineq_mask,
+                        status
+                    )
                     status.sigma = corr_sigma
                 if not corrector_needed:
                     _ipm_trace(status, "corrector", f"skipped sigma={corr_sigma:.2e} dxz={DXZ:.2e}")
                     break
 
-                label = "corrector" if corr_idx == 0 else f"corrector-{corr_idx + 1}"
-                _ipm_trace(status, "corrector", f"{label} needed sigma={corr_sigma:.2e} dxz={DXZ:.2e}")
+                label = "corrector" if corr_idx == 0 else "boundary-rescue"
+                msg = f"{label} needed sigma={corr_sigma:.2e}"
+                if corr_idx == 0:
+                    msg += f" dxz={DXZ:.2e}"
+                else:
+                    msg += f" alpha={min(x_step_size, z_step_size):.2e}"
+                _ipm_trace(status, "corrector", msg)
                 lhs_cc_tt = lhs_pred_tt
                 old_sigma = corr_sigma
-                old_step = min(x_step_size, z_step_size)
+                old_x_step = x_step_size
+                old_z_step = z_step_size
                 old_state = speculative_state or (
                     Delta_X_tt, Delta_Y_tt, Delta_Z_tt, Delta_T_tt,
                     x_step_size, z_step_size, status.mals_delta0,
@@ -1207,26 +1230,8 @@ def _tt_ipm_newton_step(
                 )
                 _ipm_trace(status, "step-size", f"{label} alpha_x={x_step_size:.2e} alpha_z={z_step_size:.2e}", t0)
                 if corr_idx > 0:
-                    next_sigma, _ = _tt_corrector_sigma(
-                        X_tt,
-                        Z_tt,
-                        T_tt,
-                        Delta_X_tt,
-                        Delta_Z_tt,
-                        Delta_T_tt,
-                        x_step_size,
-                        z_step_size,
-                        ZX,
-                        TX,
-                        status
-                    )
-                    new_step = min(x_step_size, z_step_size)
-                    accept_extra = (
-                        new_step > 1.05 * old_step
-                        or (next_sigma < 0.7 * old_sigma and new_step > 0.5 * old_step)
-                    )
-                    if accept_extra:
-                        status.sigma = next_sigma
+                    if _tt_accept_boundary_rescue(old_x_step, old_z_step, x_step_size, z_step_size):
+                        status.sigma = corr_sigma
                     else:
                         (
                             Delta_X_tt, Delta_Y_tt, Delta_Z_tt, Delta_T_tt,
@@ -1238,8 +1243,8 @@ def _tt_ipm_newton_step(
                         _ipm_trace(
                             status,
                             "corrector",
-                            f"{label} rejected alpha={new_step:.2e}->{old_step:.2e} "
-                            f"sigma={old_sigma:.2e}->{next_sigma:.2e}"
+                            f"{label} rejected alpha={min(x_step_size, z_step_size):.2e}->"
+                            f"{min(old_x_step, old_z_step):.2e} sigma={old_sigma:.2e}"
                         )
                         break
         else:
