@@ -53,6 +53,25 @@ cdef void cy_dgemm(
 @cython.wraparound(False)
 @cython.nonecheck(False)
 @cython.inline
+cdef void cy_dgemv_row(
+        const double[:, ::1] A,
+        const double[::1] x,
+        double[::1] y,
+        double alpha=1.0,
+        double beta=0.0
+) noexcept nogil:
+    cdef int M = A.shape[0]
+    cdef int N = A.shape[1]
+    cdef char trans = 84  # ord("T")
+    # Row-major y = A x is column-major dgemv on A.T.
+    blas.dgemv(&trans, &N, &M, &alpha,
+               <double*>&A[0, 0], &N, <double*>&x[0], &inc, &beta, &y[0], &inc)
+
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.nonecheck(False)
+@cython.inline
 cdef void _transpose_reshape_step2(
     const double[:, ::1] src_2d, # Input: (r* n, R*S)
     double[:, ::1] dest, # Output: (r * R, n * S)
@@ -209,6 +228,8 @@ cdef class BaseMatVec:
 
 cdef class DiagTwoCoreBlockWrapper:
     cdef const double[:, :, ::1] XAX, A0, A1, XAX2
+    cdef const double[:, :, ::1] XAX_by_r, A0_by_n, A1_by_p, XAX2_by_R_T
+    cdef double[:, ::1] coeff, tmp, small
     cdef int ldim, sdim, rdim, n0, kdim, n1, Sdim, Ldim, Rdim
     cdef int out_size, in_size
 
@@ -223,6 +244,10 @@ cdef class DiagTwoCoreBlockWrapper:
         self.A0 = np.ascontiguousarray(A0)
         self.A1 = np.ascontiguousarray(A1)
         self.XAX2 = np.ascontiguousarray(XAX2)
+        self.XAX_by_r = np.ascontiguousarray(np.transpose(XAX, (2, 0, 1)))
+        self.A0_by_n = np.ascontiguousarray(np.transpose(A0, (1, 0, 2)))
+        self.A1_by_p = np.ascontiguousarray(np.transpose(A1, (1, 0, 2)))
+        self.XAX2_by_R_T = np.ascontiguousarray(np.transpose(XAX2, (2, 1, 0)))
         self.ldim = XAX.shape[0]
         self.sdim = XAX.shape[1]
         self.rdim = XAX.shape[2]
@@ -234,6 +259,9 @@ cdef class DiagTwoCoreBlockWrapper:
         self.Rdim = XAX2.shape[2]
         self.out_size = self.ldim * self.n0 * self.n1 * self.Ldim
         self.in_size = self.rdim * self.n0 * self.n1 * self.Rdim
+        self.coeff = np.empty((self.sdim, self.Sdim), dtype=np.float64)
+        self.tmp = np.empty((self.ldim, self.Sdim), dtype=np.float64)
+        self.small = np.empty((self.ldim, self.Ldim), dtype=np.float64)
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -243,23 +271,23 @@ cdef class DiagTwoCoreBlockWrapper:
             (self.ldim * self.Ldim, self.rdim * self.Rdim), dtype=np.float64
         )
         cdef double[:, ::1] out = out_arr
-        cdef const double[:, :, ::1] XAX = self.XAX
-        cdef const double[:, :, ::1] A0 = self.A0
-        cdef const double[:, :, ::1] A1 = self.A1
-        cdef const double[:, :, ::1] XAX2 = self.XAX2
-        cdef int li, Li, ri, Ri, s, k, S
-        cdef double acc
+        cdef const double[:, :, ::1] XAX_by_r = self.XAX_by_r
+        cdef const double[:, :, ::1] A0_by_n = self.A0_by_n
+        cdef const double[:, :, ::1] A1_by_p = self.A1_by_p
+        cdef const double[:, :, ::1] XAX2_by_R_T = self.XAX2_by_R_T
+        cdef double[:, ::1] coeff = self.coeff
+        cdef double[:, ::1] tmp = self.tmp
+        cdef double[:, ::1] small = self.small
+        cdef int li, Li, ri, Ri
         with nogil:
-            for li in range(self.ldim):
-                for Li in range(self.Ldim):
-                    for ri in range(self.rdim):
-                        for Ri in range(self.Rdim):
-                            acc = 0.0
-                            for s in range(self.sdim):
-                                for k in range(self.kdim):
-                                    for S in range(self.Sdim):
-                                        acc += XAX[li, s, ri] * A0[s, n, k] * A1[k, p, S] * XAX2[Li, S, Ri]
-                            out[li * self.Ldim + Li, ri * self.Rdim + Ri] = acc
+            cy_dgemm(A0_by_n[n, :, :], A1_by_p[p, :, :], coeff)
+            for ri in range(self.rdim):
+                cy_dgemm(XAX_by_r[ri, :, :], coeff, tmp)
+                for Ri in range(self.Rdim):
+                    cy_dgemm(tmp, XAX2_by_R_T[Ri, :, :], small)
+                    for li in range(self.ldim):
+                        for Li in range(self.Ldim):
+                            out[li * self.Ldim + Li, ri * self.Rdim + Ri] = small[li, Li]
         return out_arr
 
     @cython.boundscheck(False)
@@ -270,33 +298,32 @@ cdef class DiagTwoCoreBlockWrapper:
         cdef cnp.ndarray[double, ndim=1] out_arr = np.zeros(self.out_size, dtype=np.float64)
         cdef const double[::1] x = x_arr
         cdef double[::1] out = out_arr
-        cdef const double[:, :, ::1] XAX = self.XAX
-        cdef const double[:, :, ::1] A0 = self.A0
-        cdef const double[:, :, ::1] A1 = self.A1
-        cdef const double[:, :, ::1] XAX2 = self.XAX2
-        cdef int li, Li, ri, Ri, s, k, S, n, p
-        cdef int out_idx, in_idx
-        cdef double coeff
-        with nogil:
-            for n in range(self.n0):
-                for p in range(self.n1):
+        cdef cnp.ndarray[double, ndim=1] x_block_arr = np.empty(self.rdim * self.Rdim, dtype=np.float64)
+        cdef cnp.ndarray[double, ndim=1] y_block_arr = np.empty(self.ldim * self.Ldim, dtype=np.float64)
+        cdef double[::1] x_block = x_block_arr
+        cdef double[::1] y_block = y_block_arr
+        cdef cnp.ndarray[double, ndim=2] block_arr
+        cdef double[:, ::1] block_view
+        cdef int li, Li, ri, Ri, n, p
+        for n in range(self.n0):
+            for p in range(self.n1):
+                for ri in range(self.rdim):
+                    for Ri in range(self.Rdim):
+                        x_block[ri * self.Rdim + Ri] = x[((ri * self.n0 + n) * self.n1 + p) * self.Rdim + Ri]
+                block_arr = self.block(n, p)
+                block_view = block_arr
+                with nogil:
+                    cy_dgemv_row(block_view, x_block, y_block)
                     for li in range(self.ldim):
                         for Li in range(self.Ldim):
-                            out_idx = ((li * self.n0 + n) * self.n1 + p) * self.Ldim + Li
-                            for ri in range(self.rdim):
-                                for Ri in range(self.Rdim):
-                                    in_idx = ((ri * self.n0 + n) * self.n1 + p) * self.Rdim + Ri
-                                    coeff = 0.0
-                                    for s in range(self.sdim):
-                                        for k in range(self.kdim):
-                                            for S in range(self.Sdim):
-                                                coeff += XAX[li, s, ri] * A0[s, n, k] * A1[k, p, S] * XAX2[Li, S, Ri]
-                                    out[out_idx] += coeff * x[in_idx]
+                            out[((li * self.n0 + n) * self.n1 + p) * self.Ldim + Li] = y_block[li * self.Ldim + Li]
         return out_arr
 
 
 cdef class DiagOneCoreBlockWrapper:
     cdef const double[:, :, ::1] XAX, A0, XAX1
+    cdef const double[:, :, ::1] XAX_by_r, A0_by_n, XAX1_by_R_T
+    cdef double[:, ::1] tmp, small
     cdef int ldim, sdim, rdim, n0, Sdim, Ldim, Rdim
     cdef int out_size, in_size
 
@@ -309,6 +336,9 @@ cdef class DiagOneCoreBlockWrapper:
         self.XAX = np.ascontiguousarray(XAX)
         self.A0 = np.ascontiguousarray(A0)
         self.XAX1 = np.ascontiguousarray(XAX1)
+        self.XAX_by_r = np.ascontiguousarray(np.transpose(XAX, (2, 0, 1)))
+        self.A0_by_n = np.ascontiguousarray(np.transpose(A0, (1, 0, 2)))
+        self.XAX1_by_R_T = np.ascontiguousarray(np.transpose(XAX1, (2, 1, 0)))
         self.ldim = XAX.shape[0]
         self.sdim = XAX.shape[1]
         self.rdim = XAX.shape[2]
@@ -318,6 +348,8 @@ cdef class DiagOneCoreBlockWrapper:
         self.Rdim = XAX1.shape[2]
         self.out_size = self.ldim * self.n0 * self.Ldim
         self.in_size = self.rdim * self.n0 * self.Rdim
+        self.tmp = np.empty((self.ldim, self.Sdim), dtype=np.float64)
+        self.small = np.empty((self.ldim, self.Ldim), dtype=np.float64)
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -327,21 +359,20 @@ cdef class DiagOneCoreBlockWrapper:
             (self.ldim * self.Ldim, self.rdim * self.Rdim), dtype=np.float64
         )
         cdef double[:, ::1] out = out_arr
-        cdef const double[:, :, ::1] XAX = self.XAX
-        cdef const double[:, :, ::1] A0 = self.A0
-        cdef const double[:, :, ::1] XAX1 = self.XAX1
-        cdef int li, Li, ri, Ri, s, S
-        cdef double acc
+        cdef const double[:, :, ::1] XAX_by_r = self.XAX_by_r
+        cdef const double[:, :, ::1] A0_by_n = self.A0_by_n
+        cdef const double[:, :, ::1] XAX1_by_R_T = self.XAX1_by_R_T
+        cdef double[:, ::1] tmp = self.tmp
+        cdef double[:, ::1] small = self.small
+        cdef int li, Li, ri, Ri
         with nogil:
-            for li in range(self.ldim):
-                for Li in range(self.Ldim):
-                    for ri in range(self.rdim):
-                        for Ri in range(self.Rdim):
-                            acc = 0.0
-                            for s in range(self.sdim):
-                                for S in range(self.Sdim):
-                                    acc += XAX[li, s, ri] * A0[s, n, S] * XAX1[Li, S, Ri]
-                            out[li * self.Ldim + Li, ri * self.Rdim + Ri] = acc
+            for ri in range(self.rdim):
+                cy_dgemm(XAX_by_r[ri, :, :], A0_by_n[n, :, :], tmp)
+                for Ri in range(self.Rdim):
+                    cy_dgemm(tmp, XAX1_by_R_T[Ri, :, :], small)
+                    for li in range(self.ldim):
+                        for Li in range(self.Ldim):
+                            out[li * self.Ldim + Li, ri * self.Rdim + Ri] = small[li, Li]
         return out_arr
 
     @cython.boundscheck(False)
@@ -352,25 +383,24 @@ cdef class DiagOneCoreBlockWrapper:
         cdef cnp.ndarray[double, ndim=1] out_arr = np.zeros(self.out_size, dtype=np.float64)
         cdef const double[::1] x = x_arr
         cdef double[::1] out = out_arr
-        cdef const double[:, :, ::1] XAX = self.XAX
-        cdef const double[:, :, ::1] A0 = self.A0
-        cdef const double[:, :, ::1] XAX1 = self.XAX1
-        cdef int li, Li, ri, Ri, s, S, n
-        cdef int out_idx, in_idx
-        cdef double coeff
-        with nogil:
-            for n in range(self.n0):
+        cdef cnp.ndarray[double, ndim=1] x_block_arr = np.empty(self.rdim * self.Rdim, dtype=np.float64)
+        cdef cnp.ndarray[double, ndim=1] y_block_arr = np.empty(self.ldim * self.Ldim, dtype=np.float64)
+        cdef double[::1] x_block = x_block_arr
+        cdef double[::1] y_block = y_block_arr
+        cdef cnp.ndarray[double, ndim=2] block_arr
+        cdef double[:, ::1] block_view
+        cdef int li, Li, ri, Ri, n
+        for n in range(self.n0):
+            for ri in range(self.rdim):
+                for Ri in range(self.Rdim):
+                    x_block[ri * self.Rdim + Ri] = x[(ri * self.n0 + n) * self.Rdim + Ri]
+            block_arr = self.block(n)
+            block_view = block_arr
+            with nogil:
+                cy_dgemv_row(block_view, x_block, y_block)
                 for li in range(self.ldim):
                     for Li in range(self.Ldim):
-                        out_idx = (li * self.n0 + n) * self.Ldim + Li
-                        for ri in range(self.rdim):
-                            for Ri in range(self.Rdim):
-                                in_idx = (ri * self.n0 + n) * self.Rdim + Ri
-                                coeff = 0.0
-                                for s in range(self.sdim):
-                                    for S in range(self.Sdim):
-                                        coeff += XAX[li, s, ri] * A0[s, n, S] * XAX1[Li, S, Ri]
-                                out[out_idx] += coeff * x[in_idx]
+                        out[(li * self.n0 + n) * self.Ldim + Li] = y_block[li * self.Ldim + Li]
         return out_arr
 
 cdef class MatVecWrapper(BaseMatVec):
