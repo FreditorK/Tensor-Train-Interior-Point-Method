@@ -13,13 +13,27 @@ def tt_diag_constraint_op(dim):
     basis = tt_diag_op(identity)
     return basis, identity
 
+
+def tt_rank_one_split_mask(dim):
+    split_idx = np.random.randint(dim)
+    all_one = np.ones((1, 2, 2, 1))
+    offdiag = E(0, 1) + E(1, 0)
+    samebit = E(0, 0) + E(1, 1)
+    mask_graph_tt = [all_one.copy() for _ in range(dim)]
+    compl_mask_graph_tt = [all_one.copy() for _ in range(dim)]
+    mask_graph_tt[split_idx] = offdiag
+    compl_mask_graph_tt[split_idx] = samebit
+    return mask_graph_tt, compl_mask_graph_tt, split_idx
+
+
 def tt_obj_matrix_and_ineq_mask(rank, dim):
     actual_graph_tt = tt_rank_reduce(tt_random_graph(dim, rank), 1e-10)
-    mask_graph_tt = tt_rank_reduce(tt_random_graph(dim, 1), 1e-10)
+    mask_graph_tt, compl_mask_graph_tt, split_idx = tt_rank_one_split_mask(dim)
     sim_graph_tt = tt_rank_reduce(tt_fast_hadamard(actual_graph_tt, mask_graph_tt, 1e-12), 1e-10)
-    disim_graph_tt = tt_rank_reduce(tt_fast_hadamard(actual_graph_tt, tt_sub(tt_one_matrix(dim), mask_graph_tt), 1e-12), 1e-10)
+    disim_graph_tt = tt_rank_reduce(tt_fast_hadamard(actual_graph_tt, compl_mask_graph_tt, 1e-12), 1e-10)
     disim_laplacian_tt = tt_sub(tt_diag(tt_fast_matrix_vec_mul(disim_graph_tt, [np.ones((1, 2, 1)) for _ in range(dim)],  1e-12)), disim_graph_tt)
     obj_tt = tt_rank_reduce(tt_add(sim_graph_tt, disim_laplacian_tt), 1e-10)
+    print("Split mask core:", split_idx)
     print("Actual graph TT-rank:", tt_ranks(actual_graph_tt))
     print("Obj TT-rank:", tt_ranks(obj_tt))
     return obj_tt, actual_graph_tt
