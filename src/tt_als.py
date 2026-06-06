@@ -7,7 +7,12 @@ import numpy as np
 sys.path.append(os.getcwd() + '/../')
 
 from src.tt_ops import *
-from cy_src.lgmres_cy import DiagOneCoreBlockWrapper, DiagTwoCoreBlockWrapper
+from cy_src.lgmres_cy import (
+    DiagOneCoreBlockWrapper,
+    DiagTwoCoreBlockWrapper,
+    SymOneCoreMatVecWrapper,
+    SymTwoCoreMatVecWrapper,
+)
 from opt_einsum import contract as einsum
 from sksparse.cholmod import cholesky as sparse_cholesky
 
@@ -1063,47 +1068,22 @@ def _eigen_step_stalled(prev_step, step, prev_res, res, tol):
 
 
 def _sym_two_core_matvec(Phi_l, A_l, A_r, Phi_r, x_shape, diagonal_shift=0.0):
-    mat_vec = contract_expression(
-        'lsr, smnk, kptS, LSR, rntR->lmpL',
-        Phi_l.shape, A_l.shape, A_r.shape, Phi_r.shape, x_shape, optimize="greedy"
-    )
-    mat_vec_t = contract_expression(
-        'lsr, smnk, kptS, LSR, lmpL->rntR',
-        Phi_l.shape, A_l.shape, A_r.shape, Phi_r.shape, x_shape, optimize="greedy"
+    helper = SymTwoCoreMatVecWrapper(
+        Phi_l, A_l, A_r, Phi_r,
+        x_shape[0], x_shape[1], x_shape[2], x_shape[3], diagonal_shift
     )
 
     def apply(x_vec):
-        x = x_vec.reshape(*x_shape)
-        y = 0.5 * (
-            mat_vec(Phi_l, A_l, A_r, Phi_r, x).reshape(-1, 1)
-            + mat_vec_t(Phi_l, A_l, A_r, Phi_r, x).reshape(-1, 1)
-        )
-        if diagonal_shift:
-            y += diagonal_shift * x_vec.reshape(-1, 1)
-        return y
+        return helper.matvec(np.asarray(x_vec, dtype=np.float64).reshape(-1)).reshape(-1, 1)
 
     return apply
 
 
 def _sym_one_core_matvec(Phi_l, A_k, Phi_r, x_shape, diagonal_shift=0.0):
-    mat_vec = contract_expression(
-        'lsr,smnS,LSR,rnR->lmL',
-        Phi_l.shape, A_k.shape, Phi_r.shape, x_shape, optimize="greedy"
-    )
-    mat_vec_t = contract_expression(
-        'lsr,smnS,LSR,lmL->rnR',
-        Phi_l.shape, A_k.shape, Phi_r.shape, x_shape, optimize="greedy"
-    )
+    helper = SymOneCoreMatVecWrapper(Phi_l, A_k, Phi_r, x_shape[0], x_shape[1], x_shape[2], diagonal_shift)
 
     def apply(x_vec):
-        x = x_vec.reshape(*x_shape)
-        y = 0.5 * (
-            mat_vec(Phi_l, A_k, Phi_r, x).reshape(-1, 1)
-            + mat_vec_t(Phi_l, A_k, Phi_r, x).reshape(-1, 1)
-        )
-        if diagonal_shift:
-            y += diagonal_shift * x_vec.reshape(-1, 1)
-        return y
+        return helper.matvec(np.asarray(x_vec, dtype=np.float64).reshape(-1)).reshape(-1, 1)
 
     return apply
 

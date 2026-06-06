@@ -211,6 +211,21 @@ cdef void pack_results3(double[:, :] result0, double[:, :] result1, double[:, :]
                 flat_result[2 * base + idx] = result2[k * n + j, i]
 
 
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.nonecheck(False)
+@cython.inline
+cdef void pack_result(double[:, :] result, double[:] flat_result, int R, int n, int r) noexcept nogil:
+    cdef int i, j, k
+    cdef int idx
+
+    for i in range(r):
+        for j in range(n):
+            for k in range(R):
+                idx = (i * n + j) * R + k
+                flat_result[idx] = result[k * n + j, i]
+
+
 cdef class BaseMatVec:
 
     @cython.boundscheck(False)
@@ -402,6 +417,111 @@ cdef class DiagOneCoreBlockWrapper:
                     for Li in range(self.Ldim):
                         out[(li * self.n0 + n) * self.Ldim + Li] = y_block[li * self.Ldim + Li]
         return out_arr
+
+
+cdef class SymOneCoreMatVecWrapper:
+    cdef double[:, ::1] result, x_reshaped
+    cdef object flat_result_arr
+    cdef double[:] flat_result
+    cdef const double[:, ::1] XAX, XAX_T, block_A, block_A_T, XAX1, XAX1_T
+    cdef double[:, ::1] workspace1, workspace1_2, workspace2, workspace2_2
+    cdef int r, n, R, total_size
+    cdef size_t block_size
+    cdef double diagonal_shift
+
+    def __init__(
+            self,
+            cnp.ndarray[double, ndim=3] Phi_l,
+            cnp.ndarray[double, ndim=4] A_k,
+            cnp.ndarray[double, ndim=3] Phi_r,
+            int r,
+            int n,
+            int R,
+            double diagonal_shift=0.0
+    ):
+        cdef object Phi_l_T = np.transpose(Phi_l, axes=(2, 1, 0))
+        cdef object A_k_T = np.transpose(A_k, axes=(0, 2, 1, 3))
+        cdef object Phi_r_T = np.transpose(Phi_r, axes=(2, 1, 0))
+
+        self.XAX = np.ascontiguousarray(Phi_l.transpose(0, 2, 1).reshape(Phi_l.shape[0], -1).T)
+        self.block_A = np.ascontiguousarray(A_k.reshape(A_k.shape[0] * A_k.shape[1], A_k.shape[2] * A_k.shape[3]).T)
+        self.XAX1 = np.ascontiguousarray(Phi_r.reshape(-1, R).T)
+        self.XAX_T = np.ascontiguousarray(Phi_l_T.transpose(0, 2, 1).reshape(Phi_l_T.shape[0], -1).T)
+        self.block_A_T = np.ascontiguousarray(A_k_T.reshape(A_k_T.shape[0] * A_k_T.shape[1], A_k_T.shape[2] * A_k_T.shape[3]).T)
+        self.XAX1_T = np.ascontiguousarray(Phi_r_T.reshape(-1, R).T)
+
+        self.r = r
+        self.n = n
+        self.R = R
+        self.diagonal_shift = diagonal_shift
+        self.total_size = r * n * R
+        self.block_size = self.total_size * sizeof(double)
+        self.result = np.empty((R * n, r), dtype=np.float64)
+        self.x_reshaped = np.empty((r * n, R), dtype=np.float64)
+        self.workspace1 = np.empty((r * n, R * A_k.shape[3]), dtype=np.float64)
+        self.workspace1_2 = np.empty((r * R, n * A_k.shape[3]), dtype=np.float64)
+        self.workspace2 = np.empty((r * R, A_k.shape[0] * n), dtype=np.float64)
+        self.workspace2_2 = np.empty((R * n, r * A_k.shape[0]), dtype=np.float64)
+        self.flat_result_arr = np.empty(self.total_size, dtype=np.float64)
+        self.flat_result = self.flat_result_arr
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.nonecheck(False)
+    cpdef cnp.ndarray[double, ndim=1] matvec(self, cnp.ndarray[double, ndim=1] x_core):
+        cdef const double[:, :] x_view = x_core.reshape(self.r * self.n, self.R)
+        cdef const double[:] x_flat = x_core
+        cdef int i
+
+        with nogil:
+            memcpy(&self.x_reshaped[0, 0], &x_view[0, 0], self.block_size)
+            einsum(
+                self.XAX, self.block_A, self.XAX1,
+                self.x_reshaped, self.result,
+                self.workspace1, self.workspace1_2, self.workspace2, self.workspace2_2,
+                self.r, self.n, self.R, 0.5, 0.0
+            )
+            einsum(
+                self.XAX_T, self.block_A_T, self.XAX1_T,
+                self.x_reshaped, self.result,
+                self.workspace1, self.workspace1_2, self.workspace2, self.workspace2_2,
+                self.r, self.n, self.R, 0.5, 1.0
+            )
+            pack_result(self.result, self.flat_result, self.R, self.n, self.r)
+            if self.diagonal_shift != 0.0:
+                for i in range(self.total_size):
+                    self.flat_result[i] += self.diagonal_shift * x_flat[i]
+        return self.flat_result_arr
+
+
+cdef class SymTwoCoreMatVecWrapper:
+    cdef object inner
+
+    def __init__(
+            self,
+            cnp.ndarray[double, ndim=3] Phi_l,
+            cnp.ndarray[double, ndim=4] A_l,
+            cnp.ndarray[double, ndim=4] A_r,
+            cnp.ndarray[double, ndim=3] Phi_r,
+            int r,
+            int n0,
+            int n1,
+            int R,
+            double diagonal_shift=0.0
+    ):
+        cdef cnp.ndarray[double, ndim=4] A_pair = np.ascontiguousarray(
+            np.einsum("smnk,kptS->smpntS", A_l, A_r, optimize=True).reshape(
+                A_l.shape[0], n0 * n1, n0 * n1, A_r.shape[3]
+            )
+        )
+        self.inner = SymOneCoreMatVecWrapper(Phi_l, A_pair, Phi_r, r, n0 * n1, R, diagonal_shift)
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.nonecheck(False)
+    cpdef cnp.ndarray[double, ndim=1] matvec(self, cnp.ndarray[double, ndim=1] x_core):
+        return self.inner.matvec(x_core)
+
 
 cdef class MatVecWrapper(BaseMatVec):
     cdef double[:,  ::1] result0, result1, temp, x_reshaped_0, x_reshaped_1
