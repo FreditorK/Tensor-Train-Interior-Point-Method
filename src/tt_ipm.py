@@ -1419,7 +1419,11 @@ def _tt_update_ineq_boundary(status, ZX, raw_TX, T_tt):
     denom = 2 ** status.dim + max(status.num_ineq_constraints, 0.0)
     raw_mu = (abs(ZX) + abs(raw_TX)) / max(denom, 1.0)
     target = status.ineq_boundary_fraction * raw_mu * max(status.num_ineq_constraints, 1.0) / max(t_sum, 1e-300)
-    target = float(np.clip(target, status.ineq_boundary_min, status.ineq_boundary_max))
+    if status.is_last_iter:
+        target = min(target, 0.1 * status.abs_tol / max(t_sum, 1e-300))
+        target = float(np.clip(target, 0.0, status.ineq_boundary_max))
+    else:
+        target = float(np.clip(target, status.ineq_boundary_min, status.ineq_boundary_max))
     return min(status.ineq_boundary_val, target)
 
 
@@ -1530,6 +1534,9 @@ def _ipm_check_for_stalled_progress(prev_errors, status, gap_tol):
     """Checks if the optimization has stalled."""
     if status.is_last_iter:
         return False
+    if (status.ineq_status is IneqStatus.ACTIVE
+            and status.psd_slack + status.ineq_slack > max(status.abs_tol, gap_tol)):
+        return False
 
     primal_stalled = abs(prev_errors['primal'] - status.primal_error) < 0.04 * gap_tol
     dual_stalled = abs(prev_errors['dual'] - status.dual_error) < 0.04 * gap_tol
@@ -1568,6 +1575,14 @@ def _ipm_finish_merit(status, ZX, TX):
     primal_sq = status.primal_feas_norm ** 2
     dual_sq = status.dual_feas_norm ** 2
     return max(gap, primal_sq, dual_sq)
+
+
+def _tt_finish_gap(status, ZX, raw_TX):
+    return abs(ZX + raw_TX)
+
+
+def _tt_central_gap(status, ZX, raw_TX):
+    return abs(ZX) + (abs(raw_TX) if status.ineq_status is IneqStatus.ACTIVE else 0.0)
 
 
 def _tt_ineq_complementarity(X_tt, T_tt, status):
@@ -1613,9 +1628,10 @@ def _tt_postprocess_ineq_solution(obj_tt, lin_op_tt_adj, X_tt, Y_tt, T_tt, Z_tt,
         status.dual_error = dual_after / status.dual_error_normalisation
         status.is_dual_feasible = status.dual_error < (1 + (status.ineq_status is IneqStatus.ACTIVE)) * status.feasibility_tol
         ZX = tt_inner_prod(X_tt, Z_tt)
-        shifted_TX = tt_inner_prod(X_tt, T_candidate) + status.ineq_boundary_val * tt_entrywise_sum(T_candidate)
+        raw_TX = tt_inner_prod(X_tt, T_candidate)
+        shifted_TX = raw_TX + status.ineq_boundary_val * tt_entrywise_sum(T_candidate)
         status.ineq_slack = slack_after
-        status.finish_gap = abs(ZX + tt_inner_prod(X_tt, T_candidate))
+        status.finish_gap = _tt_finish_gap(status, ZX, raw_TX)
         status.path_gap = abs(ZX) + abs(shifted_TX)
         status.reported_gap = status.finish_gap if status.is_last_iter else status.path_gap
         status.mu = status.path_gap / (2 ** status.dim + status.num_ineq_constraints)
@@ -1650,7 +1666,7 @@ def _tt_postprocess_gap_shrink(obj_tt, lin_op_tt_adj, X_tt, Y_tt, T_tt, Z_tt, st
         current_shifted_TX = current_TX + status.ineq_boundary_val * tt_entrywise_sum(T_tt)
     else:
         current_shifted_TX = 0.0
-    current_gap = abs(current_ZX + current_TX)
+    current_gap = _tt_finish_gap(status, current_ZX, current_TX)
     current_merit = max(current_gap, current_dual ** 2, status.primal_feas_norm ** 2)
     dual_limit = _tt_finish_residual_limit(status, current_dual, status.dual_error_normalisation)
     best = None
@@ -1666,7 +1682,7 @@ def _tt_postprocess_gap_shrink(obj_tt, lin_op_tt_adj, X_tt, Y_tt, T_tt, Z_tt, st
         dual_norm = tt_norm(tt_compute_dual_feasibility(obj_tt, lin_op_tt_adj, Z_cand, Y_cand, T_cand, status))
         ZX_cand = tt_inner_prod(X_tt, Z_cand)
         TX_cand = tt_inner_prod(X_tt, T_cand) if T_cand is not None else 0.0
-        gap = abs(ZX_cand + TX_cand)
+        gap = _tt_finish_gap(status, ZX_cand, TX_cand)
         merit = max(gap, dual_norm ** 2, status.primal_feas_norm ** 2)
         if dual_norm > dual_limit * (1 + 1e-6) + 1e-12:
             continue
@@ -1813,7 +1829,7 @@ def _tt_finish_metrics(obj_tt, lin_op_tt, lin_op_tt_adj, bias_tt, X_tt, Y_tt, T_
     if status.ineq_status is IneqStatus.ACTIVE and T_tt is not None:
         shifted_TX += status.ineq_boundary_val * tt_entrywise_sum(T_tt)
     path_gap = abs(ZX) + abs(shifted_TX)
-    finish_gap = abs(ZX + raw_TX)
+    finish_gap = _tt_finish_gap(status, ZX, raw_TX)
     central_norm = 1 + abs(tt_inner_prod(obj_tt, tt_reshape(X_tt, (4,))))
     return {
         "primal": primal_norm,
@@ -1936,7 +1952,13 @@ def _ipm_trace(status, stage, message="", t0=None):
 def _tt_rank_peak(tt):
     if tt is None:
         return "-"
-    return str(max(tt_ranks(tt)))
+    return str(_tt_rank_peak_value(tt))
+
+
+def _tt_rank_peak_value(tt):
+    if tt is None:
+        return 0
+    return int(max(tt_ranks(tt)))
 
 
 def _ipm_log_iteration(iteration, status, X_tt, Y_tt, Z_tt, T_tt):
@@ -2121,7 +2143,9 @@ def tt_ipm(
     X_tt, Y_tt, Z_tt, T_tt = _initialise(ineq_mask, status, dim, lambdaStar, lambdaStarIneq)
 
     iteration = 0
-    finishing_steps = max_refinement
+    finish_budget = max_refinement
+    finishing_steps = finish_budget
+    finish_extra_used = False
     prev_errors = {'primal': np.inf, 'dual': np.inf, 'centrality': np.inf}
     finish_prev_state = None
     finish_prev_merit = np.inf
@@ -2147,7 +2171,7 @@ def tt_ipm(
             shifted_TX = 0.0
         TX = shifted_TX
         path_gap = abs(ZX) + abs(shifted_TX)
-        finish_gap = abs(ZX + raw_TX)
+        finish_gap = _tt_finish_gap(status, ZX, raw_TX)
         status.iteration = iteration
         status.psd_slack = abs(ZX)
         status.ineq_slack = abs(raw_TX)
@@ -2159,6 +2183,10 @@ def tt_ipm(
         status.centrl_error_normalisation = 1 + abs(tt_inner_prod(obj_tt, tt_reshape(X_tt, (4, ))))
         status.centrality_error = status.mu / status.centrl_error_normalisation
         status.is_central = np.less(status.centrality_error, centrality_tol)
+        if status.ineq_status is IneqStatus.ACTIVE:
+            high_rank_tail = _tt_rank_peak_value(X_tt) >= max(16, 2 * dim)
+            large_gap_tail = _tt_central_gap(status, ZX, raw_TX) > max(5 * abs_tol, 10 * gap_tol)
+            status.is_central = status.is_central and not (high_rank_tail and large_gap_tail)
         status.eta = max(min(status.eta, 2*status.mu), status.op_tol)
 
         t0 = time.time()
@@ -2196,11 +2224,25 @@ def tt_ipm(
             _ipm_log_iteration(iteration, status, X_tt, Y_tt, Z_tt, T_tt)
 
         status, finishing_steps = _ipm_check_convergence(
-            status, finishing_steps, ZX, TX, abs_tol, max_refinement
+            status, finishing_steps, ZX, TX, abs_tol, finish_budget
         )
         if finishing_steps == 0:
-            iteration -= 1
-            break
+            can_extend_finish = (
+                    status.ineq_status is IneqStatus.ACTIVE
+                    and not finish_extra_used
+                    and status.finish_gap > abs_tol
+                    and status.finish_gap < 20 * abs_tol
+                    and status.primal_error < abs_tol
+                    and status.dual_error < abs_tol
+            )
+            if can_extend_finish:
+                finish_extra_used = True
+                finish_budget = 8
+                finishing_steps = finish_budget
+                _ipm_trace(status, "finish", f"extend steps={finish_budget}")
+            else:
+                iteration -= 1
+                break
 
         t0 = time.time()
         x_step_size, z_step_size, Delta_X_tt, Delta_Y_tt, Delta_Z_tt, Delta_T_tt, status = _tt_ipm_newton_step(
