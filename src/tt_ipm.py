@@ -622,27 +622,38 @@ def _tt_budgeted_mask_symmetrise(matrix_tt, mask_tt, err_bound):
     return rounded_tt
 
 def tt_compute_primal_feasibility(lin_op_tt, bias_tt, X_tt, status):
-    primal_feas = tt_rank_reduce(tt_sub(tt_mat_vec_mul(lin_op_tt, tt_reshape(X_tt, (4,)), status.rounding.residual_primal(status), status.eps), bias_tt),
-                   status.rounding.residual_primal(status))  # primal feasibility
+    primal_tol = status.rounding.residual_primal(status)
+    primal_feas = tt_rank_reduce(
+        tt_sub(tt_mat_vec_mul(lin_op_tt, tt_reshape(X_tt, (4,)), primal_tol, status.eps), bias_tt),
+        primal_tol
+    )  # primal feasibility
     return primal_feas
 
 
 def tt_compute_dual_feasibility(obj_tt, lin_op_tt_adj, Z_tt, Y_tt, T_tt, status):
-    dual_feas = tt_rank_reduce(tt_sub(tt_fast_matrix_vec_mul(lin_op_tt_adj, Y_tt, status.eps),
-                                      tt_rank_reduce(tt_add(tt_reshape(Z_tt, (4,)), obj_tt), status.eps)),
-                               status.eps if status.ineq_status is IneqStatus.ACTIVE else status.rounding.residual_dual(status))
+    dual_tol = status.rounding.residual_dual(status)
+    dual_feas = tt_rank_reduce(
+        tt_sub(
+            tt_fast_matrix_vec_mul(lin_op_tt_adj, Y_tt, status.eps),
+            tt_rank_reduce(tt_add(tt_reshape(Z_tt, (4,)), obj_tt), status.eps)
+        ),
+        status.eps if status.ineq_status is IneqStatus.ACTIVE else dual_tol
+    )
     if status.ineq_status is IneqStatus.ACTIVE and T_tt is not None:
-        dual_feas = tt_rank_reduce(tt_sub(dual_feas, tt_reshape(T_tt, (4,))), status.rounding.residual_dual(status))
+        dual_feas = tt_rank_reduce(tt_sub(dual_feas, tt_reshape(T_tt, (4,))), dual_tol)
 
     return dual_feas
 
 
 def tt_compute_centrality(X_tt, Z_tt, status):
+    central_tol = status.rounding.residual_centrality(status)
     if status.aho_direction:
-        centrality_feas = tt_reshape(tt_scale(-1, _tt_symmetrise(tt_mat_mat_mul(X_tt, Z_tt, status.rounding.residual_centrality(status), status.eps),
-                                                        status.rounding.residual_centrality(status))), (4,))
+        centrality_feas = tt_reshape(
+            tt_scale(-1, _tt_symmetrise(tt_mat_mat_mul(X_tt, Z_tt, central_tol, status.eps), central_tol)),
+            (4,)
+        )
     else:
-        centrality_feas = tt_reshape(tt_scale(-1, tt_mat_mat_mul(Z_tt, X_tt, status.rounding.residual_centrality(status), status.eps)), (4,))
+        centrality_feas = tt_reshape(tt_scale(-1, tt_mat_mat_mul(Z_tt, X_tt, central_tol, status.eps)), (4,))
     return centrality_feas
 
 
@@ -1611,11 +1622,12 @@ def _tt_ineq_complementarity(X_tt, T_tt, status):
 
 
 def _tt_polish_dual_y(obj_tt, Z_tt, T_tt, status):
-    target = tt_rank_reduce(tt_add(tt_reshape(Z_tt, (4,)), obj_tt), status.rounding.residual_dual(status))
+    dual_tol = status.rounding.residual_dual(status)
+    target = tt_rank_reduce(tt_add(tt_reshape(Z_tt, (4,)), obj_tt), dual_tol)
     if status.ineq_status is IneqStatus.ACTIVE and T_tt is not None:
-        target = tt_rank_reduce(tt_add(target, tt_reshape(T_tt, (4,))), status.rounding.residual_dual(status))
+        target = tt_rank_reduce(tt_add(target, tt_reshape(T_tt, (4,))), dual_tol)
     projected = tt_sub(target, tt_fast_matrix_vec_mul(status.lag_map_y, target, status.eps))
-    projected = tt_rank_reduce(projected, status.rounding.residual_dual(status))
+    projected = tt_rank_reduce(projected, dual_tol)
     return tt_reshape(_tt_symmetrise(tt_reshape(projected, (2, 2)), status.rounding.update_z_round_tol(status)), (4,))
 
 
@@ -1751,9 +1763,9 @@ def _tt_postprocess_feasible_gap_descent(obj_tt, lin_op_tt, lin_op_tt_adj, bias_
 
     t0 = time.time()
     current = _tt_finish_metrics(obj_tt, lin_op_tt, lin_op_tt_adj, bias_tt, X_tt, Y_tt, T_tt, Z_tt, status)
-    raw_gap = tt_inner_prod(X_tt, Z_tt)
+    raw_gap = current["ZX"]
     if status.ineq_status is IneqStatus.ACTIVE and T_tt is not None:
-        raw_gap += tt_inner_prod(X_tt, T_tt)
+        raw_gap += current["TX"]
     if abs(raw_gap) <= max(status.op_tol, 1e-12):
         return X_tt, Y_tt, T_tt, Z_tt, status
 
@@ -1792,12 +1804,20 @@ def _tt_postprocess_feasible_gap_descent(obj_tt, lin_op_tt, lin_op_tt_adj, bias_
             tt_add(X_tt, tt_scale(scale * x_step_size, Delta_X_tt)),
             status.rounding.update_x_round_tol(status)
         )
-        metrics = _tt_finish_metrics(obj_tt, lin_op_tt, lin_op_tt_adj, bias_tt, X_cand, Y_tt, T_tt, Z_tt, status)
+        ZX_cand = tt_inner_prod(X_cand, Z_tt)
+        TX_cand = tt_inner_prod(X_cand, T_tt) if status.ineq_status is IneqStatus.ACTIVE and T_tt is not None else 0.0
+        finish_improvement = max(1e-12, 1e-8 * best_metrics["finish"])
+        if _tt_finish_gap(status, ZX_cand, TX_cand) >= best_metrics["finish"] - finish_improvement:
+            continue
+        metrics = _tt_finish_metrics(
+            obj_tt, lin_op_tt, lin_op_tt_adj, bias_tt, X_cand, Y_tt, T_tt, Z_tt, status,
+            ZX=ZX_cand, raw_TX=TX_cand
+        )
         if metrics["primal"] > primal_limit * (1 + 1e-8) + 1e-12:
             continue
         if metrics["dual"] > dual_limit * (1 + 1e-8) + 1e-12:
             continue
-        if metrics["finish"] < best_metrics["finish"] - max(1e-12, 1e-8 * best_metrics["finish"]):
+        if metrics["finish"] < best_metrics["finish"] - finish_improvement:
             best = scale, X_cand
             best_metrics = metrics
 
@@ -1821,21 +1841,23 @@ def _tt_apply_update(X_tt, Y_tt, T_tt, Z_tt, Delta_X_tt, Delta_Y_tt, Delta_T_tt,
                      Delta_Z_tt, x_step_size, z_step_size, ineq_mask, status, scale=1.0):
     ax = scale * x_step_size
     az = scale * z_step_size
-    X_tt = _tt_budgeted_psd_symmetrise(tt_add(X_tt, tt_scale(ax, Delta_X_tt)),
-                                       status.rounding.update_x_round_tol(status))
-    Z_tt = _tt_budgeted_psd_symmetrise(tt_add(Z_tt, tt_scale(az, Delta_Z_tt)),
-                                       status.rounding.update_z_round_tol(status))
+    x_tol = status.rounding.update_x_round_tol(status)
+    z_tol = status.rounding.update_z_round_tol(status)
+    X_tt = _tt_budgeted_psd_symmetrise(tt_add(X_tt, tt_scale(ax, Delta_X_tt)), x_tol)
+    Z_tt = _tt_budgeted_psd_symmetrise(tt_add(Z_tt, tt_scale(az, Delta_Z_tt)), z_tol)
     Y_tt = tt_rank_reduce(tt_add(Y_tt, tt_scale(az, Delta_Y_tt)), status.eps)
     Y_tt = tt_reshape(
         _tt_symmetrise(
             tt_reshape(tt_sub(Y_tt, tt_fast_matrix_vec_mul(status.lag_map_y, Y_tt, status.eps)), (2, 2)),
-            status.rounding.update_z_round_tol(status)
+            z_tol
         ),
         (4,)
     )
     if status.ineq_status is IneqStatus.ACTIVE and Delta_T_tt is not None:
-        T_tt = _tt_budgeted_mask_symmetrise(tt_add(T_tt, tt_scale(az, Delta_T_tt)),
-                                            ineq_mask, status.rounding.update_t_round_tol(status))
+        T_tt = _tt_budgeted_mask_symmetrise(
+            tt_add(T_tt, tt_scale(az, Delta_T_tt)),
+            ineq_mask, status.rounding.update_t_round_tol(status)
+        )
     return X_tt, Y_tt, T_tt, Z_tt
 
 
@@ -1900,9 +1922,11 @@ def _tt_outer_merit_update(obj_tt, lin_op_tt, lin_op_tt_adj, bias_tt,
 
 
 def _tt_finish_metrics(obj_tt, lin_op_tt, lin_op_tt_adj, bias_tt, X_tt, Y_tt, T_tt, Z_tt, status,
-                       merit_gap="finish", with_residual_cache=False, merit_limit=None):
-    ZX = tt_inner_prod(X_tt, Z_tt)
-    raw_TX = tt_inner_prod(X_tt, T_tt) if status.ineq_status is IneqStatus.ACTIVE and T_tt is not None else 0.0
+                       merit_gap="finish", with_residual_cache=False, merit_limit=None, ZX=None, raw_TX=None):
+    if ZX is None:
+        ZX = tt_inner_prod(X_tt, Z_tt)
+    if raw_TX is None:
+        raw_TX = tt_inner_prod(X_tt, T_tt) if status.ineq_status is IneqStatus.ACTIVE and T_tt is not None else 0.0
     shifted_TX = raw_TX
     if status.ineq_status is IneqStatus.ACTIVE and T_tt is not None:
         shifted_TX += status.ineq_boundary_val * tt_entrywise_sum(T_tt)
@@ -1915,6 +1939,8 @@ def _tt_finish_metrics(obj_tt, lin_op_tt, lin_op_tt_adj, bias_tt, X_tt, Y_tt, T_
             "dual": np.inf,
             "psd": abs(ZX),
             "ineq": abs(raw_TX),
+            "ZX": ZX,
+            "TX": raw_TX,
             "path": path_gap,
             "finish": finish_gap,
             "mu": path_gap / (2 ** status.dim + (status.ineq_status is IneqStatus.ACTIVE) * status.num_ineq_constraints),
@@ -1931,6 +1957,8 @@ def _tt_finish_metrics(obj_tt, lin_op_tt, lin_op_tt_adj, bias_tt, X_tt, Y_tt, T_
             "dual": np.inf,
             "psd": abs(ZX),
             "ineq": abs(raw_TX),
+            "ZX": ZX,
+            "TX": raw_TX,
             "path": path_gap,
             "finish": finish_gap,
             "mu": path_gap / (2 ** status.dim + (status.ineq_status is IneqStatus.ACTIVE) * status.num_ineq_constraints),
@@ -1940,17 +1968,36 @@ def _tt_finish_metrics(obj_tt, lin_op_tt, lin_op_tt_adj, bias_tt, X_tt, Y_tt, T_
 
     dual_feas = tt_compute_dual_feasibility(obj_tt, lin_op_tt_adj, Z_tt, Y_tt, T_tt, status)
     dual_norm = tt_norm(dual_feas)
+    dual_merit = dual_norm ** 2
+    merit = max(gap, primal_merit, dual_merit)
+    if merit_limit is not None and merit > merit_limit:
+        return {
+            "primal": primal_norm,
+            "dual": dual_norm,
+            "psd": abs(ZX),
+            "ineq": abs(raw_TX),
+            "ZX": ZX,
+            "TX": raw_TX,
+            "path": path_gap,
+            "finish": finish_gap,
+            "mu": path_gap / (2 ** status.dim + (status.ineq_status is IneqStatus.ACTIVE) * status.num_ineq_constraints),
+            "central_norm": status.centrl_error_normalisation,
+            "merit": merit,
+        }
+
     central_norm = 1 + abs(tt_inner_prod(obj_tt, tt_reshape(X_tt, (4,))))
     metrics = {
         "primal": primal_norm,
         "dual": dual_norm,
         "psd": abs(ZX),
         "ineq": abs(raw_TX),
+        "ZX": ZX,
+        "TX": raw_TX,
         "path": path_gap,
         "finish": finish_gap,
         "mu": path_gap / (2 ** status.dim + (status.ineq_status is IneqStatus.ACTIVE) * status.num_ineq_constraints),
         "central_norm": central_norm,
-        "merit": max(gap, primal_norm ** 2, dual_norm ** 2),
+        "merit": merit,
     }
     if with_residual_cache:
         metrics["residual_cache"] = {
@@ -2014,13 +2061,16 @@ def _tt_finish_line_search_update(obj_tt, lin_op_tt, lin_op_tt_adj, bias_tt,
         X_cand, Y_cand, T_cand, Z_cand, cand_status = _tt_postprocess_gap_shrink(
             obj_tt, lin_op_tt_adj, X_cand, Y_cand, T_cand, Z_cand, cand_status
         )
-        metrics = _tt_finish_metrics(obj_tt, lin_op_tt, lin_op_tt_adj, bias_tt,
-                                     X_cand, Y_cand, T_cand, Z_cand, cand_status)
+        merit_improvement = max(1e-12, 1e-8 * best_metrics["merit"])
+        metrics = _tt_finish_metrics(
+            obj_tt, lin_op_tt, lin_op_tt_adj, bias_tt, X_cand, Y_cand, T_cand, Z_cand, cand_status,
+            merit_limit=best_metrics["merit"] - merit_improvement
+        )
         if metrics["primal"] > primal_limit * (1 + 1e-8) + 1e-12:
             continue
         if metrics["dual"] > dual_limit * (1 + 1e-8) + 1e-12:
             continue
-        if metrics["merit"] < best_metrics["merit"] - max(1e-12, 1e-8 * best_metrics["merit"]):
+        if metrics["merit"] < best_metrics["merit"] - merit_improvement:
             best = scale, X_cand, Y_cand, T_cand, Z_cand, cand_status
             best_metrics = metrics
 
