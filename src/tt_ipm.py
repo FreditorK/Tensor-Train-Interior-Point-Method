@@ -664,18 +664,37 @@ def tt_infeasible_newton_system(
         lin_op_tt_adj,
         bias_tt,
         ineq_mask,
-        status
+        status,
+        residual_cache=None
 ):
     rhs = TTBlockVector()
-    primal_feas = tt_compute_primal_feasibility(lin_op_tt, bias_tt, X_tt, status)
-    status.primal_feas_norm = tt_norm(primal_feas)
+    if residual_cache is not None and residual_cache.get("primal") is not None:
+        primal_feas = residual_cache["primal"]
+        status.primal_feas_norm = residual_cache.get("primal_norm")
+        if status.primal_feas_norm is None:
+            status.primal_feas_norm = tt_norm(primal_feas)
+    else:
+        primal_feas = tt_compute_primal_feasibility(lin_op_tt, bias_tt, X_tt, status)
+        status.primal_feas_norm = tt_norm(primal_feas)
     status.primal_error = np.divide(status.primal_feas_norm, status.primal_error_normalisation)
     status.is_primal_feasible = np.less(status.primal_error, status.feasibility_tol)
 
-    dual_feas = tt_compute_dual_feasibility(obj_tt, lin_op_tt_adj, Z_tt, Y_tt, T_tt, status)
-    status.dual_feas_norm = tt_norm(dual_feas)
+    if residual_cache is not None and residual_cache.get("dual") is not None:
+        dual_feas = residual_cache["dual"]
+        status.dual_feas_norm = residual_cache.get("dual_norm")
+        if status.dual_feas_norm is None:
+            status.dual_feas_norm = tt_norm(dual_feas)
+    else:
+        dual_feas = tt_compute_dual_feasibility(obj_tt, lin_op_tt_adj, Z_tt, Y_tt, T_tt, status)
+        status.dual_feas_norm = tt_norm(dual_feas)
     status.dual_error = np.divide(status.dual_feas_norm, status.dual_error_normalisation)
     status.is_dual_feasible = np.less(status.dual_error, (1 + (status.ineq_status is IneqStatus.ACTIVE))*status.feasibility_tol)
+    residual_cache = {
+        "primal": primal_feas,
+        "primal_norm": status.primal_feas_norm,
+        "dual": dual_feas,
+        "dual_norm": status.dual_feas_norm,
+    }
 
     status.is_last_iter = status.is_last_iter or (status.is_primal_feasible and status.is_dual_feasible and status.is_central)
     wants_primal_restoration = _tt_should_restore_primal(status)
@@ -745,7 +764,7 @@ def tt_infeasible_newton_system(
         lhs[3, 3] = tt_rank_reduce(tt_add(status.lag_map_t, tt_diag_op(masked_X_tt, status.eps)), eps=status.rounding.operator_dual(status))
         if needs_central_row:
             rhs[3] = tt_rank_reduce(tt_reshape(tt_scale(-1, tt_fast_hadamard(masked_X_tt, T_tt, status.eps)), (4, )), eps=status.rounding.residual_centrality(status))
-    return lhs, rhs, status
+    return lhs, rhs, status, residual_cache
 
 def _tt_symmetrise(matrix_tt, err_bound):
     return tt_rank_reduce(tt_scale(0.5, tt_add(matrix_tt, tt_transpose(matrix_tt))), eps=err_bound)
@@ -1820,9 +1839,68 @@ def _tt_apply_update(X_tt, Y_tt, T_tt, Z_tt, Delta_X_tt, Delta_Y_tt, Delta_T_tt,
     return X_tt, Y_tt, T_tt, Z_tt
 
 
-def _tt_finish_metrics(obj_tt, lin_op_tt, lin_op_tt_adj, bias_tt, X_tt, Y_tt, T_tt, Z_tt, status):
-    primal_norm = tt_norm(tt_compute_primal_feasibility(lin_op_tt, bias_tt, X_tt, status))
-    dual_norm = tt_norm(tt_compute_dual_feasibility(obj_tt, lin_op_tt_adj, Z_tt, Y_tt, T_tt, status))
+def _tt_current_outer_merit(status):
+    gap = status.finish_gap if status.is_last_iter else status.path_gap
+    return max(gap, status.primal_feas_norm ** 2, status.dual_feas_norm ** 2)
+
+
+def _tt_apply_outer_merit_metrics(status, metrics):
+    _tt_apply_finish_metrics(status, metrics)
+    status.reported_gap = metrics["finish"] if status.is_last_iter else metrics["path"]
+
+
+def _tt_outer_merit_update(obj_tt, lin_op_tt, lin_op_tt_adj, bias_tt,
+                           X_tt, Y_tt, T_tt, Z_tt,
+                           Delta_X_tt, Delta_Y_tt, Delta_T_tt, Delta_Z_tt,
+                           x_step_size, z_step_size, ineq_mask, status):
+    t0 = time.time()
+    current_merit = _tt_current_outer_merit(status)
+    accept_limit = current_merit * (1 + 1e-8) + 1e-12
+    best = None
+    best_metrics = None
+    full_merit = np.inf
+
+    for scale in (1.0, 0.75, 0.5, 0.25, 0.1, 0.03):
+        X_cand, Y_cand, T_cand, Z_cand = _tt_apply_update(
+            X_tt, Y_tt, T_tt, Z_tt, Delta_X_tt, Delta_Y_tt, Delta_T_tt, Delta_Z_tt,
+            x_step_size, z_step_size, ineq_mask, status, scale
+        )
+        metrics = _tt_finish_metrics(
+            obj_tt, lin_op_tt, lin_op_tt_adj, bias_tt, X_cand, Y_cand, T_cand, Z_cand, status,
+            merit_gap="finish" if status.is_last_iter else "path",
+            with_residual_cache=True,
+            merit_limit=accept_limit
+        )
+        if scale == 1.0:
+            full_merit = metrics["merit"]
+            if full_merit <= accept_limit:
+                _tt_apply_outer_merit_metrics(status, metrics)
+                _ipm_trace(status, "merit", f"scale=1.00e+00 merit={current_merit:.2e}->{full_merit:.2e}", t0)
+                return X_cand, Y_cand, T_cand, Z_cand, status, metrics["residual_cache"], True
+            continue
+        if metrics["merit"] > accept_limit:
+            continue
+        if best_metrics is None or metrics["merit"] < best_metrics["merit"]:
+            best = scale, X_cand, Y_cand, T_cand, Z_cand
+            best_metrics = metrics
+
+    if best is None:
+        _ipm_trace(status, "merit", f"rejected merit={current_merit:.2e}->{full_merit:.2e}", t0)
+        return X_tt, Y_tt, T_tt, Z_tt, status, None, False
+
+    scale, X_tt, Y_tt, T_tt, Z_tt = best
+    _tt_apply_outer_merit_metrics(status, best_metrics)
+    _ipm_trace(
+        status,
+        "merit",
+        f"scale={scale:.2e} merit={current_merit:.2e}->{best_metrics['merit']:.2e} full={full_merit:.2e}",
+        t0,
+    )
+    return X_tt, Y_tt, T_tt, Z_tt, status, best_metrics["residual_cache"], True
+
+
+def _tt_finish_metrics(obj_tt, lin_op_tt, lin_op_tt_adj, bias_tt, X_tt, Y_tt, T_tt, Z_tt, status,
+                       merit_gap="finish", with_residual_cache=False, merit_limit=None):
     ZX = tt_inner_prod(X_tt, Z_tt)
     raw_TX = tt_inner_prod(X_tt, T_tt) if status.ineq_status is IneqStatus.ACTIVE and T_tt is not None else 0.0
     shifted_TX = raw_TX
@@ -1830,8 +1908,40 @@ def _tt_finish_metrics(obj_tt, lin_op_tt, lin_op_tt_adj, bias_tt, X_tt, Y_tt, T_
         shifted_TX += status.ineq_boundary_val * tt_entrywise_sum(T_tt)
     path_gap = abs(ZX) + abs(shifted_TX)
     finish_gap = _tt_finish_gap(status, ZX, raw_TX)
+    gap = path_gap if merit_gap == "path" else finish_gap
+    if merit_limit is not None and gap > merit_limit:
+        return {
+            "primal": np.inf,
+            "dual": np.inf,
+            "psd": abs(ZX),
+            "ineq": abs(raw_TX),
+            "path": path_gap,
+            "finish": finish_gap,
+            "mu": path_gap / (2 ** status.dim + (status.ineq_status is IneqStatus.ACTIVE) * status.num_ineq_constraints),
+            "central_norm": status.centrl_error_normalisation,
+            "merit": gap,
+        }
+
+    primal_feas = tt_compute_primal_feasibility(lin_op_tt, bias_tt, X_tt, status)
+    primal_norm = tt_norm(primal_feas)
+    primal_merit = primal_norm ** 2
+    if merit_limit is not None and primal_merit > merit_limit:
+        return {
+            "primal": primal_norm,
+            "dual": np.inf,
+            "psd": abs(ZX),
+            "ineq": abs(raw_TX),
+            "path": path_gap,
+            "finish": finish_gap,
+            "mu": path_gap / (2 ** status.dim + (status.ineq_status is IneqStatus.ACTIVE) * status.num_ineq_constraints),
+            "central_norm": status.centrl_error_normalisation,
+            "merit": primal_merit,
+        }
+
+    dual_feas = tt_compute_dual_feasibility(obj_tt, lin_op_tt_adj, Z_tt, Y_tt, T_tt, status)
+    dual_norm = tt_norm(dual_feas)
     central_norm = 1 + abs(tt_inner_prod(obj_tt, tt_reshape(X_tt, (4,))))
-    return {
+    metrics = {
         "primal": primal_norm,
         "dual": dual_norm,
         "psd": abs(ZX),
@@ -1840,8 +1950,16 @@ def _tt_finish_metrics(obj_tt, lin_op_tt, lin_op_tt_adj, bias_tt, X_tt, Y_tt, T_
         "finish": finish_gap,
         "mu": path_gap / (2 ** status.dim + (status.ineq_status is IneqStatus.ACTIVE) * status.num_ineq_constraints),
         "central_norm": central_norm,
-        "merit": max(finish_gap, primal_norm ** 2, dual_norm ** 2),
+        "merit": max(gap, primal_norm ** 2, dual_norm ** 2),
     }
+    if with_residual_cache:
+        metrics["residual_cache"] = {
+            "primal": primal_feas,
+            "primal_norm": primal_norm,
+            "dual": dual_feas,
+            "dual_norm": dual_norm,
+        }
+    return metrics
 
 
 def _tt_apply_finish_metrics(status, metrics):
@@ -2150,6 +2268,7 @@ def tt_ipm(
     finish_prev_state = None
     finish_prev_merit = np.inf
     lhs = lhs_skeleton
+    residual_cache = None
 
     while finishing_steps > 0:
         iteration += 1
@@ -2190,7 +2309,7 @@ def tt_ipm(
         status.eta = max(min(status.eta, 2*status.mu), status.op_tol)
 
         t0 = time.time()
-        lhs_matrix_tt, rhs_vec_tt, status = tt_infeasible_newton_system(
+        lhs_matrix_tt, rhs_vec_tt, status, current_residual_cache = tt_infeasible_newton_system(
             lhs,
             obj_tt,
             X_tt,
@@ -2201,8 +2320,10 @@ def tt_ipm(
             lin_op_tt_adj,
             bias_tt,
             ineq_mask,
-            status
+            status,
+            residual_cache
         )
+        residual_cache = None
         status.reported_gap = status.finish_gap if status.is_last_iter else status.path_gap
         _ipm_trace(status, "system", f"rhs_rows={list(rhs_vec_tt.keys())}", t0)
 
@@ -2260,6 +2381,7 @@ def tt_ipm(
         _ipm_trace(status, "newton-all", "returned", t0)
 
         if (Delta_X_tt is None and Delta_Z_tt is None) or (x_step_size < 1e-5 and z_step_size < 1e-5):
+            residual_cache = current_residual_cache
             if status.is_last_iter:
                 break
             elif status.is_primal_feasible and status.is_dual_feasible:
@@ -2281,17 +2403,26 @@ def tt_ipm(
                 if not accepted_update:
                     if status.aho_direction:
                         status.force_xz_steps = max(status.force_xz_steps, 1)
+                        residual_cache = current_residual_cache
                         _tt_reset_solver_warm_starts(status)
                         _ipm_trace(status, "finish-line", "retry=xz")
                         _ipm_trace(status, "iter", f"done it={iteration - 1:03d}", iter_t0)
                         continue
                     break
             else:
-                X_tt, Y_tt, T_tt, Z_tt = _tt_apply_update(
+                X_tt, Y_tt, T_tt, Z_tt, status, residual_cache, accepted_update = _tt_outer_merit_update(
+                    obj_tt, lin_op_tt, lin_op_tt_adj, bias_tt,
                     X_tt, Y_tt, T_tt, Z_tt,
                     Delta_X_tt, Delta_Y_tt, Delta_T_tt, Delta_Z_tt,
                     x_step_size, z_step_size, ineq_mask, status
                 )
+                if not accepted_update:
+                    residual_cache = current_residual_cache
+                    status.force_xz_steps = max(status.force_xz_steps, 1)
+                    _tt_reset_solver_warm_starts(status)
+                    _ipm_trace(status, "merit", "retry=xz")
+                    _ipm_trace(status, "iter", f"done it={iteration - 1:03d}", iter_t0)
+                    continue
             _ipm_trace(status, "update", f"rmax X/Y/Z/T={_tt_rank_peak(X_tt)}/{_tt_rank_peak(Y_tt)}/{_tt_rank_peak(Z_tt)}/{_tt_rank_peak(T_tt)}", t0)
 
         if _ipm_check_for_stalled_progress(prev_errors, status, gap_tol):
