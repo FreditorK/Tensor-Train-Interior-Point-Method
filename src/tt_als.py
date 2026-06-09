@@ -1651,7 +1651,12 @@ def tt_max_generalised_eigen(A, Delta, x0=None, nswp=10, tol=1e-8, size_limit = 
     if max_res > tol:
         severe_miss = (not np.isfinite(max_res)) or max_res > 1e-2
         action = "keep-reset" if severe_miss else "keep"
-        print(f"warn   | step-eig | target=miss | relres={max_res:.2e} > {tol:.2e} | action={action}", flush=True)
+        detail = f"relres={max_res:.2e} > {tol:.2e}"
+        print(
+            f"warn   | {'step-eig':<8} | {'target=miss':<11} | "
+            f"{detail:<84} | action={action}",
+            flush=True
+        )
         if severe_miss:
             x_cores = None
     return step_size, x_cores

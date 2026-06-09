@@ -1866,6 +1866,59 @@ def _tt_current_outer_merit(status):
     return max(gap, status.primal_feas_norm ** 2, status.dual_feas_norm ** 2)
 
 
+_TT_OUTER_MERIT_RHO = 1e-4
+_TT_OUTER_MERIT_C_OMEGA = 1.0
+_TT_OUTER_MERIT_WATCHDOG = 4
+
+
+def _tt_outer_merit_omega(status, current_merit):
+    return status.eta * max(1.0, current_merit)
+
+
+def _tt_current_outer_components(status):
+    gap_key = "finish" if status.is_last_iter else "path"
+    gap = status.finish_gap if status.is_last_iter else status.path_gap
+    return {
+        "gap_key": gap_key,
+        "gap": gap,
+        "primal": status.primal_feas_norm,
+        "dual": status.dual_feas_norm,
+        "psd": status.psd_slack,
+        "ineq": status.ineq_slack,
+    }
+
+
+def _tt_outer_component_improved(current, metrics):
+    candidates = {
+        "gap": metrics[current["gap_key"]],
+        "primal": metrics["primal"],
+        "dual": metrics["dual"],
+        "psd": metrics["psd"],
+        "ineq": metrics["ineq"],
+    }
+    for key, old_value in current.items():
+        if key == "gap_key":
+            continue
+        new_value = candidates[key]
+        if not (np.isfinite(old_value) and np.isfinite(new_value)):
+            continue
+        if new_value < old_value - max(1e-12, 1e-8 * max(abs(old_value), 1.0)):
+            return True
+    return False
+
+
+def _tt_outer_acceptance(metrics, current_merit, watchdog_merit, omega, current_components):
+    sufficient_limit = (1.0 - _TT_OUTER_MERIT_RHO) * current_merit + _TT_OUTER_MERIT_C_OMEGA * omega
+    if metrics["merit"] <= sufficient_limit:
+        return True, "sufficient", sufficient_limit
+
+    watchdog_limit = watchdog_merit + _TT_OUTER_MERIT_C_OMEGA * omega
+    if metrics["merit"] <= watchdog_limit and _tt_outer_component_improved(current_components, metrics):
+        return True, "watchdog", watchdog_limit
+
+    return False, "reject", max(sufficient_limit, watchdog_limit)
+
+
 def _tt_apply_outer_merit_metrics(status, metrics):
     _tt_apply_finish_metrics(status, metrics)
     status.reported_gap = metrics["finish"] if status.is_last_iter else metrics["path"]
@@ -1874,12 +1927,20 @@ def _tt_apply_outer_merit_metrics(status, metrics):
 def _tt_outer_merit_update(obj_tt, lin_op_tt, lin_op_tt_adj, bias_tt,
                            X_tt, Y_tt, T_tt, Z_tt,
                            Delta_X_tt, Delta_Y_tt, Delta_T_tt, Delta_Z_tt,
-                           x_step_size, z_step_size, ineq_mask, status):
+                           x_step_size, z_step_size, ineq_mask, status, merit_history):
     t0 = time.time()
     current_merit = _tt_current_outer_merit(status)
-    accept_limit = current_merit * (1 + 1e-8) + 1e-12
+    current_components = _tt_current_outer_components(status)
+    omega = _tt_outer_merit_omega(status, current_merit)
+    history = merit_history[-_TT_OUTER_MERIT_WATCHDOG:] if merit_history else []
+    watchdog_merit = max([current_merit] + history)
+    sufficient_limit = (1.0 - _TT_OUTER_MERIT_RHO) * current_merit + _TT_OUTER_MERIT_C_OMEGA * omega
+    watchdog_limit = watchdog_merit + _TT_OUTER_MERIT_C_OMEGA * omega
+    accept_limit = max(sufficient_limit, watchdog_limit)
     best = None
     best_metrics = None
+    best_reason = "reject"
+    best_limit = accept_limit
     full_merit = np.inf
 
     for scale in (1.0, 0.75, 0.5, 0.25, 0.1, 0.03):
@@ -1893,18 +1954,29 @@ def _tt_outer_merit_update(obj_tt, lin_op_tt, lin_op_tt_adj, bias_tt,
             with_residual_cache=True,
             merit_limit=accept_limit
         )
+        accepted, reason, limit = _tt_outer_acceptance(
+            metrics, current_merit, watchdog_merit, omega, current_components
+        )
         if scale == 1.0:
             full_merit = metrics["merit"]
-            if full_merit <= accept_limit:
+            if accepted:
                 _tt_apply_outer_merit_metrics(status, metrics)
-                _ipm_trace(status, "merit", f"scale=1.00e+00 merit={current_merit:.2e}->{full_merit:.2e}", t0)
+                _ipm_trace(
+                    status,
+                    "merit",
+                    f"scale=1.00e+00 mode={reason} limit={limit:.2e} "
+                    f"merit={current_merit:.2e}->{full_merit:.2e}",
+                    t0
+                )
                 return X_cand, Y_cand, T_cand, Z_cand, status, metrics["residual_cache"], True
             continue
-        if metrics["merit"] > accept_limit:
+        if not accepted:
             continue
         if best_metrics is None or metrics["merit"] < best_metrics["merit"]:
             best = scale, X_cand, Y_cand, T_cand, Z_cand
             best_metrics = metrics
+            best_reason = reason
+            best_limit = limit
 
     if best is None:
         _ipm_trace(status, "merit", f"rejected merit={current_merit:.2e}->{full_merit:.2e}", t0)
@@ -1915,7 +1987,8 @@ def _tt_outer_merit_update(obj_tt, lin_op_tt, lin_op_tt_adj, bias_tt,
     _ipm_trace(
         status,
         "merit",
-        f"scale={scale:.2e} merit={current_merit:.2e}->{best_metrics['merit']:.2e} full={full_merit:.2e}",
+        f"scale={scale:.2e} mode={best_reason} limit={best_limit:.2e} "
+        f"merit={current_merit:.2e}->{best_metrics['merit']:.2e} full={full_merit:.2e}",
         t0,
     )
     return X_tt, Y_tt, T_tt, Z_tt, status, best_metrics["residual_cache"], True
@@ -2146,7 +2219,7 @@ def _ipm_log_iteration(iteration, status, X_tt, Y_tt, Z_tt, T_tt):
         _tt_rank_peak(T_tt),
     ])
     print(
-        f"it {iteration - 1:03d} | {phase:<6} | {direction:<3} | ineq={ineq_status:<8} | "
+        f"it {iteration - 1:03d} | {phase:<8} | {direction:<11} | ineq={ineq_status:<10} | "
         f"mu={status.mu:.2e} gap={status.reported_gap:.2e} path={status.path_gap:.2e} "
         f"eta={status.eta:.2e} sigma={status.sigma:.2e} | "
         f"err c/p/d={status.centrality_error:.2e}/{status.primal_error:.2e}/{status.dual_error:.2e} | "
@@ -2319,6 +2392,7 @@ def tt_ipm(
     finish_prev_merit = np.inf
     lhs = lhs_skeleton
     residual_cache = None
+    outer_merit_history = []
 
     while finishing_steps > 0:
         iteration += 1
@@ -2464,15 +2538,23 @@ def tt_ipm(
                     obj_tt, lin_op_tt, lin_op_tt_adj, bias_tt,
                     X_tt, Y_tt, T_tt, Z_tt,
                     Delta_X_tt, Delta_Y_tt, Delta_T_tt, Delta_Z_tt,
-                    x_step_size, z_step_size, ineq_mask, status
+                    x_step_size, z_step_size, ineq_mask, status, outer_merit_history
                 )
                 if not accepted_update:
                     residual_cache = current_residual_cache
-                    status.force_xz_steps = max(status.force_xz_steps, 1)
-                    _tt_reset_solver_warm_starts(status)
-                    _ipm_trace(status, "merit", "retry=xz")
+                    if status.aho_direction:
+                        status.force_xz_steps = max(status.force_xz_steps, 1)
+                        retry_direction = "xz"
+                    else:
+                        status.force_xz_steps = 0
+                        retry_direction = "aho"
+                    status.mals_delta0 = None
+                    _ipm_trace(status, "merit", f"retry={retry_direction}")
                     _ipm_trace(status, "iter", f"done it={iteration - 1:03d}", iter_t0)
                     continue
+                outer_merit_history.append(_tt_current_outer_merit(status))
+                if len(outer_merit_history) > _TT_OUTER_MERIT_WATCHDOG:
+                    outer_merit_history = outer_merit_history[-_TT_OUTER_MERIT_WATCHDOG:]
             _ipm_trace(status, "update", f"rmax X/Y/Z/T={_tt_rank_peak(X_tt)}/{_tt_rank_peak(Y_tt)}/{_tt_rank_peak(Z_tt)}/{_tt_rank_peak(T_tt)}", t0)
 
         if _ipm_check_for_stalled_progress(prev_errors, status, gap_tol):
