@@ -9,8 +9,7 @@ op_tol: 0.0001
 seeds:
 - 328
 - 332
-- 836
-- 837
+- 797
 - 14
 verbose: true
 warm_up: 3

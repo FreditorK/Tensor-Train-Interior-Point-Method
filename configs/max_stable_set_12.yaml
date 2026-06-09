@@ -7,6 +7,7 @@ max_iter: 28
 max_refinement: 6
 op_tol: 0.0001
 seeds:
-- 510
+- 425
+- 565
 verbose: true
 warm_up: 3

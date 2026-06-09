@@ -10,3 +10,5 @@ cy_src/*.c
 .vscode/logs/
 logs/
 condor_file.sub
+build_cython.sh
+build_cython_cedar.sub

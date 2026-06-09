@@ -1,7 +1,6 @@
 # Common
 dim: !!int 6
 seeds: 
-- 73 
 - 54
 - 624
 - 7

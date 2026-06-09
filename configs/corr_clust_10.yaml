@@ -9,6 +9,8 @@ max_refinement: 10
 op_tol: 0.0001
 seeds:
 - 10
-trace_verbose: true
+- 423
+- 125
+- 152
 verbose: true
 warm_up: 3
